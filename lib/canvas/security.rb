@@ -49,6 +49,37 @@ module Canvas::Security
     end
   end
 
+  def self.encrypt_data(data)
+    nonce = SecureRandom.bytes(12)
+    encryptor = OpenSSL::Cipher.new('aes-256-gcm').encrypt
+    encryptor.key = Digest::SHA1.hexdigest(self.encryption_key)[0...32]
+    encryptor.iv = nonce
+    encryptor.auth_data = 'Canvas-v1.0.0'
+    encrypted_data = encryptor.update(data) + encryptor.final
+    tag = encryptor.auth_tag
+    [encrypted_data, nonce, tag]
+  end
+
+  def self.decrypt_data(data, nonce, tag)
+    decipher = OpenSSL::Cipher.new('aes-256-gcm').decrypt
+    decipher.key = Digest::SHA1.hexdigest(self.encryption_key)[0...32]
+    decipher.iv = nonce
+    decipher.auth_tag = tag
+    decipher.auth_data = 'Canvas-v1.0.0'
+    decipher.update(data) + decipher.final
+  end
+
+  def self.url_key_encrypt_data(data)
+    encryption_data = encrypt_data("#{data.encoding}~#{data.dup.force_encoding('ASCII-8BIT')}")
+    encryption_data.map{|item| Base64.urlsafe_encode64(item, padding: false)}.join('~')
+  end
+
+  def self.url_key_decrypt_data(data)
+    encrypted_data, nonce, tag = data.split('~').map{|item| Base64.urlsafe_decode64(item)}
+    encoding, data = decrypt_data(encrypted_data, nonce, tag).split('~', 2)
+    data.force_encoding(encoding)
+  end
+
   def self.encrypt_password(secret, key)
     require 'base64'
     c = OpenSSL::Cipher.new('aes-256-cbc')
@@ -158,13 +189,13 @@ module Canvas::Security
   #
   # Raises Canvas::Security::TokenExpired if the token has expired, and
   # Canvas::Security::InvalidToken if the token is otherwise invalid.
-  def self.decode_jwt(token, keys = [])
+  def self.decode_jwt(token, keys = [], ignore_expiration: false)
     keys += encryption_keys
 
     keys.each do |key|
       begin
         body = JSON::JWT.decode(token, key)
-        verify_jwt(body)
+        verify_jwt(body, ignore_expiration: ignore_expiration)
         return body.with_indifferent_access
       rescue JSON::JWS::VerificationFailed
         # Keep looping, to try all the keys. If none succeed,

@@ -18,10 +18,10 @@
 import React from 'react'
 import _ from 'lodash'
 import PropTypes from 'prop-types'
-import ScreenReaderContent from '@instructure/ui-a11y/lib/components/ScreenReaderContent'
-import TextInput from '@instructure/ui-forms/lib/components/TextInput'
-import Flex, { FlexItem } from '@instructure/ui-layout/lib/components/Flex'
-import I18n from 'i18n!edit_rubric'
+import {ScreenReaderContent} from '@instructure/ui-a11y'
+import {TextInput} from '@instructure/ui-forms'
+import {Flex,  FlexItem } from '@instructure/ui-layout'
+import I18n from 'i18n!edit_rubricPoints'
 
 import { assessmentShape } from './types'
 
@@ -29,7 +29,7 @@ export const roundIfWhole = (n) => (
   I18n.toNumber(n, { precision: Math.floor(n) === n ? 0 : 2, strip_insignificant_zeros: true })
 )
 const pointString = (points) =>
-  _.isNull(points.text) ? roundIfWhole(points.value) : points.text
+  (points.text === null) ? roundIfWhole(points.value) : points.text
 
 export const possibleString = (possible) =>
   I18n.t('%{possible} pts', {

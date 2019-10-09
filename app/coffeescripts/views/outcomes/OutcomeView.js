@@ -16,7 +16,7 @@
 // with this program. If not, see <http://www.gnu.org/licenses/>.
 //
 
-import I18n from 'i18n!outcomes'
+import I18n from 'i18n!OutcomeView'
 import numberHelper from 'jsx/shared/helpers/numberHelper'
 import $ from 'jquery'
 import _ from 'underscore'
@@ -25,7 +25,8 @@ import CalculationMethodFormView from './CalculationMethodFormView'
 import outcomeTemplate from 'jst/outcomes/outcome'
 import outcomeFormTemplate from 'jst/outcomes/outcomeForm'
 import criterionTemplate from 'jst/outcomes/_criterion'
-import confirmOutcomeEditModal, {showConfirmOutcomeEdit} from 'jsx/outcomes/ConfirmOutcomeEditModal'
+import criterionHeaderTemplate from 'jst/outcomes/_criterionHeader'
+import {showConfirmOutcomeEdit} from 'jsx/outcomes/ConfirmOutcomeEditModal'
 import { addCriterionInfoButton } from 'jsx/outcomes/CriterionInfo'
 import 'jqueryui/dialog'
 
@@ -64,25 +65,14 @@ export default class OutcomeView extends OutcomeContentBase {
     )
   }
 
-  constructor({setQuizMastery, useForScoring}) {
-    {
-      // Hack: trick Babel/TypeScript into allowing this before super.
-      if (false) { super(); }
-      let thisFn = (() => { return this; }).toString();
-      let thisName = thisFn.slice(thisFn.indexOf('return') + 6 + 1, thisFn.lastIndexOf(';')).trim();
-      eval(`${thisName} = this;`);
-    }
-    this.editRating = this.editRating.bind(this)
-    this.deleteRating = this.deleteRating.bind(this)
-    this.insertRating = this.insertRating.bind(this)
-    this.updateCalcMethod = this.updateCalcMethod.bind(this)
+  initialize({setQuizMastery, useForScoring}) {
     this.setQuizMastery = setQuizMastery
     this.useForScoring = useForScoring
-    super(...arguments)
     this.calculationMethodFormView = new CalculationMethodFormView({
       model: this.model
     })
     this.originalConfirmableValues = this.getFormData()
+    super.initialize(...arguments)
   }
 
   submit(event) {
@@ -138,11 +128,14 @@ export default class OutcomeView extends OutcomeContentBase {
 
   editRating(e) {
     e.preventDefault()
+    const childIdx = $(e.currentTarget).closest('.rating').index()
+    const $th = $(`.criterion thead tr > th:nth-child(${childIdx+1})`)
     const $showWrapper = $(e.currentTarget).parents('.show:first')
     const $editWrapper = $showWrapper.next()
 
     $showWrapper.attr('aria-expanded', 'false').hide()
     $editWrapper.attr('aria-expanded', 'true').show()
+    $th.find('h5').attr('aria-expanded', 'false').hide()
     return $editWrapper.find('.outcome_rating_description').focus()
   }
 
@@ -151,6 +144,8 @@ export default class OutcomeView extends OutcomeContentBase {
     e.preventDefault()
     if (this.$('.rating').length > 1) {
       const deleteBtn = $(e.currentTarget)
+      const childIdx = deleteBtn.closest('.rating').index()
+      const $th = $(`.criterion thead tr > th:nth-child(${childIdx+1})`)
       let focusTarget = deleteBtn
         .closest('.rating')
         .prev()
@@ -161,6 +156,7 @@ export default class OutcomeView extends OutcomeContentBase {
           .next()
           .find('.edit_rating')
       }
+      $th.remove()
       deleteBtn.closest('td').remove()
       focusTarget.focus()
       return this.updateRatings()
@@ -169,9 +165,11 @@ export default class OutcomeView extends OutcomeContentBase {
 
   saveRating(e) {
     e.preventDefault()
+    const childIdx = $(e.currentTarget).closest('.rating').index()
+    const $th = $(`.criterion thead tr > th:nth-child(${childIdx+1})`)
     const $editWrapper = $(e.currentTarget).parents('.edit:first')
     const $showWrapper = $editWrapper.prev()
-    $showWrapper.find('h5').text($editWrapper.find('input.outcome_rating_description').val())
+    $th.find('h5').text($editWrapper.find('input.outcome_rating_description').val())
     let points = numberHelper.parse($editWrapper.find('input.outcome_rating_points').val())
     if (_.isNaN(points)) {
       points = 0
@@ -181,6 +179,7 @@ export default class OutcomeView extends OutcomeContentBase {
     $showWrapper.find('.points').text(points)
     $editWrapper.attr('aria-expanded', 'false').hide()
     $showWrapper.attr('aria-expanded', 'true').show()
+    $th.find('h5').attr('aria-expanded', 'true').show()
     $showWrapper.find('.edit_rating').focus()
     return this.updateRatings()
   }
@@ -188,13 +187,20 @@ export default class OutcomeView extends OutcomeContentBase {
   insertRating(e) {
     e.preventDefault()
     const $rating = $(criterionTemplate({description: '', points: '', _index: 99}))
+    const childIdx = $(e.currentTarget).closest('.rating-header').index()
+    const $ratingHeader = $(criterionHeaderTemplate({description: '', _index: 99}))
+    const $tr = $('.criterion tbody tr')
     $(e.currentTarget)
-      .closest('.rating')
-      .after($rating)
+      .closest('.rating-header')
+      .after($ratingHeader)
+    $tr.find(`> td:nth-child(${childIdx+1})`).after($rating)
     $rating
       .find('.show')
       .hide()
       .next()
+      .show(200)
+    $ratingHeader
+      .hide()
       .show(200)
     $rating.find('.edit input:first').focus()
     return this.updateRatings()
@@ -266,7 +272,10 @@ export default class OutcomeView extends OutcomeContentBase {
       case 'edit':
       case 'add':
         this.$el.html(
-          outcomeFormTemplate(_.extend(data, {calculationMethods: this.model.calculationMethods()}))
+          outcomeFormTemplate(_.extend(data, {
+            calculationMethods: this.model.calculationMethods(),
+            use_rce_enhancements: ENV.use_rce_enhancements
+        }))
         )
 
         addCriterionInfoButton(this.$el.find("#react-info-link")[0])

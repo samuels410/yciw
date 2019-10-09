@@ -16,191 +16,790 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-import React from 'react';
-import { mount } from 'enzyme';
-import GradebookSettingsModal from 'jsx/gradezilla/default_gradebook/components/GradebookSettingsModal';
-import GradebookSettingsModalApi from 'jsx/gradezilla/default_gradebook/apis/GradebookSettingsModalApi';
-import { destroyContainer } from 'jsx/shared/FlashAlert';
+import React from 'react'
+import ReactDOM from 'react-dom'
+import {fireEvent, wait} from '@testing-library/react'
 
-let clock;
+import GradebookSettingsModal from 'jsx/gradezilla/default_gradebook/components/GradebookSettingsModal'
+import * as GradebookSettingsModalApi from 'jsx/gradezilla/default_gradebook/apis/GradebookSettingsModalApi'
+import * as FlashAlert from 'jsx/shared/FlashAlert'
+import CourseSettings from 'jsx/gradezilla/default_gradebook/CourseSettings'
+import PostPolicies from 'jsx/gradezilla/default_gradebook/PostPolicies'
+import * as PostPolicyApi from 'jsx/gradezilla/default_gradebook/PostPolicies/PostPolicyApi'
+import {createGradebook} from 'jsx/gradezilla/default_gradebook/__tests__/GradebookSpecHelper'
 
-QUnit.module('GradebookSettingsModal', {
-  setup () {
-    clock = sinon.useFakeTimers();
-    this.qunitTimeout = QUnit.config.testTimeout;
-    QUnit.config.testTimeout = 1000;
-    const applicationElement = document.createElement('div');
-    applicationElement.id = 'application';
-    document.getElementById('fixtures').appendChild(applicationElement);
-  },
+/* eslint-disable qunit/no-identical-names */
+QUnit.module('GradebookSettingsModal', suiteHooks => {
+  let $container
+  let component
+  let gradebook
+  let props
 
-  mountComponent (customProps = {}) {
-    const defaultProps = {
-      courseId: '1',
-      locale: 'en',
-      onClose () {},
+  let updatedCourseSettings
+  let fetchedLatePolicy
+  let existingLatePolicy
+  let newLatePolicy
+  let postPolicy
+
+  let fetchLatePolicyPromise
+  let createLatePolicyPromise
+  let updateLatePolicyPromise
+  let setCoursePostPolicyPromise
+  let getAssignmentPostPoliciesPromise
+  let updateCourseSettingsPromise
+  let originalQunitTimeout
+
+  suiteHooks.beforeEach(() => {
+    originalQunitTimeout = QUnit.config.testTimeout
+    /*
+     * The InstUI `Modal` component is taking a while to transition,
+     * so QUnit needs to wait a little longer before timing out.
+     */
+    QUnit.config.testTimeout = 10000
+
+    $container = document.createElement('div')
+    document.body.appendChild($container)
+
+    gradebook = createGradebook({post_manually: false})
+
+    updatedCourseSettings = {allowFinalGradeOverride: true}
+    fetchedLatePolicy = GradebookSettingsModalApi.DEFAULT_LATE_POLICY_DATA
+    newLatePolicy = GradebookSettingsModalApi.DEFAULT_LATE_POLICY_DATA
+    existingLatePolicy = {
+      id: '2901',
+      lateSubmissionDeduction: 0,
+      lateSubmissionDeductionEnabled: false,
+      lateSubmissionInterval: 'day',
+      lateSubmissionMinimumPercent: 0,
+      lateSubmissionMinimumPercentEnabled: false,
+      missingSubmissionDeduction: 0,
+      missingSubmissionDeductionEnabled: false
+    }
+    postPolicy = {postManually: true}
+
+    props = {
+      anonymousAssignmentsPresent: false,
+      courseFeatures: {
+        finalGradeOverrideEnabled: true
+      },
+      courseId: '1201',
+      courseSettings: new CourseSettings(gradebook, {allowFinalGradeOverride: false}),
       gradedLateSubmissionsExist: true,
-      onLatePolicyUpdate () {}
-    };
-    const props = { ...defaultProps, ...customProps };
-    this.wrapper = mount(<GradebookSettingsModal {...props} />);
-    return this.wrapper.instance();
-  },
+      locale: 'en',
+      onClose: sinon.spy(),
+      onCourseSettingsUpdated: sinon.spy(),
+      onEntered: sinon.spy(),
+      onLatePolicyUpdate() {},
+      postPolicies: new PostPolicies(gradebook)
+    }
 
-  stubLatePolicyFetchSuccess (component, customData) {
-    const data = {
-      latePolicy: {
-        id: '15',
-        missingSubmissionDeductionEnabled: false,
-        missingSubmissionDeduction: 0,
-        lateSubmissionDeductionEnabled: false,
-        lateSubmissionDeduction: 0,
-        lateSubmissionInterval: 'day',
-        lateSubmissionMinimumPercentEnabled: false,
-        lateSubmissionMinimumPercent: 0,
-        ...customData
+    fetchLatePolicyPromise = {}
+    fetchLatePolicyPromise.promise = new Promise((resolve, reject) => {
+      fetchLatePolicyPromise.resolve = () => {
+        resolve({data: {latePolicy: fetchedLatePolicy}})
       }
-    };
+      fetchLatePolicyPromise.reject = reject
+    })
+    sandbox
+      .stub(GradebookSettingsModalApi, 'fetchLatePolicy')
+      .returns(fetchLatePolicyPromise.promise)
 
-    const fetchSuccess = Promise.resolve({ data });
-    const promise = fetchSuccess.then(component.onFetchLatePolicySuccess)
-    sandbox.stub(component, 'fetchLatePolicy').returns(promise);
-    return promise;
-  },
+    createLatePolicyPromise = {}
+    createLatePolicyPromise.promise = new Promise((resolve, reject) => {
+      createLatePolicyPromise.resolve = () => {
+        resolve({data: {latePolicy: existingLatePolicy}})
+      }
+      createLatePolicyPromise.reject = reject
+    })
+    sandbox
+      .stub(GradebookSettingsModalApi, 'createLatePolicy')
+      .returns(createLatePolicyPromise.promise)
 
-  teardown () {
-    QUnit.config.testTimeout = this.qunitTimeout;
-    this.wrapper.unmount();
-    destroyContainer();
-    document.getElementById('fixtures').innerHTML = '';
-    clock.restore();
+    updateLatePolicyPromise = {}
+    updateLatePolicyPromise.promise = new Promise((resolve, reject) => {
+      updateLatePolicyPromise.resolve = () => {
+        resolve({data: {latePolicy: existingLatePolicy}})
+      }
+      updateLatePolicyPromise.reject = reject
+    })
+    sandbox
+      .stub(GradebookSettingsModalApi, 'updateLatePolicy')
+      .returns(updateLatePolicyPromise.promise)
+
+    setCoursePostPolicyPromise = {}
+    setCoursePostPolicyPromise.promise = new Promise((resolve, reject) => {
+      setCoursePostPolicyPromise.resolve = () => {
+        const {postManually} = postPolicy
+        resolve({postManually})
+      }
+      setCoursePostPolicyPromise.reject = reject
+    })
+    sandbox.stub(PostPolicyApi, 'setCoursePostPolicy').returns(setCoursePostPolicyPromise.promise)
+
+    getAssignmentPostPoliciesPromise = {}
+    getAssignmentPostPoliciesPromise.promise = new Promise((resolve, reject) => {
+      getAssignmentPostPoliciesPromise.resolve = () => {
+        const assignmentPostPoliciesById = {2345: {postManually: true}}
+        resolve({assignmentPostPoliciesById})
+      }
+      getAssignmentPostPoliciesPromise.reject = reject
+    })
+    sandbox
+      .stub(PostPolicyApi, 'getAssignmentPostPolicies')
+      .returns(getAssignmentPostPoliciesPromise.promise)
+
+    updateCourseSettingsPromise = {}
+    updateCourseSettingsPromise.promise = new Promise((resolve, reject) => {
+      updateCourseSettingsPromise.resolve = () => {
+        resolve({data: updatedCourseSettings})
+      }
+      updateCourseSettingsPromise.reject = reject
+    })
+    sandbox
+      .stub(GradebookSettingsModalApi, 'updateCourseSettings')
+      .returns(updateCourseSettingsPromise.promise)
+  })
+
+  suiteHooks.afterEach(() => {
+    return ensureModalIsClosed().then(() => {
+      ReactDOM.unmountComponentAtNode($container)
+      $container.remove()
+      QUnit.config.testTimeout = originalQunitTimeout
+    })
+  })
+
+  function mountComponent() {
+    const bindRef = ref => {
+      component = ref
+    }
+    ReactDOM.render(<GradebookSettingsModal ref={bindRef} {...props} />, $container)
   }
-});
 
-test('modal is initially closed', function () {
-  this.mountComponent();
-  equal(this.wrapper.find('Modal').prop('open'), false);
-});
+  function getModalElement() {
+    return document.querySelector('[role="dialog"][aria-label="Gradebook Settings"]')
+  }
 
-test('calling open causes the modal to be rendered', function () {
-  const component = this.mountComponent();
-  const fetchLatePolicy = this.stubLatePolicyFetchSuccess(component);
-  component.open();
-  return fetchLatePolicy.then(() => {
-    this.wrapper.update()
-    equal(this.wrapper.find('Modal').prop('open'), true);
-  });
-});
+  function openModal() {
+    component.open()
+    return wait(() => {
+      if (props.onEntered.callCount > 0) {
+        return
+      }
+      throw new Error('Modal is not yet open')
+    })
+  }
 
-test('calling close closes the modal', function () {
-  const component = this.mountComponent();
-  const fetchLatePolicy = this.stubLatePolicyFetchSuccess(component);
-  component.open();
-  return fetchLatePolicy.then(() => {
-    this.wrapper.update()
-    equal(this.wrapper.find('Modal').prop('open'), true, 'modal is open');
-    component.close();
-    this.wrapper.update()
-    equal(this.wrapper.find('Modal').prop('open'), false, 'modal is closed');
-  });
-});
+  function mountAndOpen() {
+    mountComponent()
+    return openModal()
+  }
 
-test('clicking cancel closes the modal', function () {
-  const component = this.mountComponent();
-  const fetchLatePolicy = this.stubLatePolicyFetchSuccess(component);
-  component.open();
-  clock.tick(50); // wait for Modal to transition open
-  return fetchLatePolicy.then(() => {
-    this.wrapper.update()
-    equal(this.wrapper.find('Modal').prop('open'), true);
-    document.getElementById('gradebook-settings-cancel-button').click();
-    this.wrapper.update()
-    equal(this.wrapper.find('Modal').prop('open'), false);
-  });
-});
+  function mountOpenAndLoad() {
+    return mountAndOpen()
+      .then(() => fetchLatePolicyPromise.resolve())
+      .then(() => wait(() => !getSpinner()))
+  }
 
-test('the "Update" button is disabled when the modal opens', function () {
-  const component = this.mountComponent();
-  const fetchLatePolicy = this.stubLatePolicyFetchSuccess(component);
-  component.open();
-  clock.tick(50); // wait for Modal to transition open
-  return fetchLatePolicy.then(() => {
-    this.wrapper.update()
-    const updateButton = document.getElementById('gradebook-settings-update-button')
-    ok(updateButton.getAttribute('aria-disabled'));
-  });
-});
+  function mountOpenLoadAndSelectTab(tabLabel) {
+    return mountOpenAndLoad().then(() => {
+      findTab(tabLabel).click()
+    })
+  }
 
-test('the "Update" button is enabled if a setting is changed', function () {
-  const component = this.mountComponent();
-  const fetchLatePolicy = this.stubLatePolicyFetchSuccess(component);
-  component.open();
-  clock.tick(50); // wait for Modal to transition open
-  return fetchLatePolicy.then(() => {
-    this.wrapper.update()
-    component.changeLatePolicy({ ...component.state.latePolicy, changes: { lateSubmissionDeductionEnabled: true } });
-    const updateButton = document.getElementById('gradebook-settings-update-button');
-    notOk(updateButton.getAttribute('aria-disabled'));
-  });
-});
+  function waitForModalClosed() {
+    return wait(() => {
+      if (props.onClose.callCount > 0) {
+        return
+      }
+      throw new Error('Modal is still open')
+    })
+  }
 
-test('the "Update" button is disabled if a setting is changed, but there are validation errors', function () {
-  const component = this.mountComponent();
-  const fetchLatePolicy = this.stubLatePolicyFetchSuccess(component);
-  component.open();
-  clock.tick(50); // wait for Modal to transition open
-  return fetchLatePolicy.then(() => {
-    this.wrapper.update()
-    component.changeLatePolicy({
-      ...component.state.latePolicy,
-      changes: { lateSubmissionDeductionEnabled: true },
-      validationErrors: { missingSubmissionDeduction: 'Missing submission percent must be numeric' }
-    });
-    const updateButton = document.getElementById('gradebook-settings-update-button');
-    ok(updateButton.getAttribute('aria-disabled'));
-  });
-});
+  function ensureModalIsClosed() {
+    if (getModalElement()) {
+      component.close()
+      return waitForModalClosed()
+    } else {
+      return Promise.resolve()
+    }
+  }
 
-test('clicking "Update" sends a request to update the late policy', function () {
-  sandbox.stub(GradebookSettingsModalApi, 'updateLatePolicy').returns(Promise.resolve());
-  const component = this.mountComponent();
-  const fetchLatePolicy = this.stubLatePolicyFetchSuccess(component);
-  component.open();
-  clock.tick(50); // wait for Modal to transition open
-  return fetchLatePolicy.then(() => {
-    this.wrapper.update()
-    const changes = { lateSubmissionDeductionEnabled: true };
-    component.changeLatePolicy({ ...component.state.latePolicy, changes });
-    const button = document.getElementById('gradebook-settings-update-button');
-    button.click();
-    equal(GradebookSettingsModalApi.updateLatePolicy.callCount, 1, 'updateLatePolicy is called once');
-    const changesArg = GradebookSettingsModalApi.updateLatePolicy.getCall(0).args[1];
-    propEqual(changesArg, changes, 'updateLatePolicy is called with the late policy changes');
-  });
-});
+  function getSpinner() {
+    return [...getModalElement().querySelectorAll('svg title')].find($title =>
+      $title.textContent.includes('Loading')
+    )
+  }
 
-test('clicking "Update" sends a post request to create a late policy if one does not yet exist', function () {
-  sandbox.stub(GradebookSettingsModalApi, 'createLatePolicy').returns(Promise.resolve());
-  // When a late policy does not exist, the API call returns 'Not Found'
-  const component = this.mountComponent();
-  const fetchLatePolicy = this.stubLatePolicyFetchSuccess(component, { newRecord: true });
-  component.open();
-  clock.tick(50); // wait for Modal to transition open
+  function findTab(label) {
+    return [...getModalElement().querySelectorAll('[role="tab"]')].find($tab =>
+      $tab.textContent.includes(label)
+    )
+  }
 
-  return fetchLatePolicy.then(() => {
-    this.wrapper.update()
-    const changes = { lateSubmissionDeductionEnabled: true };
-    component.changeLatePolicy({ ...component.state.latePolicy, changes});
-    document.getElementById('gradebook-settings-update-button').click();
-    equal(GradebookSettingsModalApi.createLatePolicy.callCount, 1, 'createLatePolicy is called once');
-    const changesArg = GradebookSettingsModalApi.createLatePolicy.getCall(0).args[1];
-    propEqual(changesArg, changes, 'createLatePolicy is called with the late policy changes');
-  });
-});
+  function getGradePostingPolicyTab() {
+    return findTab('Grade Posting Policy')
+  }
 
-test('onUpdateLatePolicySuccess calls the onLatePolicyUpdate prop', function () {
-  const onLatePolicyUpdate = sinon.stub();
-  const component = this.mountComponent({ onLatePolicyUpdate });
-  component.onUpdateLatePolicySuccess();
-  strictEqual(onLatePolicyUpdate.callCount, 1);
-});
+  function getAdvancedTab() {
+    return findTab('Advanced')
+  }
+
+  function findCheckbox(label) {
+    const $modal = getModalElement()
+    const $label = [...$modal.querySelectorAll('label')].find($el =>
+      $el.textContent.includes(label)
+    )
+    return $modal.querySelector(`#${$label.getAttribute('for')}`)
+  }
+
+  function getAutomaticallyApplyMissingCheckbox() {
+    return findCheckbox('Automatically apply grade for missing submissions')
+  }
+
+  function getManuallyPostGradesOption() {
+    return findCheckbox('Manually Post Grades')
+  }
+
+  function getAutomaticallyPostGradesOption() {
+    return findCheckbox('Automatically Post Grades')
+  }
+
+  function getAllowFinalGradeOverrideCheckbox() {
+    return findCheckbox('Allow final grade override')
+  }
+
+  function getUpdateButton() {
+    return getModalElement().querySelector('#gradebook-settings-update-button')
+  }
+
+  QUnit.module('#open()', () => {
+    test('opens the modal', async () => {
+      mountComponent()
+      await openModal()
+      ok(getModalElement())
+    })
+  })
+
+  QUnit.module('#close()', () => {
+    test('closes the modal', async () => {
+      mountComponent()
+      await openModal()
+      component.close()
+      await waitForModalClosed()
+      notOk(getModalElement())
+    })
+
+    test('resets the selected post policy to the actual value', async () => {
+      props.postPolicies.setCoursePostPolicy({postManually: true})
+      await mountOpenLoadAndSelectTab('Grade Posting Policy')
+      getAutomaticallyPostGradesOption().click()
+      component.close()
+      await waitForModalClosed()
+      await mountOpenLoadAndSelectTab('Grade Posting Policy')
+      strictEqual(getManuallyPostGradesOption().checked, true)
+    })
+  })
+
+  QUnit.module('upon opening', () => {
+    test('sends a request for the course late policy', async () => {
+      await mountOpenAndLoad()
+      strictEqual(GradebookSettingsModalApi.fetchLatePolicy.callCount, 1)
+    })
+
+    test('includes the course id when requesting the course late policy', async () => {
+      await mountOpenAndLoad()
+      const [courseId] = GradebookSettingsModalApi.fetchLatePolicy.lastCall.args
+      strictEqual(courseId, '1201')
+    })
+  })
+
+  QUnit.module('"Grade Posting Policy" tab', () => {
+    test('is present when "Post Policies" is enabled', async () => {
+      await mountOpenAndLoad()
+      ok(getGradePostingPolicyTab())
+    })
+
+    test('is not present when "Post Policies" is disabled', async () => {
+      props.postPolicies = null
+      await mountOpenAndLoad()
+      notOk(getGradePostingPolicyTab())
+    })
+  })
+
+  QUnit.module('"Advanced" tab', () => {
+    test('is present when "Final Grade Override" is enabled', async () => {
+      await mountOpenAndLoad()
+      ok(getAdvancedTab())
+    })
+
+    test('is not present when "Final Grade Override" is disabled', async () => {
+      props.courseFeatures.finalGradeOverrideEnabled = false
+      await mountOpenAndLoad()
+      notOk(getAdvancedTab())
+    })
+  })
+
+  QUnit.module('"Update" button', () => {
+    test('is disabled when no settings have been changed', async () => {
+      await mountOpenAndLoad()
+      strictEqual(getUpdateButton().disabled, true)
+    })
+
+    test('is enabled when the late policy has been changed', async () => {
+      await mountOpenAndLoad()
+      getAutomaticallyApplyMissingCheckbox().click()
+      strictEqual(getUpdateButton().disabled, false)
+    })
+
+    test('is disabled when a late policy change was reverted', async () => {
+      await mountOpenAndLoad()
+      const $checkbox = getAutomaticallyApplyMissingCheckbox()
+      $checkbox.click() // change the setting
+      $checkbox.click() // change it back
+      strictEqual(getUpdateButton().disabled, true)
+    })
+
+    test('is enabled when the grade posting policy has been changed', async () => {
+      props.postPolicies.setCoursePostPolicy({postManually: true})
+      await mountOpenLoadAndSelectTab('Grade Posting Policy')
+      getAutomaticallyPostGradesOption().click()
+      strictEqual(getUpdateButton().disabled, false)
+    })
+
+    test('is disabled when a grade posting policy change was reverted', async () => {
+      props.postPolicies.setCoursePostPolicy({postManually: true})
+      await mountOpenLoadAndSelectTab('Grade Posting Policy')
+      getAutomaticallyPostGradesOption().click()
+      getManuallyPostGradesOption().click()
+      strictEqual(getUpdateButton().disabled, true)
+    })
+
+    test('is enabled when an advanced settings has been changed', async () => {
+      await mountOpenLoadAndSelectTab('Advanced')
+      getAllowFinalGradeOverrideCheckbox().click()
+      strictEqual(getUpdateButton().disabled, false)
+    })
+
+    test('is disabled when an advanced settings change was reverted', async () => {
+      await mountOpenLoadAndSelectTab('Advanced')
+      getAllowFinalGradeOverrideCheckbox().click()
+      getAllowFinalGradeOverrideCheckbox().click()
+      strictEqual(getUpdateButton().disabled, true)
+    })
+
+    test('is disabled when a late policy change is invalid', async () => {
+      await mountOpenAndLoad()
+      getAutomaticallyApplyMissingCheckbox().click()
+      const $input = getModalElement().querySelector('#missing-submission-grade')
+      fireEvent.change($input, {target: {value: '-1'}})
+      strictEqual(getUpdateButton().disabled, true)
+    })
+
+    QUnit.module('when clicked', () => {
+      test('creates a new late policy when none existed', async () => {
+        fetchedLatePolicy = newLatePolicy
+        await mountOpenAndLoad()
+        getAutomaticallyApplyMissingCheckbox().click()
+        getUpdateButton().click()
+        strictEqual(GradebookSettingsModalApi.createLatePolicy.callCount, 1)
+      })
+
+      test('updates the late policy when one exists', async () => {
+        fetchedLatePolicy = existingLatePolicy
+        await mountOpenAndLoad()
+        getAutomaticallyApplyMissingCheckbox().click()
+        getUpdateButton().click()
+        strictEqual(GradebookSettingsModalApi.updateLatePolicy.callCount, 1)
+      })
+
+      test('does not create a late policy when no settings have been changed', async () => {
+        await mountOpenAndLoad()
+        const $checkbox = getAutomaticallyApplyMissingCheckbox()
+        $checkbox.click() // change the setting
+        $checkbox.click() // change it back
+        getUpdateButton().click()
+        strictEqual(GradebookSettingsModalApi.createLatePolicy.callCount, 0)
+      })
+
+      test('updates the course post policy when changed', async () => {
+        await mountOpenLoadAndSelectTab('Grade Posting Policy')
+        getManuallyPostGradesOption().click()
+        getUpdateButton().click()
+        strictEqual(PostPolicyApi.setCoursePostPolicy.callCount, 1)
+      })
+
+      test('does not update the course post policy when unchanged', async () => {
+        await mountOpenLoadAndSelectTab('Grade Posting Policy')
+        getManuallyPostGradesOption().click()
+        getAutomaticallyPostGradesOption().click()
+        getUpdateButton().click()
+        strictEqual(PostPolicyApi.setCoursePostPolicy.callCount, 0)
+      })
+
+      test('updates advanced settings when changed', async () => {
+        await mountOpenLoadAndSelectTab('Advanced')
+        getAllowFinalGradeOverrideCheckbox().click()
+        getUpdateButton().click()
+        strictEqual(GradebookSettingsModalApi.updateCourseSettings.callCount, 1)
+      })
+
+      test('does not update advanced settings when unchanged', async () => {
+        await mountOpenLoadAndSelectTab('Advanced')
+        getAllowFinalGradeOverrideCheckbox().click()
+        getAllowFinalGradeOverrideCheckbox().click()
+        getUpdateButton().click()
+        strictEqual(GradebookSettingsModalApi.updateCourseSettings.callCount, 0)
+      })
+
+      QUnit.module('when a late policy change is invalid', contextHooks => {
+        contextHooks.beforeEach(() => {
+          return mountOpenAndLoad().then(() => {
+            getAutomaticallyApplyMissingCheckbox().click()
+            const $input = getModalElement().querySelector('#missing-submission-grade')
+            fireEvent.change($input, {target: {value: '-1'}})
+          })
+        })
+
+        test('does not attempt to create the late policy', () => {
+          getUpdateButton().click()
+          strictEqual(GradebookSettingsModalApi.createLatePolicy.callCount, 0)
+        })
+
+        test('updates the course post policy when changed', () => {
+          getGradePostingPolicyTab().click()
+          getManuallyPostGradesOption().click()
+          getUpdateButton().click()
+          strictEqual(PostPolicyApi.setCoursePostPolicy.callCount, 1)
+        })
+
+        test('updates advanced settings when changed', () => {
+          getAdvancedTab().click()
+          getAllowFinalGradeOverrideCheckbox().click()
+          getUpdateButton().click()
+          strictEqual(GradebookSettingsModalApi.updateCourseSettings.callCount, 1)
+        })
+      })
+    })
+  })
+
+  QUnit.module('when creating a new late policy', hooks => {
+    hooks.beforeEach(() => {
+      sandbox.spy(FlashAlert, 'showFlashAlert')
+
+      return mountOpenAndLoad().then(() => {
+        getAutomaticallyApplyMissingCheckbox().click()
+        getUpdateButton().click()
+      })
+    })
+
+    hooks.afterEach(() => {
+      FlashAlert.destroyContainer()
+    })
+
+    test('disables the "Update" button while the request is pending', () => {
+      strictEqual(getUpdateButton().disabled, true)
+      createLatePolicyPromise.resolve()
+    })
+
+    QUnit.module('when the request succeeds', contextHooks => {
+      contextHooks.beforeEach(() => {
+        createLatePolicyPromise.resolve()
+        return waitForModalClosed()
+      })
+
+      test('displays a flash alert', () => {
+        strictEqual(FlashAlert.showFlashAlert.callCount, 1)
+      })
+
+      test('uses the "success" type for the flash alert', () => {
+        const [{type}] = FlashAlert.showFlashAlert.lastCall.args
+        equal(type, 'success')
+      })
+
+      test('closes the modal', () => {
+        notOk(getModalElement())
+      })
+    })
+
+    QUnit.module('when the request fails', contextHooks => {
+      contextHooks.beforeEach(() => {
+        createLatePolicyPromise.reject(new Error('request failed'))
+        return wait(() => FlashAlert.showFlashAlert.callCount > 0)
+      })
+
+      test('displays a flash alert', () => {
+        strictEqual(FlashAlert.showFlashAlert.callCount, 1)
+      })
+
+      test('uses the "error" type for the flash alert', () => {
+        const [{type}] = FlashAlert.showFlashAlert.lastCall.args
+        equal(type, 'error')
+      })
+
+      test('does not close the modal', () => {
+        ok(getModalElement())
+      })
+    })
+  })
+
+  QUnit.module('when updating the late policy', hooks => {
+    hooks.beforeEach(() => {
+      sandbox.spy(FlashAlert, 'showFlashAlert')
+
+      fetchedLatePolicy = existingLatePolicy
+      return mountOpenAndLoad().then(() => {
+        getAutomaticallyApplyMissingCheckbox().click()
+        getUpdateButton().click()
+      })
+    })
+
+    hooks.afterEach(() => {
+      FlashAlert.destroyContainer()
+    })
+
+    test('disables the "Update" button while the request is pending', () => {
+      strictEqual(getUpdateButton().disabled, true)
+      updateLatePolicyPromise.resolve()
+    })
+
+    QUnit.module('when the request succeeds', contextHooks => {
+      contextHooks.beforeEach(() => {
+        updateLatePolicyPromise.resolve()
+        return waitForModalClosed()
+      })
+
+      test('displays a flash alert', () => {
+        strictEqual(FlashAlert.showFlashAlert.callCount, 1)
+      })
+
+      test('uses the "success" type for the flash alert', () => {
+        const [{type}] = FlashAlert.showFlashAlert.lastCall.args
+        equal(type, 'success')
+      })
+
+      test('closes the modal', () => {
+        notOk(getModalElement())
+      })
+    })
+
+    QUnit.module('when the request fails', contextHooks => {
+      contextHooks.beforeEach(() => {
+        updateLatePolicyPromise.reject(new Error('request failed'))
+        return wait(() => FlashAlert.showFlashAlert.callCount > 0)
+      })
+
+      test('displays a flash alert', () => {
+        strictEqual(FlashAlert.showFlashAlert.callCount, 1)
+      })
+
+      test('uses the "error" type for the flash alert', () => {
+        const [{type}] = FlashAlert.showFlashAlert.lastCall.args
+        equal(type, 'error')
+      })
+
+      test('does not close the modal', () => {
+        ok(getModalElement())
+      })
+    })
+  })
+
+  QUnit.module('when updating the course post policy', hooks => {
+    hooks.beforeEach(() => {
+      sandbox.spy(FlashAlert, 'showFlashAlert')
+      sinon.spy(props.postPolicies, 'setCoursePostPolicy')
+      sinon.spy(props.postPolicies, 'setAssignmentPostPolicies')
+
+      return mountOpenLoadAndSelectTab('Grade Posting Policy').then(() => {
+        getManuallyPostGradesOption().click()
+        getUpdateButton().click()
+      })
+    })
+
+    hooks.afterEach(() => {
+      FlashAlert.destroyContainer()
+    })
+
+    test('disables the "Update" button while the request is pending', () => {
+      strictEqual(getUpdateButton().disabled, true)
+      setCoursePostPolicyPromise.resolve()
+    })
+
+    QUnit.module('when the call to setCoursePostPolicy succeeds', contextHooks => {
+      contextHooks.beforeEach(() => {
+        setCoursePostPolicyPromise.resolve()
+      })
+
+      test('calls getAssignmentPostPolicies', async () => {
+        getAssignmentPostPoliciesPromise.resolve()
+        await waitForModalClosed()
+
+        strictEqual(PostPolicyApi.getAssignmentPostPolicies.callCount, 1)
+      })
+
+      QUnit.module('when getAssignmentPostPolicies succeeds', assignmentSuccessHooks => {
+        assignmentSuccessHooks.beforeEach(() => {
+          getAssignmentPostPoliciesPromise.resolve()
+          return waitForModalClosed()
+        })
+
+        test('displays a flash alert', () => {
+          strictEqual(FlashAlert.showFlashAlert.callCount, 1)
+        })
+
+        test('uses the "success" type for the flash alert', () => {
+          const [{type}] = FlashAlert.showFlashAlert.lastCall.args
+          equal(type, 'success')
+        })
+
+        test('calls setCoursePostPolicy on the associated PostPolicies object', () => {
+          strictEqual(props.postPolicies.setCoursePostPolicy.callCount, 1)
+        })
+
+        test('passes the new postManually value to setCoursePostPolicy', () => {
+          const {postManually} = props.postPolicies.setCoursePostPolicy.firstCall.args[0]
+          strictEqual(postManually, true)
+        })
+
+        test('calls setAssignmentPostPolicies on the associated PostPolicies object', () => {
+          strictEqual(props.postPolicies.setAssignmentPostPolicies.callCount, 1)
+        })
+
+        test('passes the received assignment IDs and post policies to setAssignmentPostPolicies', () => {
+          const {
+            assignmentPostPoliciesById
+          } = props.postPolicies.setAssignmentPostPolicies.firstCall.args[0]
+          deepEqual(assignmentPostPoliciesById, {2345: {postManually: true}})
+        })
+
+        test('closes the modal', () => {
+          notOk(getModalElement())
+        })
+      })
+
+      QUnit.module('when getAssignmentPostPolicies fails', assignmentFailureHooks => {
+        assignmentFailureHooks.beforeEach(() => {
+          getAssignmentPostPoliciesPromise.reject()
+          return wait(() => FlashAlert.showFlashAlert.callCount > 0)
+        })
+
+        test('shows an "error" flash alert', () => {
+          const [{type}] = FlashAlert.showFlashAlert.lastCall.args
+          equal(type, 'error')
+        })
+      })
+    })
+
+    QUnit.module('when the request fails', contextHooks => {
+      contextHooks.beforeEach(() => {
+        setCoursePostPolicyPromise.reject(new Error('request failed'))
+        return wait(() => FlashAlert.showFlashAlert.callCount > 0)
+      })
+
+      test('displays a flash alert', () => {
+        strictEqual(FlashAlert.showFlashAlert.callCount, 1)
+      })
+
+      test('uses the "error" type for the flash alert', () => {
+        const [{type}] = FlashAlert.showFlashAlert.lastCall.args
+        equal(type, 'error')
+      })
+
+      test('does not update the Gradebook Post Policies', () => {
+        notDeepEqual(props.postPolicies.coursePostPolicy, postPolicy)
+      })
+
+      test('does not close the modal', () => {
+        ok(getModalElement())
+      })
+    })
+  })
+
+  QUnit.module('when updating advanced settings', hooks => {
+    hooks.beforeEach(() => {
+      sandbox.spy(FlashAlert, 'showFlashAlert')
+
+      return mountOpenLoadAndSelectTab('Advanced').then(() => {
+        getAllowFinalGradeOverrideCheckbox().click()
+        getUpdateButton().click()
+      })
+    })
+
+    hooks.afterEach(() => {
+      FlashAlert.destroyContainer()
+    })
+
+    test('disables the "Update" button while the request is pending', () => {
+      strictEqual(getUpdateButton().disabled, true)
+      updateCourseSettingsPromise.resolve()
+    })
+
+    QUnit.module('when the request succeeds', contextHooks => {
+      contextHooks.beforeEach(() => {
+        updateCourseSettingsPromise.resolve()
+        return waitForModalClosed()
+      })
+
+      test('displays a flash alert', () => {
+        strictEqual(FlashAlert.showFlashAlert.callCount, 1)
+      })
+
+      test('uses the "success" type for the flash alert', () => {
+        const [{type}] = FlashAlert.showFlashAlert.lastCall.args
+        equal(type, 'success')
+      })
+
+      test('calls the onCourseSettingsUpdated callback prop', () => {
+        strictEqual(props.onCourseSettingsUpdated.callCount, 1)
+      })
+
+      test('includes the updated settings when calling onCourseSettingsUpdated', () => {
+        const [settings] = props.onCourseSettingsUpdated.lastCall.args
+        deepEqual(settings, updatedCourseSettings)
+      })
+
+      test('closes the modal', () => {
+        notOk(getModalElement())
+      })
+    })
+
+    QUnit.module('when the request fails', contextHooks => {
+      contextHooks.beforeEach(() => {
+        updateCourseSettingsPromise.reject(new Error('request failed'))
+        return wait(() => FlashAlert.showFlashAlert.callCount > 0)
+      })
+
+      test('displays a flash alert', () => {
+        strictEqual(FlashAlert.showFlashAlert.callCount, 1)
+      })
+
+      test('uses the "error" type for the flash alert', () => {
+        const [{type}] = FlashAlert.showFlashAlert.lastCall.args
+        equal(type, 'error')
+      })
+
+      test('does not call the onCourseSettingsUpdated callback prop', () => {
+        strictEqual(props.onCourseSettingsUpdated.callCount, 0)
+      })
+
+      test('does not close the modal', () => {
+        ok(getModalElement())
+      })
+    })
+  })
+
+  QUnit.module('"Cancel" button', () => {
+    function getCancelButton() {
+      return getModalElement().querySelector('#gradebook-settings-cancel-button')
+    }
+
+    QUnit.module('when clicked', () => {
+      test('closes the modal', async () => {
+        await mountAndOpen()
+        getCancelButton().click()
+        await waitForModalClosed()
+        notOk(getModalElement())
+      })
+    })
+  })
+})
+/* eslint-enable qunit/no-identical-names */

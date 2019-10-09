@@ -15,14 +15,12 @@
 # You should have received a copy of the GNU Affero General Public License along
 # with this program. If not, see <http://www.gnu.org/licenses/>.
 
-define [
-  'jquery'
-  'jst/PostGradesFrameDialog'
-  'jsx/external_apps/lib/iframeAllowances'
-  'jqueryui/dialog'
-], ($, postGradesFrameDialog, iframeAllowances) ->
+import $ from 'jquery'
+import postGradesFrameDialog from 'jst/PostGradesFrameDialog'
+import iframeAllowances from 'jsx/external_apps/lib/iframeAllowances'
+import 'jqueryui/dialog'
 
-  class PostGradesFrameDialog
+export default class PostGradesFrameDialog
     constructor: (options) ->
       # init vars
       if options.returnFocusTo
@@ -47,18 +45,18 @@ define [
         iframeWidth = @$iframe.outerWidth(true)
         iframeHeight = @$iframe.outerHeight(true)
         @$iframe.addClass('info_alert_outline')
-        $(e.target).removeClass('screenreader-only')
+        @$iframe.data('height-with-alert', iframeHeight)
+        $(e.target).children('div').first().removeClass('screenreader-only')
         alertHeight = $(e.target).outerHeight(true)
         @$iframe.css('height', (iframeHeight - alertHeight - 4) + 'px')
           .css('width', (iframeWidth - 4) + 'px')
         @$dialog.scrollLeft(0).scrollTop(0)
       ).on('blur', (e) =>
         iframeWidth = @$iframe.outerWidth(true)
-        iframeHeight = @$iframe.outerHeight(true)
-        alertHeight = $(e.target).outerHeight(true)
+        iframeHeight = @$iframe.data('height-with-alert')
         @$iframe.removeClass('info_alert_outline')
-        $(e.target).addClass('screenreader-only')
-        @$iframe.css('height', (iframeHeight + alertHeight) + 'px')
+        $(e.target).children('div').first().addClass('screenreader-only')
+        @$iframe.css('height', iframeHeight + 'px')
           .css('width', iframeWidth + 'px')
         @$dialog.scrollLeft(0).scrollTop(0)
       )

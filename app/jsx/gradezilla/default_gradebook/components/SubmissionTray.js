@@ -16,63 +16,58 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-import React from 'react';
-import { arrayOf, bool, func, number, oneOf, shape, string } from 'prop-types';
-import I18n from 'i18n!gradebook';
-import Avatar from '@instructure/ui-elements/lib/components/Avatar';
-import Button from '@instructure/ui-buttons/lib/components/Button';
-import CloseButton from '@instructure/ui-buttons/lib/components/CloseButton'
-import View from '@instructure/ui-layout/lib/components/View';
-import Heading from '@instructure/ui-elements/lib/components/Heading';
-import Link from '@instructure/ui-elements/lib/components/Link';
-import Spinner from '@instructure/ui-elements/lib/components/Spinner';
-import Tray from '@instructure/ui-overlays/lib/components/Tray';
-import Text from '@instructure/ui-elements/lib/components/Text';
-import IconSpeedGraderLine from '@instructure/ui-icons/lib/Line/IconSpeedGrader';
-import Carousel from '../../../gradezilla/default_gradebook/components/Carousel';
-import GradeInput from '../../../gradezilla/default_gradebook/components/GradeInput';
-import LatePolicyGrade from '../../../gradezilla/default_gradebook/components/LatePolicyGrade';
-import CommentPropTypes from '../../../gradezilla/default_gradebook/propTypes/CommentPropTypes';
-import SubmissionCommentListItem from '../../../gradezilla/default_gradebook/components/SubmissionCommentListItem';
-import SubmissionCommentCreateForm from '../../../gradezilla/default_gradebook/components/SubmissionCommentCreateForm';
-import SubmissionStatus from '../../../gradezilla/default_gradebook/components/SubmissionStatus';
-import SubmissionTrayRadioInputGroup from '../../../gradezilla/default_gradebook/components/SubmissionTrayRadioInputGroup';
+import React from 'react'
+import {arrayOf, bool, func, number, oneOf, shape, string} from 'prop-types'
+import I18n from 'i18n!gradezilla'
+import {Alert} from '@instructure/ui-alerts'
+import {Avatar, Heading, Spinner, Text} from '@instructure/ui-elements'
+import {Button, CloseButton} from '@instructure/ui-buttons'
+import {View} from '@instructure/ui-layout'
+import {Tray} from '@instructure/ui-overlays'
+import {IconSpeedGraderLine} from '@instructure/ui-icons'
+import Carousel from './Carousel'
+import GradeInput from './GradeInput'
+import LatePolicyGrade from './LatePolicyGrade'
+import CommentPropTypes from '../propTypes/CommentPropTypes'
+import SubmissionCommentListItem from './SubmissionCommentListItem'
+import SubmissionCommentCreateForm from './SubmissionCommentCreateForm'
+import SubmissionStatus from './SubmissionStatus'
+import SubmissionTrayRadioInputGroup from './SubmissionTrayRadioInputGroup'
 
-function renderAvatar (name, avatarUrl) {
+function renderAvatar(name, avatarUrl) {
   return (
     <div id="SubmissionTray__Avatar">
       <Avatar name={name} src={avatarUrl} size="auto" />
     </div>
-  );
+  )
 }
 
-function renderTraySubHeading (headingText) {
+function renderTraySubHeading(headingText) {
   return (
     <Heading level="h4" as="h2" margin="auto auto small">
-      <Text weight="bold">
-        {headingText}
-      </Text>
+      <Text weight="bold">{headingText}</Text>
     </Heading>
-  );
+  )
 }
 
 export default class SubmissionTray extends React.Component {
   static defaultProps = {
     contentRef: undefined,
     gradingDisabled: false,
-    latePolicy: { lateSubmissionInterval: 'day' },
-    submission: { drop: false },
-    pendingGradeInfo: null,
-  };
+    latePolicy: {lateSubmissionInterval: 'day'},
+    submission: {drop: false},
+    pendingGradeInfo: null
+  }
 
   static propTypes = {
     assignment: shape({
       name: string.isRequired,
       htmlUrl: string.isRequired,
       muted: bool.isRequired,
+      postManually: bool.isRequired,
       published: bool.isRequired,
       anonymizeStudents: bool.isRequired,
-      moderatedGrading: bool.isRequired,
+      moderatedGrading: bool.isRequired
     }).isRequired,
     contentRef: func,
     currentUserId: string.isRequired,
@@ -95,6 +90,8 @@ export default class SubmissionTray extends React.Component {
       grade: string,
       valid: bool.isRequired
     }),
+    postPoliciesEnabled: bool.isRequired,
+    requireStudentGroupForSpeedGrader: bool.isRequired,
     student: shape({
       id: string.isRequired,
       avatarUrl: string,
@@ -106,9 +103,11 @@ export default class SubmissionTray extends React.Component {
       drop: bool,
       excused: bool.isRequired,
       grade: string,
+      gradedAt: string.isRequired,
       late: bool.isRequired,
       missing: bool.isRequired,
       pointsDeducted: number,
+      postedAt: string.isRequired,
       secondsLate: number.isRequired,
       assignmentId: string.isRequired
     }),
@@ -140,13 +139,13 @@ export default class SubmissionTray extends React.Component {
     isInNoGradingPeriod: bool.isRequired,
     isNotCountedForScore: bool.isRequired,
     onAnonymousSpeedGraderClick: func.isRequired
-  };
+  }
 
   cancelCommenting = () => {
-    this.props.editSubmissionComment(null);
-  };
+    this.props.editSubmissionComment(null)
+  }
 
-  renderSubmissionCommentList () {
+  renderSubmissionCommentList() {
     return this.props.submissionComments.map(comment => (
       <SubmissionCommentListItem
         author={comment.author}
@@ -160,20 +159,22 @@ export default class SubmissionTray extends React.Component {
         editing={!!this.props.editedCommentId && this.props.editedCommentId === comment.id}
         id={comment.id}
         key={comment.id}
-        last={this.props.submissionComments[this.props.submissionComments.length - 1].id === comment.id}
+        last={
+          this.props.submissionComments[this.props.submissionComments.length - 1].id === comment.id
+        }
         deleteSubmissionComment={this.props.deleteSubmissionComment}
         editSubmissionComment={this.props.editSubmissionComment}
         updateSubmissionComment={this.props.updateSubmissionComment}
         processing={this.props.processing}
         setProcessing={this.props.setProcessing}
       />
-    ));
+    ))
   }
 
-  renderSubmissionComments () {
-    const {anonymizeStudents, moderatedGrading, muted} = this.props.assignment;
+  renderSubmissionComments() {
+    const {anonymizeStudents, moderatedGrading, muted} = this.props.assignment
     if (anonymizeStudents || (moderatedGrading && muted)) {
-      return;
+      return
     }
 
     if (this.props.submissionCommentsLoaded) {
@@ -183,52 +184,74 @@ export default class SubmissionTray extends React.Component {
 
           {this.renderSubmissionCommentList()}
 
-          {
-            !this.props.editedCommentId &&
-              <SubmissionCommentCreateForm
-                cancelCommenting={this.cancelCommenting}
-                createSubmissionComment={this.props.createSubmissionComment}
-                processing={this.props.processing}
-                setProcessing={this.props.setProcessing}
-              />
-          }
+          {!this.props.editedCommentId && (
+            <SubmissionCommentCreateForm
+              cancelCommenting={this.cancelCommenting}
+              createSubmissionComment={this.props.createSubmissionComment}
+              processing={this.props.processing}
+              setProcessing={this.props.setProcessing}
+            />
+          )}
         </div>
-      );
+      )
     }
 
     return (
-      <div style={{ textAlign: 'center' }}>
+      <div style={{textAlign: 'center'}}>
         <Spinner title={I18n.t('Loading comments')} size="large" />
       </div>
-    );
+    )
   }
 
-  renderSpeedGraderLink (speedGraderProps) {
-    const buttonProps = { variant: 'link', href: speedGraderProps.speedGraderUrl }
-    if (speedGraderProps.anonymizeStudents) {
-      buttonProps.onClick = (e) => {
-        e.preventDefault();
-        this.props.onAnonymousSpeedGraderClick(speedGraderProps.speedGraderUrl);
-      };
+  renderSpeedGraderLink(speedGraderProps) {
+    const buttonProps = {
+      disabled: speedGraderProps.requireStudentGroup,
+      href: speedGraderProps.speedGraderUrl,
+      variant: 'link'
     }
+    if (speedGraderProps.anonymizeStudents) {
+      buttonProps.onClick = e => {
+        e.preventDefault()
+        this.props.onAnonymousSpeedGraderClick(speedGraderProps.speedGraderUrl)
+      }
+    }
+
     return (
-      <View as="div" textAlign="center">
-        <Button {...buttonProps}>
-          <IconSpeedGraderLine />
-          {I18n.t('SpeedGrader')}
-        </Button>
+      <View as="div">
+        {speedGraderProps.requireStudentGroup && (
+          <Alert variant="info">
+            <Text as="p" weight="bold">
+              {I18n.t('Select Student Group')}
+            </Text>
+
+            <Text as="p">
+              {I18n.t(`
+                Due to the size of your course you must select a student group before launching
+                SpeedGrader.
+              `)}
+            </Text>
+          </Alert>
+        )}
+        <View as="div" textAlign="center">
+          <Button {...buttonProps}>
+            <IconSpeedGraderLine />
+            {I18n.t('SpeedGrader')}
+          </Button>
+        </View>
       </View>
-    );
+    )
   }
 
-  render () {
-    const { name, avatarUrl } = this.props.student;
-    const assignmentParam = `assignment_id=${this.props.submission.assignmentId}`;
-    const studentParam = `#{"student_id":"${this.props.student.id}"}`;
+  render() {
+    const {name, avatarUrl} = this.props.student
+    const assignmentParam = `assignment_id=${this.props.submission.assignmentId}`
+    const studentParam = `student_id=${this.props.student.id}`
     const speedGraderUrlParams = this.props.assignment.anonymizeStudents
       ? assignmentParam
-      : `${assignmentParam}${studentParam}`
-    const speedGraderUrl = encodeURI(`/courses/${this.props.courseId}/gradebook/speed_grader?${speedGraderUrlParams}`)
+      : `${assignmentParam}&${studentParam}`
+    const speedGraderUrl = encodeURI(
+      `/courses/${this.props.courseId}/gradebook/speed_grader?${speedGraderUrlParams}`
+    )
 
     const submissionCommentsProps = {
       submissionComments: this.props.submissionComments,
@@ -236,24 +259,26 @@ export default class SubmissionTray extends React.Component {
       deleteSubmissionComment: this.props.deleteSubmissionComment,
       createSubmissionComment: this.props.createSubmissionComment,
       processing: this.props.processing,
-      setProcessing: this.props.setProcessing,
-    };
-    const trayIsBusy = this.props.processing || this.props.submissionUpdating || !this.props.submissionCommentsLoaded;
+      setProcessing: this.props.setProcessing
+    }
+    const trayIsBusy =
+      this.props.processing || this.props.submissionUpdating || !this.props.submissionCommentsLoaded
 
-    let carouselContainerStyleOverride = '0 0 0 0';
+    let carouselContainerStyleOverride = '0 0 0 0'
 
     if (!avatarUrl) {
       // When we don't have an avatar, let's ensure there's enough space between the tray close button and the student
       // carousel's previous student arrow
-      carouselContainerStyleOverride = 'small 0 0 0';
+      carouselContainerStyleOverride = 'small 0 0 0'
     }
 
-    let speedGraderProps = null;
+    let speedGraderProps = null
     if (this.props.speedGraderEnabled) {
       speedGraderProps = {
         anonymizeStudents: this.props.assignment.anonymizeStudents,
+        requireStudentGroup: this.props.requireStudentGroupForSpeedGrader,
         speedGraderUrl
-      };
+      }
     }
 
     return (
@@ -270,7 +295,7 @@ export default class SubmissionTray extends React.Component {
           {I18n.t('Close submission tray')}
         </CloseButton>
         <div className="SubmissionTray__Container">
-          <div id="SubmissionTray__Content" style={{ display: 'flex', flexDirection: 'column' }}>
+          <div id="SubmissionTray__Content" style={{display: 'flex', flexDirection: 'column'}}>
             <View as="div" padding={carouselContainerStyleOverride}>
               {avatarUrl && renderAvatar(name, avatarUrl)}
 
@@ -284,9 +309,13 @@ export default class SubmissionTray extends React.Component {
                 onRightArrowClick={this.props.selectNextStudent}
                 rightArrowDescription={I18n.t('Next student')}
               >
-                <Link href={this.props.student.gradesUrl}>
+                <Button
+                  href={this.props.student.gradesUrl}
+                  variant="link"
+                  theme={{mediumPadding: '0', mediumHeight: 'normal'}}
+                >
                   {name}
-                </Link>
+                </Button>
               </Carousel>
 
               <View as="div" margin="small 0" className="hr" />
@@ -301,17 +330,21 @@ export default class SubmissionTray extends React.Component {
                 onRightArrowClick={this.props.selectNextAssignment}
                 rightArrowDescription={I18n.t('Next assignment')}
               >
-                <Link href={this.props.assignment.htmlUrl}>
+                <Button
+                  href={this.props.assignment.htmlUrl}
+                  variant="link"
+                  theme={{mediumPadding: '0', mediumHeight: 'normal'}}
+                >
                   {this.props.assignment.name}
-                </Link>
+                </Button>
               </Carousel>
 
-              { this.props.speedGraderEnabled && this.renderSpeedGraderLink(speedGraderProps) }
+              {this.props.speedGraderEnabled && this.renderSpeedGraderLink(speedGraderProps)}
 
               <View as="div" margin="small 0" className="hr" />
             </View>
 
-            <View as="div" style={{ overflowY: 'auto', flex: '1 1 auto' }}>
+            <View as="div" style={{overflowY: 'auto', flex: '1 1 auto'}}>
               <SubmissionStatus
                 assignment={this.props.assignment}
                 isConcluded={this.props.student.isConcluded}
@@ -319,6 +352,7 @@ export default class SubmissionTray extends React.Component {
                 isInClosedGradingPeriod={this.props.isInClosedGradingPeriod}
                 isInNoGradingPeriod={this.props.isInNoGradingPeriod}
                 isNotCountedForScore={this.props.isNotCountedForScore}
+                postPoliciesEnabled={this.props.postPoliciesEnabled}
                 submission={this.props.submission}
               />
 
@@ -333,7 +367,7 @@ export default class SubmissionTray extends React.Component {
                 submissionUpdating={this.props.submissionUpdating}
               />
 
-              {!!this.props.submission.pointsDeducted &&
+              {!!this.props.submission.pointsDeducted && (
                 <View as="div" margin="small 0 0 0">
                   <LatePolicyGrade
                     assignment={this.props.assignment}
@@ -342,7 +376,7 @@ export default class SubmissionTray extends React.Component {
                     submission={this.props.submission}
                   />
                 </View>
-              }
+              )}
 
               <View as="div" margin="small 0" className="hr" />
 
@@ -367,6 +401,6 @@ export default class SubmissionTray extends React.Component {
           </div>
         </div>
       </Tray>
-    );
+    )
   }
 }

@@ -31,10 +31,11 @@ describe "login logout test" do
   end
 
   before do
+    Account.default.enable_canvas_authentication
     @login_error_box_css = ".error_text:last"
   end
 
-  it "should login successfully with correct username and password", priority: "2" do
+  it "should login successfully with correct username and password", :xbrowser, priority: "2" do
     user_with_pseudonym({:active_user => true})
     login_as
     expect(f('[aria-label="Profile tray"] h2').text).to eq @user.primary_pseudonym.unique_id

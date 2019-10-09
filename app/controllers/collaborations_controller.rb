@@ -168,6 +168,7 @@ class CollaborationsController < ApplicationController
   def api_index
     return unless authorized_action(@context, @current_user, :read) &&
       (tab_enabled?(@context.class::TAB_COLLABORATIONS) || tab_enabled?(@context.class::TAB_COLLABORATIONS_NEW))
+    log_api_asset_access([ "collaborations", @context ], "collaborations", "other")
 
     url = @context.instance_of?(Course) ? api_v1_course_collaborations_index_url : api_v1_group_collaborations_index_url
 
@@ -176,10 +177,10 @@ class CollaborationsController < ApplicationController
                              where(type: 'ExternalToolCollaboration')
 
     unless @context.grants_right?(@current_user, session, :manage_content)
-      where_collaborators = Collaboration.arel_table[:user_id].eq(@current_user.id).
-                            or(Collaborator.arel_table[:user_id].eq(@current_user.id))
+      where_collaborators = Collaboration.arel_table[:user_id].eq(@current_user&.id).
+                            or(Collaborator.arel_table[:user_id].eq(@current_user&.id))
       if @context.instance_of?(Course)
-        users_course_groups = @context.groups.joins(:users).where(User.arel_table[:id].eq(@current_user.id)).pluck(:id)
+        users_course_groups = @context.groups.joins(:users).where(User.arel_table[:id].eq(@current_user&.id)).pluck(:id)
         where_collaborators = where_collaborators.or(Collaborator.arel_table[:group_id].in(users_course_groups))
       end
 
@@ -352,13 +353,15 @@ class CollaborationsController < ApplicationController
   # @returns [Collaborator]
   def members
     return unless authorized_action(@collaboration, @current_user, :read)
-    options = {:include => params[:include]}
+    includes = Array(params[:include])
+    options = {include: includes}
     collaborators = @collaboration.collaborators.preload(:group, :user)
     collaborators = Api.paginate(collaborators,
                                  self,
                                  api_v1_collaboration_members_url)
 
-    render :json => collaborators.map { |c| collaborator_json(c, @current_user, session, options) }
+    UserPastLtiId.manual_preload_past_lti_ids(collaborators, @context) if includes.include? 'collaborator_lti_id'
+    render(:json => collaborators.map{|c| collaborator_json(c, @current_user, session, options, context: @context)})
   end
 
   # @API List potential members
@@ -414,7 +417,9 @@ class CollaborationsController < ApplicationController
     visibility = content_item['ext_canvas_visibility']
     lti_user_ids = visibility && visibility['users'] || []
     lti_group_ids = visibility && visibility['groups'] || []
-    users = User.where(lti_context_id: lti_user_ids).to_a
+
+    users = User.active.joins(:past_lti_ids).where(user_past_lti_ids: {user_lti_context_id: lti_user_ids}).distinct.to_a
+    users += User.active.where(lti_context_id: lti_user_ids).to_a
     group_ids = Group.where(lti_context_id: lti_group_ids).map(&:id)
     [users, group_ids]
   end

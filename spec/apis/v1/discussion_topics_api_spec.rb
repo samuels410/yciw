@@ -119,7 +119,7 @@ describe Api::V1::DiscussionTopics do
     expect(data[:permissions][:attach]).to eq true # teachers can always attach
 
     data = @test_api.discussion_topic_api_json(@topic, @topic.context, @student, nil)
-    expect(data[:permissions][:attach]).to eq false # students can't attach by default
+    expect(data[:permissions][:attach]).to eq true # students can attach by default
 
     @topic.context.update_attribute(:allow_student_forum_attachments, true)
     AdheresToPolicy::Cache.clear
@@ -391,6 +391,7 @@ describe DiscussionTopicsController, type: :request do
                           'hidden_for_user' => false,
                           'created_at' => @attachment.created_at.as_json,
                           'updated_at' => @attachment.updated_at.as_json,
+                          'upload_status' => "success",
                           'modified_at' => @attachment.modified_at.as_json,
                           'thumbnail_url' => nil,
                           'mime_class' => @attachment.mime_class,
@@ -1518,6 +1519,7 @@ describe DiscussionTopicsController, type: :request do
           'hidden_for_user' => false,
           'created_at' => attachment.created_at.as_json,
           'updated_at' => attachment.updated_at.as_json,
+          'upload_status' => "success",
           'thumbnail_url' => nil,
           'modified_at' => attachment.modified_at.as_json,
           'mime_class' => attachment.mime_class,
@@ -2598,6 +2600,7 @@ describe DiscussionTopicsController, type: :request do
         'hidden_for_user' => false,
         'created_at' => @attachment.created_at.as_json,
         'updated_at' => @attachment.updated_at.as_json,
+        'upload_status' => "success",
         'thumbnail_url' => nil,
         'modified_at' => @attachment.modified_at.as_json,
         'mime_class' => @attachment.mime_class,

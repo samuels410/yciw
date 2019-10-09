@@ -46,7 +46,7 @@ describe Score do
 
   subject_once(:score) { student.scores.create!(params) }
 
-  it { is_expected.to belong_to(:enrollment) }
+  it { is_expected.to belong_to(:enrollment).required }
   # shoulda-matchers will have an `optional` method in version 4. As a workaround,
   # I've used the validates_presence_of matcher on the line following the belong_to matcher
   it { is_expected.to belong_to(:grading_period) }
@@ -280,20 +280,6 @@ describe Score do
 
       it "returns the calculated final score when no override is present" do
         expect(score.effective_final_score).to eq 74
-      end
-    end
-
-    describe "#effective_final_score_lower_bound" do
-      it "returns the lowest possible score in the matching grading scheme, if grading schemes enabled" do
-        score.update!(override_score: 89)
-        allow(score.course).to receive(:grading_standard_enabled?).and_return(true)
-        expect(score.effective_final_score_lower_bound).to eq 87
-      end
-
-      it "returns the effective final score if grading schemes are not enabled" do
-        score.update!(override_score: 89)
-        allow(score.course).to receive(:grading_standard_enabled?).and_return(false)
-        expect(score.effective_final_score_lower_bound).to eq 89
       end
     end
 

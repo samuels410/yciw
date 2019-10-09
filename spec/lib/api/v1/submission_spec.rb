@@ -58,9 +58,8 @@ describe Api::V1::Submission do
           current_user: user
         )
         path = "/courses/#{course.id}/gradebook/speed_grader"
-        query = { 'assignment_id' => assignment.id.to_s }
-        fragment = { 'provisional_grade_id' => provisional_grade.id, 'student_id' => user.id }
-        expect(json.fetch('speedgrader_url')).to match_path(path).and_query(query).and_fragment(fragment)
+        query = { assignment_id: assignment.id, student_id: user.id }
+        expect(json.fetch('speedgrader_url')).to match_path(path).and_query(query)
       end
 
       it "links to the speed grader for a student's anonymous submission when grader cannot view student names" do
@@ -73,9 +72,8 @@ describe Api::V1::Submission do
           current_user: user
         )
         path = "/courses/#{course.id}/gradebook/speed_grader"
-        query = { 'assignment_id' => assignment.id.to_s }
-        fragment = { 'provisional_grade_id' => provisional_grade.id, 'anonymous_id' => submission.anonymous_id }
-        expect(json.fetch('speedgrader_url')).to match_path(path).and_query(query).and_fragment(fragment)
+        query = { assignment_id: assignment.id, anonymous_id: submission.anonymous_id }
+        expect(json.fetch('speedgrader_url')).to match_path(path).and_query(query)
       end
     end
   end
@@ -495,6 +493,30 @@ describe Api::V1::Submission do
 
       it "outputs submission histories only for distinct urls" do
         expect(json.fetch(field).count).to be 4
+      end
+    end
+
+    describe "posted_at" do
+      let(:field) { "posted_at" }
+      let(:submission) { assignment.submissions.build(user: user) }
+      let(:json) do
+        fake_controller.submission_json(submission, assignment, user, session, context, [field], params)
+      end
+
+      it "is included if the owning course has post policies enabled" do
+        posted_at = Time.zone.now
+        submission.update!(posted_at: posted_at)
+
+        assignment.course.enable_feature!(:new_gradebook)
+        PostPolicy.enable_feature!
+        expect(json.fetch('posted_at')).to eq posted_at
+      end
+
+      it "is included if the owning course does not have post policies enabled" do
+        posted_at = Time.zone.now
+        submission.update!(posted_at: posted_at)
+
+        expect(json.fetch('posted_at')).to eq posted_at
       end
     end
   end

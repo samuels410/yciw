@@ -81,6 +81,23 @@ describe "Api::V1::Assignment" do
       expect(json['planner_override']['id']).to eq po.id
     end
 
+    it "includes the assignment's post policy when feature enabled" do
+      assignment.course.enable_feature!(:new_gradebook)
+      PostPolicy.enable_feature!
+      assignment.post_policy.update!(post_manually: true)
+
+      json = api.assignment_json(assignment, user, session)
+      expect(json["post_manually"]).to be true
+    end
+
+    it "does not include the assignment's post policy when feature disabled" do
+      PostPolicy.disable_feature!
+      assignment.post_policy.update!(post_manually: true)
+
+      json = api.assignment_json(assignment, user, session)
+      expect(json).not_to have_key "post_manually"
+    end
+
     it "returns nil for planner override when flag is passed and there is no override" do
       json = api.assignment_json(assignment, user, session, {include_planner_override: true})
       expect(json.key?('planner_override')).to be_present
@@ -202,6 +219,32 @@ describe "Api::V1::Assignment" do
       it "includes ignore_for_scoring when it is on the rubric" do
         json = api.assignment_json(assignment, user, session)
         expect(json['rubric'][0]['ignore_for_scoring']).to eq true
+      end
+
+      it "includes hide_score_total setting in rubric_settings" do
+        json = api.assignment_json(assignment, user, session)
+        expect(json['rubric_settings']['hide_score_total']).to eq false
+      end
+
+      it "returns true for hide_score_total if set to true on the rubric association" do
+        ra = assignment.rubric_association
+        ra.hide_score_total = true
+        ra.save!
+        json = api.assignment_json(assignment, user, session)
+        expect(json['rubric_settings']['hide_score_total']).to eq true
+      end
+
+      it "includes hide_points setting in rubric_settings" do
+        json = api.assignment_json(assignment, user, session)
+        expect(json['rubric_settings']['hide_points']).to eq false
+      end
+
+      it "returns true for hide_points if set to true on the rubric association" do
+        ra = assignment.rubric_association
+        ra.hide_points = true
+        ra.save!
+        json = api.assignment_json(assignment, user, session)
+        expect(json['rubric_settings']['hide_points']).to eq true
       end
     end
   end

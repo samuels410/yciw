@@ -17,12 +17,10 @@
  */
 
 import $ from 'jquery'
-import _ from 'underscore'
 import I18n from 'i18n!external_tools'
 import React from 'react'
 import PropTypes from 'prop-types'
 import Modal from '../../shared/components/InstuiModal'
-import {ModalBody} from '@instructure/ui-overlays/lib/components/Modal'
 import 'compiled/jquery.rails_flash_notifications'
 import store from '../../external_apps/lib/ExternalAppsStore'
 import ConfigurationForm from '../../external_apps/components/ConfigurationForm'
@@ -41,7 +39,7 @@ export default class EditExternalToolButton extends React.Component {
   }
 
   setContextExternalToolState = data => {
-    const tool = _.extend(data, this.props.tool)
+    const tool = Object.assign(data, this.props.tool)
     this.setState({
       tool,
       modalIsOpen: true
@@ -69,8 +67,9 @@ export default class EditExternalToolButton extends React.Component {
 
   saveChanges = (configurationType, data) => {
     const success = res => {
-      const updatedTool = _.extend(this.state.tool, res)
+      const updatedTool = Object.assign(this.state.tool, res)
       // refresh app config index with latest tool state
+      store.reset()
       store.fetch()
       this.setState({updatedTool})
       this.closeModal()
@@ -86,7 +85,7 @@ export default class EditExternalToolButton extends React.Component {
       $.flashError(I18n.t('We were unable to update the app.'))
     }
 
-    const tool = _.extend(this.state.tool, data)
+    const tool = Object.assign(this.state.tool, data)
     store.save(configurationType, tool, success.bind(this), error.bind(this))
   }
 
@@ -170,7 +169,7 @@ export default class EditExternalToolButton extends React.Component {
             open={this.state.modalIsOpen}
             onDismiss={this.closeModal}
           >
-            <ModalBody>{this.form()}</ModalBody>
+            <Modal.Body>{this.form()}</Modal.Body>
           </Modal>
         </li>
       )

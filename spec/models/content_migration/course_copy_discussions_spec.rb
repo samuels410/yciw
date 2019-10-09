@@ -21,15 +21,6 @@ describe ContentMigration do
   context "course copy discussions" do
     include_examples "course copy"
 
-    def graded_discussion_topic
-      @topic = @copy_from.discussion_topics.build(:title => "topic")
-      @assignment = @copy_from.assignments.build(:submission_types => 'discussion_topic', :title => @topic.title)
-      @assignment.infer_times
-      @assignment.saved_by = :discussion_topic
-      @topic.assignment = @assignment
-      @topic.save
-    end
-
     it "should copy discussion topic attributes" do
       topic = @copy_from.discussion_topics.create!(:title => "topic", :message => "<p>bloop</p>",
         :pinned => true, :discussion_type => "threaded",
@@ -108,7 +99,7 @@ describe ContentMigration do
     end
 
     it "should copy a discussion topic when assignment is selected" do
-      graded_discussion_topic
+      graded_discussion_topic(context: @copy_from)
 
       # Should not fail if the destination has a group
       @copy_to.groups.create!(:name => 'some random group of people')
@@ -225,7 +216,7 @@ describe ContentMigration do
     end
 
     it "should not copy deleted assignment attached to topic" do
-      graded_discussion_topic
+      graded_discussion_topic(context: @copy_from)
       @assignment.workflow_state = 'deleted'
       @assignment.save!
 
@@ -239,7 +230,7 @@ describe ContentMigration do
     end
 
     it "should copy the assignment group and grading standard in complete copy" do
-      graded_discussion_topic
+      graded_discussion_topic(context: @copy_from)
       gs = make_grading_standard(@copy_from, title: 'One')
       group = @copy_from.assignment_groups.create!(:name => "new group")
       @assignment.assignment_group = group
@@ -253,7 +244,7 @@ describe ContentMigration do
     end
 
     it "should copy the grading standard (but not assignment group) in selective copy" do
-      graded_discussion_topic
+      graded_discussion_topic(context: @copy_from)
       gs = make_grading_standard(@copy_from, title: 'One')
       group = @copy_from.assignment_groups.create!(:name => "new group")
       @assignment.assignment_group = group
@@ -268,7 +259,7 @@ describe ContentMigration do
     end
 
     it "should not copy the assignment group and grading standard in selective export" do
-      graded_discussion_topic
+      graded_discussion_topic(context: @copy_from)
       gs = make_grading_standard(@copy_from, title: 'One')
       group = @copy_from.assignment_groups.create!(:name => "new group")
       @assignment.assignment_group = group
@@ -314,7 +305,7 @@ describe ContentMigration do
     end
 
     it "should not copy lock_at directly when on assignment" do
-      graded_discussion_topic
+      graded_discussion_topic(context: @copy_from)
       @assignment.update_attribute(:lock_at, 3.days.from_now)
 
       run_course_copy
@@ -322,6 +313,32 @@ describe ContentMigration do
       topic2 = @copy_to.discussion_topics.where(:migration_id => mig_id(@topic)).first
       expect(topic2.assignment.lock_at.to_i).to eq @assignment.lock_at.to_i
       expect(topic2.lock_at).to be_nil
+    end
+
+    it "should not apply the late policy right away if shifting dates to the future" do
+      graded_discussion_topic(context: @copy_from)
+      @assignment.update_attributes(:due_at => 3.days.ago, :points_possible => 4)
+
+      [@copy_from, @copy_to].each do |course|
+        course.create_late_policy(missing_submission_deduction_enabled: true, missing_submission_deduction: 25.0)
+      end
+      student_in_course(:course => @copy_to)
+
+      @cm.copy_options = {
+        everything: true,
+        shift_dates: true,
+        old_start_date: 4.days.ago.to_s,
+        old_end_date: 2.days.ago.to_s,
+        new_start_date: 6.days.from_now.to_s,
+        new_end_date: 8.days.from_now.to_s
+      }
+      @cm.save!
+
+      run_course_copy
+
+      topic2 = @copy_to.discussion_topics.where(:migration_id => mig_id(@topic)).first
+      sub = topic2.assignment.submissions.where(:user_id => @student).first
+      expect(sub).to be_unsubmitted # should not mark as missing
     end
   end
 end

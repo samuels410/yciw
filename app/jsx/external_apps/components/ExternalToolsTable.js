@@ -16,14 +16,15 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-import _ from 'underscore'
 import I18n from 'i18n!external_tools'
 import React from 'react'
 import PropTypes from 'prop-types'
-import store from '../../external_apps/lib/ExternalAppsStore'
-import ExternalToolsTableRow from '../../external_apps/components/ExternalToolsTableRow'
-import InfiniteScroll from '../../external_apps/components/InfiniteScroll'
-import ScreenReaderContent from '@instructure/ui-a11y/lib/components/ScreenReaderContent'
+import store from '../lib/ExternalAppsStore'
+import ExternalToolsTableRow from './ExternalToolsTableRow'
+import InfiniteScroll from './InfiniteScroll'
+import {ScreenReaderContent} from '@instructure/ui-a11y'
+
+import splitAssetString from 'compiled/str/splitAssetString'
 
 export default class ExternalToolsTable extends React.Component {
   static propTypes = {
@@ -33,13 +34,19 @@ export default class ExternalToolsTable extends React.Component {
 
   state = store.getState()
 
+  get assetContextType() {
+    return splitAssetString(ENV.context_asset_string, false)[0]
+  }
+
   onChange = () => {
     this.setState(store.getState())
   }
 
   componentDidMount() {
     store.addChangeListener(this.onChange)
-    store.fetch()
+    if (!store.getState().isLoaded) {
+      store.fetch();
+    }
   }
 
   componentWillUnmount() {
@@ -55,8 +62,9 @@ export default class ExternalToolsTable extends React.Component {
   loader = () => <div className="loadingIndicator" />
 
   setFocusAbove = (tool) => () => {
-    if (tool) {
-      this[`externalTool${tool.app_id}`].focus()
+    const toolRow = tool && this[`externalTool${tool.app_id}`]
+    if (toolRow && toolRow.button) {
+      toolRow.focus()
     } else {
       this.props.setFocusAbove()
     }
@@ -70,22 +78,21 @@ export default class ExternalToolsTable extends React.Component {
     if (store.getState().externalTools.length === 0) {
       return null
     }
-    let t = null
+    let t = null;
     return store
       .getState()
       .externalTools
       .map((tool) => {
-        const toRender = <ExternalToolsTableRow
+        t = <ExternalToolsTableRow
           key={tool.app_id}
           ref={this.setToolRowRef(tool)}
           tool={tool}
           canAddEdit={this.props.canAddEdit}
           setFocusAbove={this.setFocusAbove(t)}
+          store={store}
+          contextType={this.assetContextType}
         />
-        if (tool.lti_version !== '1.3') {
-          t = tool
-        }
-        return toRender
+        return t;
       })
   }
 
@@ -116,7 +123,9 @@ export default class ExternalToolsTable extends React.Component {
                 </th>
               </tr>
             </thead>
-            <tbody className="collectionViewItems">{this.trs()}</tbody>
+            <tbody className="collectionViewItems">
+              {this.trs()}
+            </tbody>
           </table>
         </InfiniteScroll>
       </div>

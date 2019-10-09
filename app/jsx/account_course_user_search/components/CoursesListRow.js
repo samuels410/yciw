@@ -18,14 +18,16 @@
 
 import React from 'react'
 import {number, string, shape, arrayOf, bool} from 'prop-types'
-import Button from '@instructure/ui-buttons/lib/components/Button'
-import ScreenReaderContent from '@instructure/ui-a11y/lib/components/ScreenReaderContent'
-import Tooltip from '@instructure/ui-overlays/lib/components/Tooltip'
-import IconBlueprintLine from '@instructure/ui-icons/lib/Line/IconBlueprint'
-import IconPlusLine from '@instructure/ui-icons/lib/Line/IconPlus'
-import IconSettingsLine from '@instructure/ui-icons/lib/Line/IconSettings'
-import IconStatsLine from '@instructure/ui-icons/lib/Line/IconStats'
-import IconPublish from '@instructure/ui-icons/lib/Line/IconPublish'
+import {Button} from '@instructure/ui-buttons'
+import {ScreenReaderContent} from '@instructure/ui-a11y'
+import {Tooltip} from '@instructure/ui-overlays'
+import {
+  IconBlueprintLine,
+  IconPlusLine,
+  IconSettingsLine,
+  IconStatsLine,
+  IconPublishLine
+} from '@instructure/ui-icons'
 import axios from 'axios'
 import {uniqBy} from 'lodash'
 import $ from 'compiled/jquery.rails_flash_notifications'
@@ -47,7 +49,8 @@ export default class CoursesListRow extends React.Component {
     roles: arrayOf(shape({id: string.isRequired})),
     showSISIds: bool.isRequired,
     can_create_enrollments: bool,
-    blueprint: bool
+    blueprint: bool,
+    concluded: bool
   }
 
   static defaultProps = {
@@ -119,7 +122,7 @@ export default class CoursesListRow extends React.Component {
   }
 
   allowAddingEnrollments() {
-    return this.props.can_create_enrollments && this.props.workflow_state !== 'completed'
+    return this.props.can_create_enrollments && !this.props.concluded
   }
 
   renderAddEnrollments() {
@@ -163,7 +166,7 @@ export default class CoursesListRow extends React.Component {
         <th scope="row" style={{textAlign: 'center'}}>
           {isPublished ? (
             <span className="published-status published">
-              <IconPublish size="x-smll" />
+              <IconPublishLine size="x-small" />
               <ScreenReaderContent>{I18n.t('yes')}</ScreenReaderContent>
             </span>
           ) : (
@@ -207,7 +210,7 @@ export default class CoursesListRow extends React.Component {
         </td>
         <td>{subaccount_name}</td>
         <td>{I18n.n(total_students + newlyEnrolledStudents)}</td>
-        <td style={{whiteSpace: 'nowrap'}}>
+        <td style={{whiteSpace: 'nowrap', textAlign: 'end'}}>
           {this.renderAddEnrollments()}
           <Tooltip tip={statsTip}>
             <Button variant="icon" size="small" href={`${url}/statistics`}>

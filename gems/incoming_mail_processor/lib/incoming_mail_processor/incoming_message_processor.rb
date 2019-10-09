@@ -149,12 +149,15 @@ module IncomingMailProcessor
     end
 
     def report_stats(incoming_message, mailbox_account)
-      CanvasStatsd::Statsd.increment("incoming_mail_processor.incoming_message_processed.#{mailbox_account.escaped_address}")
-
+      InstStatsd::Statsd.increment("incoming_mail_processor.incoming_message_processed.#{mailbox_account.escaped_address}",
+                                   short_stat: 'incoming_mail_processor.incoming_message_processed',
+                                   tags: {mailbox: mailbox_account.escaped_address})
       age = age(incoming_message)
       if age
         stat_name = "incoming_mail_processor.message_age.#{mailbox_account.escaped_address}"
-        CanvasStatsd::Statsd.timing(stat_name, age)
+        InstStatsd::Statsd.timing(stat_name, age,
+                                  short_stat: 'incoming_mail_processor.message_age',
+                                  tags: {mailbox: mailbox_account.escaped_address})
       end
     end
 
@@ -333,7 +336,7 @@ module IncomingMailProcessor
     def self.extract_address_tag(message, account)
       addr, domain = account.address.split(/@/)
       regex = Regexp.new("#{Regexp.escape(addr)}\\+([^@]+)@#{Regexp.escape(domain)}")
-      message.to.each do |address|
+      message.to&.each do |address|
         if match = regex.match(address)
           return match[1]
         end

@@ -29,7 +29,7 @@ export function loadMathJax (configFile, cb = null) {
   if (!isMathJaxLoaded()) {
     // signal local config to mathjax as it loads
     window.MathJax = localConfig;
-    $.getScript(`//cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.1/MathJax.js?config=${configFile}`, cb);
+    $.getScript(`//cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/MathJax.js?config=${configFile}`, cb);
   } else if (typeof cb === 'function') {
       // Make sure we always call the callback if it is loaded already and make sure we
       // also reprocess the page since chances are if we are requesting MathJax again,
@@ -40,8 +40,11 @@ export function loadMathJax (configFile, cb = null) {
 }
 
 export function isMathMLOnPage () {
-  const mathElements = $('math:visible').toArray();
-  return mathElements.some(elem => $(elem).parent('.hidden-readable').length <= 0);
+  const mathElements = document.getElementsByTagName('math')
+  for (let i = 0; i < mathElements.length; i++) {
+    const $el = $(mathElements[i])
+    if ($el.is(':visible') && $el.parent('.hidden-readable').length <= 0) return true
+  }
 }
 
 export function isMathJaxLoaded () {

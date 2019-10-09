@@ -18,18 +18,14 @@
 
 import React from 'react'
 import {arrayOf, bool, func, oneOf, shape, string} from 'prop-types'
-import IconMoreSolid from '@instructure/ui-icons/lib/Solid/IconMore'
-import Button from '@instructure/ui-buttons/lib/components/Button'
-import View from '@instructure/ui-layout/lib/components/View'
-import Grid, {GridCol, GridRow} from '@instructure/ui-layout/lib/components/Grid'
-import Menu, {
-  MenuItem,
-  MenuItemGroup,
-  MenuItemSeparator
-} from '@instructure/ui-menu/lib/components/Menu'
-import Text from '@instructure/ui-elements/lib/components/Text'
-import I18n from 'i18n!gradebook'
-import ScreenReaderContent from '@instructure/ui-a11y/lib/components/ScreenReaderContent'
+import {IconMoreSolid} from '@instructure/ui-icons'
+import {Button} from '@instructure/ui-buttons'
+import {View, Grid, GridCol, GridRow} from '@instructure/ui-layout'
+
+import {Menu, MenuItem, MenuItemGroup, MenuItemSeparator} from '@instructure/ui-menu'
+import {Text} from '@instructure/ui-elements'
+import I18n from 'i18n!gradezilla'
+import {ScreenReaderContent} from '@instructure/ui-a11y'
 import studentRowHeaderConstants from '../../constants/studentRowHeaderConstants'
 import ColumnHeader from './ColumnHeader'
 
@@ -41,6 +37,7 @@ export default class StudentColumnHeader extends ColumnHeader {
     sisName: string,
     selectedSecondaryInfo: oneOf(studentRowHeaderConstants.secondaryInfoKeys).isRequired,
     sectionsEnabled: bool.isRequired,
+    studentGroupsEnabled: bool.isRequired,
     onSelectSecondaryInfo: func.isRequired,
     sortBySetting: shape({
       direction: string.isRequired,
@@ -82,6 +79,10 @@ export default class StudentColumnHeader extends ColumnHeader {
 
   onShowLoginId = () => {
     this.onSelectSecondaryInfo('login_id')
+  }
+
+  onShowGroup = () => {
+    this.onSelectSecondaryInfo('group')
   }
 
   onShowFirstLastNames = () => {
@@ -270,6 +271,16 @@ export default class StudentColumnHeader extends ColumnHeader {
                           {this.props.loginHandleName ||
                             studentRowHeaderConstants.secondaryInfoLabels.login_id}
                         </MenuItem>
+
+                        {this.props.studentGroupsEnabled && (
+                          <MenuItem
+                            key="group"
+                            selected={this.props.selectedSecondaryInfo === 'group'}
+                            onSelect={this.onShowGroup}
+                          >
+                            {studentRowHeaderConstants.secondaryInfoLabels.group}
+                          </MenuItem>
+                        )}
 
                         <MenuItem
                           key="none"

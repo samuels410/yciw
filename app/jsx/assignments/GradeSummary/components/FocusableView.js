@@ -33,7 +33,6 @@ const style = {margin: 0, padding: 0}
 /* eslint-disable jsx-a11y/no-static-element-interactions */
 /* eslint-disable jsx-a11y/no-noninteractive-tabindex */
 
-/* eslint-disable no-param-reassign */
 function bindHorizontalHandler(handlers, $el) {
   if ($el) {
     handlers[LEFT] = event => {
@@ -79,7 +78,6 @@ function bindVerticalHandler(handlers, $el) {
     delete handlers[DOWN]
   }
 }
-/* eslint-enable no-param-reassign */
 
 export default class FocusableView extends Component {
   static propTypes = {
@@ -98,16 +96,14 @@ export default class FocusableView extends Component {
     this.bindVerticalScroll = $ref => {
       bindVerticalHandler(this.keyHandlers, $ref)
     }
-
-    this.handleKeyDown = this.handleKeyDown.bind(this)
   }
 
-  handleKeyDown(event) {
+  handleKeyDown = event => {
     const handler = this.keyHandlers[event.keyCode]
     if (handler) {
       handler(event)
     }
-  }
+  };
 
   render() {
     return (

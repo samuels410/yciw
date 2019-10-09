@@ -33,8 +33,11 @@ module CanvasPartman
         ensure_partitions(advance_partitions)
       end
 
-      def migrate_data_to_partitions(batch_size: 1000)
+      def migrate_data_to_partitions(batch_size: 1000, timeout: nil)
+        start_time = Time.now
         loop do
+          return false if timeout && (start_time + timeout) < Time.now
+
           id_dates = base_class.from("ONLY #{base_class.quoted_table_name}").
             order(base_class.partitioning_field).
             limit(batch_size).
@@ -51,16 +54,30 @@ module CanvasPartman
             SQL
           end
         end
+        true
       end
 
-      def ensure_partitions(advance = 1)
+      def ensure_partitions(advance=1)
+        ensure_or_check_partitions(advance, true)
+      end
+
+      def partitions_created?(advance=1)
+        ensure_or_check_partitions(advance, false)
+      end
+
+      def ensure_or_check_partitions(advance, create_partitions)
         current = Time.now.utc.send("beginning_of_#{base_class.partitioning_interval.to_s.singularize}")
         (advance + 1).times do
           unless partition_exists?(current)
-            create_partition(current)
+            if create_partitions
+              create_partition(current)
+            else
+              return false
+            end
           end
           current += 1.send(base_class.partitioning_interval)
         end
+        true
       end
 
       def prune_partitions(number_to_keep = 6)
@@ -111,7 +128,7 @@ SQL
         match = table_regex.match(name)
         return nil unless match
         if base_class.partitioning_interval == :weeks
-          Time.utc(match[:year]).beginning_of_week + (match[:weeks].to_i - 1).weeks
+          Time.utc(match[:year]).beginning_of_week + (match[:week].to_i - 1).weeks
         else
           Time.utc(*match[1..-1])
         end

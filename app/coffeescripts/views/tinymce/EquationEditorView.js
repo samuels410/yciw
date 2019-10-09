@@ -15,7 +15,7 @@
 // You should have received a copy of the GNU Affero General Public License along
 // with this program. If not, see <http://www.gnu.org/licenses/>.
 
-import I18n from 'i18n!editor'
+import I18n from 'i18n!EquationEditorView'
 import $ from 'jquery'
 import _ from 'underscore'
 import Backbone from 'Backbone'
@@ -28,21 +28,6 @@ import 'jqueryui/dialog'
 import 'mathquill'
 
 export default class EquationEditorView extends Backbone.View {
-  constructor(...args) {
-    {
-      // Hack: trick Babel/TypeScript into allowing this before super.
-      if (false) { super(); }
-      let thisFn = (() => { return this; }).toString();
-      let thisName = thisFn.slice(thisFn.indexOf('return') + 6 + 1, thisFn.lastIndexOf(';')).trim();
-      eval(`${thisName} = this;`);
-    }
-    this.onClose = this.onClose.bind(this)
-    this.initialRender = this.initialRender.bind(this)
-    this.toggleView = this.toggleView.bind(this)
-    this.setView = this.setView.bind(this)
-    this.onSubmit = this.onSubmit.bind(this)
-    super(...args)
-  }
 
   static initClass() {
     this.prototype.template = template
@@ -70,7 +55,7 @@ export default class EquationEditorView extends Backbone.View {
   //   thing in the editor to turn into an equation
   static getEquationText(elems) {
     const self = this
-    return _.map(elems, function(elem) {
+    return _.map(elems, elem => {
       // Get the text from text nodes and CDATA nodes
       if ([3, 4].includes(elem.nodeType)) {
         if (elem.nodeValue.match(/^<img/)) {
@@ -93,7 +78,7 @@ export default class EquationEditorView extends Backbone.View {
       } else if (elem.nodeType !== 8) {
         return self.getEquationText(elem.childNodes)
       }
-    }).join('')
+    }).join('');
   }
 
   getEquationText(elems) {
@@ -112,7 +97,7 @@ export default class EquationEditorView extends Backbone.View {
     }
 
     this.cacheEls()
-    this.$el.click(preventDefault(function() {}))
+    this.$el.click(preventDefault(() => {}))
     return this.$el.dialog({
       minWidth: 670,
       minHeight: 290,
@@ -122,19 +107,19 @@ export default class EquationEditorView extends Backbone.View {
         'Use the toolbars here, or Switch View to Advanced to type/paste in LaTeX'
       ),
       dialogClass: 'math-dialog',
-      open: this.initialRender,
-      close: this.onClose,
+      open: () => this.initialRender(),
+      close: () => this.onClose(),
       buttons: [
         {
           class: 'btn-primary',
           text: I18n.t('button.insert_equation', 'Insert Equation'),
-          click: this.onSubmit
+          click: (e) => this.onSubmit(e)
         }
       ]
     })
   }
 
-  onClose(e, ui) {
+  onClose() {
     return this.restoreCaret()
   }
 
@@ -158,7 +143,7 @@ export default class EquationEditorView extends Backbone.View {
     })
     this.toolbar.render()
 
-    $('a.math-toggle-link').bind('click', this.toggleView)
+    $('a.math-toggle-link').bind('click', e => this.toggleView(e))
 
     this.$el.data('toolbar', this.toolbar)
     return this.$el.data('view', 'mathquill')

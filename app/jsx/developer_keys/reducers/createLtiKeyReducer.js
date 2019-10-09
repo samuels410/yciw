@@ -28,12 +28,18 @@ const initialState = {
   toolConfigurationUrl: '',
   enabledScopes: [],
   disabledPlacements: [],
+  privacyLevel: 'anonymous',
   updateCustomizationsPending: false,
   updateCustomizationsSuccessful: false,
-  updateCustomizationsError: null
+  updateCustomizationsError: null,
+  configurationMethod: 'manual'
 }
 
 const ltiKeysHandlers = {
+  [ACTION_NAMES.LTI_CONFIGURATION_METHOD]: (state, action) => ({
+    ...state,
+    configurationMethod: action.payload
+  }),
   [ACTION_NAMES.LTI_KEYS_SET_LTI_KEY]: (state, action) => ({
     ...state,
     isLtiKey: action.payload
@@ -49,6 +55,10 @@ const ltiKeysHandlers = {
   [ACTION_NAMES.LTI_KEYS_SET_DISABLED_PLACEMENTS]: (state, action) => ({
     ...state,
     disabledPlacements: action.payload
+  }),
+  [ACTION_NAMES.LTI_KEYS_SET_PRIVACY_LEVEL]: (state, action) => ({
+    ...state,
+    privacyLevel: action.payload
   }),
   [ACTION_NAMES.SET_LTI_TOOL_CONFIGURATION]: (state, action) => ({
     ...state,

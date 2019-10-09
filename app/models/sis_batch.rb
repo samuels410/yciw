@@ -20,7 +20,7 @@ class SisBatch < ActiveRecord::Base
   include Workflow
   belongs_to :account
   serialize :data
-  serialize :options
+  serialize :options, Hash
   serialize :processing_errors, Array
   serialize :processing_warnings, Array
   belongs_to :attachment
@@ -113,20 +113,7 @@ class SisBatch < ActiveRecord::Base
 
   def self.bulk_insert_sis_errors(errors)
     errors.each_slice(1000) do |batch|
-      errors_hash = batch.map do |error|
-        {
-          root_account_id: error.root_account_id,
-          created_at: error.created_at,
-          sis_batch_id: error.sis_batch_id,
-          failure: error.failure,
-          file: error.file,
-          message: error.message,
-          backtrace: error.backtrace,
-          row: error.row,
-          row_info: error.row_info
-        }
-      end
-      SisBatchError.bulk_insert(errors_hash)
+      SisBatchError.bulk_insert_objects(batch)
     end
   end
 
@@ -134,7 +121,7 @@ class SisBatch < ActiveRecord::Base
     # Try to have 100 jobs but don't have a job that processes less than 25
     # rows but also not more than 1000 rows.
     # Progress is calculated on the number of jobs remaining.
-    [[(rows/100.to_f).ceil, 25].max, 1000].min
+    [[(rows/99.to_f).ceil, 25].max, 1000].min
   end
 
   workflow do
@@ -205,7 +192,6 @@ class SisBatch < ActiveRecord::Base
   # can rename this to something more sensible.
   def process_without_send_later
     self.class.transaction do
-      self.options ||= {}
       if self.workflow_state == 'aborted'
         self.progress = 100
         self.save
@@ -240,7 +226,7 @@ class SisBatch < ActiveRecord::Base
   end
 
   def abort_batch
-    SisBatch.not_completed.where(id: self).update_all(workflow_state: 'aborted')
+    SisBatch.not_completed.where(id: self).update_all(workflow_state: 'aborted', updated_at: Time.zone.now)
     self.class.queue_job_for_account(account, 10.minutes.from_now) if self.account.sis_batches.needs_processing.exists?
   end
 
@@ -268,7 +254,6 @@ class SisBatch < ActiveRecord::Base
   end
 
   def skip_deletes?
-    self.options ||= {}
     !!self.options[:skip_deletes]
   end
 
@@ -340,13 +325,21 @@ class SisBatch < ActiveRecord::Base
     previous_zip = previous_batch.try(:download_zip)
     return unless previous_zip
 
-    if change_threshold && (1-previous_zip.size.to_f/@data_file.size.to_f).abs > (0.01 * change_threshold)
+    if change_threshold && file_diff_percent(@data_file.size, previous_zip.size) > change_threshold
       SisBatch.add_error(nil, "Diffing not performed because file size difference exceeded threshold", sis_batch: self)
       return
     end
 
-    diffed_data_file = SIS::CSV::DiffGenerator.new(self.account, self).generate(previous_zip.path, @data_file.path)
-    return :empty_diff_file unless diffed_data_file # just end if there's nothing to import
+    diff = SIS::CSV::DiffGenerator.new(self.account, self).generate(previous_zip.path, @data_file.path)
+    return :empty_diff_file unless diff # just end if there's nothing to import
+
+    diffed_data_file = diff[:file_io]
+
+    if self.diff_row_count_threshold && diff[:row_count] > self.diff_row_count_threshold
+      diffed_data_file.close
+      SisBatch.add_error(nil, "Diffing not performed because difference row count exceeded threshold", sis_batch: self)
+      return
+    end
 
     self.data[:diffed_against_sis_batch_id] = previous_batch.id
 
@@ -359,6 +352,18 @@ class SisBatch < ActiveRecord::Base
     # Success, swap out the original update for this new diff and continue.
     @data_file.try(:close)
     @data_file = diffed_data_file
+  end
+
+  def diff_row_count_threshold=(val)
+    self.options[:diff_row_count_threshold] = val
+  end
+
+  def diff_row_count_threshold
+    self.options[:diff_row_count_threshold]
+  end
+
+  def file_diff_percent(current_file_size, previous_zip_size)
+    (1 - current_file_size.to_f / previous_zip_size.to_f).abs * 100
   end
 
   def download_zip
@@ -447,11 +452,11 @@ class SisBatch < ActiveRecord::Base
 
   def stat_active_state(type)
     case type
-    when GroupMembership
+    when 'GroupMembership'
       'accepted'
-    when Group
+    when 'Group'
       'available'
-    when Course
+    when 'Course'
       ['claimed', 'created', 'available']
     else
       'active'
@@ -460,7 +465,7 @@ class SisBatch < ActiveRecord::Base
 
   def stat_deleted_state(type)
     case type
-    when CommunicationChannel
+    when 'CommunicationChannel'
       'retired'
     else
       'deleted'
@@ -469,11 +474,11 @@ class SisBatch < ActiveRecord::Base
 
   def stat_restored_from(type)
     case type
-    when CommunicationChannel
+    when 'CommunicationChannel'
       ['retired', 'unconfirmed']
-    when Course
+    when 'Course'
       ['completed', 'deleted']
-    when Enrollment
+    when 'Enrollment'
       ['inactive', 'completed', 'rejected', 'deleted']
     else
       'deleted'
@@ -508,15 +513,17 @@ class SisBatch < ActiveRecord::Base
 
   def remove_non_batch_courses(courses, total_rows, current_row)
     # delete courses that weren't in this batch, in the selected term
+    course_count = 0
     current_row ||= 0
     courses.find_in_batches do |batch|
       count = Course.destroy_batch(batch, sis_batch: self, batch_mode: true)
       finish_course_destroy(batch)
       current_row += count
+      course_count += count
       self.fast_update_progress(current_row.to_f / total_rows * 100)
     end
 
-    self.data[:counts][:batch_courses_deleted] = current_row
+    self.data[:counts][:batch_courses_deleted] = course_count
     current_row
   end
 
@@ -649,7 +656,6 @@ class SisBatch < ActiveRecord::Base
   end
 
   def as_json(options={})
-    self.options ||= {} # set this to empty hash if it does not exist so options[:stuff] doesn't blow up
     data = {
       "id" => self.id,
       "created_at" => self.created_at,
@@ -670,6 +676,7 @@ class SisBatch < ActiveRecord::Base
       "diffing_drop_status" => self.options[:diffing_drop_status],
       "skip_deletes" => self.options[:skip_deletes],
       "change_threshold" => self.change_threshold,
+      "diff_row_count_threshold" => self.options[:diff_row_count_threshold]
     }
     data["processing_errors"] = self.processing_errors if self.processing_errors.present?
     data["processing_warnings"] = self.processing_warnings if self.processing_warnings.present?
@@ -779,7 +786,6 @@ class SisBatch < ActiveRecord::Base
   end
 
   def restore_workflow_states(scope, type, restore_progress, count, total)
-    count = 0
     Shackles.activate(:slave) do
       scope.active.order(:context_id).find_in_batches(batch_size: 5_000) do |data|
         Shackles.activate(:master) do
@@ -787,11 +793,7 @@ class SisBatch < ActiveRecord::Base
             if retry_count == 0
               # restore the items and return the ids of the items that changed
               ids = type.constantize.connection.select_values(restore_sql(type, data.map(&:to_restore_array)))
-              if type == 'Enrollment'
-                ids.each_slice(1000) do |slice|
-                  Enrollment::BatchStateUpdater.send_later_enqueue_args(:run_call_backs_for, {n_strand: "restore_states_batch_updater:#{account.global_id}}"}, slice)
-                end
-              end
+              finalize_enrollments(ids) if type == 'Enrollment'
               count += update_restore_progress(restore_progress, data, count, total)
             else
               # try to restore each row one at a time
@@ -807,9 +809,7 @@ class SisBatch < ActiveRecord::Base
                   end
                 end
               end
-              successful_ids.each_slice(1000) do |slice|
-                Enrollment::BatchStateUpdater.send_later_enqueue_args(:run_call_backs_for, {n_strand: "restore_states_batch_updater:#{account.global_id}}"}, slice)
-              end
+              finalize_enrollments(successful_ids) if type == 'Enrollment'
               count += update_restore_progress(restore_progress, data - failed_data, count, total)
               roll_back_data.active.where(id: failed_data).update_all(workflow_state: 'failed', updated_at: Time.zone.now)
             end
@@ -820,11 +820,23 @@ class SisBatch < ActiveRecord::Base
     count
   end
 
+  def finalize_enrollments(ids)
+    ids.each_slice(1000) do |slice|
+      Enrollment::BatchStateUpdater.send_later_enqueue_args(:run_call_backs_for, { n_strand: ["restore_states_batch_updater", account.global_id] }, slice, self.account)
+    end
+    # we know enrollments are not deleted, but we don't know what the previous
+    # state was, we will assume deleted and restore the scores and submissions
+    # for students, if it was not deleted, it will not break anything.
+    Enrollment.where(id: ids, type: 'StudentEnrollment').order(:course_id).preload(:course).find_in_batches do |batch|
+      Enrollment.restore_submissions_and_scores_for_enrollments(batch)
+    end
+  end
+
   def restore_states_later(batch_mode: nil, undelete_only: false, unconclude_only: false)
     self.shard.activate do
       restore_progress = Progress.create! context: self, tag: "sis_batch_state_restore", completion: 0.0
       restore_progress.process_job(self, :restore_states_for_batch,
-                                   {n_strand: "restore_states_for_batch:#{account.global_id}}"},
+                                   {n_strand: ["restore_states_for_batch", account.global_id]},
                                    {batch_mode: batch_mode, undelete_only: undelete_only, unconclude_only: unconclude_only})
       restore_progress
     end
@@ -888,15 +900,30 @@ class SisBatch < ActiveRecord::Base
     end
   end
 
-  def downloadable_attachments
-    @downloadable_attachments ||=
-      begin
-        ids = data[:downloadable_attachment_ids]
-        if ids.present?
-          self.shard.activate { Attachment.where(:id => ids).polymorphic_where(:context => self).to_a }
-        else
-          []
+  def downloadable_attachments(type=:all)
+    return [] unless data
+    self.shard.activate do
+      @downloadable_attachments ||=
+        begin
+          ids = data[:downloadable_attachment_ids]
+          if ids.present?
+            Attachment.where(:id => ids).polymorphic_where(:context => self).to_a
+          else
+            []
+          end
         end
+
+      diff_att_ids = data[:diffed_attachment_ids] || []
+      case type
+      when :all
+        @downloadable_attachments
+      when :uploaded
+        @downloadable_attachments.reject{|att| diff_att_ids.include?(att.id)}
+      when :diffed
+        @downloadable_attachments.select{|att| diff_att_ids.include?(att.id)}
+      else
+        raise "invalid attachment type"
       end
+    end
   end
 end

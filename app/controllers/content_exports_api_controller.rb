@@ -78,6 +78,7 @@
 #     }
 #
 class ContentExportsApiController < ApplicationController
+  include ContentExportApiHelper
   include Api::V1::ContentExport
   before_action :require_context
 
@@ -147,42 +148,9 @@ class ContentExportsApiController < ApplicationController
       valid_types = %w(zip)
       valid_types += %w(qti common_cartridge quizzes2) if @context.is_a?(Course)
       return render json: { message: 'invalid export_type' }, status: :bad_request unless valid_types.include?(params[:export_type])
-      export = @context.content_exports.build
-      export.user = @current_user
-      export.workflow_state = 'created'
-      export.settings[:skip_notifications] = true if value_to_boolean(params[:skip_notifications])
-
-      # ZipExporter accepts unhashed asset strings, to avoid having to instantiate all the files and folders
-      selected_content = ContentMigration.process_copy_params(params[:select]&.to_unsafe_h, true, params[:export_type] == ContentExport::ZIP) if params[:select]
-      case params[:export_type]
-      when 'qti'
-        export.export_type = ContentExport::QTI
-        export.selected_content = selected_content || { all_quizzes: true }
-      when 'zip'
-        export.export_type = ContentExport::ZIP
-        export.selected_content = selected_content || { all_attachments: true }
-      when 'quizzes2'
-        if params[:quiz_id].nil? || params[:quiz_id] !~ Api::ID_REGEX
-          return render json: { message: 'quiz_id required and must be a valid ID' },
-            status: :bad_request
-        elsif !@context.quizzes.exists?(params[:quiz_id])
-          return render json: { message: 'Quiz could not be found' }, status: :bad_request
-        else
-          export.export_type = ContentExport::QUIZZES2
-          # we pass the quiz_id of the quiz we want to clone here
-          export.selected_content = params[:quiz_id]
-        end
-      else
-        export.export_type = ContentExport::COMMON_CARTRIDGE
-        export.selected_content = selected_content || { everything: true }
-      end
-      # recheck, since the export type influences permissions (e.g., students can download zips of non-locked files, but not common cartridges)
-      return unless authorized_action(export, @current_user, :create)
-
-      opts = params.permit(:version).to_unsafe_h
-      export.progress = 0
-      if export.save
-        export.queue_api_job(opts)
+      export = create_content_export_from_api(params, @context, @current_user)
+      return unless export.class == ContentExport
+      if export.id
         render json: content_export_json(export, @current_user, session)
       else
         render json: export.errors, status: :bad_request
@@ -193,7 +161,8 @@ class ContentExportsApiController < ApplicationController
   def content_list
     if authorized_action(@context, @current_user, :read_as_admin)
       base_url = polymorphic_url([:api_v1, @context, :content_list])
-      formatter = Canvas::Migration::Helpers::SelectiveContentFormatter.new(nil, base_url)
+      formatter = Canvas::Migration::Helpers::SelectiveContentFormatter.new(nil, base_url,
+        global_identifiers: @context.content_exports.temp_record.can_use_global_identifiers?)
 
       unless formatter.valid_type?(params[:type])
         return render :json => {:message => "unsupported migration type"}, :status => :bad_request

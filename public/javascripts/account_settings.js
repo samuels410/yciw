@@ -21,6 +21,8 @@ import I18n from 'i18n!account_settings'
 import $ from 'jquery'
 import htmlEscape from 'str/htmlEscape'
 import RichContentEditor from 'jsx/shared/rce/RichContentEditor'
+import axios from 'axios'
+import {setupCache} from 'axios-cache-adapter/src/index'
 import 'jqueryui/tabs'
 import globalAnnouncements from './global_announcements'
 import './jquery.ajaxJSON'
@@ -31,6 +33,8 @@ import './jquery.instructure_misc_plugins' // confirmDelete, showIf, /\.log/
 import './jquery.loadingImg'
 import './vendor/date' // Date.parse
 import './vendor/jquery.scrollTo'
+
+let reportsTabHasLoaded = false
 
   export function openReportDescriptionLink (event) {
     event.preventDefault();
@@ -117,21 +121,110 @@ import './vendor/jquery.scrollTo'
     globalAnnouncements.augmentView()
     globalAnnouncements.bindDomEvents()
 
-    $("#account_settings_tabs").tabs({
-      beforeActivate: (event, ui) => {
-        if (ui.newTab.context.id === 'tab-security-link') {
-          import('jsx/account_settings/SecurityPanel')
-            .then(({start}) => {
-              start(document.getElementById('tab-security'));
+    $('#account_settings_tabs')
+      .on('tabsbeforeactivate tabscreate', (event, ui) => {
+        const tabId = event.type === 'tabscreate'
+          ? location.hash.replace('#', '') + '-link'
+          : ui.newTab.context.id
+
+        if (tabId === 'tab-reports-link' && !reportsTabHasLoaded) {
+          reportsTabHasLoaded = true
+          const splitContext = window.ENV.context_asset_string.split('_')
+
+          fetch(`/${splitContext[0]}s/${splitContext[1]}/reports_tab`, {headers: {accept: 'text/html'}}).then(req => req.text()).then(html => {
+
+            $('#tab-reports').html(html)
+            $("#tab-reports .datetime_field").datetime_field();
+
+            $(".open_report_description_link").click(openReportDescriptionLink);
+
+            $(".run_report_link").click(function(event) {
+              event.preventDefault();
+              $(this).parent("form").submit();
+            });
+
+            $(".run_report_form").formSubmit({
+              resetForm: true,
+              beforeSubmit: function(data) {
+                $(this).loadingImage();
+                return true;
+              },
+              success: function(data) {
+                $(this).loadingImage('remove');
+                var report = $(this).attr('id').replace('_form', '');
+                $("#" + report).find('.run_report_link').hide()
+                  .end().find('.configure_report_link').hide()
+                  .end().find('.running_report_message').show();
+                $(this).parent(".report_dialog").dialog('close');
+              },
+              error: function(data) {
+                $(this).loadingImage('remove');
+                $(this).parent(".report_dialog").dialog('close');
+              }
+            });
+
+            $(".configure_report_link").click(function(event) {
+              event.preventDefault();
+              var data = $(this).data(),
+                $dialog = data.$report_dialog;
+              if (!$dialog) {
+                $dialog = data.$report_dialog = $(this).parent("td").find(".report_dialog").dialog({
+                  autoOpen: false,
+                  width: 400,
+                  title: I18n.t('titles.configure_report', 'Configure Report')
+                });
+              }
+              $dialog.dialog('open');
+            })
+
           }).catch(() => {
-            // We really should never get here... but if we do... do something.
-            const $message = $('<div />').text('Security Tab failed to load')
-            $('tab-security').append($message)
+            $('#tab-reports').text(I18n.t('There are no reports for you to view.'))
           })
+        } else if (tabId === 'tab-security-link') {
+          // Set up axios and send a prefetch request to get the data we need,
+          // this should make things appear to be much quicker once the bundle
+          // loads in.
+          const cache = setupCache({
+            maxAge: 0.5 * 60 * 1000, // Hold onto the data for 30 seconds
+            debug: true
+          })
+
+          const api = axios.create({
+            adapter: cache.adapter
+          })
+
+          const splitContext = window.ENV.context_asset_string.split('_')
+
+          api
+            .get(`/api/v1/${splitContext[0]}s/${splitContext[1]}/csp_settings`)
+            .then(() => {
+              // Bring in the actual bundle of files to use
+              import('jsx/account_settings')
+                .then(({ start }) => {
+                  start(document.getElementById('tab-security'), {
+                    context: splitContext[0],
+                    contextId: splitContext[1],
+                    isSubAccount: !ENV.ACCOUNT.root_account,
+                    initialCspSettings: ENV.CSP,
+                    api
+                  })
+                })
+                .catch(() => {
+                  // We really should never get here... but if we do... do something.
+                  $('#tab-security').text(I18n.t('Security Tab failed to load'))
+                })
+            })
+            .catch(() => {
+              // We really should never get here... but if we do... do something.
+              $('#tab-security').text(I18n.t('Security Tab failed to load'))
+            })
         }
-      }
-    }).show();
-    $(".add_ip_filter_link").click(function(event) {
+      })
+      .tabs()
+      .show()
+
+
+    $(".add_ip_filter_link").click(event => {
       event.preventDefault();
       var $filter = $(".ip_filter.blank:first").clone(true).removeClass('blank');
       $("#ip_filters").append($filter.show());
@@ -143,7 +236,7 @@ import './vendor/jquery.scrollTo'
     if($(".ip_filter:not(.blank)").length == 0) {
       $(".add_ip_filter_link").click();
     }
-    $(".ip_help_link").click(function(event) {
+    $(".ip_help_link").click(event => {
       event.preventDefault();
       $("#ip_filters_dialog").dialog({
         title: I18n.t('titles.what_are_quiz_ip_filters', "What are Quiz IP Filters?"),
@@ -151,7 +244,7 @@ import './vendor/jquery.scrollTo'
       });
     });
 
-    $(".open_registration_delegated_warning_link").click(function(event) {
+    $(".open_registration_delegated_warning_link").click(event => {
       event.preventDefault();
       $("#open_registration_delegated_warning_dialog").dialog({
         title: I18n.t('titles.open_registration_delegated_warning_dialog', "An External Identity Provider is Enabled"),
@@ -171,16 +264,14 @@ import './vendor/jquery.scrollTo'
 
     var $blankCustomHelpLink = $('.custom_help_link.blank').detach().removeClass('blank'),
         uniqueCounter = 1000;
-    $(".add_custom_help_link").click(function(event) {
+    $(".add_custom_help_link").click(event => {
       event.preventDefault();
       var $newContainer = $blankCustomHelpLink.clone(true).appendTo('#custom_help_links').show(),
           newId = uniqueCounter++;
       // need to replace the unique id in the inputs so they get sent back to rails right,
       // chage the 'for' on the lables to match.
-      $.each(['id', 'name', 'for'], function(i, prop){
-        $newContainer.find('['+prop+']').attr(prop, function(i, previous){
-          return previous.replace(/\d+/, newId);
-        });
+      $.each(['id', 'name', 'for'], (i, prop) => {
+        $newContainer.find('['+prop+']').attr(prop, (i, previous) => previous.replace(/\d+/, newId));
       });
     });
 
@@ -219,7 +310,7 @@ import './vendor/jquery.scrollTo'
         $myFieldset.showIf(iAmChecked);
     }).change();
 
-    $(".turnitin_account_settings").change(function() {
+    $(".turnitin_account_settings").change(() => {
       $(".confirm_turnitin_settings_link").text(I18n.t('links.turnitin.confirm_settings', "confirm Turnitin settings"));
     });
 
@@ -242,13 +333,13 @@ import './vendor/jquery.scrollTo'
         turnitin_host: account.turnitin_host
       }
       $link.text(I18n.t('notices.turnitin.checking_settings', "checking Turnitin settings..."));
-      $.getJSON(url, turnitin_data, function(data) {
+      $.getJSON(url, turnitin_data, data => {
         if(data && data.success) {
           $link.text(I18n.t('notices.turnitin.setings_confirmed', "Turnitin settings confirmed!"));
         } else {
           $link.text(I18n.t('notices.turnitin.invalid_settings', "invalid Turnitin settings, please check your account id and shared secret from Turnitin"))
         }
-      }, function(data) {
+      }, data => {
         $link.text(I18n.t('notices.turnitin.invalid_settings', "invalid Turnitin settings, please check your account id and shared secret from Turnitin"))
       });
     });
@@ -256,46 +347,7 @@ import './vendor/jquery.scrollTo'
     // Admins tab
     $(".add_users_link").click(addUsersLink);
 
-    $(".open_report_description_link").click(openReportDescriptionLink);
 
-    $(".run_report_link").click(function(event) {
-      event.preventDefault();
-      $(this).parent("form").submit();
-    });
-
-    $(".run_report_form").formSubmit({
-      resetForm: true,
-      beforeSubmit: function(data) {
-        $(this).loadingImage();
-        return true;
-      },
-      success: function(data) {
-        $(this).loadingImage('remove');
-        var report = $(this).attr('id').replace('_form', '');
-        $("#" + report).find('.run_report_link').hide()
-          .end().find('.configure_report_link').hide()
-          .end().find('.running_report_message').show();
-        $(this).parent(".report_dialog").dialog('close');
-      },
-      error: function(data) {
-        $(this).loadingImage('remove');
-        $(this).parent(".report_dialog").dialog('close');
-      }
-    });
-
-    $(".configure_report_link").click(function(event) {
-      event.preventDefault();
-      var data = $(this).data(),
-        $dialog = data.$report_dialog;
-      if (!$dialog) {
-        $dialog = data.$report_dialog = $(this).parent("td").find(".report_dialog").dialog({
-          autoOpen: false,
-          width: 400,
-          title: I18n.t('titles.configure_report', 'Configure Report')
-        });
-      }
-      $dialog.dialog('open');
-    })
 
     $('.service_help_dialog').each(function(index) {
       var $dialog = $(this),
@@ -355,26 +407,25 @@ import './vendor/jquery.scrollTo'
     if ($rce_container.length > 0) {
       const $textarea = $rce_container.find('textarea');
       RichContentEditor.preloadRemoteModule();
-      if ($("#account_terms_of_service_terms_type").find(":selected").text() === 'Custom') {
-        $('#terms_of_service_modal').show()
-        $rce_container.show();
-        setTimeout (() => {
-          RichContentEditor.loadNewEditor($textarea, { manageParent: true, defaultContent: ENV.TERMS_OF_SERVICE_CUSTOM_CONTENT || ''})
-        }, 1000);
-      }
-      $( "#account_terms_of_service_terms_type" ).change(function() {
-        if (this.value === 'custom') {
+      const $terms_type = $( "#account_terms_of_service_terms_type" ).change(onTermsTypeChange)
+      async function onTermsTypeChange() {
+        if ($terms_type.val() === 'custom') {
           $('#terms_of_service_modal').show()
           $rce_container.show();
+
+          const url = '/api/v1/terms_of_service_custom_content'
+          const defaultContent = await (await fetch(url)).text()
+
           RichContentEditor.loadNewEditor($textarea, {
             focus: true,
             manageParent: true,
-            defaultContent: ENV.TERMS_OF_SERVICE_CUSTOM_CONTENT || ''
+            defaultContent
           });
         } else {
           $rce_container.hide();
           $('#terms_of_service_modal').hide()
         }
-      });
+      }
+      onTermsTypeChange()
     }
   });

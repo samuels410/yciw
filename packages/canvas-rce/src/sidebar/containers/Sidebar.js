@@ -16,17 +16,15 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-import Sidebar from "../components/Sidebar";
-import sidebarHandlers from "./sidebarHandlers";
-import { connect } from "react-redux";
-
-function propsFromState(state) {
-  let {
+export function propsFromState(state) {
+  const {
     ui,
+    containingContext,
     contextType,
     contextId,
     files,
     images,
+    documents,
     folders,
     rootFolderId,
     flickr,
@@ -35,9 +33,9 @@ function propsFromState(state) {
     newPageLinkExpanded
   } = state;
 
-  let collections = {};
+  const collections = {};
   for (const key in state.collections) {
-    let collection = state.collections[key];
+    const collection = state.collections[key];
     collections[key] = {
       links: collection.links,
       lastError: collection.error,
@@ -46,23 +44,20 @@ function propsFromState(state) {
     };
   }
 
-  return Object.assign(
-    {},
-    {
-      contextType,
-      contextId,
-      collections,
-      files,
-      images,
-      folders,
-      rootFolderId,
-      flickr,
-      upload,
-      session,
-      newPageLinkExpanded
-    },
-    ui
-  );
+  return {
+    containingContext,
+    contextType,
+    contextId,
+    collections,
+    files,
+    images,
+    documents,
+    folders,
+    rootFolderId,
+    flickr,
+    upload,
+    session,
+    newPageLinkExpanded,
+    ...ui
+  };
 }
-
-export default connect(propsFromState, sidebarHandlers)(Sidebar);

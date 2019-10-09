@@ -90,7 +90,7 @@ module Context
   def rubric_contexts(user)
     associations = []
     course_ids = [self.id]
-    course_ids = (course_ids + user.participating_instructor_course_ids.map{|id| Shard.relative_id_for(id, user.shard, Shard.current)}).uniq if user
+    course_ids = (course_ids + user.participating_instructor_course_with_concluded_ids.map{|id| Shard.relative_id_for(id, user.shard, Shard.current)}).uniq if user
     Shard.partition_by_shard(course_ids) do |sharded_course_ids|
       context_codes = sharded_course_ids.map{|id| "course_#{id}"}
       if Shard.current == self.shard
@@ -238,6 +238,48 @@ module Context
     nil
   end
 
+  def self.find_asset_by_url(url)
+    object = nil
+    params = Rails.application.routes.recognize_path(url)
+    course = Course.find(params[:course_id]) if params[:course_id]
+    group = Group.find(params[:group_id]) if params[:group_id]
+    user = User.find(params[:user_id]) if params[:user_id]
+    context = course || group || user
+    return nil unless context
+    case params[:controller]
+    when 'files'
+      rel_path = params[:file_path]
+      object = rel_path && Folder.find_attachment_in_context_with_path(course, CGI.unescape(rel_path))
+      file_id = params[:file_id] || params[:id]
+      query = URI.parse(url)&.query
+      file_id ||= query && CGI.parse(URI.parse(url)&.query)&.send(:[], "preview")&.first
+      object ||= context.attachments.find_by_id(file_id) # attachments.find_by_id uses the replacement hackery
+    when 'wiki_pages'
+      object = context.wiki.find_page(CGI.unescape(params[:id]), include_deleted: true)
+      if !object && params[:id].to_s.include?("+") # maybe it really is a "+"
+        object = context.wiki.find_page(CGI.unescape(params[:id].to_s.gsub("+", "%2B")), include_deleted: true)
+      end
+    when 'external_tools'
+      if params[:action] == "retrieve"
+        tool_url = CGI.parse(URI.parse(url).query)["url"].first rescue nil
+        object = ContextExternalTool.find_external_tool(tool_url, context) if tool_url
+      elsif params[:id]
+        object = ContextExternalTool.find_external_tool_by_id(params[:id], context)
+      end
+    when 'context_modules'
+      if %w(item_redirect item_redirect_mastery_paths choose_mastery_path).include?(params[:action])
+        object = context.context_module_tags.find_by(id: params[:id])
+      else
+        object = context.context_modules.find_by(id: params[:id])
+      end
+    else
+      object = context.try(params[:controller].sub(/^.+\//, ''))&.find_by(id: params[:id])
+    end
+    object
+  rescue => e
+    nil
+  end
+
   def self.asset_name(asset)
     name = asset.display_name.presence if asset.respond_to?(:display_name)
     name ||= asset.title.presence if asset.respond_to?(:title)
@@ -246,10 +288,27 @@ module Context
     name || ''
   end
 
+  def self.asset_body(asset)
+    asset.try(:body) || asset.try(:message) || asset.try(:description)
+  end
+
   def self.get_account(context)
     case context
     when Account
       context
+    when Course
+      get_account(context.account)
+    when CourseSection
+      get_account(context.course)
+    when Group
+      get_account(context.context)
+    end
+  end
+
+  def self.get_account_or_parent_account(context)
+    case context
+    when Account
+      context.root_account? ? context : context.parent_account
     when Course
       get_account(context.account)
     when CourseSection

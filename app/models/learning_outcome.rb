@@ -155,27 +155,11 @@ class LearningOutcome < ActiveRecord::Base
   def align(asset, context, opts={})
     tag = find_or_create_tag(asset, context)
     tag.tag = determine_tag_type(opts[:mastery_type])
-    tag.position = (self.alignments.map(&:position).compact.max || 1) + 1
     tag.mastery_score = opts[:mastery_score] if opts[:mastery_score]
     tag.save
 
     create_missing_outcome_link(context) if context.is_a? Course
     tag
-  end
-
-  def reorder_alignments(context, order)
-    order_hash = {}
-    order.each_with_index{|o, i| order_hash[o.to_i] = i; order_hash[o] = i }
-    tags = self.alignments.where(context_id: context, context_type: context.class.to_s, tag_type: 'learning_outcome')
-    tags = tags.sort_by{|t| order_hash[t.id] || order_hash[t.content_asset_string] || CanvasSort::Last }
-    updates = []
-    tags.each_with_index do |tag, idx|
-      tag.position = idx + 1
-      updates << "WHEN id=#{tag.id} THEN #{idx + 1}"
-    end
-    ContentTag.where(:id => tags).update_all("position=CASE #{updates.join(" ")} ELSE position END")
-    self.touch
-    tags
   end
 
   def remove_alignment(alignment_id, context)
@@ -359,6 +343,7 @@ class LearningOutcome < ActiveRecord::Base
 
   scope(:for_context_codes, ->(codes) { where(:context_code => codes) })
   scope(:active, -> { where("learning_outcomes.workflow_state<>'deleted'") })
+  scope(:active_first, -> { order(Arel.sql("CASE WHEN workflow_state = 'active' THEN 0 ELSE 1 END")) })
   scope(:has_result_for_user,
     lambda do |user|
       joins(:learning_outcome_results)

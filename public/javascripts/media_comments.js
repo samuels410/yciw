@@ -16,7 +16,7 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-import I18n from 'i18n!media_comments'
+import I18n from 'i18n!media_comments_publicjs'
 import _ from 'underscore'
 import pubsub from 'vendor/jquery.ba-tinypubsub'
 import $ from 'jquery'
@@ -27,7 +27,8 @@ import 'jqueryui/dialog'
 import './jquery.instructure_misc_helpers' /* /\$\.h/, /\$\.fileSize/ */
 import './jquery.instructure_misc_plugins' /* .dim, /\.log\(/ */
 import 'jqueryui/progressbar'
-import 'jqueryui/tabs'
+
+const getDefaultExport = mod => mod.default ? mod.default : mod
 
   "use strict"
   var jsUploader
@@ -59,9 +60,10 @@ import 'jqueryui/tabs'
     return ENV.context_asset_string || ('user_' + ENV.current_user_id);
   }
 
-  function addEntry(entry){
-    var contextCode = $.mediaComment.contextCode(),
-        mediaType = { 2: 'image', 5: 'audio' }[entry.mediaType] || 'video';
+  function addEntry(entry, isAudioFile){
+    const contextCode = $.mediaComment.contextCode();
+
+    const mediaType = { 2: 'image', 5: 'audio' }[entry.mediaType] || isAudioFile ? 'audio' : 'video';
 
     if (contextCode) {
       $.ajaxJSON("/media_objects", "POST", {
@@ -70,7 +72,7 @@ import 'jqueryui/tabs'
         context_code: contextCode,
         title: entry.title,
         user_entered_title: entry.userTitle
-      }, function(data) {
+      }, data => {
         pubsub.publish('media_object_created', data);
       }, $.noop);
     }
@@ -229,7 +231,7 @@ import 'jqueryui/tabs'
       $("#media_upload_progress").progressbar('option', 'value', 100);
       var entry = entries[0];
       $("#media_upload_submit").text(I18n.t('messages.submitted', "Submitted Media File!"));
-      setTimeout(function() {
+      setTimeout(() => {
         $("#media_comment_dialog").dialog('close');
       }, 1500);
       if(type == 'audio') {
@@ -259,7 +261,7 @@ import 'jqueryui/tabs'
   var reset_selectors = false;
   var lastInit = null;
   $.mediaComment.init = function(mediaType, opts) {
-  require.ensure([], function () {
+  require.ensure([], () => {
     var swfobject = require('swfobject');
 
     lastInit = lastInit || new Date();
@@ -287,7 +289,7 @@ import 'jqueryui/tabs'
         height: 475,
         modal: true
       });
-      $dialog.dialog('option', 'close', function() {
+      $dialog.dialog('option', 'close', () => {
         $("#audio_record").before("<div id='audio_record'/>").remove();
         $("#video_record").before("<div id='video_record'/>").remove();
         if(opts && opts.close && $.isFunction(opts.close)) {
@@ -322,7 +324,7 @@ import 'jqueryui/tabs'
       // **********************************************************************
       // Flash audio video record (and upload)
       // **********************************************************************
-      setTimeout(function() {
+      setTimeout(() => {
         var recordVars = {
           host:location.protocol + "//" + INST.kalturaSettings.domain,
           rtmpHost:"rtmp://" + (INST.kalturaSettings.rtmp_domain || INST.kalturaSettings.domain),
@@ -366,7 +368,7 @@ import 'jqueryui/tabs'
 
         // give the dialog time to initialize or the recorder will
         // render funky in ie
-      }, INST.browser.ie ? 500 : 10);
+      }, 10);
 
       // **********************************************************************
       // Flash uploaders
@@ -417,7 +419,7 @@ import 'jqueryui/tabs'
           var $video_record_holder, $video_record, $video_record_meter;
           var video_record_counter, current_video_level, video_has_volume = false;
           reset_selectors = true;
-          setInterval(function() {
+          setInterval(() => {
             if(reset_selectors) {
               $audio_record_holder = $("#audio_record_holder");
               $audio_record = $("#audio_record");
@@ -448,7 +450,7 @@ import 'jqueryui/tabs'
               audio_level = Math.max(audio_level, current_audio_level);
               if(audio_level > -1 && !$audio_record_holder.hasClass('with_volume')) {
                 $audio_record_meter.css('display', 'none');
-                $("#audio_record_holder").addClass('with_volume').animate({'width': 420}, function() {
+                $("#audio_record_holder").addClass('with_volume').animate({'width': 420}, () => {
                   $audio_record_meter.css('display', '');
                 });
               }
@@ -465,7 +467,7 @@ import 'jqueryui/tabs'
               video_level = Math.max(video_level, current_video_level);
               if(video_level > -1 && !$video_record_holder.hasClass('with_volume')) {
                 $video_record_meter.css('display', 'none');
-                $("#video_record_holder").addClass('with_volume').animate({'width': 420}, function() {
+                $("#video_record_holder").addClass('with_volume').animate({'width': 420}, () => {
                   $video_record_meter.css('display', '');
                 });
               }
@@ -483,30 +485,28 @@ import 'jqueryui/tabs'
 
     // Do JS uploader is appropriate
     if (INST.kalturaSettings.js_uploader) {
-       const JsUploader = require('compiled/media_comments/js_uploader')
+       const JsUploader = getDefaultExport(require('compiled/media_comments/js_uploader'))
        jsUploader = new JsUploader(mediaType, opts)
        jsUploader.onReady = mediaCommentReady
        jsUploader.addEntry = addEntry
 
-       if (ENV.ARC_RECORDING_FEATURE_ENABLED) {
-         const Browser = require('jsx/shared/browserUtils')
-         const currentBrowser = Browser.getBrowser()
-         if (
-           (currentBrowser.name === 'Chrome' && Number(currentBrowser.version) >= 68) ||
-           (currentBrowser.name === 'Firefox' && Number(currentBrowser.version) >= 61)
-         ) {
-           import('jsx/media_recorder/renderRecorder').then((renderCanvasMediaRecorder) => {
-             let tryToRenderInterval
-             const renderFunc = () => {
-               const e = document.getElementById('record_media_tab')
-               if (e) {
-                 renderCanvasMediaRecorder(e, jsUploader.doUploadByFile)
-                 clearInterval(tryToRenderInterval)
-               }
+         const getBrowser = require('jsx/shared/browserUtils').getBrowser
+         const currentBrowser = getBrowser()
+       if (
+         (currentBrowser.name === 'Chrome' && Number(currentBrowser.version) >= 68) ||
+         (currentBrowser.name === 'Firefox' && Number(currentBrowser.version) >= 61)
+       ) {
+         import('jsx/media_recorder/renderRecorder').then(({default: renderCanvasMediaRecorder}) => {
+           let tryToRenderInterval
+           const renderFunc = () => {
+             const e = document.getElementById('record_media_tab')
+             if (e) {
+               renderCanvasMediaRecorder(e, jsUploader.doUploadByFile)
+               clearInterval(tryToRenderInterval)
              }
-             tryToRenderInterval = setInterval(renderFunc, 10)
-           })
-        }
+           }
+           tryToRenderInterval = setInterval(renderFunc, 10)
+         })
       }
     }
 
@@ -531,10 +531,10 @@ import 'jqueryui/tabs'
       // **********************************************************************
       // load kaltura_session
       // **********************************************************************
-      $.ajaxJSON('/api/v1/services/kaltura_session', 'POST', {}, function(data) {
+      $.ajaxJSON('/api/v1/services/kaltura_session', 'POST', {}, data => {
         $div.data('ks', data.ks);
         $div.data('uid', data.uid);
-      }, function(data) {
+      }, data => {
         if(data.logged_in == false) {
           $div.data('ks-error', I18n.t('errors.must_be_logged_in', "You must be logged in to record media."));
         } else {
@@ -546,8 +546,9 @@ import 'jqueryui/tabs'
       // **********************************************************************
       var checkForKS = function() {
         if($div.data('ks')) {
-          var mediaCommentsTemplate = require('jst/MediaComments');
+          const mediaCommentsTemplate = getDefaultExport(require('jst/MediaComments'))
           $div.html(mediaCommentsTemplate());
+          require('jqueryui/tabs')
           $div.find("#media_record_tabs").tabs({activate: $.mediaComment.video_delegate.expectReady});
           mediaCommentReady();
         } else if($div.data('ks-error')) {
@@ -567,7 +568,7 @@ import 'jqueryui/tabs'
   } // End of init function
 
   $(document).ready(function() {
-    $(document).bind('reset_media_comment_forms', function() {
+    $(document).bind('reset_media_comment_forms', () => {
       $("#audio_record_holder_message,#video_record_holder_message").removeClass('saving')
         .find(".recorder_message").html("Saving Recording...<img src='/images/media-saving.gif'/>");
       $("#audio_record_holder").stop(true, true).clearQueue().css('width', '').removeClass('with_volume');
@@ -585,7 +586,7 @@ import 'jqueryui/tabs'
         $("#video_upload")[0].removeFiles(0, files.length - 1);
       }
    });
-    $("#media_upload_submit").live('click', function(event) {
+    $("#media_upload_submit").live('click', event => {
       $.mediaComment.upload_delegate.submit();
     });
     $("#video_record_option,#audio_record_option").live('click', function(event) {
@@ -603,7 +604,7 @@ import 'jqueryui/tabs'
       }
     });
   });
-  $(document).bind('media_recording_error', function() {
+  $(document).bind('media_recording_error', () => {
     $("#audio_record_holder_message,#video_record_holder_message").find(".recorder_message").html(
             htmlEscape(I18n.t('errors.save_failed', "Saving appears to have failed.  Please close this popup to try again.")) +
             "<div style='font-size: 0.8em; margin-top: 20px;'>" +
@@ -620,7 +621,7 @@ import 'jqueryui/tabs'
   window.beforeAddEntry = function() {
     var attemptId = Math.random();
     $.mediaComment.lastAddAttemptId = attemptId;
-    setTimeout(function() {
+    setTimeout(() => {
       if($.mediaComment.lastAddAttemptId == attemptId) {
         $(document).triggerHandler('media_recording_error');
       }

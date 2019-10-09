@@ -51,6 +51,34 @@ RSpec.describe SubmissionComment do
     end
   end
 
+  describe 'viewed submission comments' do
+    it 'returns read if the submission is read' do
+      comment = @submission.submission_comments.create!(valid_attributes)
+      @submission.mark_read(@user)
+      expect(comment).to be_read(@user)
+    end
+
+    it 'returns read if there is a viewed submission comment' do
+      comment = @submission.submission_comments.create!(valid_attributes)
+      comment.viewed_submission_comments.create!(user: @user)
+      expect(comment).to be_read(@user)
+    end
+
+    it 'creates a viewed submission comment if mark_read! is called' do
+      comment = @submission.submission_comments.create!(valid_attributes)
+      comment.mark_read!(@user)
+      expect(comment).to be_read(@user)
+      expect(ViewedSubmissionComment.count).to be(1)
+      expect(ViewedSubmissionComment.last.user).to eq(@user)
+      expect(ViewedSubmissionComment.last.submission_comment).to eq(comment)
+    end
+
+    it 'returns false if the submission is not read and no viewed submission comments' do
+      comment = @submission.submission_comments.create!(valid_attributes)
+      expect(comment).not_to be_read(@user)
+    end
+  end
+
   describe 'notifications' do
     before(:once) do
       @student_ended = user_model
@@ -105,6 +133,30 @@ RSpec.describe SubmissionComment do
       @comment = @submission.add_comment(:author => @student, :comment => "some comment")
       expect(@submission).to be_unsubmitted
       expect(@comment.messages_sent).to be_include('Submission Comment For Teacher')
+    end
+
+    context "muted assignments" do
+      it "doesn't dispatch notification on create" do
+        @assignment.mute!
+
+        @comment = @submission.add_comment(author: @teacher, comment: "some comment")
+        expect(@comment.messages_sent.keys).not_to include('Submission Comment')
+      end
+    end
+
+    context "post policies" do
+      before(:once) do
+        @course.enable_feature!(:new_gradebook)
+        PostPolicy.enable_feature!
+      end
+
+      it "doesn't dispatch notifications on create for manually posted assignments" do
+        @assignment.post_policy.update_attribute(:post_manually, true)
+        @assignment.hide_submissions(submission_ids: [@submission.id])
+
+        @comment = @submission.add_comment(author: @teacher, comment: "some comment")
+        expect(@comment.messages_sent.keys).not_to include('Submission Comment')
+      end
     end
 
     context 'draft comment' do
@@ -504,6 +556,29 @@ This text has a http://www.google.com link in it...
         expect(@submission_comment.grants_any_right?(@student, {}, :read)).to be_falsey
       end
     end
+
+    describe "viewing comments" do
+      context "when the assignment is not moderated" do
+        let(:course) { Course.create! }
+        let(:assignment) { course.assignments.create!(title: "hi") }
+        let(:ta) { course.enroll_ta(User.create!, active_all: true).user }
+        let(:student) { course.enroll_student(User.create!, active_all: true).user }
+        let(:submission) { assignment.submission_for_student(student) }
+        let(:comment) do
+          assignment.update_submission(student, commenter: student, comment: 'ok')
+          submission.submission_comments.first
+        end
+
+        it "submitter comments can be read by an instructor with default permissions" do
+          expect(comment.grants_right?(ta, :read)).to be true
+        end
+
+        it "submitter comments can be read by an instructor who cannot manage assignments but can view the submitter's grades" do
+          RoleOverride.create!(context: course.account, permission: :manage_assignments, role: ta_role, enabled: false)
+          expect(comment.grants_right?(ta, :read)).to be true
+        end
+      end
+    end
   end
 
   describe '#update_submission' do
@@ -613,6 +688,92 @@ This text has a http://www.google.com link in it...
     it "does not create an event when no updating_user present" do
       comment = @submission.submission_comments.create!(author: @student)
       expect{ comment.update!(comment: "changing the comment!") }.not_to change{ AnonymousOrModerationEvent.count }
+    end
+  end
+
+  describe '#attempt' do
+    before(:once) do
+      @submission.update!(attempt: 4)
+      @comment1 = @submission.submission_comments.create!(valid_attributes.merge(attempt: 1))
+      @comment2 = @submission.submission_comments.create!(valid_attributes.merge(attempt: 2))
+      @comment3 = @submission.submission_comments.create!(valid_attributes.merge(attempt: 2))
+      @comment4 = @submission.submission_comments.create!(valid_attributes.merge(attempt: nil))
+    end
+
+    context 'when the submission attempt is nil' do
+      before(:once) do
+        @submission.update!(attempt: nil)
+      end
+
+      it 'raises an error if the submission_comment attempt is greater than 0' do
+        expect { @submission.submission_comments.create!(valid_attributes.merge(attempt: 1)) }.to raise_error(ActiveRecord::RecordInvalid)
+      end
+
+      it 'does not raise an error if the submission_comment attempt is equal to 0' do
+        expect { @submission.submission_comments.create!(valid_attributes.merge(attempt: 0)) }.not_to raise_error
+      end
+    end
+
+    it 'can limit comments to the specific attempt' do
+      expect(@submission.submission_comments.where(attempt: 1)).to eq [@comment1]
+    end
+
+    it 'can have multiple comments' do
+      expect(@submission.submission_comments.where(attempt: 2).sort).to eq [@comment2, @comment3]
+    end
+
+    it 'can limit the comments to attempts that are nil' do
+      expect(@submission.submission_comments.where(attempt: nil)).to eq [@comment4]
+    end
+
+    it 'cannot be present? if submission#attempt is nil' do
+      @submission.update_column(:attempt, nil) # bypass infer_values callback
+      @comment1.reload
+      @comment1.attempt = 2
+      expect(@comment1).not_to be_valid
+    end
+
+    it 'cannot be larger then submission#attempt' do
+      @comment1.attempt = @submission.attempt + 1
+      expect(@comment1).not_to be_valid
+    end
+  end
+
+  describe "after_save#update_participation" do
+    context "muted/unmuted assignments" do
+      it "doesn't update participation for a muted assignment" do
+        @assignment.mute!
+
+        expect(ContentParticipation).to_not receive(:create_or_update)
+        @comment = @submission.add_comment(author: @teacher, comment: "some comment")
+      end
+
+      it "updates particiapation for an unmuted assignment" do
+        expect(ContentParticipation).to receive(:create_or_update).
+          with({content: @submission, user: @submission.user, workflow_state: "unread"})
+        @comment = @submission.add_comment(author: @teacher, comment: "some comment")
+      end
+    end
+
+    context "post policies" do
+      before(:once) do
+        @course.enable_feature!(:new_gradebook)
+        PostPolicy.enable_feature!
+      end
+
+      it "doesn't update participation for a manually posted assignment" do
+        @assignment.post_policy.update_attribute(:post_manually, true)
+        @assignment.hide_submissions(submission_ids: [@submission.id])
+
+        expect(ContentParticipation).to_not receive(:create_or_update)
+        @comment = @submission.add_comment(author: @teacher, comment: "some comment")
+      end
+
+      it "updates participation for an automatically posted assignment" do
+        expect(ContentParticipation).to receive(:create_or_update).
+          with({content: @submission, user: @submission.user, workflow_state: "unread"})
+        @comment = @submission.add_comment(author: @teacher, comment: "some comment")
+      end
     end
   end
 end

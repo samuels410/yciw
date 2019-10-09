@@ -15,7 +15,7 @@
 // You should have received a copy of the GNU Affero General Public License along
 // with this program. If not, see <http://www.gnu.org/licenses/>.
 
-import I18n from 'i18n!roster'
+import I18n from 'i18n!RosterUserView'
 import $ from 'jquery'
 import _ from 'underscore'
 import Backbone from 'Backbone'
@@ -33,19 +33,6 @@ let linkToStudentsDialog = null
 let invitationDialog = null
 
 export default class RosterUserView extends Backbone.View {
-  constructor(...args) {
-    {
-      // Hack: trick Babel/TypeScript into allowing this before super.
-      if (false) { super(); }
-      let thisFn = (() => { return this; }).toString();
-      let thisName = thisFn.slice(thisFn.indexOf('return') + 6 + 1, thisFn.lastIndexOf(';')).trim();
-      eval(`${thisName} = this;`);
-    }
-    this.handleMenuEvent = this.handleMenuEvent.bind(this)
-    this.focus = this.focus.bind(this)
-    this.blur = this.blur.bind(this)
-    super(...args)
-  }
 
   static initClass() {
     this.prototype.tagName = 'tr'
@@ -71,7 +58,7 @@ export default class RosterUserView extends Backbone.View {
     this.model.currentRole = __guard__(this.model.get('enrollments')[0], x => x.role)
 
     this.$el.attr('id', `user_${options.model.get('id')}`)
-    return Array.from(this.model.get('enrollments')).map(e => this.$el.addClass(e.role))
+    return Array.from(this.model.get('enrollments')).map(e => this.$el.addClass(e.type))
   }
 
   toJSON() {
@@ -98,11 +85,11 @@ export default class RosterUserView extends Backbone.View {
       json.enrollments = _.reject(json.enrollments, en => en.enrollment_state === 'inactive') // if not _completely_ inactive, treat the inactive enrollments as deleted
     }
 
-    json.canRemoveUsers = _.all(this.model.get('enrollments'), e => e.can_be_removed)
+    json.canRemoveUsers = _.every(this.model.get('enrollments'), e => e.can_be_removed)
     json.canResendInvitation = !json.isInactive
 
     if (json.canRemoveUsers && !ENV.course.concluded) {
-      json.canEditRoles = !_.any(
+      json.canEditRoles = !_.some(
         this.model.get('enrollments'),
         e => e.type === 'ObserverEnrollment' && e.associated_user_id
       )
@@ -113,7 +100,7 @@ export default class RosterUserView extends Backbone.View {
     json.canViewLoginIdColumn =
       ENV.permissions.manage_admin_users || ENV.permissions.manage_students
     json.canViewSisIdColumn = ENV.permissions.read_sis
-    json.canManage = _.any(['TeacherEnrollment', 'DesignerEnrollment', 'TaEnrollment'], et =>
+    json.canManage = _.some(['TeacherEnrollment', 'DesignerEnrollment', 'TaEnrollment'], et =>
       this.model.hasEnrollmentType(et)
     )
       ? ENV.permissions.manage_admin_users
@@ -144,7 +131,7 @@ export default class RosterUserView extends Backbone.View {
       const users = {}
       if (
         observerEnrollments.length >= 1 &&
-        _.all(observerEnrollments, enrollment => !enrollment.observed_user)
+        _.every(observerEnrollments, enrollment => !enrollment.observed_user)
       ) {
         users[''] = {name: I18n.t('nobody', 'nobody')}
       } else {

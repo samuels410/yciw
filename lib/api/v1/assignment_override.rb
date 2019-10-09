@@ -193,12 +193,16 @@ module Api::V1::AssignmentOverride
     [:due_at, :unlock_at, :lock_at].each do |field|
       next unless data.key?(field)
 
-      if data[field].blank?
-        # override value of nil/'' is meaningful
-        override_data[field] = nil
-      elsif value = Time.zone.parse(data[field].to_s)
-        override_data[field] = value
-      else
+      begin
+        if data[field].blank?
+          # override value of nil/'' is meaningful
+          override_data[field] = nil
+        elsif value = Time.zone.parse(data[field].to_s)
+          override_data[field] = value
+        else
+          errors << "invalid #{field} #{data[field].inspect}"
+        end
+      rescue
         errors << "invalid #{field} #{data[field].inspect}"
       end
     end
@@ -456,6 +460,7 @@ module Api::V1::AssignmentOverride
       prepared_overrides[:overrides_to_create].size + prepared_overrides[:overrides_to_update].size
 
     assignment.touch # invalidate cached list of overrides for the assignment
+    assignment.assignment_overrides.reset # unload the obsolete association
     assignment.run_if_overrides_changed_later!(updating_user: updating_user)
   end
 

@@ -23,7 +23,7 @@ class EportfoliosController < ApplicationController
   include EportfolioPage
   before_action :require_user, :only => [:index, :user_index]
   before_action :reject_student_view_student
-  before_action :rich_content_service_config
+  before_action :verified_user_check, :only => [:index, :user_index, :create]
   before_action :get_eportfolio, :except => [:index, :user_index, :create]
 
   def index
@@ -33,7 +33,8 @@ class EportfoliosController < ApplicationController
   def user_index
     @context = @current_user.profile
     return unless tab_enabled?(UserProfile::TAB_EPORTFOLIOS)
-    @active_tab = "eportfolios"
+    rce_js_env
+    set_active_tab "eportfolios"
     add_crumb(@current_user.short_name, user_profile_url(@current_user))
     add_crumb(t(:crumb, "ePortfolios"))
     @portfolios = @current_user.eportfolios.active.order(:updated_at).to_a
@@ -50,7 +51,10 @@ class EportfoliosController < ApplicationController
           format.html { redirect_to eportfolio_url(@portfolio) }
           format.json { render :json => @portfolio.as_json(:permissions => {:user => @current_user, :session => session}) }
         else
-          format.html { render :new }
+          format.html {
+            rce_js_env
+            render :new
+          }
           format.json { render :json => @portfolio.errors, :status => :bad_request }
         end
       end
@@ -64,6 +68,7 @@ class EportfoliosController < ApplicationController
       session[:permissions_key] = SecureRandom.uuid
     end
     if authorized_action(@portfolio, @current_user, :read)
+      rce_js_env
       @portfolio.ensure_defaults
       @category = @portfolio.eportfolio_categories.first
       @page = @category.eportfolio_entries.first
@@ -93,6 +98,12 @@ class EportfoliosController < ApplicationController
         # otherwise, if  I can otherwise view the user, link directly to them
         @owner_url ||= user_url(@portfolio.user) if @portfolio.user.grants_right?(@current_user, :view_statistics)
       end
+
+      if can_do(@portfolio, @current_user, :update)
+        content_for_head helpers.auto_discovery_link_tag(:atom, feeds_eportfolio_path(@portfolio.id, :atom, :verifier => @portfolio.uuid), {:title => t('titles.feed', "Eportfolio Atom Feed") })
+      elsif @portfolio.public
+        content_for_head helpers.auto_discovery_link_tag(:atom, feeds_eportfolio_path(@portfolio.id, :atom), {:title => t('titles.feed', "Eportfolio Atom Feed") })
+      end
     end
   end
 
@@ -105,7 +116,10 @@ class EportfoliosController < ApplicationController
           format.html { redirect_to eportfolio_url(@portfolio) }
           format.json { render :json => @portfolio.as_json(:permissions => {:user => @current_user, :session => session}) }
         else
-          format.html { render :edit }
+          format.html {
+            rce_js_env
+            render :edit
+          }
           format.json { render :json => @portfolio.errors, :status => :bad_request }
         end
       end
@@ -129,15 +143,19 @@ class EportfoliosController < ApplicationController
 
   def reorder_categories
     if authorized_action(@portfolio, @current_user, :update)
-      @portfolio.eportfolio_categories.build.update_order(params[:order].split(","))
+      order = []
+      params[:order].split(",").each { |id| order << Shard.relative_id_for(id, Shard.current, @portfolio.shard) }
+      @portfolio.eportfolio_categories.build.update_order(order)
       render :json => @portfolio.eportfolio_categories.map{|c| [c.id, c.position]}, :status => :ok
     end
   end
 
   def reorder_entries
     if authorized_action(@portfolio, @current_user, :update)
+      order = []
+      params[:order].split(",").each { |id| order << Shard.relative_id_for(id, Shard.current, @portfolio.shard) }
       @category = @portfolio.eportfolio_categories.find(params[:eportfolio_category_id])
-      @category.eportfolio_entries.build.update_order(params[:order].split(","))
+      @category.eportfolio_entries.build.update_order(order)
       render :json => @portfolio.eportfolio_entries.map{|c| [c.id, c.position]}, :status => :ok
     end
   end
@@ -147,7 +165,8 @@ class EportfoliosController < ApplicationController
     if authorized_action(@portfolio, @current_user, :update)
       @attachments = @portfolio.attachments.not_deleted.
         where(display_name: zip_filename,
-              workflow_state: ['to_be_zipped', 'zipping', 'zipped', 'unattached'])
+              workflow_state: ['to_be_zipped', 'zipping', 'zipped', 'unattached'],
+              user_id: @current_user)
       @attachment = @attachments.order(:created_at).last
       @attachments.where.not(id: @attachment).find_each(&:destroy_permanently_plus)
 
@@ -160,6 +179,7 @@ class EportfoliosController < ApplicationController
         @attachment = @portfolio.attachments.build(:display_name => zip_filename)
         @attachment.workflow_state = 'to_be_zipped'
         @attachment.file_state = '0'
+        @attachment.user = @current_user
         @attachment.save!
         ContentZipper.send_later_enqueue_args(:process_attachment, { :priority => Delayed::LOW_PRIORITY, :max_attempts => 1 }, @attachment)
         render :json => @attachment
@@ -208,9 +228,6 @@ class EportfoliosController < ApplicationController
   end
 
   protected
-  def rich_content_service_config
-    rce_js_env(:basic)
-  end
 
   def eportfolio_params
     params.require(:eportfolio).permit(:name, :public)

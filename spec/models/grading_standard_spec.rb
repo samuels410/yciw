@@ -46,9 +46,9 @@ describe GradingStandard do
   end
 
   describe 'validations' do
-    it { is_expected.to validate_presence_of(:context_type) }
-    it { is_expected.to validate_presence_of(:context_id) }
+    it { is_expected.to belong_to(:context).required }
     it { is_expected.to validate_presence_of(:data) }
+    it { is_expected.to serialize(:data) }
 
     describe 'grading standard data' do
       let(:standard) { GradingStandard.new(context: @course) }
@@ -115,13 +115,6 @@ describe GradingStandard do
 
     it 'returns false for a non-default instance' do
       expect(GradingStandard.new).not_to be_default_standard
-    end
-  end
-
-  describe "#lower_bound" do
-    it "returns the lower bound of a score" do
-      standard = GradingStandard.new(data: @default_standard_v1)
-      expect(standard.lower_bound(82)).to eq 79
     end
   end
 

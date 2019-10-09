@@ -38,6 +38,7 @@ class CommunicationChannel < ActiveRecord::Base
   validate :validate_email, if: lambda { |cc| cc.path_type == TYPE_EMAIL && cc.new_record? }
   validate :not_otp_communication_channel, :if => lambda { |cc| cc.path_type == TYPE_SMS && cc.retired? && !cc.new_record? }
   after_commit :check_if_bouncing_changed
+  after_save :clear_user_email_cache
 
   acts_as_list :scope => :user
 
@@ -48,11 +49,19 @@ class CommunicationChannel < ActiveRecord::Base
 
   # Constants for the different supported communication channels
   TYPE_EMAIL    = 'email'
-  TYPE_SMS      = 'sms'
-  TYPE_TWITTER  = 'twitter'
   TYPE_PUSH     = 'push'
+  TYPE_SMS      = 'sms'
+  TYPE_SLACK    = 'slack'
+  TYPE_TWITTER  = 'twitter'
+
+  VALID_TYPES = [TYPE_EMAIL, TYPE_SMS, TYPE_TWITTER, TYPE_PUSH, TYPE_SLACK].freeze
+
 
   RETIRE_THRESHOLD = 1
+
+  def clear_user_email_cache
+    self.user.clear_email_cache! if self.path_type == TYPE_EMAIL
+  end
 
   def self.country_codes
     # [country code, name, true if email should be used instead of Twilio]
@@ -131,7 +140,7 @@ class CommunicationChannel < ActiveRecord::Base
       'cspire1.com' => { name: 'C Spire', country_code: 1 }.with_indifferent_access.freeze,
       'cingularme.com' => { name: 'Cingular', country_code: 1 }.with_indifferent_access.freeze,
       'mobile.celloneusa.com' => { name: 'CellularOne', country_code: 1 }.with_indifferent_access.freeze,
-      'sms.mycricket.com' => { name: 'Cricket', country_code: 1 }.with_indifferent_access.freeze,
+      'mms.cricketwireless.net' => { name: 'Cricket', country_code: 1 }.with_indifferent_access.freeze,
       'messaging.nextel.com' => { name: 'Nextel', country_code: 1 }.with_indifferent_access.freeze,
       'messaging.sprintpcs.com' => { name: 'Sprint PCS', country_code: 1 }.with_indifferent_access.freeze,
       'tmomail.net' => { name: 'T-Mobile', country_code: 1 }.with_indifferent_access.freeze,
@@ -203,7 +212,7 @@ class CommunicationChannel < ActiveRecord::Base
     p.whenever { |record|
       @send_confirmation and
       record.workflow_state == 'unconfirmed' and
-      self.path_type == TYPE_SMS and
+      (self.path_type == TYPE_SMS or self.path_type == TYPE_SLACK) and
       !self.user.creation_pending?
     }
     p.data { {
@@ -271,13 +280,23 @@ class CommunicationChannel < ActiveRecord::Base
   end
 
   def forgot_password!
+    return if Rails.cache.read(['recent_password_reset', self.global_id].cache_key) == true
     @request_password = true
+    Rails.cache.write(['recent_password_reset', self.global_id].cache_key, true, expires_in: Setting.get('resend_password_reset_time', 5).to_f.minutes)
     set_confirmation_code(true, Setting.get('password_reset_token_expiration_minutes', '120').to_i.minutes.from_now)
     self.save!
     @request_password = false
   end
 
+  def confirmation_limit_reached
+    self.confirmation_sent_count > 2
+  end
+
   def send_confirmation!(root_account)
+    if self.confirmation_limit_reached
+      return
+    end
+    self.confirmation_sent_count = self.confirmation_sent_count + 1
     @send_confirmation = true
     @root_account = root_account
     self.save!
@@ -370,6 +389,7 @@ class CommunicationChannel < ActiveRecord::Base
     rank_order = [TYPE_EMAIL, TYPE_SMS, TYPE_PUSH]
     # Add twitter and yo (in that order) if the user's account is setup for them.
     rank_order << TYPE_TWITTER if twitter_service
+    rank_order << TYPE_SLACK if user.associated_root_accounts.any?{|a| a.settings[:encrypted_slack_key]}
     self.unretired.where('communication_channels.path_type IN (?)', rank_order).
       order(Arel.sql("#{self.rank_sql(rank_order, 'communication_channels.path_type')} ASC, communication_channels.position asc")).to_a
   end
@@ -440,8 +460,7 @@ class CommunicationChannel < ActiveRecord::Base
 
   # This is setup as a default in the database, but this overcomes misspellings.
   def assert_path_type
-    valid_types = [TYPE_EMAIL, TYPE_SMS, TYPE_TWITTER, TYPE_PUSH]
-    self.path_type = TYPE_EMAIL unless valid_types.include?(path_type)
+    self.path_type = TYPE_EMAIL unless VALID_TYPES.include?(path_type)
     true
   end
   protected :assert_path_type
@@ -542,6 +561,16 @@ class CommunicationChannel < ActiveRecord::Base
   def self.find_by_confirmation_code(code)
     where(confirmation_code: code).first
 
+  end
+
+  def self.user_can_have_more_channels?(user, domain_root_account)
+    max_allowed_channels = domain_root_account.settings[:max_communication_channels]
+    return true unless max_allowed_channels
+
+    number_channels = user.communication_channels.where(
+      "workflow_state <> 'retired' OR (workflow_state = 'retired' AND created_at > ?)", 1.hour.ago
+    ).count
+    number_channels < max_allowed_channels
   end
 
   def e164_path

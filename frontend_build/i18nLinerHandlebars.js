@@ -25,7 +25,6 @@ const Handlebars = require('handlebars')
 const {pick} = require('lodash')
 const {EmberHandlebars} = require('ember-template-compiler')
 const ScopedHbsExtractor = require('i18nliner-canvas/js/scoped_hbs_extractor')
-require('babel-polyfill')
 const {allFingerprintsFor} = require('brandable_css/lib/main')
 const PreProcessor = require('i18nliner-handlebars/dist/lib/pre_processor').default
 require('i18nliner-canvas/js/scoped_hbs_pre_processor')
@@ -59,17 +58,17 @@ const compileHandlebars = data => {
 }
 
 const emitTemplate = (path, name, result, dependencies, cssRegistration, partialRegistration) => {
-  const moduleName = `jst/${path.replace(/.*\/\jst\//, '').replace(/\.handlebars/, '')}`
   return `
-    define('${moduleName}', ${JSON.stringify(dependencies)}, function(Handlebars){
-      Handlebars = Handlebars.default
-      var template = Handlebars.template, templates = Handlebars.templates = Handlebars.templates || {};
-      var name = '${name}';
-      templates[name] = template(${result.template});
-      ${partialRegistration};
-      ${cssRegistration};
-      return templates[name];
-    });
+    import _Handlebars from 'handlebars/runtime';
+    var Handlebars = _Handlebars.default;
+    ${dependencies.map(d => `import ${JSON.stringify(d)};`).join('\n')}
+
+    var template = Handlebars.template, templates = Handlebars.templates = Handlebars.templates || {};
+    var name = '${name}';
+    templates[name] = template(${result.template});
+    ${partialRegistration};
+    ${cssRegistration};
+    export default templates[name];
   `
 }
 
@@ -104,7 +103,7 @@ const buildCssReference = name => {
       `${JSON.stringify(getCombinedChecksums(cached))}[brandableCss.getCssVariant()]`
 
   return `
-    var brandableCss = arguments[1];
+    import brandableCss from 'compiled/util/brandableCss';
     brandableCss.loadStylesheet('${bundle}', ${options});
   `
 }
@@ -147,18 +146,14 @@ const buildPartialRequirements = partialPaths => {
   return requirements
 }
 
-module.exports = function i18nLinerHandlebarsLoader(source) {
+function i18nLinerHandlebarsLoader(source) {
   this.cacheable()
   const name = resourceName(this.resourcePath)
-  const dependencies = ['handlebars/runtime']
+  const dependencies = []
 
   const partialRegistration = emitPartialRegistration(this.resourcePath, name)
 
   const cssRegistration = buildCssReference(name)
-  if (cssRegistration) {
-    // arguments[1] will be brandableCss
-    dependencies.push('compiled/util/brandableCss')
-  }
 
   const partials = findReferencedPartials(source)
   const partialRequirements = buildPartialRequirements(partials)
@@ -186,4 +181,14 @@ module.exports = function i18nLinerHandlebarsLoader(source) {
     partialRegistration
   )
   return compiledTemplate
+}
+
+module.exports = i18nLinerHandlebarsLoader
+
+module.exports.compile = (source, path) => {
+  const context = {
+    cacheable: () => {},
+    resourcePath: path
+  }
+  return i18nLinerHandlebarsLoader.call(context, source)
 }

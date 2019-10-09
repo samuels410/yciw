@@ -17,52 +17,90 @@
  */
 
 import React from 'react'
-import {bool} from 'prop-types'
-import View from '@instructure/ui-layout/lib/components/View'
+import {bool, func} from 'prop-types'
+
+import {View} from '@instructure/ui-layout'
+
 import {TeacherAssignmentShape} from '../../assignmentData'
 import Override from './Override'
 import EveryoneElse from './EveryoneElse'
 
-Overrides.propTypes = {
-  assignment: TeacherAssignmentShape.isRequired,
-  readOnly: bool
-}
-
-Overrides.defaultProps = {
-  readOnly: false
-}
-
-export default function Overrides(props) {
-  return (
-    <View as="div">
-      {renderOverrides(props.assignment, props.readOnly)}
-      {renderEveryoneElse(props.assignment, props.readOnly)}
-    </View>
-  )
-}
-
-function renderEveryoneElse(assignment, readOnly) {
-  if (assignment.dueAt !== null) {
-    return <EveryoneElse assignment={assignment} readOnly={readOnly} />
+export default class Overrides extends React.Component {
+  static propTypes = {
+    assignment: TeacherAssignmentShape.isRequired,
+    onChangeAssignment: func.isRequired,
+    onValidate: func.isRequired,
+    invalidMessage: func.isRequired,
+    readOnly: bool
   }
-  return null
-}
 
-function renderOverrides(assignment, readOnly) {
-  if (assignment.assignmentOverrides.nodes.length > 0) {
-    return assignment.assignmentOverrides.nodes.map(override => (
-      // in the existing schema, submissionTypes and allowedExtensions are on the assignment.
-      // eventually, they will also be part of each override
-      <Override
-        key={override.lid}
-        override={{
-          ...override,
-          submissionTypes: assignment.submissionTypes,
-          allowedExtensions: assignment.allowedExtensions
-        }}
-        readOnly={readOnly}
+  static defaultProps = {
+    readOnly: false
+  }
+
+  handleChangeOverride = (overrideIndex, path, value) => {
+    const hoistToAssignment = ['allowedAttempts', 'submissionTypes']
+    if (hoistToAssignment.includes(path)) {
+      this.props.onChangeAssignment(path, value)
+    } else {
+      this.props.onChangeAssignment(`assignmentOverrides.nodes.${overrideIndex}.${path}`, value)
+    }
+  }
+
+  handleValidateEveryoneElse = (_ignore, path, value) => this.props.onValidate(path, value)
+
+  handleValidateOverride = (overrideIndex, path, value) =>
+    this.props.onValidate(`assignmentOverrides.nodes.${overrideIndex}.${path}`, value)
+
+  everyoneElseInvalidMessage = (_ignore, path) => this.props.invalidMessage(path)
+
+  invalidMessage = (overrideIndex, path) =>
+    this.props.invalidMessage(`assignmentOverrides.nodes.${overrideIndex}.${path}`)
+
+  renderEveryoneElse() {
+    return (
+      <EveryoneElse
+        assignment={this.props.assignment}
+        onChangeAssignment={this.props.onChangeAssignment}
+        onValidate={this.handleValidateEveryoneElse}
+        invalidMessage={this.everyoneElseInvalidMessage}
+        readOnly={this.props.readOnly}
       />
-    ))
+    )
   }
-  return null
+
+  renderOverrides() {
+    const assignment = this.props.assignment
+    const overrides = assignment.assignmentOverrides.nodes
+    if (overrides.length > 0) {
+      return overrides.map((override, index) => (
+        // in the existing schema submissionTypes, allowedExtensions, and allowedAttempts are on the assignment.
+        // eventually, they will also be part of each override
+        <Override
+          key={override.lid}
+          override={{
+            ...override,
+            submissionTypes: assignment.submissionTypes,
+            allowedExtensions: assignment.allowedExtensions,
+            allowedAttempts: assignment.allowedAttempts
+          }}
+          index={index}
+          onChangeOverride={this.handleChangeOverride}
+          onValidate={this.handleValidateOverride}
+          invalidMessage={this.invalidMessage}
+          readOnly={this.props.readOnly}
+        />
+      ))
+    }
+    return null
+  }
+
+  render() {
+    return (
+      <View as="div">
+        {this.renderOverrides()}
+        {this.props.assignment.onlyVisibleToOverrides ? null : this.renderEveryoneElse()}
+      </View>
+    )
+  }
 }

@@ -44,6 +44,8 @@ module Canvas::LiveEventsCallbacks
       Canvas::LiveEvents.assignment_group_created(obj)
     when Submission
       Canvas::LiveEvents.submission_created(obj)
+    when SubmissionComment
+      Canvas::LiveEvents.submission_comment_created(obj)
     when UserAccountAssociation
       Canvas::LiveEvents.user_account_association_created(obj)
     when Attachment
@@ -60,6 +62,8 @@ module Canvas::LiveEventsCallbacks
       Canvas::LiveEvents.module_created(obj)
     when ContentTag
       Canvas::LiveEvents.module_item_created(obj) if obj.tag_type == "context_module"
+    when LearningOutcomeResult
+      Canvas::LiveEvents.learning_outcome_result_created(obj)
     end
   end
 
@@ -125,11 +129,17 @@ module Canvas::LiveEventsCallbacks
     when ContextModule
       Canvas::LiveEvents.module_updated(obj)
     when ContextModuleProgression
-      if changes["completed_at"] && CourseProgress.new(obj.context_module.course, obj.user, read_only: true).completed?
-        Canvas::LiveEvents.course_completed(obj)
+      if changes["completed_at"]
+        if CourseProgress.new(obj.context_module.course, obj.user, read_only: true).completed?
+          Canvas::LiveEvents.course_completed(obj)
+        else
+          Canvas::LiveEvents.course_progress(obj)
+        end
       end
     when ContentTag
       Canvas::LiveEvents.module_item_updated(obj) if obj.tag_type == "context_module"
+    when LearningOutcomeResult
+      Canvas::LiveEvents.learning_outcome_result_updated(obj)
     end
   end
 

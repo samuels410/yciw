@@ -221,12 +221,6 @@ class GradeSummaryPresenter
     rubric_assessments.map(&:rubric).uniq
   end
 
-  # Called by external classes that want to make sure we clear out
-  # cached data. Most likely this is only the GradeCalculator
-  def self.invalidate_cache(context)
-    Rails.cache.delete(cache_key(context, 'assignment_stats'))
-  end
-
   def assignment_stats
     @stats ||= ScoreStatistic.where(assignment: @context.assignments.active.except(:order)).index_by(&:assignment_id)
   end
@@ -238,8 +232,15 @@ class GradeSummaryPresenter
     end
   end
 
-  def has_muted_assignments?
-    assignments.any?(&:muted?)
+  def hidden_submissions?
+    if @context.post_policies_enabled?
+      submissions.any? do |sub|
+        return !sub.posted? if sub.assignment.post_manually?
+        sub.graded? && !sub.posted?
+      end
+    else
+      assignments.any?(&:muted?)
+    end
   end
 
   def courses_with_grades

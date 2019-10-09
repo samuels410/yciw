@@ -19,22 +19,30 @@
 import I18n from 'i18n!external_tools'
 import React from 'react'
 import PropTypes from 'prop-types'
-import Text from '@instructure/ui-elements/lib/components/Text'
 
-import EditExternalToolButton from '../../external_apps/components/EditExternalToolButton'
-import ManageUpdateExternalToolButton from '../../external_apps/components/ManageUpdateExternalToolButton'
-import ExternalToolPlacementButton from '../../external_apps/components/ExternalToolPlacementButton'
-import DeleteExternalToolButton from '../../external_apps/components/DeleteExternalToolButton'
-import ConfigureExternalToolButton from '../../external_apps/components/ConfigureExternalToolButton'
-import ReregisterExternalToolButton from '../../external_apps/components/ReregisterExternalToolButton'
-import classMunger from '../../external_apps/lib/classMunger'
+import EditExternalToolButton from './EditExternalToolButton'
+import ManageUpdateExternalToolButton from './ManageUpdateExternalToolButton'
+import ExternalToolPlacementButton from './ExternalToolPlacementButton'
+import DeleteExternalToolButton from './DeleteExternalToolButton'
+import DeploymentIdButton from './DeploymentIdButton'
+import ConfigureExternalToolButton from './ConfigureExternalToolButton'
+import ReregisterExternalToolButton from './ReregisterExternalToolButton'
+import classMunger from '../lib/classMunger'
 import 'jquery.instructure_misc_helpers'
 
 export default class ExternalToolsTableRow extends React.Component {
   static propTypes = {
     tool: PropTypes.object.isRequired,
     canAddEdit: PropTypes.bool.isRequired,
-    setFocusAbove: PropTypes.func.isRequired
+    setFocusAbove: PropTypes.func.isRequired,
+    store: PropTypes.shape({
+      getState: PropTypes.func,
+      filteredApps: PropTypes.func,
+    }).isRequired
+  }
+
+  get is13Tool () {
+    return this.props.tool.lti_version === '1.3'
   }
 
   onModalClose = () => {
@@ -105,24 +113,20 @@ export default class ExternalToolsTableRow extends React.Component {
   }
 
   renderButtons = () => {
-    if (this.props.tool.lti_version === '1.3') {
-      return <td className="links text-right" nowrap="nowrap">
-        <Text>LTI 1.3</Text>
-      </td>
-    }
-    if (this.props.tool.installed_locally && !this.props.tool.restricted_by_master_course) {
+    const { tool } = this.props
+    if (tool.installed_locally && !tool.restricted_by_master_course) {
       let configureButton= null
       let updateBadge = null
 
-      if (this.props.tool.tool_configuration) {
+      if (tool.tool_configuration) {
         configureButton = (
-          <ConfigureExternalToolButton ref="configureExternalToolButton" tool={this.props.tool} returnFocus={this.returnFocus} />
+          <ConfigureExternalToolButton ref="configureExternalToolButton" tool={tool} returnFocus={this.returnFocus} />
         )
       }
 
-      if (this.props.tool.has_update) {
+      if (tool.has_update) {
         const badgeAriaLabel = I18n.t('An update is available for %{toolName}', {
-          toolName: this.props.tool.name
+          toolName: tool.name
         })
         updateBadge = <i className="icon-upload tool-update-badge" aria-label={badgeAriaLabel} />
       }
@@ -141,7 +145,7 @@ export default class ExternalToolsTableRow extends React.Component {
             >
               <i className="icon-settings" />
               <i className="icon-mini-arrow-down" />
-              <span className="screenreader-only">{`${this.props.tool.name} ${I18n.t(
+              <span className="screenreader-only">{`${tool.name} ${I18n.t(
                 'Settings'
               )}`}</span>
             </a>
@@ -154,30 +158,38 @@ export default class ExternalToolsTableRow extends React.Component {
             >
               {configureButton}
               <ManageUpdateExternalToolButton
-                tool={this.props.tool}
+                tool={tool}
                 returnFocus={this.returnFocus}
               />
               <EditExternalToolButton
                 ref="editExternalToolButton"
-                tool={this.props.tool}
-                canAddEdit={this.props.canAddEdit}
+                tool={tool}
+                canAddEdit={this.props.canAddEdit && !this.is13Tool}
                 returnFocus={this.returnFocus}
               />
               <ExternalToolPlacementButton
                 ref="externalToolPlacementButton"
-                tool={this.props.tool}
+                tool={tool}
                 onClose={this.onModalClose}
                 returnFocus={this.returnFocus}
               />
               <ReregisterExternalToolButton
                 ref="reregisterExternalToolButton"
-                tool={this.props.tool}
+                tool={tool}
                 canAddEdit={this.props.canAddEdit}
                 returnFocus={this.returnFocus}
               />
+              {
+                this.is13Tool
+                ? <DeploymentIdButton
+                    tool={tool}
+                    returnFocus={this.returnFocus}
+                  />
+                : null
+              }
               <DeleteExternalToolButton
                 ref="deleteExternalToolButton"
-                tool={this.props.tool}
+                tool={tool}
                 canAddEdit={this.props.canAddEdit}
                 returnFocus={this.returnFocus}
               />
@@ -190,7 +202,7 @@ export default class ExternalToolsTableRow extends React.Component {
         <td className="links text-right e-tool-table-data" nowrap="nowrap">
           <ExternalToolPlacementButton
             ref="externalToolPlacementButton"
-            tool={this.props.tool}
+            tool={tool}
             type="button"
             returnFocus={this.returnFocus}
           />

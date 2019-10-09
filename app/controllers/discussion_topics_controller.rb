@@ -243,7 +243,7 @@ require 'atom'
 #
 class DiscussionTopicsController < ApplicationController
   before_action :require_context_and_read_access, :except => :public_feed
-  before_action :rich_content_service_config
+  before_action :rce_js_env
 
   include Api::V1::DiscussionTopics
   include Api::V1::Assignment
@@ -367,7 +367,7 @@ class DiscussionTopicsController < ApplicationController
       format.html do
         log_asset_access([ "topics", @context ], 'topics', 'other')
 
-        @active_tab = 'discussions'
+        set_active_tab 'discussions'
         add_crumb(t('#crumbs.discussions', 'Discussions'),
                   named_context_url(@context, :context_discussion_topics_url))
 
@@ -377,6 +377,24 @@ class DiscussionTopicsController < ApplicationController
             locked.is_a?(Hash) ? locked[:can_view] : locked
           end
           js_env openTopics: open_topics, lockedTopics: locked_topics, newTopicURL: named_context_url(@context, :new_context_discussion_topic_url)
+        end
+
+        fetch_params = {
+          per_page: 50,
+          plain_messages: true,
+          include_assignment: true,
+          exclude_assignment_descriptions: true,
+          exclude_context_module_locked_topics: true,
+          page: "__page__"
+        }
+        fetch_params[:include] = ['sections_user_count', 'sections'] if @context.is_a?(Course)
+
+        discussion_topics_fetch_url = send("api_v1_#{@context.class.to_s.downcase}_discussion_topics_path", fetch_params)
+        discussion_topics_urls_to_prefetch = (scope.count / fetch_params[:per_page].to_f).ceil.times.map do |i|
+          discussion_topics_fetch_url.gsub(fetch_params[:page], (i+1).to_s)
+        end
+        discussion_topics_urls_to_prefetch.each_with_index do |url, i|
+          prefetch_xhr(url, id: "prefetched_discussion_topic_page_#{i}")
         end
 
         hash = {
@@ -390,8 +408,9 @@ class DiscussionTopicsController < ApplicationController
             publish: user_can_moderate
           },
           discussion_topic_menu_tools: external_tools_display_hashes(:discussion_topic_menu),
+          DIRECT_SHARE_ENABLED: @context.grants_right?(@current_user, session, :manage_content) && @domain_root_account&.feature_enabled?(:direct_share),
         }
-        if @context.is_a?(Course) && @context.grants_right?(@current_user, session, :read) && !@js_env[:COURSE_ID].present?
+        if @context.is_a?(Course) && @context.grants_right?(@current_user, session, :read) && @js_env&.dig(:COURSE_ID).blank?
           hash[:COURSE_ID] = @context.id.to_s
         end
         conditional_release_js_env(includes: :active_rules)
@@ -402,8 +421,20 @@ class DiscussionTopicsController < ApplicationController
         if user_can_edit_course_settings?
           js_env(SETTINGS_URL: named_context_url(@context, :api_v1_context_settings_url))
         end
+
+        add_body_class 'hide-content-while-scripts-not-loaded'
+        @page_title = join_title(t('#titles.discussions', "Discussions"), @context.name)
+
+        feed_code = @context_enrollment.try(:feed_code) || (@context.available? && @context.feed_code)
+        content_for_head helpers.auto_discovery_link_tag(:atom, feeds_forum_format_path(@context.feed_code, :atom), {:title => t(:course_discussions_atom_feed_title, "Course Discussions Atom Feed")})
+
+        js_bundle :discussion_topics_index_v2
+        css_bundle :discussions_index
+
+        render html: '', layout: true
       end
       format.json do
+        log_api_asset_access([ "topics", @context ], 'topics', 'other')
         if @context.grants_right?(@current_user, session, :moderate_forum)
           mc_status = setup_master_course_restrictions(@topics, @context)
         end
@@ -430,7 +461,6 @@ class DiscussionTopicsController < ApplicationController
   end
 
   def announcements_locked?
-    return true if @context.account.lock_all_announcements[:locked]
     return false unless @context.is_a?(Course)
     @context.lock_all_announcements?
   end
@@ -452,6 +482,7 @@ class DiscussionTopicsController < ApplicationController
     return unless authorized_action(@topic, @current_user, (@topic.new_record? ? :create : :update))
     return render_unauthorized_action unless @topic.visible_for?(@current_user)
 
+    @context.try(:require_assignment_group) unless @topic.is_announcement
     can_set_group_category = @context.respond_to?(:group_categories) && @context.grants_right?(@current_user, session, :manage) # i.e. not a student
     hash =  {
       URL_ROOT: named_context_url(@context, :api_v1_context_discussion_topics_url),
@@ -686,7 +717,7 @@ class DiscussionTopicsController < ApplicationController
                 # Can moderate any topic
                 :MODERATE         => user_can_moderate
               },
-              :ROOT_URL => api_url.call('topic_view'),
+              :ROOT_URL => "#{api_url.call('topic_view')}?include_new_entries=1&include_enrollment_state=1&include_context_card_info=1",
               :ENTRY_ROOT_URL => api_url.call('topic_entry_list'),
               :REPLY_URL => api_url.call('add_reply', ':entry_id'),
               :ROOT_REPLY_URL => api_url.call('add_entry'),
@@ -709,6 +740,9 @@ class DiscussionTopicsController < ApplicationController
               :ASSIGNMENT_ID => @topic.assignment_id,
               :IS_GROUP => @topic.group_category_id?,
             }
+            # will fire off the xhr for this as soon as the page comes back.
+            # see app/coffeescripts/models/Topic#fetch for where it is consumed
+            prefetch_xhr(env_hash[:ROOT_URL])
 
             env_hash[:GRADED_RUBRICS_URL] = context_url(@topic.assignment.context, :context_assignment_rubric_url, @topic.assignment.id) if @topic.assignment
             if params[:hide_student_names]
@@ -727,8 +761,8 @@ class DiscussionTopicsController < ApplicationController
               @assignment_presenter.can_view_speed_grader_link?(@current_user)
               env_hash[:SPEEDGRADER_URL_TEMPLATE] = named_context_url(@topic.assignment.context,
                                                                       :speed_grader_context_gradebook_url,
-                                                                      :assignment_id => @topic.assignment.id,
-                                                                      :anchor => {:student_id => ":student_id"}.to_json)
+                                                                      assignment_id: @topic.assignment.id,
+                                                                      student_id: ":student_id")
             end
 
             js_hash = {:DISCUSSION => env_hash}
@@ -738,14 +772,30 @@ class DiscussionTopicsController < ApplicationController
             end
             js_hash[:COURSE_ID] = @context.id if @context.is_a?(Course)
             js_hash[:CONTEXT_ACTION_SOURCE] = :discussion_topic
-            js_hash[:STUDENT_CONTEXT_CARDS_ENABLED] = @context.is_a?(Course) &&
-              @domain_root_account.feature_enabled?(:student_context_cards) &&
-              @context.grants_right?(@current_user, session, :manage)
+            if @context.is_a?(Course) && @context.grants_right?(@current_user, session, :manage)
+              set_student_context_cards_js_env
+            end
 
             append_sis_data(js_hash)
             js_env(js_hash)
             set_master_course_js_env_data(@topic, @context)
             conditional_release_js_env(@topic.assignment, includes: [:rule])
+            js_bundle :discussion
+            css_bundle :tinymce, :discussions, :learning_outcomes
+
+            if @context_enrollment
+              content_for_head helpers.auto_discovery_link_tag(:atom, feeds_topic_format_path(@topic.id, @context_enrollment.feed_code, :atom), {:title => t(:discussion_atom_feed_title, "Discussion Atom Feed")})
+              if @topic.podcast_enabled
+                content_for_head helpers.auto_discovery_link_tag(:rss, feeds_topic_format_path(@topic.id, @context_enrollment.feed_code, :rss), {:title => t(:discussion_podcast_feed_title, "Discussion Podcast Feed")})
+              end
+            elsif @context.available?
+              content_for_head helpers.auto_discovery_link_tag(:atom, feeds_topic_format_path(@topic.id, @context.feed_code, :atom), {:title => t(:discussion_atom_feed_title, "Discussion Atom Feed")})
+              if @topic.podcast_enabled
+                content_for_head helpers.auto_discovery_link_tag(:rss, feeds_topic_format_path(@topic.id, @context.feed_code, :rss), {:title => t(:discussion_podcast_feed_title, "Discussion Podcast Feed")})
+              end
+            end
+
+            render stream: can_stream_template?
           end
         end
       end
@@ -826,7 +876,7 @@ class DiscussionTopicsController < ApplicationController
   #
   # @argument specific_sections [String]
   #   A comma-separated list of sections ids to which the discussion topic
-  #   should be made specific too.  If it is not desired to make the discussion
+  #   should be made specific to.  If it is not desired to make the discussion
   #   topic specific to sections, then this parameter may be omitted or set to
   #   "all".  Can only be present only on announcements and only those that are
   #   for a course (as opposed to a group).
@@ -1003,10 +1053,6 @@ class DiscussionTopicsController < ApplicationController
 
   protected
 
-  def rich_content_service_config
-    rce_js_env(:highrisk)
-  end
-
   def cancel_redirect_url
     topic_type = @topic.is_announcement ? :announcements : :discussion_topics
     @topic.new_record? ? polymorphic_url([@context, topic_type]) : polymorphic_url([@context, @topic])
@@ -1018,10 +1064,10 @@ class DiscussionTopicsController < ApplicationController
 
   def add_discussion_or_announcement_crumb
     if  @topic.is_a? Announcement
-      @active_tab = "announcements"
+      set_active_tab "announcements"
       add_crumb t('#crumbs.announcements', "Announcements"), named_context_url(@context, :context_announcements_url)
     else
-      @active_tab = "discussions"
+      set_active_tab "discussions"
       add_crumb t('#crumbs.discussions', "Discussions"), named_context_url(@context, :context_discussion_topics_url)
     end
   end

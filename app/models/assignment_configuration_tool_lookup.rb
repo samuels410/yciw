@@ -16,10 +16,64 @@
 # with this program. If not, see <http://www.gnu.org/licenses/>.
 
 class AssignmentConfigurationToolLookup < ActiveRecord::Base
+  SUBSCRIPTION_MANAGEMENT_STRAND = 'plagiarism-platform-subscription-management'
+
   belongs_to :tool, polymorphic: [:context_external_tool, message_handler: 'Lti::MessageHandler']
   belongs_to :assignment
   after_create :create_subscription
   # Do not add before_destroy or after_destroy, these records are "delete_all"ed
+
+  class << self
+    def by_message_handler(message_handler, assignments)
+      product_family = message_handler.resource_handler.tool_proxy.product_family
+      AssignmentConfigurationToolLookup.where(
+        assignment: Array(assignments),
+        tool_product_code: product_family.product_code,
+        tool_vendor_code: product_family.vendor_code,
+        tool_resource_type_code: message_handler.resource_handler.resource_type_code
+      )
+    end
+
+    def by_tool_proxy(tool_proxy)
+      by_tool_proxy_scope(tool_proxy).preload(:assignment).map(&:assignment)
+    end
+
+    def by_tool_proxy_scope(tool_proxy)
+      message_handler = tool_proxy.resources.preload(:message_handlers).map(&:message_handlers).flatten.find do |mh|
+        mh.capabilities&.include?(Lti::ResourcePlacement::SIMILARITY_DETECTION_LTI2)
+      end
+      where(
+        tool_product_code: tool_proxy.product_family.product_code,
+        tool_vendor_code: tool_proxy.product_family.vendor_code,
+        tool_resource_type_code: message_handler&.resource_handler&.resource_type_code
+      )
+    end
+
+    def recreate_missing_subscriptions(account, message_handler)
+      Rails.logger.info do
+        "in: AssignmentConfigurationToolLookup::recreate_missing_subscriptions,"\
+        "account_id: #{account.id}, handler_id: #{message_handler.id}"
+      end
+      Assignment.active.where(
+        context_id: Course.not_deleted.where(account: account).pluck(:id)
+      ).find_in_batches do |assignments|
+        recreate_subscriptions(message_handler, assignments)
+      end
+    end
+
+    private
+
+    def recreate_subscriptions(message_handler, assignments)
+      Rails.logger.info do
+        "in: AssignmentConfigurationToolLookup::recreate_subscriptions, "\
+        "handler_id: #{message_handler.id}, assignments_size: #{assignments.count}"
+      end
+      by_message_handler(message_handler, assignments).each do |lookup|
+        lookup.destroy_subscription
+        lookup.create_subscription
+      end
+    end
+  end
 
   def lti_tool
     @_lti_tool ||= begin
@@ -37,6 +91,7 @@ class AssignmentConfigurationToolLookup < ActiveRecord::Base
   end
 
   def destroy_subscription
+    Rails.logger.info { "in: AssignmentConfigurationToolLookup::destroy_subscription, tool_lookup_id: #{id}" }
     return unless lti_tool.instance_of? Lti::MessageHandler
     tool_proxy = lti_tool.resource_handler.tool_proxy
     Lti::AssignmentSubscriptionsHelper.new(tool_proxy).destroy_subscription(subscription_id)
@@ -54,29 +109,6 @@ class AssignmentConfigurationToolLookup < ActiveRecord::Base
     end
     {}
   end
-
-  def self.by_message_handler(message_handler, assignment)
-    product_family = message_handler.resource_handler.tool_proxy.product_family
-    AssignmentConfigurationToolLookup.where(
-      assignment: assignment,
-      tool_product_code: product_family.product_code,
-      tool_vendor_code: product_family.vendor_code,
-      tool_resource_type_code: message_handler.resource_handler.resource_type_code
-    )
-  end
-
-  def self.by_tool_proxy(tool_proxy)
-    message_handler = tool_proxy.resources.preload(:message_handlers).map(&:message_handlers).flatten.find do |mh|
-      mh.capabilities&.include?(Lti::ResourcePlacement::SIMILARITY_DETECTION_LTI2)
-    end
-    where(
-      tool_product_code: tool_proxy.product_family.product_code,
-      tool_vendor_code: tool_proxy.product_family.vendor_code,
-      tool_resource_type_code: message_handler&.resource_handler&.resource_type_code
-    ).preload(:assignment).map(&:assignment)
-  end
-
-  private
 
   def create_subscription
     return unless lti_tool.instance_of? Lti::MessageHandler

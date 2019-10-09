@@ -56,6 +56,15 @@ module Lti
           end
         end
 
+        context 'when the jti is being reused' do
+          let(:jti) { 'static value' }
+          let(:nonce_key) { "nonce::#{jti}" }
+
+          before {  Lti::Security.check_and_store_nonce(nonce_key, iat, 30.seconds) }
+
+          it { is_expected.to be_success }
+        end
+
         context 'when the aud is invalid' do
           let(:aud) { 'banana' }
 
@@ -90,6 +99,81 @@ module Lti
 
           it_behaves_like 'errors' do
             let(:response_message) { 'JWT verification failure' }
+          end
+        end
+
+        context 'when a url is used to get public key' do
+          let(:rsa_key_pair) { Lti::RSAKeyPair.new }
+          let(:url) { "https://get.public.jwk" }
+          let(:public_jwk_url_response) do
+            {
+              keys: [
+                public_jwk
+              ]
+            }
+          end
+          let(:stubbed_response) { double(success?: true, parsed_response: public_jwk_url_response) }
+
+          def expected_url_called(url, type, response)
+            expect(HTTParty).to receive(type).with(url).and_return(response)
+          end
+
+          context 'when there is no public jwk' do
+            before do
+              public_jwk_url_response = { keys: [ public_jwk ] }
+              developer_key.update!(public_jwk: nil, public_jwk_url: url)
+            end
+
+            it do
+              expected_url_called(url, :get, stubbed_response)
+              is_expected.to be_success
+            end
+          end
+
+          context 'when there is a public jwk' do
+            before do
+              developer_key.update!(public_jwk_url: url)
+            end
+
+            it do
+              expected_url_called(url, :get, stubbed_response)
+              is_expected.to be_success
+            end
+          end
+
+          context 'when an empty object is returned' do
+            let(:public_jwk_url_response) { {} }
+            let(:response_message) { 'JWT verification failure' }
+            before do
+              developer_key.update!(public_jwk_url: url)
+            end
+
+            it do
+              expected_url_called(url, :get, stubbed_response)
+              subject
+              expect(json_parse['errors'].to_s).to include response_message
+            end
+          end
+
+          context 'when the url is not valid giving a 404' do
+            let(:stubbed_response) { double(success?: false, parsed_response: public_jwk_url_response.to_json) }
+            let(:response_message) { 'JWT verification failure' }
+
+            before do
+              developer_key.update!(public_jwk_url: url)
+            end
+
+            let(:public_jwk_url_response) do
+              {
+                success?: false, code: '404'
+              }
+            end
+
+            it do
+              expected_url_called(url, :get, stubbed_response)
+              subject
+              expect(json_parse['errors'].to_s).to include response_message
+            end
           end
         end
 

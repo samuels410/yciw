@@ -19,46 +19,97 @@ import I18n from 'i18n!react_developer_keys'
 import PropTypes from 'prop-types'
 import React from 'react'
 
-import Heading from '@instructure/ui-elements/lib/components/Heading'
-import Select from '@instructure/ui-forms/lib/components/Select'
-import TextArea from '@instructure/ui-forms/lib/components/TextArea'
-import TextInput from '@instructure/ui-forms/lib/components/TextInput'
-import View from '@instructure/ui-layout/lib/components/View'
+import {Heading} from '@instructure/ui-elements'
+import {Select, TextArea, TextInput} from '@instructure/ui-forms'
+import {View} from '@instructure/ui-layout'
+
+import ManualConfigurationForm from './ManualConfigurationForm'
+
+const validationMessageInvalidJson = [{text: I18n.t('Json is not valid. Please submit properly formatted json.'), type: 'error'}]
+const validationMessageRequiredField = [{text: I18n.t('Field cannot be blank.'), type: 'error'}]
 
 export default class ToolConfigurationForm extends React.Component {
   state = {
-    configurationType: 'json'
+    invalidJson: null
   }
 
   get toolConfiguration() {
+    if(this.state.invalidJson) {
+      return this.state.invalidJson
+    }
     const {toolConfiguration} = this.props
-    return toolConfiguration ? JSON.stringify(toolConfiguration) : ''
+    return toolConfiguration ? JSON.stringify(toolConfiguration, null, 4) : ''
+  }
+
+  generateToolConfiguration = () => {
+    return this.manualConfigRef.generateToolConfiguration();
+  }
+
+  valid = () => {
+    return this.manualConfigRef.valid();
+  }
+
+  updatePastedJson = (value) => {
+    try {
+      const settings = JSON.parse(value.target.value)
+      this.props.updateToolConfiguration(settings)
+      this.setState({invalidJson: null})
+    } catch(e) {
+      if (e instanceof SyntaxError) {
+        this.setState({invalidJson: value.target.value})
+      }
+    }
+  }
+
+  updateToolConfigurationUrl = (e) => {
+    this.props.updateToolConfigurationUrl(e.target.value)
   }
 
   handleConfigTypeChange = (e, option) => {
-    this.setState({
-      configurationType: option.value
-    })
+    this.props.dispatch(this.props.setLtiConfigurationMethod(option.value))
   }
 
+  setManualConfigRef = node => this.manualConfigRef = node;
+
   configurationInput() {
-    if (this.state.configurationType === 'json') {
+    if (this.props.configurationMethod === 'json') {
       return (
         <TextArea
           name="tool_configuration"
-          defaultValue={this.toolConfiguration}
+          value={this.toolConfiguration}
+          onChange={this.updatePastedJson}
           label={I18n.t('LTI 1.3 Configuration')}
           maxHeight="20rem"
+          messages={this.props.showRequiredMessages && this.state.invalidJson ? validationMessageInvalidJson : []}
+        />
+      )
+    } else if (this.props.configurationMethod === 'manual') {
+      return (
+        <ManualConfigurationForm
+          ref={this.setManualConfigRef}
+          toolConfiguration={this.props.toolConfiguration}
+          validScopes={this.props.validScopes}
+          validPlacements={this.props.validPlacements}
         />
       )
     }
     return (
       <TextInput
         name="tool_configuration_url"
-        defaultValue={this.props.toolConfigurationUrl}
+        value={this.props.toolConfigurationUrl}
+        onChange={this.updateToolConfigurationUrl}
         label={I18n.t('JSON URL')}
+        messages={this.props.showRequiredMessages ? validationMessageRequiredField : []}
       />
     )
+  }
+
+  renderOptions () {
+    return [
+      <option key="manual" value="manual">{I18n.t('Manual Entry')}</option>,
+      <option key="json" value="json">{I18n.t('Paste JSON')}</option>,
+      this.props.editing ? null : <option key="url" value="url">{I18n.t('Enter URL')}</option>
+    ].filter(o => !!o)
   }
 
   render() {
@@ -68,12 +119,11 @@ export default class ToolConfigurationForm extends React.Component {
           {I18n.t('Configure')}
         </Heading>
         <Select
-          label="Medium"
-          assistiveText={I18n.t('2 options available. Use arrow keys to navigate options.')}
+          label="Method"
           onChange={this.handleConfigTypeChange}
+          selectedOption={this.props.configurationMethod}
         >
-          <option value="json">{I18n.t('Paste JSON')}</option>
-          <option value="url">{I18n.t('Enter URL')}</option>
+          {this.renderOptions()}
         </Select>
         <br />
         {this.configurationInput()}
@@ -83,6 +133,19 @@ export default class ToolConfigurationForm extends React.Component {
 }
 
 ToolConfigurationForm.propTypes = {
+  dispatch: PropTypes.func.isRequired,
   toolConfiguration: PropTypes.object.isRequired,
-  toolConfigurationUrl: PropTypes.string.isRequired
+  toolConfigurationUrl: PropTypes.string.isRequired,
+  validScopes: PropTypes.object.isRequired,
+  validPlacements: PropTypes.arrayOf(PropTypes.string).isRequired,
+  setLtiConfigurationMethod: PropTypes.func.isRequired,
+  configurationMethod: PropTypes.string,
+  editing: PropTypes.bool.isRequired,
+  showRequiredMessages: PropTypes.bool.isRequired,
+  updateToolConfiguration: PropTypes.func.isRequired,
+  updateToolConfigurationUrl: PropTypes.func.isRequired
+}
+
+ToolConfigurationForm.defaultProps = {
+  configurationMethod: 'json'
 }

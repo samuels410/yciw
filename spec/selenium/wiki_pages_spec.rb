@@ -15,10 +15,10 @@
 # You should have received a copy of the GNU Affero General Public License along
 # with this program. If not, see <http://www.gnu.org/licenses/>.
 
-require File.expand_path(File.dirname(__FILE__) + '/common')
-require File.expand_path(File.dirname(__FILE__) + '/helpers/wiki_and_tiny_common')
-require File.expand_path(File.dirname(__FILE__) + '/helpers/public_courses_context')
-require File.expand_path(File.dirname(__FILE__) + '/helpers/files_common')
+require_relative 'common'
+require_relative 'helpers/wiki_and_tiny_common'
+require_relative 'helpers/public_courses_context'
+require_relative 'helpers/files_common'
 
 describe "Wiki Pages" do
   include_context "in-process server selenium tests"
@@ -95,7 +95,7 @@ describe "Wiki Pages" do
       expect_flash_message :info
     end
 
-    it "should update the page with changes made in another window", priority: "1", test_id: 126833 do
+    it "should update with changes made in other window", priority: "1", test_id: 126833, custom_timeout: 40.seconds do
       @course.wiki_pages.create!(title: 'Page1')
       edit_page('this is')
       driver.execute_script("window.open()")
@@ -417,7 +417,7 @@ describe "Wiki Pages" do
       end
     end
 
-    context "Edit Page" do
+    context "Edit Page", ignore_js_errors: true do
       before :each do
         get "/courses/#{@course.id}/pages/bar/edit"
         wait_for_ajaximations
@@ -459,14 +459,20 @@ describe "Wiki Pages" do
         expect(driver.switch_to.alert).to be_present
         driver.switch_to.alert.accept
       end
+    end
+  end
 
-      it "should insert a file using RCE in the wiki page", priority: "1", test_id: 126673 do
-        file = @course.attachments.create!(display_name: 'some test file', uploaded_data: default_uploaded_data)
-        file.context = @course
-        file.save!
-        get "/courses/#{@course.id}/pages/bar/edit"
-        insert_file_from_rce
-      end
+  context "Insert RCE File" do
+    it "should insert a file using RCE in the wiki page", priority: "1", test_id: 126673 do
+      stub_rcs_config
+      course_with_teacher(user: @teacher, active_course: true, active_enrollment: true)
+      @course.wiki_pages.create!(:title => "Bar")
+      user_session(@user)
+      file = @course.attachments.create!(display_name: 'some test file', uploaded_data: default_uploaded_data)
+      file.context = @course
+      file.save!
+      get "/courses/#{@course.id}/pages/bar/edit"
+      insert_file_from_rce
     end
   end
 
@@ -542,8 +548,6 @@ describe "Wiki Pages" do
   context "menu tools" do
     before do
       course_with_teacher_logged_in
-      Account.default.enable_feature!(:lor_for_account)
-
       @tool = Account.default.context_external_tools.new(:name => "a", :domain => "google.com", :consumer_key => '12345', :shared_secret => 'secret')
       @tool.wiki_page_menu = {:url => "http://www.example.com", :text => "Export Wiki Page"}
       @tool.save!
@@ -604,7 +608,7 @@ describe "Wiki Pages" do
         <p>
           <iframe style="width: 640px; height: 480px;"
                   title="Instructure - About Us"
-                  src="https://player.vimeo.com/video/58752872"
+                  src="https://player.vimeo.com/video/51408381"
                   width="300"
                   height="150"
                   allowfullscreen="allowfullscreen"
@@ -624,6 +628,7 @@ describe "Wiki Pages" do
     include_context "public course as a logged out user"
 
     it "should load mathjax in a page with <math>" do
+      skip('Unskip in ADMIN-2684')
       title = "mathML"
       public_course.wiki_pages.create!(
         :title => title,

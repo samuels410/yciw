@@ -20,17 +20,16 @@ import I18n from 'i18n!react_developer_keys'
 import PropTypes from 'prop-types'
 import React from 'react'
 
-import Button from '@instructure/ui-buttons/lib/components/Button'
-import {ModalFooter} from '@instructure/ui-overlays/lib/components/Modal'
+import {Button} from '@instructure/ui-buttons'
 
 const NewKeyFooter = props => {
   return (
-    <ModalFooter>
+    <>
       <Button onClick={props.onCancelClick} margin="0 small 0 0">{I18n.t('Cancel')}</Button>
       <Button onClick={props.onSaveClick} variant="primary" disabled={props.disable}>
         {I18n.t('Save Key')}
       </Button>
-    </ModalFooter>
+    </>
   )
 }
 
@@ -39,5 +38,7 @@ NewKeyFooter.propTypes = {
   onSaveClick: PropTypes.func.isRequired,
   disable: PropTypes.bool
 }
+
+NewKeyFooter.displayName = "NewKeyFooter"
 
 export default NewKeyFooter

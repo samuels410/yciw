@@ -18,31 +18,37 @@
 
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import {cleanUrl} from './contentInsertionUtils';
 import formatMessage from "../format-message";
 
-export function renderLink(link) {
-  const href = link.href || link.url;
-  const title =
-    link.title ||
-    formatMessage({
-      default: "Link",
-      description:
-        "Fallback title attribute on an unnamed link inserted from the sidebar."
-    });
-  const previewAlt = link["data-preview-alt"];
-  const contents = link.contents || title;
+export function renderLink(data, contents) {
+  const linkAttrs = {...data}
+  linkAttrs.href = linkAttrs.href || linkAttrs.url;
+  delete linkAttrs.url
+  if (linkAttrs.href) {
+    linkAttrs.href = cleanUrl(linkAttrs.href);
+  }
+  linkAttrs.title = linkAttrs.title || formatMessage("Link");
+  const children = contents || linkAttrs.text || linkAttrs.title;
+  delete linkAttrs.selectionDetails
+  delete linkAttrs.text
+  linkAttrs.className = linkAttrs.class
+  delete linkAttrs.class
+
+  // renderToStaticMarkup isn't happy with bool attributes
+  Object.keys(linkAttrs).forEach(attr => {
+    if (typeof linkAttrs[attr] === 'boolean') linkAttrs[attr] = linkAttrs[attr].toString()
+  })
 
   return renderToStaticMarkup(
-    <a
-      href={href}
-      title={title}
-      data-preview-alt={previewAlt}
-      className={link["class"]}
-      id={link["id"]}
-    >
-      {contents}
+    <a {...linkAttrs}>
+      {children}
     </a>
   );
+}
+
+export function renderDoc(doc) {
+  return `<a target="_blank" rel="noopener noreferrer" href="${doc.href}">${doc.display_name || doc.filename}</a>`
 }
 
 export function renderLinkedImage(linkElem, image) {
@@ -56,25 +62,37 @@ export function renderLinkedImage(linkElem, image) {
 }
 
 export function constructJSXImageElement(image, opts = {}) {
-  const href = image.href || image.url;
-  let ret = <img alt={image.title || image.display_name} src={href} />;
-  if (image.alt_text) {
-    if (image.alt_text.decorativeSelected) {
-      ret = <img alt="" data-decorative="true" src={href} />;
+  const {href, url, title, display_name, alt_text, link, ...otherAttributes} = image
+  const src = href || url;
+  let altText = title || display_name
+  if (alt_text) {
+    if (alt_text.decorativeSelected) {
+      altText = ''
+      otherAttributes['data-is-decorative'] = 'true'
     } else {
-      ret = <img alt={image.alt_text.altText} src={href} />;
+      altText = alt_text.altText
     }
   }
-  if (image.link && !opts.doNotLink) {
-    ret = (
-      <a href={image.link} target="_blank">
+
+  const ret = (
+    <img
+      alt={altText}
+      src={src}
+      width={image.width}
+      height={image.height}
+      {...otherAttributes}
+    />
+  )
+  if (link && !opts.doNotLink) {
+    return(
+      <a href={link} target="_blank" rel="noopener noreferrer">
         {ret}
       </a>
     );
   }
-  return ret;
+  return ret
 }
 
-export function renderImage(image) {
-  return renderToStaticMarkup(constructJSXImageElement(image));
+export function renderImage(image, opts) {
+  return renderToStaticMarkup(constructJSXImageElement(image, opts));
 }

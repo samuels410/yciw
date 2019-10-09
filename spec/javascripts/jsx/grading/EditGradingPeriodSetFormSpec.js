@@ -27,12 +27,12 @@ const wrapper = document.getElementById('fixtures')
 
 const assertDisabled = function(component) {
   const $el = ReactDOM.findDOMNode(component)
-  equal($el.getAttribute('aria-disabled'), 'true')
+  strictEqual($el.getAttribute('disabled'), '')
 }
 
 const assertEnabled = function(component) {
   const $el = ReactDOM.findDOMNode(component)
-  notEqual($el.getAttribute('aria-disabled'), 'true')
+  strictEqual($el.getAttribute('disabled'), null)
 }
 
 const exampleSet = {
@@ -148,7 +148,7 @@ test("calls the 'onCancel' callback when the cancel button is clicked", function
 
 test("does not call 'onSave' when the set has no title", function() {
   const spy = sinon.spy()
-  const updatedSet = _.extend({}, exampleSet, {title: '', enrollmentTermIDs: ['1']})
+  const updatedSet = {...exampleSet, title: '', enrollmentTermIDs: ['1']}
   const form = this.renderComponent({onSave: spy, set: updatedSet})
   const saveButton = ReactDOM.findDOMNode(form.refs.saveButton)
   Simulate.click(saveButton)

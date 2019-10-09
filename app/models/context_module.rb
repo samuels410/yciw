@@ -40,6 +40,8 @@ class ContextModule < ActiveRecord::Base
   after_save :invalidate_progressions
   after_save :relock_warning_check
   validates_presence_of :workflow_state, :context_id, :context_type
+  validates_presence_of :name, :if => :require_presence_of_name
+  attr_accessor :require_presence_of_name
 
   def relock_warning_check
     # if the course is already active and we're adding more stringent requirements
@@ -52,6 +54,8 @@ class ContextModule < ActiveRecord::Base
       if self.saved_change_to_workflow_state? && self.workflow_state_before_last_save == "unpublished"
         # should trigger when publishing a prerequisite for an already active module
         @relock_warning = true if self.context.context_modules.active.any?{|mod| self.is_prerequisite_for?(mod)}
+        # if any of these changed while we were unpublished, then we also need to trigger
+        @relock_warning = true if self.prerequisites.any? || self.completion_requirements.any? || self.unlock_at.present?
       end
       if self.saved_change_to_completion_requirements?
         # removing a requirement shouldn't trigger
@@ -120,7 +124,7 @@ class ContextModule < ActiveRecord::Base
   end
 
   def check_for_stale_cache_after_unlocking!
-    self.touch if self.unlock_at && self.unlock_at < Time.now && self.updated_at < self.unlock_at
+    Shackles.activate(:master) {self.touch} if self.unlock_at && self.unlock_at < Time.now && self.updated_at < self.unlock_at
   end
 
   def is_prerequisite_for?(mod)
@@ -363,15 +367,38 @@ class ContextModule < ActiveRecord::Base
 
   def self.module_names(context)
     Rails.cache.fetch(['module_names', context].cache_key) do
-      names = {}
-      context.context_modules.not_deleted.pluck(:id, :name).each do |id, name|
-        names[id] = name
-      end
-      names
+      gather_module_names(context.context_modules.not_deleted)
     end
   end
 
+  def self.active_module_names(context)
+    Rails.cache.fetch(['active_module_names', context].cache_key) do
+      gather_module_names(context.context_modules.active)
+    end
+  end
+
+  def self.gather_module_names(scope)
+    scope.pluck(:id, :name).each_with_object({}) do |(id, name), names|
+      names[id] = name
+    end
+  end
+
+  def prerequisites
+    @prerequisites ||= gather_prerequisites(ContextModule.module_names(self.context))
+  end
+
+  def active_prerequisites
+    @active_prerequisites ||= gather_prerequisites(ContextModule.active_module_names(self.context))
+  end
+
+  def gather_prerequisites(module_names)
+    all_prereqs = read_attribute(:prerequisites)
+    return [] unless all_prereqs&.any?
+    all_prereqs.select{|pre| module_names.key?(pre[:id])}.map{|pre| pre.merge(:name => module_names[pre[:id]])}
+  end
+
   def prerequisites=(prereqs)
+    Rails.cache.delete(['module_names', context].cache_key) # ensure the module list is up to date
     if prereqs.is_a?(Array)
       # validate format, skipping invalid ones
       prereqs = prereqs.select do |pre|
@@ -393,6 +420,8 @@ class ContextModule < ActiveRecord::Base
     else
       prereqs = nil
     end
+    @prerequisites = nil
+    @active_prerequisites = nil
     write_attribute(:prerequisites, prereqs)
   end
 
@@ -509,14 +538,18 @@ class ContextModule < ActiveRecord::Base
       end
     end
 
-    tags = DifferentiableAssignment.filter(tags, user, self.context, opts) do |tags, user_ids|
-      filter.call(tags, user_ids, self.context_id, opts)
+    tags = self.shard.activate do
+      DifferentiableAssignment.filter(tags, user, self.context, opts) do |tags, user_ids|
+        filter.call(tags, user_ids, self.context_id, opts)
+      end
     end
 
     tags
   end
 
   def reload
+    @prerequisites = nil
+    @active_prerequisites = nil
     clear_cached_lookups
     super
   end
@@ -689,13 +722,6 @@ class ContextModule < ActiveRecord::Base
     else
       nil
     end
-  end
-
-  def active_prerequisites
-    return [] unless self.prerequisites.any?
-    prereq_ids = self.prerequisites.select{|pre|pre[:type] == 'context_module'}.map{|pre| pre[:id] }
-    active_ids = self.context.context_modules.active.where(:id => prereq_ids).pluck(:id)
-    self.prerequisites.select{|pre| pre[:type] == 'context_module' && active_ids.member?(pre[:id])}
   end
 
   def confirm_valid_requirements(do_save=false)

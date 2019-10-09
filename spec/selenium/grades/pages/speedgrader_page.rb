@@ -15,9 +15,16 @@
 # You should have received a copy of the GNU Affero General Public License along
 # with this program. If not, see <http://www.gnu.org/licenses/>.
 
+require_relative 'post_grades_tray_page'
+require_relative 'hide_grades_tray_page'
+
 class Speedgrader
   class << self
     include SeleniumDependencies
+
+    def tray
+      f('[role=dialog][aria-label="Hide grades tray"]')
+    end
 
     # components/elements
     def right_inner_panel
@@ -42,6 +49,14 @@ class Speedgrader
 
     def grade_input
       f('#grading-box-extended')
+    end
+
+    def hidden_pill
+      fxpath('//span[text() = "Hidden"]', hidden_pill_container)
+    end
+
+    def hidden_pill_container
+      f('#speed_grader_hidden_submission_pill_mount_point')
     end
 
     def grading_enabled?
@@ -70,6 +85,30 @@ class Speedgrader
 
     def mute_button
       f('button#mute_link')
+    end
+
+    def post_or_hide_grades_button
+      fj('button[title="Post or Hide Grades"]:visible')
+    end
+
+    def all_grades_hidden_link
+      fj('button:contains("All Grades Hidden"):visible')
+    end
+
+    def post_grades_link
+      fj("[role=menuitem]:contains('Post Grades'):visible")
+    end
+
+    def all_grades_posted_link
+      fj("[role=menuitem]:contains('All Grades Posted'):visible")
+    end
+
+    def hide_grades_link
+      fj("[role=menuitem]:contains('Hide Grades'):visible")
+    end
+
+    def grades_hidden_icon
+      f('svg[name=IconOff]', f('#speed_grader_post_grades_menu_mount_point'))
     end
 
     def hide_students_chkbox
@@ -311,12 +350,28 @@ class Speedgrader
       students_dropdown_button.click
     end
 
+    def fetch_student_names
+      ff('li', student_dropdown_menu).map(&:text)
+    end
+
     def click_next_or_prev_student(direction_string)
       if direction_string.equal?(:next)
         next_student.click
       else
         previous_student.click
       end
+    end
+
+    def click_post_or_hide_grades_button
+      post_or_hide_grades_button.click
+    end
+
+    def click_post_link
+      post_grades_link.click
+    end
+
+    def click_hide_link
+      hide_grades_link.click
     end
 
     def click_settings_link
@@ -421,7 +476,7 @@ class Speedgrader
     end
 
     def expand_assessment_audit_user_events(user)
-      f("#user-event-group-#{user.id} button").click
+      f("#creator-event-group-user-#{user.id} button").click
       wait_for_animations
     end
 
@@ -523,7 +578,7 @@ class Speedgrader
     end
 
     def comment_button_for_row(row_text)
-      row =fj("tr:contains('#{row_text}')")
+      row = fj("tr:contains('#{row_text}')")
       fj('button:contains("Additional Comments")', row)
     end
 
@@ -534,6 +589,21 @@ class Speedgrader
     def rubric_comment_for_row(row_text)
       row = fj("tr:contains('#{row_text}'):visible")
       f(".react-rubric-break-words", row)
+    end
+
+    def manually_post_grades(type:, sections: [])
+      click_post_or_hide_grades_button
+      click_post_link
+      PostGradesTray.post_type_radio_button(type).click
+      PostGradesTray.select_sections(sections: sections)
+      PostGradesTray.post_grades
+    end
+
+    def manually_hide_grades(sections: [])
+      click_post_or_hide_grades_button
+      click_hide_link
+      HideGradesTray.select_sections(sections: sections)
+      HideGradesTray.hide_grades
     end
   end
 end

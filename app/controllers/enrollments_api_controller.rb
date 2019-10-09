@@ -352,13 +352,13 @@ class EnrollmentsApiController < ApplicationController
   #   roles created by the {api:RoleOverridesController#add_role Add Role API}
   #   as well as the base enrollment types accepted by the `type` argument above.
   #
-  # @argument state[] [String, "active"|"invited"|"creation_pending"|"deleted"|"rejected"|"completed"|"inactive"]
+  # @argument state[] [String, "active"|"invited"|"creation_pending"|"deleted"|"rejected"|"completed"|"inactive"|"current_and_invited"|"current_and_future"|"current_and_concluded"]
   #   Filter by enrollment state. If omitted, 'active' and 'invited' enrollments
-  #   are returned. When querying a user's enrollments (either via user_id
-  #   argument or via user enrollments endpoint), the following additional
-  #   synthetic states are supported: "current_and_invited"|"current_and_future"|"current_and_concluded"
+  #   are returned. The following synthetic states are supported only when
+  #   querying a user's enrollments (either via user_id argument or via user
+  #   enrollments endpoint): +current_and_invited+, +current_and_future+, +current_and_concluded+
   #
-  # @argument include[] [String, "avatar_url"|"group_ids"|"locked"|"observed_users"|"can_be_removed"]
+  # @argument include[] [String, "avatar_url"|"group_ids"|"locked"|"observed_users"|"can_be_removed"|"uuid"]
   #   Array of additional information to include on the enrollment or user records.
   #   "avatar_url" and "group_ids" will be returned on the user record.
   #
@@ -394,78 +394,91 @@ class EnrollmentsApiController < ApplicationController
   #   Returns only enrollments for the specified SIS user ID(s). May pass in
   #   array or string.
   #
+  # @argument created_for_sis_id[] [Boolean]
+  #   If sis_user_id is present and created_for_sis_id is true, Returns only
+  #   enrollments for the specified SIS ID(s).
+  #   If a user has two sis_id's, one enrollment may be created using one of the
+  #   two ids. This would limit the enrollments returned from the endpoint to
+  #   enrollments that were created from a sis_import with that sis_user_id
+  #
   # @returns [Enrollment]
   def index
-    endpoint_scope = (@context.is_a?(Course) ? (@section.present? ? "section" : "course") : "user")
+    Shackles.activate(:slave) do
+      endpoint_scope = (@context.is_a?(Course) ? (@section.present? ? "section" : "course") : "user")
 
-    return unless enrollments = @context.is_a?(Course) ?
-      course_index_enrollments :
-      user_index_enrollments
+      return unless enrollments = @context.is_a?(Course) ?
+                                    course_index_enrollments :
+                                    user_index_enrollments
 
-    enrollments = enrollments.joins(:user).select("enrollments.*").
-      order(:type, User.sortable_name_order_by_clause("users"), :id)
+      enrollments = enrollments.joins(:user).select("enrollments.*").
+        order(:type, User.sortable_name_order_by_clause("users"), :id)
 
-    has_courses = enrollments.where_clause.instance_variable_get(:@predicates).
-      any? { |cond| cond.is_a?(String) && cond =~ /courses\./ }
-    enrollments = enrollments.joins(:course) if has_courses
-    enrollments = enrollments.shard(@shard_scope) if @shard_scope
+      has_courses = enrollments.where_clause.instance_variable_get(:@predicates).
+        any? { |cond| cond.is_a?(String) && cond =~ /courses\./ }
+      enrollments = enrollments.joins(:course) if has_courses
+      enrollments = enrollments.shard(@shard_scope) if @shard_scope
 
-    sis_context = @context.is_a?(Course) ? @context : @domain_root_account
-    unless check_sis_permissions(sis_context)
-      render_create_errors([@@errors[:insufficient_sis_permissions]])
-      return false
-    end
-
-    if params[:sis_user_id].present?
-      pseudonyms = @domain_root_account.pseudonyms.where(sis_user_id: params[:sis_user_id])
-      enrollments = enrollments.where(user_id: pseudonyms.pluck(:user_id))
-    end
-
-    if params[:sis_section_id].present?
-      sections = @domain_root_account.course_sections.where(sis_source_id: params[:sis_section_id])
-      enrollments = enrollments.where(course_section_id: sections.pluck(:id))
-    end
-
-    if params[:sis_account_id].present?
-      accounts = @domain_root_account.all_accounts.where(sis_source_id: params[:sis_account_id])
-      courses = @domain_root_account.all_courses.where(account_id: accounts.pluck(:id))
-      enrollments = enrollments.where(course_id: courses.pluck(:id))
-    end
-
-    if params[:sis_course_id].present?
-      courses = @domain_root_account.all_courses.where(sis_source_id: params[:sis_course_id])
-      enrollments = enrollments.where(course_id: courses.pluck(:id))
-    end
-
-    if params[:grading_period_id].present?
-      if @context.is_a? User
-        grading_period = @context.courses.lazy.map do |course|
-          GradingPeriod.for(course).find_by(id: params[:grading_period_id])
-        end.detect(&:present?)
-      else
-        grading_period = GradingPeriod.for(@context).find_by(id: params[:grading_period_id])
+      sis_context = @context.is_a?(Course) ? @context : @domain_root_account
+      unless check_sis_permissions(sis_context)
+        render_create_errors([@@errors[:insufficient_sis_permissions]])
+        return false
       end
 
-      unless grading_period
-        render(:json => {error: "invalid grading_period_id"}, :status => :bad_request)
-        return
+      if params[:sis_user_id].present?
+        pseudonyms = @domain_root_account.pseudonyms.where(sis_user_id: params[:sis_user_id])
+        if value_to_boolean(params[:created_for_sis_id])
+          enrollments = enrollments.where(sis_pseudonym: pseudonyms)
+        else
+          enrollments = enrollments.where(user_id: pseudonyms.pluck(:user_id))
+        end
       end
+
+      if params[:sis_section_id].present?
+        sections = @domain_root_account.course_sections.where(sis_source_id: params[:sis_section_id])
+        enrollments = enrollments.where(course_section_id: sections.pluck(:id))
+      end
+
+      if params[:sis_account_id].present?
+        accounts = @domain_root_account.all_accounts.where(sis_source_id: params[:sis_account_id])
+        courses = @domain_root_account.all_courses.where(account_id: accounts.pluck(:id))
+        enrollments = enrollments.where(course_id: courses.pluck(:id))
+      end
+
+      if params[:sis_course_id].present?
+        courses = @domain_root_account.all_courses.where(sis_source_id: params[:sis_course_id])
+        enrollments = enrollments.where(course_id: courses.pluck(:id))
+      end
+
+      if params[:grading_period_id].present?
+        if @context.is_a? User
+          grading_period = @context.courses.lazy.map do |course|
+            GradingPeriod.for(course).find_by(id: params[:grading_period_id])
+          end.detect(&:present?)
+        else
+          grading_period = GradingPeriod.for(@context).find_by(id: params[:grading_period_id])
+        end
+
+        unless grading_period
+          render(:json => {error: "invalid grading_period_id"}, :status => :bad_request)
+          return
+        end
+      end
+
+      enrollments = Api.paginate(
+        enrollments,
+        self, send("api_v1_#{endpoint_scope}_enrollments_url"))
+
+      ActiveRecord::Associations::Preloader.new.preload(enrollments, [:user, :course, :course_section, :root_account, :sis_pseudonym])
+
+      include_group_ids = Array(params[:include]).include?("group_ids")
+      includes = [:user] + Array(params[:include])
+      user_json_preloads(enrollments.map(&:user), false, {group_memberships: include_group_ids})
+
+      render :json => enrollments.map { |e|
+        enrollment_json(e, @current_user, session, includes,
+                        grading_period: grading_period)
+      }
     end
-
-    enrollments = Api.paginate(
-      enrollments,
-      self, send("api_v1_#{endpoint_scope}_enrollments_url"))
-
-    ActiveRecord::Associations::Preloader.new.preload(enrollments, [:user, :course, :course_section, :root_account, :sis_pseudonym])
-
-    include_group_ids = Array(params[:include]).include?("group_ids")
-    includes = [:user] + Array(params[:include])
-    user_json_preloads(enrollments.map(&:user), false, {group_memberships: include_group_ids})
-
-    render :json => enrollments.map { |e|
-      enrollment_json(e, @current_user, session, includes,
-                      grading_period: grading_period)
-    }
   end
 
   # @API Enrollment by ID
@@ -475,9 +488,11 @@ class EnrollmentsApiController < ApplicationController
   #  The ID of the enrollment object
   # @returns Enrollment
   def show
-    enrollment = @context.all_enrollments.find(params[:id])
-    if enrollment.user_id == @current_user.id || authorized_action(@context, @current_user, :read_roster)
-      render :json => enrollment_json(enrollment, @current_user, session)
+    Shackles.activate(:slave) do
+      enrollment = @context.all_enrollments.find(params[:id])
+      if enrollment.user_id == @current_user.id || authorized_action(@context, @current_user, :read_roster)
+        render :json => enrollment_json(enrollment, @current_user, session)
+      end
     end
   end
 
@@ -618,7 +633,7 @@ class EnrollmentsApiController < ApplicationController
 
     if @context.concluded?
       # allow moving users already in the course to open sections
-      unless @section && user.enrollments.where(course_id: @context).exists? && !@section.concluded?
+      unless @section && user.enrollments.shard(@context.shard).where(course_id: @context).exists? && !@section.concluded?
         return render_create_errors([@@errors[:concluded_course]])
       end
     end
@@ -848,7 +863,8 @@ class EnrollmentsApiController < ApplicationController
       # if user is requesting for themselves, just return all of their
       # enrollments without any extra checking.
       if params[:state].present?
-        enrollments = user.enrollments.where(enrollment_index_conditions(true))
+        enrollments = user.enrollments.where(enrollment_index_conditions(true)).joins(:enrollment_state).
+            where("enrollment_states.state IN (?)", enrollment_states_for_state_param)
       else
         enrollments = user.enrollments.current_and_invited.where(enrollment_index_conditions).
             joins(:enrollment_state).where("enrollment_states.state<>'completed'")
@@ -932,6 +948,14 @@ class EnrollmentsApiController < ApplicationController
     end
 
     [ clauses.join(' AND '), replacements ]
+  end
+
+  def enrollment_states_for_state_param
+    states = Array(params[:state]).uniq
+    states.concat(%w(active invited)) if states.delete 'current_and_invited'
+    states.concat(%w(active invited creation_pending)) if states.delete 'current_and_future'
+    states.concat(%w(active completed)) if states.delete 'current_and_concluded'
+    states.uniq
   end
 
   def check_sis_permissions(sis_context)

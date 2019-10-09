@@ -17,7 +17,6 @@
 #
 
 # @API Late Policy
-# @beta
 # Manage a course's late policy.
 #
 # @model LatePolicy
@@ -99,12 +98,12 @@
 #
 class LatePolicyController < ApplicationController
   before_action :require_user
-  before_action :render_json_unauthorized, unless: :can_manage_grades_for_course?
+  before_action :require_manage_grades_for_course, except: [:show]
+  before_action :require_view_or_manage_grades_for_course, only: [:show]
 
   rescue_from 'RecordAlreadyExists', with: :record_already_exists
 
   # @API Get a late policy
-  # @beta
   #
   # Returns the late policy for a course.
   #
@@ -119,7 +118,6 @@ class LatePolicyController < ApplicationController
   end
 
   # @API Create a late policy
-  # @beta
   #
   # Create a late policy. If the course already has a late policy, a
   # bad_request is returned since there can only be one late policy
@@ -163,7 +161,6 @@ class LatePolicyController < ApplicationController
   end
 
   # @API Patch a late policy
-  # @beta
   #
   # Patch a late policy. No body is returned upon success.
   #
@@ -199,8 +196,12 @@ class LatePolicyController < ApplicationController
 
   private
 
-  def can_manage_grades_for_course?
-    course.grants_right?(@current_user, :manage_grades)
+  def require_manage_grades_for_course
+    render_json_unauthorized unless course.grants_right?(@current_user, :manage_grades)
+  end
+
+  def require_view_or_manage_grades_for_course
+    render_json_unauthorized unless course.grants_any_right?(@current_user, :manage_grades, :view_all_grades)
   end
 
   def course

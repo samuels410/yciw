@@ -16,13 +16,11 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-import jsdom from "mocha-jsdom";
 import React from "react";
 import assert from "assert";
 import proxyquire from "proxyquire";
 import Bridge from "../../src/bridge";
 import sinon from "sinon";
-import skin from "tinymce-light-skin";
 import ReactDOM from "react-dom";
 
 class fakeRCEWrapper extends React.Component {
@@ -47,52 +45,37 @@ const CanvasRce = proxyquire("../../src/rce/CanvasRce", {
 }).default;
 
 describe("CanvasRce", () => {
-  jsdom();
 
   let target;
 
   beforeEach(() => {
-    sinon.stub(skin, "useCanvas");
     target = document.createElement("div");
     document.body.appendChild(target);
   });
 
   const renderCanvasRce = props => {
-    const mergedProps = Object.assign(
-      {
-        rceProps: {
+    const mergedProps = {
+      rceProps: {
           editorOptions: () => {
             return {};
           },
           textareaId: "someUniqueId",
           language: "en"
-        }
-      },
-      props
-    );
+        },
+      ...props
+    };
     ReactDOM.render(<CanvasRce {...mergedProps} />, target);
   };
 
   afterEach(() => {
-    skin.useCanvas.restore();
     Bridge.focusEditor(null);
   });
 
   it("bridges newly rendered editors", done => {
-    let renderCallback = rendered => {
+    const renderCallback = rendered => {
       assert.equal(Bridge.activeEditor(), rendered);
       done();
     };
     renderCanvasRce({ renderCallback });
-  });
-
-  it("uses the canvas variant of the tinymce light skin by default", () => {
-    renderCanvasRce();
-    sinon.assert.called(skin.useCanvas);
-  });
-
-  it("does not use the bundled skin if skin is passed in props", () => {
-    renderCanvasRce({ skin: "customSkin" });
-    sinon.assert.notCalled(skin.useCanvas);
   });
 });

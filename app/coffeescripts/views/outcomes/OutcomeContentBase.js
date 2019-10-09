@@ -16,7 +16,7 @@
 // with this program. If not, see <http://www.gnu.org/licenses/>.
 //
 
-import I18n from 'i18n!outcomes'
+import I18n from 'i18n!OutcomeContentBase'
 import $ from 'jquery'
 import _ from 'underscore'
 import ValidatedFormView from '../ValidatedFormView'
@@ -28,27 +28,6 @@ import 'jquery.disableWhileLoading'
 RichContentEditor.preloadRemoteModule()
 
 export default class OutcomeContentBase extends ValidatedFormView {
-  constructor(...args) {
-    {
-      // Hack: trick Babel/TypeScript into allowing this before super.
-      if (false) { super(); }
-      let thisFn = (() => { return this; }).toString();
-      let thisName = thisFn.slice(thisFn.indexOf('return') + 6 + 1, thisFn.lastIndexOf(';')).trim();
-      eval(`${thisName} = this;`);
-    }
-    this._cleanUpTiny = this._cleanUpTiny.bind(this)
-    this.submit = this.submit.bind(this)
-    this.cancel = this.cancel.bind(this)
-    this.edit = this.edit.bind(this)
-    this.delete = this.delete.bind(this)
-    this.move = this.move.bind(this)
-    this.setupTinyMCEViewSwitcher = this.setupTinyMCEViewSwitcher.bind(this)
-    this.addTinyMCEKeyboardShortcuts = this.addTinyMCEKeyboardShortcuts.bind(this)
-    this.updateTitle = this.updateTitle.bind(this)
-    this.tinymceExists = this.tinymceExists.bind(this)
-    super(...args)
-  }
-
   static initClass() {
     // overriding superclass
     this.prototype.tagName = 'div'
@@ -261,8 +240,10 @@ export default class OutcomeContentBase extends ValidatedFormView {
   }
 
   addTinyMCEKeyboardShortcuts() {
-    const keyboardShortcutsView = new RCEKeyboardShortcuts()
-    return keyboardShortcutsView.render().$el.insertBefore($('.rte_switch_views_link:first'))
+    if (!ENV.use_rce_enhancements) {
+      const keyboardShortcutsView = new RCEKeyboardShortcuts()
+      return keyboardShortcutsView.render().$el.insertBefore($('.rte_switch_views_link:first'))
+    }
   }
 
   // Called from subclasses in render.

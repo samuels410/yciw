@@ -19,14 +19,15 @@
 import React from 'react'
 import I18n from 'i18n!assignments_2'
 import {OverrideShape} from '../../assignmentData'
+import OverrideAttempts from './OverrideAttempts'
+import OverrideAssignTo from './OverrideAssignTo'
 import OverrideSubmissionTypes from './OverrideSubmissionTypes'
 import TeacherViewContext from '../TeacherViewContext'
 import AvailabilityDates from '../../../shared/AvailabilityDates'
 import FriendlyDatetime from '../../../../shared/FriendlyDatetime'
 
-import Flex, {FlexItem} from '@instructure/ui-layout/lib/components/Flex'
-import Text from '@instructure/ui-elements/lib/components/Text'
-import View from '@instructure/ui-layout/lib/components/View'
+import {Flex, FlexItem, View, Responsive} from '@instructure/ui-layout'
+import {Text} from '@instructure/ui-elements'
 
 export default class OverrideSummary extends React.Component {
   static contextType = TeacherViewContext
@@ -39,57 +40,114 @@ export default class OverrideSummary extends React.Component {
     return <Text weight="bold">{override.title}</Text>
   }
 
-  renderAttemptsAllowed() {
-    const allowed = this.props.override.allowedAttempts
+  renderAttemptsAllowedAndSubmissionTypes(override) {
+    const allowed = override.allowedAttempts
     const attempts = Number.isInteger(allowed) ? allowed : 1
-    return <Text>{I18n.t({one: '1 Attempt', other: '%{count} Attempts'}, {count: attempts})}</Text>
-  }
-
-  renderSubmissionTypesAndDueDate(override) {
     return (
       <Text>
-        <OverrideSubmissionTypes variant="simple" override={this.props.override} />
-        <Text> | </Text>
-        <FriendlyDatetime
-          prefix={I18n.t('Due: ')}
-          dateTime={override.dueAt}
-          format={I18n.t('#date.formats.full')}
-        />
+        <OverrideAttempts allowedAttempts={override.allowedAttempts} variant="summary" />
+        <div style={{display: 'inline-block', padding: '0 .5em'}}>|</div>
+        <OverrideSubmissionTypes variant="summary" override={override} />
       </Text>
     )
   }
 
+  renderDueDate(override) {
+    return (
+      <Text color="secondary">
+        {override.dueAt ? (
+          <FriendlyDatetime
+            prefix={I18n.t('Due: ')}
+            dateTime={override.dueAt}
+            format={I18n.t('#date.formats.full')}
+          />
+        ) : (
+          I18n.t('No Due Date')
+        )}
+      </Text>
+    )
+  }
+
+  // it's unfortunate but when both unlock and lock dates exist
+  // AvailabilityDates only prefixes with "Available" if the formatStyle="long"
+  // If I chnage it there, it will alter the Student view
   renderAvailability(override) {
-    return (
-      <Text>
-        {I18n.t('Available ')}
-        <AvailabilityDates assignment={override} formatStyle="short" />
-      </Text>
-    )
+    // both dates exist, manually add Available prefix
+    if (override.unlockAt && override.lockAt) {
+      return (
+        <Text color="secondary">
+          {I18n.t('Available ')}
+          <AvailabilityDates assignment={override} formatStyle="short" />
+        </Text>
+      )
+    }
+    // only one date exists, AvailabilityDates will include the Available prefix
+    if (override.unlockAt || override.lockAt) {
+      return (
+        <Text color="secondary">
+          <AvailabilityDates assignment={override} formatStyle="short" />
+        </Text>
+      )
+    }
+    // no dates exist, so the assignment is simply Available
+    return <Text>{I18n.t('Available')}</Text>
   }
 
   render() {
     const override = this.props.override
     if (override) {
       return (
-        <View as="div">
-          <Flex justifyItems="space-between">
-            <FlexItem grow>
-              <Flex direction="column">
-                <FlexItem>{this.renderTitle(override)}</FlexItem>
-                <FlexItem>{this.renderAttemptsAllowed(override)}</FlexItem>
-              </Flex>
-            </FlexItem>
-            <FlexItem>
-              <Flex direction="column" textAlign="end" justifyItems="end">
-                <FlexItem>{this.renderSubmissionTypesAndDueDate(override)}</FlexItem>
-                <FlexItem>{this.renderAvailability(override)}</FlexItem>
-              </Flex>
-            </FlexItem>
-          </Flex>
-        </View>
+        <Responsive
+          match="media"
+          query={{
+            largerScreen: {minWidth: '36rem'}
+          }}
+        >
+          {(props, matches) => {
+            const largerScreen = matches.includes('largerScreen')
+
+            const leftColumn = (
+              <View display="block" margin={largerScreen ? '0' : '0 0 small'}>
+                <View display="block" margin="0 0 xxx-small">
+                  <OverrideAssignTo override={override} variant="summary" />
+                </View>
+                <View display="block">
+                  {this.renderAttemptsAllowedAndSubmissionTypes(override)}
+                </View>
+              </View>
+            )
+
+            const rightColumn = (
+              <View display="block">
+                <View display="block" margin="0 0 xxx-small">
+                  {this.renderDueDate(override)}
+                </View>
+                <View display="block">{this.renderAvailability(override)}</View>
+              </View>
+            )
+
+            return (
+              <View as="div" data-testid="OverrideSummary">
+                {largerScreen ? (
+                  <Flex justifyItems="space-between">
+                    <FlexItem grow shrink>
+                      {leftColumn}
+                    </FlexItem>
+                    <FlexItem textAlign="end">{rightColumn}</FlexItem>
+                  </Flex>
+                ) : (
+                  <View display="block">
+                    {leftColumn}
+                    {rightColumn}
+                  </View>
+                )}
+              </View>
+            )
+          }}
+        </Responsive>
       )
+    } else {
+      return <View as="div" />
     }
-    return <View as="div" />
   }
 }

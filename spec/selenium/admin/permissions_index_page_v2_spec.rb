@@ -44,7 +44,7 @@ describe "permissions index" do
     end
 
     it "updates the role to the new name after editing" do
-      PermissionsIndex.edit_role(@custom_student_role, "A Better Kitty")
+      PermissionsIndex.edit_role(@custom_student_role, "A Better Kitty") # TODO flakiness lies within
       expect{PermissionsIndex.role_name(@custom_student_role).text}.to become("A Better Kitty")
       expect{PermissionsIndex.edit_tray_header.text}.to become("Edit A Better Kitty")
     end
@@ -73,8 +73,7 @@ describe "permissions index" do
       role_name = "no this is the best role name ever"
       PermissionsIndex.add_role(role_name)
       PermissionsIndex.close_role_tray
-      role = Role.last
-      expect(role.name).to eq(role_name)
+      role = Role.find_by(name: role_name)
       check_element_has_focus(PermissionsIndex.role_header_by_id(role))
     end
   end
@@ -127,7 +126,7 @@ describe "permissions index" do
     end
 
     it "permissions disables and locks on grid" do
-      skip("because venk said so, COMMS-1227")
+      PermissionsIndex.visit(@account)
       permission_name = "read_announcements"
       PermissionsIndex.change_permission(permission_name, student_role.id, "disable_and_lock")
       r = RoleOverride.last
@@ -169,7 +168,6 @@ describe "permissions index" do
     end
 
     it "updates a permission when changed in the tray" do
-      skip("fragile spec")
       PermissionsIndex.open_permission_tray(@permission_name)
       PermissionsIndex.disable_tray_permission(@permission_name, @role.id)
       expect{PermissionsIndex.role_tray_permission_state(@permission_name, @role.id)}.to become('Disabled')
@@ -184,8 +182,9 @@ describe "permissions index" do
       user_session(@admin)
       PermissionsIndex.visit(Account.default)
     end
+
     it "filter based on role" do
-      role_name = "Student"
+      role_name = "TA"
       PermissionsIndex.select_filter(role_name)
       expect(PermissionsIndex.role_link(role_name)).to be_displayed
       expect(f('#content')).not_to contain_css(PermissionsIndex.role_link_css("Teacher"))

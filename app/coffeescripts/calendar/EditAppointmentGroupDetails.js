@@ -27,6 +27,7 @@ import editAppointmentGroupTemplate from 'jst/calendar/editAppointmentGroup'
 import genericSelectTemplate from 'jst/calendar/genericSelect'
 import ContextSelector from '../calendar/ContextSelector'
 import preventDefault from '../fn/preventDefault'
+import {publish as jqueryPublish} from 'vendor/jquery.ba-tinypubsub'
 import 'jquery.ajaxJSON'
 import 'jquery.disableWhileLoading'
 import 'jquery.instructure_forms'
@@ -195,7 +196,7 @@ export default class EditAppointmentGroupDetails {
     const slotLimit = parseInt(input.val())
     return this.helpIconShowIf(
       checkbox,
-      _.any(this.apptGroup.appointments, a => a.child_events_count > slotLimit)
+      _.some(this.apptGroup.appointments, a => a.child_events_count > slotLimit)
     )
   }
 
@@ -209,7 +210,7 @@ export default class EditAppointmentGroupDetails {
         apptCounts[e.user.id] += 1
       })
     })
-    return this.helpIconShowIf(checkbox, _.any(apptCounts, (count, userId) => count > apptLimit))
+    return this.helpIconShowIf(checkbox, _.some(apptCounts, (count, userId) => count > apptLimit))
   }
 
   // show/hide the help icon
@@ -339,7 +340,7 @@ export default class EditAppointmentGroupDetails {
     const onSuccess = data => {
       (data.new_appointments || []).forEach(eventData => {
         const event = commonEventFactory(eventData, this.contexts)
-        $.publish('CommonEvent/eventSaved', event)
+        jqueryPublish('CommonEvent/eventSaved', event)
       })
       this.closeCB(true)
     }
@@ -351,7 +352,7 @@ export default class EditAppointmentGroupDetails {
     return this.form.disableWhileLoading(deferred)
   }
 
-  activate = () => ({})
+  activate() {}
 
   contextsChanged = (contextCodes, sectionCodes) => {
     // dropdown text

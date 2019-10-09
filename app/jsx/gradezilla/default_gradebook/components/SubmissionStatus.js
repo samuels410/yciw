@@ -16,23 +16,25 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-import React from 'react';
-import { bool, shape } from 'prop-types';
-import I18n from 'i18n!gradebook';
-import View from '@instructure/ui-layout/lib/components/View';
-import Pill from '@instructure/ui-elements/lib/components/Pill';
+import React from 'react'
+import {bool, instanceOf, number, shape, string} from 'prop-types'
+import I18n from 'i18n!gradezilla'
+import {View} from '@instructure/ui-layout'
+import {Pill} from '@instructure/ui-elements'
 import Message from './SubmissionStatus/Message'
+import {isHidden} from '../../../grading/helpers/SubmissionHelper'
 
 export default class SubmissionStatus extends React.Component {
   static defaultProps = {
     submission: {
       drop: false
     }
-  };
+  }
 
   static propTypes = {
     assignment: shape({
       muted: bool.isRequired,
+      postManually: bool.isRequired,
       published: bool.isRequired
     }).isRequired,
     isConcluded: bool.isRequired,
@@ -40,66 +42,103 @@ export default class SubmissionStatus extends React.Component {
     isInNoGradingPeriod: bool.isRequired,
     isInOtherGradingPeriod: bool.isRequired,
     isNotCountedForScore: bool.isRequired,
+    postPoliciesEnabled: bool.isRequired,
     submission: shape({
       drop: bool,
-      excused: bool
+      excused: bool,
+      postedAt: instanceOf(Date),
+      score: number,
+      workflowState: string.isRequired
     }).isRequired
-  };
+  }
 
-  getStatusPills () {
-    const { assignment, submission } = this.props;
-    const statusPillComponents = [];
+  getStatusPills() {
+    const {assignment, postPoliciesEnabled, submission} = this.props
+    const statusPillComponents = []
 
-    if (assignment.muted) {
+    if (postPoliciesEnabled) {
+      if (isHidden(submission)) {
+        statusPillComponents.push(
+          <Pill
+            key="hidden-submission"
+            variant="warning"
+            text={I18n.t('Hidden')}
+            margin="0 0 x-small"
+          />
+        )
+      }
+    } else if (assignment.muted) {
       statusPillComponents.push(
-        <Pill key="muted-assignment" variant="default" text={I18n.t('Muted')} margin="0 0 x-small" />
-      );
+        <Pill
+          key="muted-assignment"
+          variant="default"
+          text={I18n.t('Muted')}
+          margin="0 0 x-small"
+        />
+      )
     }
 
     if (!assignment.published) {
       statusPillComponents.push(
-        <Pill key="unpublished-assignment" variant="danger" text={I18n.t('Unpublished')} margin="0 0 x-small" />
-      );
+        <Pill
+          key="unpublished-assignment"
+          variant="danger"
+          text={I18n.t('Unpublished')}
+          margin="0 0 x-small"
+        />
+      )
     }
 
     if (submission.drop) {
       statusPillComponents.push(
-        <Pill key="dropped-submission" variant="default" text={I18n.t('Dropped')} margin="0 0 x-small" />
-      );
+        <Pill
+          key="dropped-submission"
+          variant="default"
+          text={I18n.t('Dropped')}
+          margin="0 0 x-small"
+        />
+      )
     }
 
     if (submission.excused) {
       statusPillComponents.push(
-        <Pill key="excused-assignment" variant="default" text={I18n.t('Excused')} margin="0 0 x-small" />
-      );
+        <Pill
+          key="excused-assignment"
+          variant="default"
+          text={I18n.t('Excused')}
+          margin="0 0 x-small"
+        />
+      )
     }
 
-    return statusPillComponents;
+    return statusPillComponents
   }
 
-  getStatusNotifications () {
-    const statusNotificationComponents = [];
+  getStatusNotifications() {
+    const statusNotificationComponents = []
     const statusNotificationContainerStyle = {
       display: 'flex'
-    };
+    }
 
     if (this.props.isConcluded) {
-      const concludedEnrollmentStatusMessage = I18n.t("This student's enrollment has been concluded")
+      const concludedEnrollmentStatusMessage = I18n.t(
+        "This student's enrollment has been concluded"
+      )
 
       statusNotificationComponents.push(
         <div key="concluded-enrollment-status" style={statusNotificationContainerStyle}>
           <Message variant="warning" message={concludedEnrollmentStatusMessage} />
         </div>
-      );
+      )
     }
 
-    const gradingPeriodStatusMessage = this.gradingPeriodStatusMessage();
+    const gradingPeriodStatusMessage = this.gradingPeriodStatusMessage()
     if (gradingPeriodStatusMessage) {
       statusNotificationComponents.push(
         <div key="grading-period-status" style={statusNotificationContainerStyle}>
           <Message variant="warning" message={gradingPeriodStatusMessage} />
         </div>
-      );
+      )
     }
 
     if (this.props.isNotCountedForScore) {
@@ -109,15 +148,15 @@ export default class SubmissionStatus extends React.Component {
         <div key="is-not-counted-for-score-status" style={statusNotificationContainerStyle}>
           <Message variant="info" message={isNotCountedForScoreMessage} />
         </div>
-      );
+      )
     }
 
-    return statusNotificationComponents;
+    return statusNotificationComponents
   }
 
-  gradingPeriodStatusMessage () {
-    const { isInOtherGradingPeriod, isInClosedGradingPeriod, isInNoGradingPeriod } = this.props;
-    let message;
+  gradingPeriodStatusMessage() {
+    const {isInOtherGradingPeriod, isInClosedGradingPeriod, isInNoGradingPeriod} = this.props
+    let message
 
     if (isInOtherGradingPeriod) {
       message = I18n.t('This submission is in another grading period')
@@ -127,16 +166,16 @@ export default class SubmissionStatus extends React.Component {
       message = I18n.t('This submission is not in any grading period')
     }
 
-    return message;
+    return message
   }
 
-  render () {
-    const statusPillComponents = this.getStatusPills();
-    const statusNotificationComponents = this.getStatusNotifications();
+  render() {
+    const statusPillComponents = this.getStatusPills()
+    const statusNotificationComponents = this.getStatusNotifications()
     const statusContainerStyle = {
       display: 'flex',
       justifyContent: 'left'
-    };
+    }
 
     return (
       <View as="div" padding="0 0 small 0">
@@ -146,6 +185,6 @@ export default class SubmissionStatus extends React.Component {
 
         {statusNotificationComponents}
       </View>
-    );
+    )
   }
-};
+}

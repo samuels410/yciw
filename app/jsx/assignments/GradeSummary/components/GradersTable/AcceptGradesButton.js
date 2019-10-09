@@ -19,11 +19,10 @@
 import React from 'react'
 import {arrayOf, bool, func, oneOf, shape, string} from 'prop-types'
 import {omit} from 'lodash'
-import Button from '@instructure/ui-buttons/lib/components/Button'
-import IconCheckMark from '@instructure/ui-icons/lib/Solid/IconCheckMark'
-import PresentationContent from '@instructure/ui-a11y/lib/components/PresentationContent'
-import ScreenReaderContent from '@instructure/ui-a11y/lib/components/ScreenReaderContent'
-import Spinner from '@instructure/ui-elements/lib/components/Spinner'
+import {Button} from '@instructure/ui-buttons'
+import {IconCheckMarkSolid} from '@instructure/ui-icons'
+import {PresentationContent, ScreenReaderContent} from '@instructure/ui-a11y'
+import {Spinner} from '@instructure/ui-elements'
 import I18n from 'i18n!assignment_grade_summary'
 
 import {FAILURE, STARTED, SUCCESS} from '../../grades/GradeActions'
@@ -56,7 +55,11 @@ function startedButton(props) {
 function successButton(props) {
   /* eslint-disable react/prop-types */
   return (
-    <Button {...buttonProps(props)} icon={IconCheckMark} variant={props.disabled ? 'default' : 'light'}>
+    <Button
+      {...buttonProps(props)}
+      icon={IconCheckMarkSolid}
+      variant={props.disabled ? 'default' : 'light'}
+    >
       {I18n.t('Accepted')}
     </Button>
   )

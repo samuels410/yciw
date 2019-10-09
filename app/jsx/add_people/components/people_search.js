@@ -16,16 +16,13 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-import I18n from 'i18n!roster'
+import I18n from 'i18n!PeopleSearch'
 import React from 'react'
-import Text from '@instructure/ui-elements/lib/components/Text'
-import RadioInputGroup from '@instructure/ui-forms/lib/components/RadioInputGroup'
-import RadioInput from '@instructure/ui-forms/lib/components/RadioInput'
-import Select from '@instructure/ui-core/lib/components/Select'
-import TextArea from '@instructure/ui-forms/lib/components/TextArea'
-import ScreenReaderContent from '@instructure/ui-a11y/lib/components/ScreenReaderContent'
-import Checkbox from '@instructure/ui-forms/lib/components/Checkbox'
-import IconUserSolid from '@instructure/ui-icons/lib/Solid/IconUser'
+import {Text} from '@instructure/ui-elements'
+import {RadioInputGroup, RadioInput, TextArea, Checkbox} from '@instructure/ui-forms'
+import CanvasSelect from '../../shared/components/CanvasSelect'
+import {ScreenReaderContent} from '@instructure/ui-a11y'
+import {IconUserSolid} from '@instructure/ui-icons'
 import {courseParamsShape, inputParamsShape} from './shapes'
 import {parseNameList, findEmailInEntry, emailValidator} from '../helpers'
 
@@ -63,11 +60,11 @@ import {parseNameList, findEmailInEntry, emailValidator} from '../helpers'
       this.props.onChange({nameList: event.target.value});
     }
 
-    onChangeSection = (event) => {
-      this.props.onChange({section: event.target.value});
+    onChangeSection = (event, optionValue) => {
+      this.props.onChange({section: optionValue});
     }
-    onChangeRole = (event) => {
-      this.props.onChange({role: event.target.value});
+    onChangeRole = (event, optionValue) => {
+      this.props.onChange({role: optionValue});
     }
     onChangePrivilege = (event) => {
       this.props.onChange({limitPrivilege: event.target.checked});
@@ -155,28 +152,28 @@ import {parseNameList, findEmailInEntry, emailValidator} from '../helpers'
           <fieldset className="peoplesearch__selections">
             <div>
               <div className="peoplesearch__selection">
-                <Select
-                  id="peoplesearch_select_role"
+                <CanvasSelect
                   label={I18n.t('Role')}
-                  value={this.props.role}
+                  id="peoplesearch_select_role"
+                  value={this.props.role || (this.props.roles.length ? this.props.roles[0].id : null)}
                   onChange={this.onChangeRole}
                 >
-                  {
-                    this.props.roles.map(r => <option key={`r_${r.name}`} value={r.id}>{r.label}</option>)
-                  }
-                </Select>
+                  {this.props.roles.map(r => (
+                    <CanvasSelect.Option key={r.id} id={r.id} value={r.id}>{r.label}</CanvasSelect.Option>
+                  ))}
+                </CanvasSelect>
               </div>
               <div className="peoplesearch__selection">
-                <Select
-                  id="peoplesearch_select_section"
+                <CanvasSelect
                   label={I18n.t('Section')}
-                  value={this.props.section}
+                  id="peoplesearch_select_section"
+                  value={this.props.section || (this.props.sections.length ? this.props.sections[0].id : null)}
                   onChange={this.onChangeSection}
                 >
-                  {
-                    this.props.sections.map(s => <option key={`s_${s.id}`} value={s.id}>{s.name}</option>)
-                  }
-                </Select>
+                  {this.props.sections.map(s => (
+                    <CanvasSelect.Option key={s.id} id={s.id} value={s.id}>{s.name}</CanvasSelect.Option>
+                  ))}
+                </CanvasSelect>
               </div>
             </div>
             <div style={{marginTop: '1em'}}>

@@ -19,18 +19,26 @@
 import * as files from "./files";
 import * as images from "./images";
 import Bridge from "../../bridge";
-import { fileEmbed } from "../../common/mimeClass";
+import {fileEmbed} from "../../common/mimeClass";
+import {VIDEO_SIZE_OPTIONS} from '../../rce/plugins/instructure_record/VideoOptionsTray/TrayController'
+import {isPreviewable} from '../../rce/plugins/shared/Previewable'
+import alertHandler from '../../rce/alertHandler';
+import formatMessage from '../../format-message';
 
-export const RECEIVE_FOLDER = "RECEIVE_FOLDER";
-export const FAIL_FOLDERS_LOAD = "FAIL_FOLDERS_LOAD";
-export const START_FILE_UPLOAD = "START_FILE_UPLOAD";
-export const FAIL_FILE_UPLOAD = "FAIL_FILE_UPLOAD";
 export const COMPLETE_FILE_UPLOAD = "COMPLETE_FILE_UPLOAD";
-export const TOGGLE_UPLOAD_FORM = "TOGGLE_UPLOAD_FORM";
+export const FAIL_FILE_UPLOAD = "FAIL_FILE_UPLOAD";
+export const FAIL_FOLDERS_LOAD = "FAIL_FOLDERS_LOAD";
+export const FAIL_MEDIA_UPLOAD = "FAIL_MEDIA_UPLOAD";
+export const MEDIA_UPLOAD_SUCCESS = "MEDIA_UPLOAD_SUCCESS";
 export const PROCESSED_FOLDER_BATCH = "PROCESSED_FOLDER_BATCH";
 export const QUOTA_EXCEEDED_UPLOAD = "QUOTA_EXCEEDED_UPLOAD";
+export const RECEIVE_FOLDER = "RECEIVE_FOLDER";
+export const START_FILE_UPLOAD = "START_FILE_UPLOAD";
 export const START_LOADING = "START_LOADING";
+export const START_MEDIA_UPLOADING = "START_MEDIA_UPLOADING";
 export const STOP_LOADING = "STOP_LOADING";
+export const STOP_MEDIA_UPLOADING = "STOP_MEDIA_UPLOADING";
+export const TOGGLE_UPLOAD_FORM = "TOGGLE_UPLOAD_FORM";
 
 export function startLoading() {
   return { type: START_LOADING };
@@ -46,6 +54,14 @@ export function receiveFolder({ id, name, parentId }) {
 
 export function failFoldersLoad(error) {
   return { type: FAIL_FOLDERS_LOAD, error };
+}
+
+export function failMediaUpload(error) {
+  return { type: FAIL_MEDIA_UPLOAD, error };
+}
+
+export function mediaUploadSuccess() {
+  return { type: MEDIA_UPLOAD_SUCCESS };
 }
 
 export function startUpload(fileMetaProps) {
@@ -72,10 +88,33 @@ export function processedFolderBatch({ folders }) {
   return { type: PROCESSED_FOLDER_BATCH, folders };
 }
 
-export function allUploadCompleteActions(results, fileMetaProps) {
-  let actions = [];
+export function startMediaUploading(fileMetaProps) {
+  return { type: START_MEDIA_UPLOADING, payload: fileMetaProps }
+}
+
+export function stopMediaUploading() {
+  return { type: STOP_MEDIA_UPLOADING }
+}
+
+export function activateMediaUpload(fileMetaProps) {
+  return (dispatch) => {
+    dispatch(startMediaUploading(fileMetaProps))
+    Bridge.insertImagePlaceholder(fileMetaProps)
+  }
+}
+
+export function removePlaceholdersFor(name) {
+  return (dispatch) => {
+    dispatch(stopMediaUploading())
+    Bridge.removePlaceholders(name)
+  }
+
+}
+
+export function allUploadCompleteActions(results, fileMetaProps, contextType) {
+  const actions = [];
   actions.push(completeUpload(results));
-  let fileProps = {
+  const fileProps = {
     id: results.id,
     name: results.display_name,
     url: results.preview_url,
@@ -89,26 +128,29 @@ export function allUploadCompleteActions(results, fileMetaProps) {
   );
 
   if (/^image\//.test(results["content-type"])) {
-    actions.push(images.createAddImage(results));
+    actions.push(images.createAddImage(results, contextType));
   }
   return actions;
 }
 
 export function embedUploadResult(results, selectedTabType) {
-  let embedData = fileEmbed(results);
+  const embedData = fileEmbed(results);
 
   if (
-    selectedTabType == "images" &&
-    embedData.type == "image" &&
+    selectedTabType === 'images' &&
+    embedData.type === 'image' &&
     !(Bridge.existingContentToLink() && !Bridge.existingContentToLinkIsImg())
   ) {
-    Bridge.insertImage(results);
+    const {href, url, title, display_name, alt_text} = results
+    Bridge.insertImage({href, url, title, display_name, alt_text});
   } else {
     Bridge.insertLink({
+      'data-canvas-previewable': isPreviewable(results['content-type']),
       title: results.display_name,
       href: results.url,
-      embed: embedData
-    });
+      embed: embedData,
+      target: '_blank'
+    }, false);
   }
   return results;
 }
@@ -139,6 +181,99 @@ export function fetchFolders(bookmark) {
         });
     }
   };
+}
+
+function generateUploadOptions(mediatypes, sessionData) {
+  const sessionDataCopy = JSON.parse(JSON.stringify(sessionData))
+  delete sessionDataCopy.kaltura_setting
+  return {
+    kaltura_session: sessionDataCopy,
+    allowedMediaTypes: mediatypes,
+    uploadUrl: sessionData.kaltura_setting.uploadUrl,
+    entryUrl: sessionData.kaltura_setting.entryUrl,
+    uiconfUrl: sessionData.kaltura_setting.uiconfUrl,
+    entryDefaults: {
+      partnerData: sessionData.kaltura_setting.partner_data
+    }
+  }
+}
+
+function addUploaderReadyEventListeners(uploader, file) {
+  uploader.addEventListener('K5.ready', () => {
+    uploader.uploadFile(file)
+  })
+}
+
+function addUploaderFileErrorEventListeners(uploader, dispatch) {
+  uploader.addEventListener('K5.fileError', (error) => {
+    dispatch(failMediaUpload(error));
+  })
+}
+
+function addUploaderFileCompleteEventListeners(uploader, dispatch, editor, dismiss, context, source) {
+  uploader.addEventListener('K5.complete', (mediaServerMediaObject) => {
+    mediaServerMediaObject.contextCode = `${context.contextType}_${context.contextId}`
+    mediaServerMediaObject.type = `${context.contextType}_${context.contextId}`
+    source.uploadMediaToCanvas(mediaServerMediaObject).then((mediaObject) => {
+      const videoElement = editor.dom.add(editor.getBody(), 'div', { 'id': `media_object_${mediaObject.media_object.media_id}` }, ' ')
+      editor.dom.setStyles(videoElement, {'width': VIDEO_SIZE_OPTIONS.width, 'height': VIDEO_SIZE_OPTIONS.height})
+      editor.dom.add(videoElement, 'iframe', {'src': mediaObject.embedded_iframe_url, 'width': '100%', 'height': '100%', 'scrolling': 'no'});
+      dispatch(mediaUploadSuccess())
+      dismiss()
+    }).catch((error)=> {
+      dispatch(failMediaUpload(error))
+    })
+  })
+}
+
+export function saveMediaRecording(file, editor, dismiss) {
+  return (dispatch, getState) => {
+    dispatch(startLoading())
+    const { source, contextId, contextType } = getState()
+    return source.mediaServerSession()
+    .then((mediaServerSession) => {
+      const session = generateUploadOptions(['video', 'audio', 'webm', 'video/webm', 'audio/webm'], mediaServerSession)
+      Bridge.setMediaServerSession(session)
+      addUploaderReadyEventListeners(Bridge.mediaServerUploader, file)
+      addUploaderFileErrorEventListeners(Bridge.mediaServerUploader, dispatch)
+      addUploaderFileCompleteEventListeners(Bridge.mediaServerUploader, dispatch, editor, dismiss, {contextId, contextType}, source)
+      return Bridge.mediaServerUploader
+    })
+    .catch(error => {
+      dispatch(failMediaUpload(error))
+    })
+  }
+}
+
+export function createMediaServerSession() {
+  return (dispatch, getState) => {
+    const { source } = getState()
+    if(!Bridge.mediaServerSession) {
+      return source.mediaServerSession()
+      .then((data) => {
+        Bridge.setMediaServerSession(data)
+      })
+    }
+  }
+}
+
+export function uploadToMediaFolder(tabContext, fileMetaProps) {
+  return (dispatch, getState) => {
+    dispatch(activateMediaUpload(fileMetaProps))
+    const { source, jwt, host, contextId, contextType } = getState()
+    return source.fetchMediaFolder({ jwt, host, contextId, contextType })
+    .then(({folders}) => {
+      fileMetaProps.parentFolderId = folders[0].id
+      delete fileMetaProps.domObject.preview // don't need this anymore
+      dispatch(uploadPreflight(tabContext, fileMetaProps))
+    })
+    .catch((e) => {
+      // Get rid of any placeholder that might be there.
+      dispatch(removePlaceholdersFor(fileMetaProps.name))
+      // eslint-disable-next-line no-console
+      console.error('Fetching the media folder failed.', e)
+    })
+  }
 }
 
 export function setUsageRights(source, fileMetaProps, results) {
@@ -193,7 +328,8 @@ export function setAltText(altText, results) {
 }
 
 export function handleFailures(error, dispatch) {
-  return error.response
+  if (error && error.response) {
+    return error.response
     .json()
     .then(resp => {
       if (resp.message === "file size exceeds quota") {
@@ -203,6 +339,10 @@ export function handleFailures(error, dispatch) {
       }
     })
     .catch(error => dispatch(failUpload(error)));
+  }
+  if (error) {
+    return Promise.resolve().then(() => dispatch(failUpload(error)))
+  }
 }
 
 export function uploadPreflight(tabContext, fileMetaProps) {
@@ -233,11 +373,20 @@ export function uploadPreflight(tabContext, fileMetaProps) {
         return setAltText(fileMetaProps.altText, results);
       })
       .then(results => {
+        // This may or may not be necessary depending on the upload
+        dispatch(removePlaceholdersFor(fileMetaProps.name))
+        return results
+      })
+      .then(results => {
         return embedUploadResult(results, tabContext);
       })
       .then(results => {
-        dispatch(allUploadCompleteActions(results, fileMetaProps));
+        dispatch(allUploadCompleteActions(results, fileMetaProps, contextType));
       })
-      .catch(err => handleFailures(err, dispatch));
+      .catch(err => {
+        // This may or may not be necessary depending on the upload
+        dispatch(removePlaceholdersFor(fileMetaProps.name))
+        handleFailures(err, dispatch)
+      });
   };
 }

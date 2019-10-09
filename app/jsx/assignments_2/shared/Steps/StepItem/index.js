@@ -16,35 +16,109 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
+import {element, func, oneOf, oneOfType, string} from 'prop-types'
 import React, {Component} from 'react'
-import PropTypes from 'prop-types'
 
-import IconCheckMark from '@instructure/ui-icons/lib/Solid/IconCheckMark'
-import IconLock from '@instructure/ui-icons/lib/Solid/IconLock'
-import {omitProps} from '@instructure/ui-utils/lib/react/passthroughProps'
+import ButtonContext from '../../../student/components/Context'
 import classNames from 'classnames'
-import px from '@instructure/ui-utils/lib/px'
+import I18n from 'i18n!assignments_2_shared_Steps_StepItem'
+import {ApplyTheme} from '@instructure/ui-themeable'
+import {Button} from '@instructure/ui-buttons'
+import {
+  IconArrowOpenEndSolid,
+  IconArrowOpenStartSolid,
+  IconCheckMarkSolid,
+  IconLockSolid,
+  IconPlusSolid
+} from '@instructure/ui-icons'
+import {omitProps} from '@instructure/ui-react-utils'
+import {px} from '@instructure/ui-utils'
+import {ScreenReaderContent} from '@instructure/ui-a11y'
 
 class StepItem extends Component {
   static propTypes = {
-    status: PropTypes.oneOf(['complete', 'in-progress', 'unavailable']),
-    label: PropTypes.oneOfType([PropTypes.func, PropTypes.string]).isRequired,
-    icon: PropTypes.element,
-    pinSize: PropTypes.string,
-    placement: PropTypes.oneOf(['first', 'last', 'interior'])
+    status: oneOf(['button', 'complete', 'in-progress', 'unavailable']),
+    label: oneOfType([func, string, element]).isRequired,
+    icon: element,
+    pinSize: string,
+    placement: oneOf(['first', 'last', 'interior'])
   }
 
   static defaultProps = {
     placement: 'interior'
   }
 
-  renderIcon() {
-    const Icon = this.props.icon
-    if (!Icon && this.props.status === 'complete') {
-      return <IconCheckMark color="primary-inverse" />
-    } else if (!Icon && this.props.status === 'unavailable') {
-      return <IconLock color="error" />
-    } else if (typeof this.props.icon === 'function') {
+  /**
+   * renderButton renders a small, circular, gray button. This button
+   * style is used for the Previous, New Attempt, and Next buttons in
+   * the Assignments 2 pizzatracker, which are used to navigate between
+   * submissions for a single assignment.
+   *
+   * @param ButtonIcon  An instUI icon corresponding to the rendered
+   *                    button's purpose
+   * @param action      The action to be performed when the rendered
+   *                    button is clicked
+   * @param a11yMessage The message to be read by the screen reader
+   *                    when focus is on the rendered button
+   */
+  renderButton(ButtonIcon, action, a11yMessage) {
+    const icon = <ButtonIcon size="x-small" />
+    return (
+      <div>
+        <ApplyTheme
+          theme={{
+            [Button.theme]: {
+              iconColor: '#C1C8CD',
+              borderRadius: '2rem'
+            }
+          }}
+        >
+          <Button variant="icon" icon={icon} size="small" onClick={action}>
+            <ScreenReaderContent>{a11yMessage} </ScreenReaderContent>
+          </Button>
+        </ApplyTheme>
+      </div>
+    )
+  }
+
+  renderIcon(context) {
+    const icon = this.props.icon
+    const status = this.props.status
+
+    if (!icon && status === 'button') {
+      switch (this.props.label) {
+        case 'Previous':
+          return this.renderButton(
+            IconArrowOpenStartSolid,
+            context.prevButtonAction,
+            I18n.t('View Previous Submission')
+          )
+        case 'Next':
+          return this.renderButton(
+            IconArrowOpenEndSolid,
+            context.nextButtonAction,
+            I18n.t('View Next Submission')
+          )
+        case 'New Attempt':
+          return this.renderButton(
+            IconPlusSolid,
+            context.startNewAttemptAction,
+            I18n.t('Create New Attempt')
+          )
+        default:
+          return null
+      }
+    } else {
+      return <span aria-hidden>{this.selectIcon(icon, status)}</span>
+    }
+  }
+
+  selectIcon(Icon, status) {
+    if (!Icon && status === 'complete') {
+      return <IconCheckMarkSolid color="primary-inverse" />
+    } else if (!Icon && status === 'unavailable') {
+      return <IconLockSolid color="error" />
+    } else if (typeof Icon === 'function') {
       return <Icon />
     } else if (Icon) {
       return Icon
@@ -59,6 +133,8 @@ class StepItem extends Component {
         return Math.round(px(this.props.pinSize) / 1.5)
       case 'unavailable':
         return Math.round(px(this.props.pinSize) / 1.2)
+      case 'button':
+        return Math.round(px(this.props.pinSize) / 1.05)
       case 'in-progress':
         return px(this.props.pinSize)
       default:
@@ -85,7 +161,11 @@ class StepItem extends Component {
     }
 
     return (
-      <span className={classNames(classes)} {...omitProps(this.props, StepItem.propTypes)}>
+      <span
+        className={classNames(classes)}
+        data-testid="step-item-step"
+        {...omitProps(this.props, StepItem.propTypes)}
+      >
         <span
           className="pinLayout"
           style={{
@@ -93,14 +173,13 @@ class StepItem extends Component {
           }}
         >
           <span
-            aria-hidden="true"
             style={{
               width: `${this.pinSize()}px`,
               height: `${this.pinSize()}px`
             }}
             className="step-item-pin"
           >
-            {this.renderIcon()}
+            <ButtonContext.Consumer>{context => this.renderIcon(context)}</ButtonContext.Consumer>
           </span>
         </span>
         <span className="step-item-label">{this.renderLabel()}</span>

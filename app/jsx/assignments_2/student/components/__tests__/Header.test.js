@@ -15,56 +15,133 @@
  * You should have received a copy of the GNU Affero General Public License along
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-import React from 'react'
-import ReactDOM from 'react-dom'
-import $ from 'jquery'
 
-import {mockAssignment} from '../../test-utils'
 import Header from '../Header'
+import {mockAssignmentAndSubmission, mockSubmission} from '../../mocks'
+import React from 'react'
+import {render} from '@testing-library/react'
+import StudentViewContext from '../Context'
+import {SubmissionMocks} from '../../graphqlData/Submission'
 
-beforeAll(() => {
-  const found = document.getElementById('fixtures')
-  if (!found) {
-    const fixtures = document.createElement('div')
-    fixtures.setAttribute('id', 'fixtures')
-    document.body.appendChild(fixtures)
-  }
-  window.pageYOffset = 0
+it('renders normally', async () => {
+  const props = await mockAssignmentAndSubmission()
+  const {getByTestId} = render(<Header {...props} />)
+  expect(getByTestId('assignment-student-header-normal')).toBeInTheDocument()
 })
 
-afterEach(() => {
-  ReactDOM.unmountComponentAtNode(document.getElementById('fixtures'))
-})
-
-it('renders normally', () => {
-  ReactDOM.render(
-    <Header scrollThreshold={150} assignment={mockAssignment()} />,
-    document.getElementById('fixtures')
-  )
-  const element = $('[data-test-id="assignments-2-student-header"]')
-  expect(element).toHaveLength(1)
-})
-
-it('dispatches scroll event properly when less than threshold', () => {
-  ReactDOM.render(
-    <Header scrollThreshold={150} assignment={mockAssignment()} />,
-    document.getElementById('fixtures')
-  )
+it('dispatches scroll event properly when less than threshold', async () => {
+  const props = await mockAssignmentAndSubmission()
+  const {getByTestId} = render(<Header {...props} />)
   const scrollEvent = new Event('scroll')
   window.pageYOffset = 100
   window.dispatchEvent(scrollEvent)
-  const foundClassElement = $('[data-test-id="assignment-student-header-normal"]')
-  expect(foundClassElement).toHaveLength(1)
+
+  expect(getByTestId('assignment-student-pizza-header-normal')).toBeInTheDocument()
 })
 
-it('dispatches scroll event properly when greather than threshold', () => {
-  ReactDOM.render(
-    <Header scrollThreshold={150} assignment={mockAssignment()} />,
-    document.getElementById('fixtures')
-  )
+it('dispatches scroll event properly when greater than threshold', async () => {
+  const props = await mockAssignmentAndSubmission()
+  const {getByTestId} = render(<Header {...props} />)
   const scrollEvent = new Event('scroll')
   window.pageYOffset = 500
   window.dispatchEvent(scrollEvent)
-  const foundClassElement = $('[data-test-id="assignment-student-header-sticky"]')
-  expect(foundClassElement).toHaveLength(1)
+
+  expect(getByTestId('assignment-student-pizza-header-sticky')).toBeInTheDocument()
+})
+
+it('displays element filler when scroll offset is in correct place', async () => {
+  const props = await mockAssignmentAndSubmission()
+  const {getByTestId} = render(<Header {...props} />)
+  const scrollEvent = new Event('scroll')
+  window.pageYOffset = 100
+  window.dispatchEvent(scrollEvent)
+
+  expect(getByTestId('assignment-student-pizza-header-normal')).toBeInTheDocument()
+
+  window.pageYOffset = 200
+  window.dispatchEvent(scrollEvent)
+
+  expect(getByTestId('header-element-filler')).toBeInTheDocument()
+  expect(getByTestId('assignment-student-header-sticky')).toBeInTheDocument()
+})
+
+it('will render the uncollapsed step container when scroll offset is less than scroll threshold', async () => {
+  const props = await mockAssignmentAndSubmission({
+    Submission: () => SubmissionMocks.submitted
+  })
+  const {getByTestId, queryByTestId} = render(<Header {...props} />)
+  const scrollEvent = new Event('scroll')
+
+  window.pageYOffset = 100
+  window.dispatchEvent(scrollEvent)
+
+  expect(getByTestId('submitted-step-container')).toBeInTheDocument()
+  expect(queryByTestId('collapsed-step-container')).not.toBeInTheDocument()
+})
+
+it('will render the collapsed step container when scroll offset is greater than scroll threshold', async () => {
+  const props = await mockAssignmentAndSubmission()
+  const {getByTestId} = render(<Header {...props} />)
+  const scrollEvent = new Event('scroll')
+
+  window.pageYOffset = 200
+  window.dispatchEvent(scrollEvent)
+
+  expect(getByTestId('collapsed-step-container')).toBeInTheDocument()
+})
+
+it('will not render LatePolicyStatusDisplay if the submission is not late', async () => {
+  const props = await mockAssignmentAndSubmission()
+  const {queryByTestId} = render(<Header {...props} />)
+  expect(queryByTestId('late-policy-container')).not.toBeInTheDocument()
+})
+
+it('will render LatePolicyStatusDisplay if the submission status is late', async () => {
+  const props = await mockAssignmentAndSubmission({
+    Submission: () => ({
+      ...SubmissionMocks.graded,
+      submissionStatus: 'late'
+    })
+  })
+  const {getByTestId} = render(<Header {...props} />)
+  expect(getByTestId('late-policy-container')).toBeInTheDocument()
+})
+
+it('will render LatePolicyStatusDisplay if the latePolicyStatus is late', async () => {
+  const props = await mockAssignmentAndSubmission({
+    Submission: () => ({
+      ...SubmissionMocks.graded,
+      latePolicyStatus: 'late'
+    })
+  })
+  const {getByTestId} = render(<Header {...props} />)
+  expect(getByTestId('late-policy-container')).toBeInTheDocument()
+})
+
+it('will render the latest grade instead of the displayed submissions grade', async () => {
+  const latestSubmission = await mockSubmission({
+    Submission: () => ({
+      ...SubmissionMocks.graded,
+      grade: '147',
+      enteredGrade: '147'
+    })
+  })
+
+  const props = await mockAssignmentAndSubmission({
+    Assignment: () => ({pointsPossible: 150}),
+    Submission: () => ({
+      ...SubmissionMocks.graded,
+      grade: '131',
+      enteredGrade: '131'
+    })
+  })
+
+  const {queryByText, queryAllByText} = render(
+    <StudentViewContext.Provider value={{latestSubmission}}>
+      <Header {...props} />
+    </StudentViewContext.Provider>
+  )
+
+  expect(queryAllByText('147/150 Points')[0]).toBeInTheDocument()
+  expect(queryByText('131/150 Points')).not.toBeInTheDocument()
 })

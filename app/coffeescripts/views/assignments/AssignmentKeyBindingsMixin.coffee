@@ -15,11 +15,10 @@
 # You should have received a copy of the GNU Affero General Public License along
 # with this program. If not, see <http://www.gnu.org/licenses/>.
 
-define [
-  'underscore'
-  'i18n!assignments'
-], ( _, I18n) ->
+import _ from 'underscore'
+import I18n from 'i18n!AssignmentKeyBindingsMixin'
 
+export default
   keyBindings:
     [
       keyCode: 74
@@ -59,7 +58,7 @@ define [
 
   handleKeys: (e) ->
     modifiers = ['shiftKey', 'altKey', 'ctrlKey']
-    return if _.any(e[mod] for mod in modifiers)
+    return if _.some(e[mod] for mod in modifiers)
     b = _.find(@keyBindings, (binding) ->
       binding.keyCode == e.keyCode
     )

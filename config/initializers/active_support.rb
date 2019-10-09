@@ -26,36 +26,36 @@ module ActiveSupport::Cache
   module RailsCacheShim
     def normalize_key(key, options)
       result = super
-      if options && options.has_key?(:use_new_rails) ? options[:use_new_rails] : !CANVAS_RAILS5_1
-        result = "rails52:#{result}"
+      if options && options.has_key?(:use_new_rails) ? options[:use_new_rails] : !CANVAS_RAILS5_2
+        result = "rails60:#{result}"
       end
       result
     end
 
     def delete(key, options = nil)
-      r1 = super(key, (options || {}).merge(use_new_rails: !CANVAS_RAILS5_1)) # prefer rails 3 if on rails 3 and vis versa
-      r2 = super(key, (options || {}).merge(use_new_rails: CANVAS_RAILS5_1))
+      r1 = super(key, (options || {}).merge(use_new_rails: !CANVAS_RAILS5_2)) # prefer rails 3 if on rails 3 and vis versa
+      r2 = super(key, (options || {}).merge(use_new_rails: CANVAS_RAILS5_2))
       r1 || r2
     end
   end
   Store.prepend(RailsCacheShim)
 
-  unless CANVAS_RAILS5_1
-    module AllowMocksInStore
-      def compress!(*args)
-        if @value && Rails.env.test?
-          begin
-            super
-          rescue TypeError => e
-            return
-          end
-        else
+  Store.prepend(Canvas::CacheRegister::ActiveSupport::Cache::Store)
+
+  module AllowMocksInStore
+    def compress!(*args)
+      if @value && Rails.env.test?
+        begin
           super
+        rescue TypeError => e
+          return
         end
+      else
+        super
       end
     end
-    Entry.prepend(AllowMocksInStore)
   end
+  Entry.prepend(AllowMocksInStore)
 end
 
 

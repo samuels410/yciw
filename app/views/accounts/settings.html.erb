@@ -14,40 +14,45 @@
 #
 # You should have received a copy of the GNU Affero General Public License along
 # with this program. If not, see <http://www.gnu.org/licenses/>.
-  @active_tab = "settings"
+  set_active_tab "settings"
   add_crumb t(:settings_crumb, "Settings")
   js_bundle :account_settings
   css_bundle :account_settings, :reports, :tinymce
-  content_for :page_title, t(:page_title, "Account Settings")
-  if can_do(@context, @current_user, :manage_storage_quotas)
-    js_env :ACCOUNT => {
+  provide :page_title, t(:page_title, "Account Settings")
+
+  js_env(
+    :ACCOUNT => {
       'id' => @context.id,
-      'default_storage_quota_mb' => @context.default_storage_quota_mb,
-      'default_user_storage_quota_mb' => @context.default_user_storage_quota_mb,
-      'default_group_storage_quota_mb' => @context.default_group_storage_quota_mb,
       'site_admin' => @account.site_admin?,
       'root_account' => @account.root_account?
-    }
-  end
+    }.tap do |h|
+      if can_do(@context, @current_user, :manage_storage_quotas)
+        h.merge!(
+          'default_storage_quota_mb' => @context.default_storage_quota_mb,
+          'default_user_storage_quota_mb' => @context.default_user_storage_quota_mb,
+          'default_group_storage_quota_mb' => @context.default_group_storage_quota_mb
+        )
+      end
+    end
+  )
 %>
-<% content_for :right_side do %>
+<% provide :right_side do %>
   <%= render :partial => "additional_settings_right_side" %>
 <% end %>
 <h1 class='screenreader-only'><%= t(:page_header_title, "Account Settings") %></h1>
-<% content_for :stylesheets do %>
-  <style type="text/css" media="screen">
-    fieldset {
-      margin: 2em 0;
-    }
-    fieldset.nested {
-      margin-top: 0;
-      margin-<%= direction('left') %>: 20px;
-    }
-    legend{
-      font-size: 1.1em;
-    }
-  </style>
-<% end %>
+
+<style type="text/css" media="screen">
+  fieldset {
+    margin: 2em 0;
+  }
+  fieldset.nested {
+    margin-top: 0;
+    margin-<%= direction('left') %>: 20px;
+  }
+  legend{
+    font-size: 1.1em;
+  }
+</style>
 
 <div id="account_settings_tabs" style="display:none;" class="ui-tabs-minimal">
   <ul>
@@ -62,7 +67,7 @@
     <% end %>
     <li><a href="#tab-users" id="tab-users-link"><%= t(:tab_admins, "Admins") %></a></li>
     <li><a href="#tab-announcements" id="tab-announcements-link"><%= t(:tab_announcements, "Announcements") %></a></li>
-    <% if !@available_reports.blank? %>
+    <% if can_do(@context, @current_user, :read_reports) %>
       <li><a href="#tab-reports" id="tab-reports-link"><%= t(:tab_reports, "Reports") %></a></li>
     <% end %>
     <% if can_do(@context, @current_user, :read_as_admin) %>
@@ -71,10 +76,17 @@
     <% if @context.root_account.settings[:enable_alerts] && can_do(@context, @current_user, :manage_interaction_alerts) %>
       <li><a href="#tab-alerts" id="tab-alerts-link"><%= t(:tab_alerts, "Alerts") %></a></li>
     <% end %>
-    <% if can_do(@context, @current_user, :manage_feature_flags) %>
-      <li><a href="#tab-features" id="tab-features-link"><%= t(:feature_options, "Feature Options") %></a></li>
+    <% if can_do(@context, @current_user, :view_feature_flags) %>
+      <li><a href="#tab-features" id="tab-features-link">
+        <% if @account.root_account.feature_enabled?(:new_features_ui) %>
+          <%= t(:feature_preview, "Feature Preview") %>
+        <% else %>
+          <%= t(:feature_options, "Feature Options") %>
+        <% end %>
+        </a>
+      </li>
     <% end %>
-    <% if @account.feature_enabled?(:javascript_csp) && can_do(@context, @current_user, :manage_account_settings) && @account.root_account? && !@account.site_admin? %>
+    <% if @account.root_account.feature_enabled?(:javascript_csp) && can_do(@context, @current_user, :manage_account_settings) && !@account.site_admin? %>
       <li><a href="#tab-security" id="tab-security-link"><%= t("Security") %></a></li>
     <% end %>
   </ul>
@@ -300,9 +312,22 @@
 
         <%= render partial: 'additional_settings', locals: { f: f } %>
 
+        <% if !@account.site_admin? && @account.root_account? && @account.feature_enabled?(:slack_notifications)%>
+          <% slack_api_key = @account.root_account.settings[:encrypted_slack_key] ? Canvas::Security.decrypt_password(@account.root_account.settings[:encrypted_slack_key], @account.root_account.settings[:encrypted_slack_key_salt], 'instructure_slack_encrypted_key') : '' %>
+          <fieldset>
+            <legend><%= t("Slack Api Key") %></legend>
+            <div class="dim-till-hover">
+              <span><%= t("Current Slack Api Key:") %></span>
+              <span id="current_slack_api_key"><%= slack_api_key.length > 4 ? "#{slack_api_key[0..3]}#{'*' * (slack_api_key.length - 4)}" : '****' %></span>
+            </div>
+            <%= f.fields_for :slack do |slack| %>
+              <%= slack.label :slack_api_key , t("New Slack Api Key") %>
+              <%= slack.text_field :slack_api_key, placeholder: t("New Slack Api Key"), value:''%>
+            <% end %>
+          </fieldset>
+        <% end %>
         <% if !@account.site_admin? && @account.root_account? && @account.grants_right?(@current_user, :manage_site_settings) %>
           <% TermsOfService.ensure_terms_for_account(@account) %>
-          <% js_env(:TERMS_OF_SERVICE_CUSTOM_CONTENT => @account.terms_of_service_content&.content) %>
           <% js_bundle :terms_of_service_modal%>
           <fieldset>
             <legend><%= t("Acceptable Use Policy") %></legend>
@@ -409,6 +434,12 @@
                     <div id="old_sis_integrations">
                       <%= f.check_box :allow_sis_import, :checked => @account.allow_sis_import %>
                       <%= f.label :allow_sis_import, t("SIS imports") %>
+                    </div>
+                    <div>
+                      <%= f.fields_for :settings do |settings| %>
+                        <%= settings.check_box :include_integration_ids_in_gradebook_exports, :checked => @account.settings[:include_integration_ids_in_gradebook_exports] == true %>
+                        <%= settings.label :include_integration_ids_in_gradebook_exports, t("Include Integration IDs in the gradebook exports.") %>
+                      <% end %>
                     </div>
                   <% end %>
 
@@ -1106,85 +1137,10 @@ acknowledge that you have read and agreed to the
     <% end %>
   </div>
 
-  <% if !@available_reports.blank? %>
-    <div id="tab-reports">
-      <h2 class="screenreader-only"><%= t('headings.sections', "Reports") %></h2>
-      <table class="reports">
-        <tr class="reports">
-          <th class="reports"><%= t 'headers.report_name', 'Name' %></th>
-          <th class="reports"><%= t 'headers.report_last_run', 'Last Run' %></th>
-          <th class="reports"></th>
-        </tr>
-        <% @available_reports.sort_by {|_, details| details.title}.each do |report, details|
-           title = details.title
-           description_partial = details[:description_partial]
-           description_partial = report + '_description' if description_partial == true
-           parameters_partial = details[:parameters_partial]
-           parameters_partial = report + '_parameters' if parameters_partial == true
-           last_complete = @last_complete_reports[report]
-           last_report = @last_reports[report]
-           in_progress = last_report && last_report.in_progress?
-           #the extra text is added so that you can give more than the date for the last run report
-           extra_text = last_complete.try(:parameters).try(:[], "extra_text")
-        %>
-          <tr id="<%= report %>" class="reports">
-            <td class="title reports">
-              <span class="title"><%= title %></span>
-              <% if description_partial %>
-                <a href="#" class="open_report_description_link" role="button" aria-haspopup="true" aria-owns="<%= "#{report}_report_description" %>">
-                  <i class="icon-question standalone-icon"></i>
-                  <span class="screenreader-only"><%= t(:open_report_description, "Open Report Description") %></span>
-                </a>
-                <div id="<%= "#{report}_report_description" %>" style="display: none" class="report_description">
-                  <%= render(:partial => description_partial) %>
-                </div>
-              <% end %>
-            </td>
-            <td class="last-run reports">
-              <% if last_complete %>
-                <%= datetime_string(last_complete.created_at) %>
-                <%#the extra text is added so that you can give more than the date for the last run report %>
-                <% if extra_text %>
-                  (<%= extra_text %>)
-                <% end %>
-                <% if last_complete.workflow_state == 'complete' %>
-                  <%= link_to "<i class='icon-download'></i>".html_safe, context_url(last_complete.account, :context_file_download_url, last_complete.attachment.id, download_frd: 1), 'aria-label' => t('Download Report'), 'title' => t('Download Report') %>
-                <% end %>
-              <% else %>
-                <%= t 'report_last_run_never', 'Never' %>
-              <% end %>
-            </td>
-            <td class="action reports">
-              <% if parameters_partial %>
-                <div style="display: none">
-                  <div class="report_dialog">
-                    <form id="<%= report %>_form" class="run_report_form" action="<%= api_v1_account_create_report_path(@account, report) %>">
-                      <div class="report_parameters">
-                        <%= render :partial => parameters_partial if parameters_partial %>
-                      </div>
-                      <br />
-                      <a href="#" id="run_<%= report %>" class="Button Button--primary Button--small run_report_link"><%= t 'links.run_report', 'Run Report' %></a>
-                    </form>
-                  </div>
-                </div>
-                <span class="running_report_message" style="<%= hidden unless in_progress %>">
-                  <%= t('report_running', 'The report is running.*You\'ll receive an email when it is done.*', :wrapper => '<div>\1</div>') %>
-                </span>
-                <a href="#" id="configure_<%= report %>" style="<%= hidden if in_progress %>" class="Button Button--small configure_report_link"><%= t 'links.configure_report', 'Configure...' %></a>
-              <% else %>
-                <form id="<%= report %>_form" class="run_report_form" action="<%= api_v1_account_create_report_path(@account, report) %>">
-                  <span class="running_report_message" style="<%= hidden unless in_progress %>">
-                    <%= t('report_running', 'The report is running.*You\'ll receive an email when it is done.*', :wrapper => '<div>\1</div>') %>
-                  </span>
-                  <a href="#" id="run_<%= report %>" style="<%= hidden if in_progress %>" class="Button Button--small Button--primary run_report_link"><%= t 'links.run_report', 'Run Report' %></a>
-                </form>
-              <% end %>
-            </td>
-          </tr>
-        <% end %>
-      </table>
-    </div>
-  <% end %>
+  <div id="tab-reports">
+    <p><%= t("Loading...") %></p>
+    <!-- this will be populated by an xhr request to AccountsController::reports_tab -->
+  </div>
   <% if can_do(@context, @current_user, :read_as_admin) %>
       <div id="tab-tools">
         <%= render :partial => 'external_tools/external_tools', :object => @context.context_external_tools.active %>
@@ -1196,10 +1152,10 @@ acknowledge that you have read and agreed to the
         <%= render :partial => 'alerts/alerts' %>
       </div>
   <% end %>
-  <% if can_do(@context, @current_user, :manage_feature_flags) %>
+  <% if can_do(@context, @current_user, :view_feature_flags) %>
     <div id="tab-features"></div>
   <% end %>
-  <% if @account.feature_enabled?(:javascript_csp) && can_do(@context, @current_user, :manage_account_settings) && @account.root_account? && !@account.site_admin? %>
+  <% if @account.root_account.feature_enabled?(:javascript_csp) && can_do(@context, @current_user, :manage_account_settings) && !@account.site_admin? %>
     <div id="tab-security"></div>
   <% end %>
 </div>

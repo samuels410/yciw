@@ -17,7 +17,10 @@
  */
 
 import ReactDOM from 'react-dom'
-import {createGradebook, setFixtureHtml} from 'jsx/gradezilla/default_gradebook/__tests__/GradebookSpecHelper'
+import {
+  createGradebook,
+  setFixtureHtml
+} from 'jsx/gradezilla/default_gradebook/__tests__/GradebookSpecHelper'
 import StudentColumnHeaderRenderer from 'jsx/gradezilla/default_gradebook/GradebookGrid/headers/StudentColumnHeaderRenderer'
 
 /* eslint-disable qunit/no-identical-names */
@@ -174,6 +177,23 @@ QUnit.module('GradebookGrid StudentColumnHeaderRenderer', suiteHooks => {
     test('sets sectionsEnabled to false when sections are not in use', () => {
       render()
       strictEqual(component.props.sectionsEnabled, false)
+    })
+
+    test('sets studentGroupsEnabled to true when student groups are present', () => {
+      gradebook.setStudentGroups([
+        {
+          groups: [{id: '1', name: 'Default Group 1'}, {id: '2', name: 'Default Group 2'}],
+          id: '1',
+          name: 'Default Group'
+        }
+      ])
+      render()
+      strictEqual(component.props.studentGroupsEnabled, true)
+    })
+
+    test('sets studentGroupsEnabled to false when student groups are not present', () => {
+      render()
+      strictEqual(component.props.studentGroupsEnabled, false)
     })
 
     test('includes the selected enrollment filters', () => {

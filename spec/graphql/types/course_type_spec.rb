@@ -17,7 +17,7 @@
 #
 
 require File.expand_path(File.dirname(__FILE__) + '/../../spec_helper')
-require File.expand_path(File.dirname(__FILE__) + '/../../helpers/graphql_type_tester')
+require_relative "../graphql_spec_helper"
 
 describe Types::CourseType do
   let_once(:course) { course_with_student(active_all: true); @course }
@@ -99,11 +99,10 @@ describe Types::CourseType do
       end
 
       it "can still return assignments for all grading periods" do
-        expect(
-          course_type.resolve(<<~GQL, current_user: @student)
-            assignmentsConnection(filter: {gradingPeriodId: null}) { edges { node { _id } } }
-          GQL
-        ).to match course.assignments.published.map(&:to_param)
+        result = course_type.resolve(<<~GQL, current_user: @student)
+          assignmentsConnection(filter: {gradingPeriodId: null}) { edges { node { _id } } }
+        GQL
+        expect(result.sort).to match course.assignments.published.map(&:to_param).sort
       end
     end
   end
@@ -119,6 +118,21 @@ describe Types::CourseType do
       expect(
         course_type.resolve("sectionsConnection { edges { node { _id } } }")
       ).to match_array course.course_sections.active.map(&:to_param)
+    end
+  end
+
+  describe "modulesConnection" do
+    it "returns course modules" do
+      modulea = course.context_modules.create! name: "module a"
+      course.context_modules.create! name: "module b"
+      expect(
+        course_type.resolve("modulesConnection { edges {node { _id } } }")
+      ).to match_array course.context_modules.map(&:to_param)
+
+      modulea.destroy
+      expect(
+        course_type.resolve("modulesConnection { edges {node { _id } } }")
+      ).to match_array course.modules_visible_to(@student).map(&:to_param)
     end
   end
 
@@ -156,13 +170,18 @@ describe Types::CourseType do
       ].sort
     end
 
-
     it "doesn't let students see other student's submissions" do
       expect(
         course_type.resolve(<<~GQL, current_user: @student2)
           submissionsConnection(
             studentIds: ["#{@student1.id}", "#{@student2.id}"],
           ) { edges { node { _id } } }
+        GQL
+      ).to eq [@student2a1_submission.id.to_s]
+
+      expect(
+        course_type.resolve(<<~GQL, current_user: @student2)
+          submissionsConnection { nodes { _id } }
         GQL
       ).to eq [@student2a1_submission.id.to_s]
     end
@@ -211,6 +230,30 @@ describe Types::CourseType do
             ) { edges { node { _id } } }
           GQL
         ).to eq [ ]
+      end
+
+      it "submitted_since" do
+        @student1a1_submission.update_attribute(:submitted_at, 1.month.ago)
+        @student1a2_submission.update_attribute(:submitted_at, 1.day.ago)
+
+        expect(
+          course_type.resolve(<<~GQL, current_user: @teacher)
+            submissionsConnection(
+              filter: { submittedSince: "#{5.days.ago.iso8601}" }
+            ) { nodes { _id } }
+          GQL
+        ).to eq [ @student1a2_submission.id.to_s ]
+      end
+
+      it "graded_since" do
+        @student2a1_submission.update_attribute(:graded_at, 1.week.from_now)
+        expect(
+          course_type.resolve(<<~GQL, current_user: @teacher)
+            submissionsConnection(
+              filter: { gradedSince: "#{1.day.from_now.iso8601}" }
+            ) { nodes { _id } }
+          GQL
+        ).to eq [ @student2a1_submission.id.to_s ]
       end
     end
   end
@@ -322,6 +365,72 @@ describe Types::CourseType do
       expect(
         course_type.resolve("term { startAt }")
       ).to eq course.enrollment_term.start_at.iso8601
+    end
+  end
+
+  describe "PostPolicy" do
+    let(:assignment) { course.assignments.create! }
+    let(:course) { Course.create!(workflow_state: "available") }
+    let(:student) { course.enroll_user(User.create!, "StudentEnrollment", enrollment_state: "active").user }
+    let(:teacher) { course.enroll_user(User.create!, "TeacherEnrollment", enrollment_state: "active").user }
+
+    context "when user has manage_grades permission" do
+      let(:context) { { current_user: teacher } }
+
+      it "returns the PostPolicy for the course" do
+        resolver = GraphQLTypeTester.new(course, context)
+        expect(resolver.resolve("postPolicy { _id }").to_i).to eql course.default_post_policy.id
+      end
+
+      it "returns null if there is no course-specific PostPolicy" do
+        course.default_post_policy.destroy
+        resolver = GraphQLTypeTester.new(course, context)
+        expect(resolver.resolve("postPolicy { _id }")).to be nil
+      end
+    end
+
+    context "when user does not have manage_grades permission" do
+      let(:context) { { current_user: student } }
+
+      it "returns null in place of the PostPolicy" do
+        course.default_post_policy.update!(post_manually: true)
+        resolver = GraphQLTypeTester.new(course, context)
+        expect(resolver.resolve("postPolicy { _id }")).to be nil
+      end
+    end
+  end
+
+  describe "AssignmentPostPoliciesConnection" do
+    let(:course) { Course.create!(workflow_state: "available") }
+    let(:student) { course.enroll_user(User.create!, "StudentEnrollment", enrollment_state: "active").user }
+    let(:teacher) { course.enroll_user(User.create!, "TeacherEnrollment", enrollment_state: "active").user }
+
+    context "when user has manage_grades permission" do
+      let(:context) { { current_user: teacher } }
+
+      it "returns only the assignment PostPolicies for the course" do
+        assignment1 = course.assignments.create!
+        assignment2 = course.assignments.create!
+
+        resolver = GraphQLTypeTester.new(course, context)
+        ids = resolver.resolve("assignmentPostPolicies { nodes { _id } }").map(&:to_i)
+        expect(ids).to contain_exactly(assignment1.post_policy.id, assignment2.post_policy.id)
+      end
+
+      it "returns null if there are no assignment PostPolicies" do
+        course.post_policies.where.not(assignment: nil).destroy_all
+        resolver = GraphQLTypeTester.new(course, context)
+        expect(resolver.resolve("assignmentPostPolicies { nodes { _id } }")).to be_empty
+      end
+    end
+
+    context "when user does not have manage_grades permission" do
+      let(:context) { { current_user: student } }
+
+      it "returns null in place of the PostPolicy" do
+        resolver = GraphQLTypeTester.new(course, context)
+        expect(resolver.resolve("assignmentPostPolicies { nodes { _id } }")).to be nil
+      end
     end
   end
 end

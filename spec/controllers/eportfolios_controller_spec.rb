@@ -74,14 +74,12 @@ describe EportfoliosController do
       end
 
       it "exposes the feature state for rich content service to js_env" do
-        @user.account.root_account.enable_feature!(:rich_content_service_high_risk)
         allow(Canvas::DynamicSettings).to receive(:find).with("rich-content-service", default_ttl: 5.minutes).and_return({
           'app-host' => 'rce.docker',
           'cdn-host' => 'rce.docker'
         })
         get 'user_index'
         expect(response).to be_successful
-        expect(assigns[:js_env][:RICH_CONTENT_SERVICE_ENABLED]).to be_truthy
       end
     end
   end
@@ -98,6 +96,17 @@ describe EportfoliosController do
       expect(response).to be_redirect
       expect(assigns[:portfolio]).not_to be_nil
       expect(assigns[:portfolio].name).to eql("some portfolio")
+    end
+
+    it "should prevent creation for unverified users if account requires it" do
+      Account.default.tap{|a| a.settings[:require_confirmed_email] = true; a.save!}
+
+      user_session(@user)
+      post 'create', params: {:eportfolio => {:name => "some portfolio"}}
+
+      expect(response).to be_redirect
+      expect(response.location).to eq root_url
+      expect(flash[:warning]).to include("Complete registration")
     end
   end
 
@@ -137,12 +146,6 @@ describe EportfoliosController do
         get 'show', params: {:id => @portfolio.id}
         expect(response).to be_successful
         expect(assigns[:page]).not_to be_nil
-      end
-
-      it "exposes the feature state for rich content service to js_env" do
-        @user.account.root_account.disable_feature!(:rich_content_service_high_risk)
-        get 'user_index'
-        expect(assigns[:js_env][:RICH_CONTENT_SERVICE_ENABLED]).to be_falsey
       end
     end
 
@@ -265,6 +268,32 @@ describe EportfoliosController do
     end
   end
 
+  describe "POST 'reorder_categories' cross shard" do
+    specs_require_sharding
+    let!(:user) { user_model }
+
+    it "should reorder categories" do
+      user.associate_with_shard(@shard1)
+      @shard1.activate { @portfolio = Eportfolio.create!(user_id: user) }
+      user_session(user)
+      c1 = eportfolio_category
+      c2 = eportfolio_category
+      c3 = eportfolio_category
+      expect(c1.position).to eql(1)
+      expect(c2.position).to eql(2)
+      expect(c3.position).to eql(3)
+      [c2, c3, c1].map(&:id).join(',')
+      post 'reorder_categories', params: { eportfolio_id: @portfolio.id, order: "#{c2.id},#{c3.id},#{c1.id}" }
+      expect(response).to be_successful
+      c1.reload
+      c2.reload
+      c3.reload
+      expect(c1.position).to eql(3)
+      expect(c2.position).to eql(1)
+      expect(c3.position).to eql(2)
+    end
+  end
+
   describe "POST 'reorder_entries'" do
     before(:once){ eportfolio }
     it "should require authorization" do
@@ -323,6 +352,7 @@ describe EportfoliosController do
       @old_zipfile = @portfolio.attachments.build(:display_name => "eportfolio.zip")
       @old_zipfile.workflow_state = 'to_be_zipped'
       @old_zipfile.file_state = '0'
+      @old_zipfile.user = @user
       @old_zipfile.save!
       Attachment.where(id: @old_zipfile).update_all(created_at: 1.day.ago)
     end
@@ -363,7 +393,7 @@ describe EportfoliosController do
       ee.save!
 
       to_zip = @portfolio.attachments[0]
-      ContentZipper.zip_eportfolio(to_zip, @portfolio)
+      ContentZipper.new.zip_eportfolio(to_zip, @portfolio)
       expect(@portfolio.attachments[0].workflow_state).to include "zipped"
     end
   end

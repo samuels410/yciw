@@ -131,12 +131,15 @@ describe "dashboard" do
     end
 
     it "should show account notifications on the dashboard", priority: "1", test_id: 215582 do
+      u = User.create!
       a1 = @course.account.announcements.create!(:subject => 'test',
                                                  :message => "hey there",
+                                                 :user => u,
                                                  :start_at => Time.zone.today - 1.day,
                                                  :end_at => Time.zone.today + 1.day)
       a2 = @course.account.announcements.create!(:subject => 'test 2',
                                                  :message => "another annoucement",
+                                                 :user => u,
                                                  :start_at => Time.zone.today - 2.days,
                                                  :end_at => Time.zone.today + 1.day)
 
@@ -152,6 +155,7 @@ describe "dashboard" do
     it "should interpolate the user's domain in global notifications" do
       announcement = @course.account.announcements.create!(:message => "blah blah http://random-survey-startup.ly/?some_GET_parameter_by_which_to_differentiate_results={{ACCOUNT_DOMAIN}}",
                                                            :subject => 'test',
+                                                           :user => User.create!,
                                                            :start_at => Date.today,
                                                            :end_at => Date.today + 1.day)
 
@@ -162,6 +166,7 @@ describe "dashboard" do
     it "should interpolate the user's id in global notifications" do
       announcement = @course.account.announcements.create!(:message => "blah blah http://random-survey-startup.ly/?surveys_are_not_really_anonymous={{CANVAS_USER_ID}}",
                                                            :subject => 'test',
+                                                           :user => User.create!,
                                                            :start_at => Date.today,
                                                            :end_at => Date.today + 1.day)
       get "/"
@@ -333,7 +338,7 @@ describe "dashboard" do
       wait_for_ajaximations
 
       # submission page should load
-      expect(f('h2').text).to eq "Submission Details"
+      expect(f('h1').text).to eq "Submission Details"
     end
 
     it "should validate the functionality of soft concluded courses on courses page", priority: "1", test_id: 216374 do

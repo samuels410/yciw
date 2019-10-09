@@ -67,38 +67,38 @@ module AccountReports::ReportHelper
   end
 
   def term
-    if (term_id = (@account_report.has_parameter? "enrollment_term_id") || (@account_report.has_parameter? "enrollment_term"))
+    if (term_id = @account_report.value_for_param("enrollment_term_id") || @account_report.value_for_param("enrollment_term"))
       @term ||= api_find(root_account.enrollment_terms, term_id)
     end
   end
 
   def start_at
-    if @account_report.has_parameter? "start_at"
+    if @account_report.value_for_param("start_at")
       @start ||= account_time_parse(@account_report.parameters["start_at"])
     end
   end
 
   def end_at
-    if @account_report.has_parameter? "end_at"
+    if @account_report.value_for_param("end_at")
       @end ||= account_time_parse(@account_report.parameters["end_at"])
     end
   end
 
   def course
-    if (course_id = (@account_report.has_parameter? "course_id") || (@account_report.has_parameter? "course"))
+    if (course_id = @account_report.value_for_param("course_id") || @account_report.value_for_param("course"))
       @course ||= api_find(root_account.all_courses, course_id)
     end
   end
 
   def assignment_group
-    if (assignment_group_id = (@account_report.has_parameter? "assignment_group_id") ||
-      (@account_report.has_parameter? "assignment_group"))
+    if (assignment_group_id = @account_report.value_for_param("assignment_group_id") ||
+      @account_report.value_for_param("assignment_group"))
       @assignment_group = course.assignment_groups.find(assignment_group_id)
     end
   end
 
   def section
-    if section_id = (@account_report.has_parameter? "section_id")
+    if section_id = @account_report.value_for_param("section_id")
       @section ||= api_find(root_account.course_sections, section_id)
     end
   end
@@ -195,14 +195,17 @@ module AccountReports::ReportHelper
     end
   end
 
-  def loaded_pseudonym(pseudonyms, u, include_deleted: false, enrollment: nil)
-    context = enrollment || root_account
-    user_pseudonyms = pseudonyms[u.id] || []
-    u.instance_variable_set(include_deleted ? :@all_pseudonyms : :@all_active_pseudonyms, user_pseudonyms)
-    SisPseudonym.for(u, context, {type: :trusted, require_sis: false, include_deleted: include_deleted})
+  def loaded_pseudonym(pseudonyms, user, include_deleted: false, enrollment: nil)
+    user_pseudonyms = pseudonyms[user.id] || []
+    user.instance_variable_set(include_deleted ? :@all_pseudonyms : :@all_active_pseudonyms, user_pseudonyms)
+    if enrollment&.sis_pseudonym_id
+      enrollment_pseudonym = user_pseudonyms.index_by(&:id)[enrollment.sis_pseudonym_id]
+      return enrollment_pseudonym if enrollment_pseudonym && (enrollment_pseudonym.workflow_state != 'deleted' || include_deleted)
+    end
+    SisPseudonym.for(user, root_account, type: :trusted, require_sis: false, include_deleted: include_deleted, root_account: root_account)
   end
 
-  def load_cross_shard_logins(users, include_deleted: false)
+  def preload_logins_for_users(users, include_deleted: false)
     shards = root_account.trusted_account_ids.map {|id| Shard.shard_for(id)}
     shards << root_account.shard
     User.preload_shard_associations(users)
@@ -217,8 +220,20 @@ module AccountReports::ReportHelper
     pseudonyms.group_by(&:user_id)
   end
 
+  def emails_by_user_id(user_ids)
+    Shard.partition_by_shard(user_ids) do |user_ids|
+      CommunicationChannel.
+        email.
+        unretired.
+        select([:user_id, :path]).
+        where(user_id: user_ids).
+        order('user_id, position ASC').
+        distinct_on(:user_id)
+    end.index_by(&:user_id)
+  end
+
   def include_deleted_objects
-    if @account_report.has_parameter? "include_deleted"
+    if @account_report.value_for_param "include_deleted"
       @include_deleted = value_to_boolean(@account_report.parameters["include_deleted"])
 
       if @include_deleted
@@ -233,7 +248,7 @@ module AccountReports::ReportHelper
 
   def send_report(file = nil, account_report = @account_report)
     type = report_title(account_report)
-    if account_report.has_parameter? "extra_text"
+    if account_report.value_for_param "extra_text"
       options = account_report.parameters["extra_text"]
     end
     AccountReports.message_recipient(
@@ -242,21 +257,26 @@ module AccountReports::ReportHelper
         'account_reports.default.message',
         "%{type} report successfully generated with the following settings. Account: %{account}; %{options}",
         :type => type, :account => account.name, :options => options),
-      file)
+      file
+    )
   end
 
-  def write_report(headers, &block)
-    file = generate_and_run_report(headers, &block)
+  def write_report(headers, enable_i18n_features = false, &block)
+    file = generate_and_run_report(headers, 'csv', enable_i18n_features, &block)
     Shackles.activate(:master) { send_report(file) }
   end
 
-  def generate_and_run_report(headers = nil, extension = 'csv')
+  def generate_and_run_report(headers = nil, extension = 'csv', enable_i18n_features = false)
     file = AccountReports.generate_file(@account_report, extension)
-    ExtendedCSV.open(file, "w") do |csv|
+    options = {}
+    if enable_i18n_features
+      options = CsvWithI18n.csv_i18n_settings(@account_report.user)
+    end
+    ExtendedCSV.open(file, "w", options) do |csv|
       csv.instance_variable_set(:@account_report, @account_report)
       csv << headers unless headers.nil?
       Shackles.activate(:slave) { yield csv } if block_given?
-      @account_report.update_attribute(:current_line, csv.lineno)
+      Shackles.activate(:master) { @account_report.update_attribute(:current_line, csv.lineno) }
     end
     file
   end
@@ -274,8 +294,7 @@ module AccountReports::ReportHelper
   #    the enrollment_term_id the query could use the id and get the results for
   #    the term.
   # 4. the parallel_#{report_type} will also need to add rows individually with
-  #    add_report_row or a little more efficient way would be to use
-  #    build_report_row, and then add_report_rows at the end of the method.
+  #    add_report_row.
   def write_report_in_batches(headers)
     # we use total_lines to track progress in the normal progress.
     # just use it here to do the same thing here even though it is not really
@@ -297,14 +316,39 @@ module AccountReports::ReportHelper
     end
   end
 
-  def add_report_row(row:, row_number: nil, report_runner:, account_report: @account_report)
-    Shackles.activate(:master) do
-      account_report.account_report_rows.create!(row: row,
-                                                 row_number: row_number,
-                                                 account_report: account_report,
-                                                 account_report_runner: report_runner,
-                                                 created_at: Time.zone.now)
+  def add_report_row(row:, row_number: nil, report_runner:)
+    report_runner.rows << build_report_row(row: row, row_number: row_number, report_runner: report_runner)
+    if report_runner.rows.length == 1_000
+      report_runner.write_rows
     end
+  end
+
+  def build_report_row(row:, row_number: nil, report_runner:)
+    # force all fields to strings
+    report_runner.account_report_rows.new(row: row.map { |field| field&.to_s&.encode(Encoding::UTF_8) },
+                                          row_number: row_number,
+                                          account_report_id: report_runner.account_report_id,
+                                          account_report_runner: report_runner,
+                                          created_at: Time.zone.now)
+  end
+
+  def number_of_items_per_runner(item_count, min: 25, max: 1000)
+    # use 100 jobs for the report, but no fewer than 25, and no more than 1000 per job
+    [[item_count/99.to_f.round(0), min].max, max].min
+  end
+
+  def create_report_runners(ids, total, min: 25, max: 1000)
+    return if ids.empty?
+    ids_so_far = 0
+    ids.each_slice(number_of_items_per_runner(total, min: min, max: max)) do |batch|
+      @account_report.add_report_runner(batch)
+      ids_so_far += batch.length
+      if ids_so_far >= Setting.get("ids_per_report_runner_batch", 10_000).to_i
+        @account_report.write_report_runners
+        ids_so_far = 0
+      end
+    end
+    @account_report.write_report_runners
   end
 
   def run_account_report_runner(report_runner, headers)
@@ -317,20 +361,21 @@ module AccountReports::ReportHelper
       end
       report_runner.start
       Shackles.activate(:slave) {AccountReports::REPORTS[@account_report.report_type].parallel_proc.call(@account_report, report_runner)}
-      update_parallel_progress(account_report: @account_report,report_runner: report_runner)
     rescue => e
       report_runner.fail
       self.fail_with_error(e)
     ensure
-      if last_account_report_runner?(@account_report)
-        write_report headers do |csv|
-          @account_report.account_report_rows.order(:account_report_runner_id, :row_number).find_each {|record| csv << record.row}
-        end
-        # total lines was used to track progress but was not accurate.
-        @account_report.update_attributes(total_lines: @account_report.current_line)
-        @account_report.delete_account_report_rows
-      end
+      update_parallel_progress(account_report: @account_report,report_runner: report_runner)
+      compile_parallel_report(headers) if last_account_report_runner?(@account_report)
     end
+  end
+
+  def compile_parallel_report(headers)
+    @account_report.update_attributes(total_lines: @account_report.account_report_rows.count + 1)
+    write_report headers do |csv|
+      @account_report.account_report_rows.order(:account_report_runner_id, :row_number).find_each { |record| csv << record.row }
+    end
+    @account_report.delete_account_report_rows
   end
 
   def fail_with_error(error)
@@ -386,14 +431,14 @@ module AccountReports::ReportHelper
     end
   end
 
-  class ExtendedCSV < CSV
+  class ExtendedCSV < CsvWithI18n
     def <<(row)
-      if @lineno % 1_000 == 0
+      if lineno % 1_000 == 0
         Shackles.activate(:master) do
           report = self.instance_variable_get(:@account_report).reload
           updates = {}
-          updates[:current_line] = @lineno
-          updates[:progress] = (@lineno.to_f / report.total_lines * 100).to_i if report.total_lines
+          updates[:current_line] = lineno
+          updates[:progress] = (lineno.to_f / (report.total_lines + 1) * 100).to_i if report.total_lines
           report.update_attributes(updates)
           if report.workflow_state == 'deleted'
             report.workflow_state = 'aborted'
@@ -421,7 +466,7 @@ module AccountReports::ReportHelper
   end
 
   def add_extra_text(text)
-    if @account_report.has_parameter?('extra_text')
+    if @account_report.value_for_param('extra_text')
       @account_report.parameters["extra_text"] << " #{text}"
     else
       @account_report.parameters["extra_text"] = text

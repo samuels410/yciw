@@ -18,6 +18,7 @@
 require File.expand_path(File.dirname(__FILE__) + '/../../../spec_helper')
 require File.expand_path(File.dirname(__FILE__) + '/concerns/advantage_services_shared_context')
 require File.expand_path(File.dirname(__FILE__) + '/concerns/advantage_services_shared_examples')
+require File.expand_path(File.dirname(__FILE__) + '/concerns/lti_services_shared_examples')
 require_dependency "lti/ims/scores_controller"
 
 module Lti::Ims
@@ -49,11 +50,12 @@ module Lti::Ims
     let(:submission) { nil }
     let(:json) { JSON.parse(response.body) }
     let(:access_token_scopes) { 'https://purl.imsglobal.org/spec/lti-ags/scope/score' }
+    let(:userId) { user.id }
     let(:params_overrides) do
       {
         course_id: context_id,
         line_item_id: line_item_id,
-        userId: user.id,
+        userId: userId,
         activityProgress: 'Completed',
         gradingProgress: 'FullyGraded',
         timestamp: Time.zone.now.iso8601(3)
@@ -63,9 +65,21 @@ module Lti::Ims
     let(:scope_to_remove) { 'https://purl.imsglobal.org/spec/lti-ags/scope/score' }
 
     describe '#create' do
+      let(:content_type) { 'application/vnd.ims.lis.v1.score+json' }
+
       it_behaves_like 'advantage services'
+      it_behaves_like 'lti services'
 
       context 'with valid params' do
+        context 'when the lti_id userId is used' do
+          let(:userId) { user.lti_id }
+
+          it 'returns a valid resultUrl in the body' do
+            send_request
+            expect(json['resultUrl']).to include 'results'
+          end
+        end
+
         it 'returns a valid resultUrl in the body' do
           send_request
           expect(json['resultUrl']).to include 'results'
@@ -228,6 +242,77 @@ module Lti::Ims
             expect(result.submission.reload.score).to eq(result.reload.result_score * (line_item.score_maximum / 100))
           end
         end
+
+        context 'with online_url' do
+          let(:params_overrides) {
+            super().merge(Lti::Result::AGS_EXT_SUBMISSION => {
+              submission_type: 'online_url',
+              submission_data: 'http://www.instructure.com'
+            })
+          }
+
+          it 'updates the submission and result url' do
+            result
+            send_request
+            expect(result.reload.extensions[Lti::Result::AGS_EXT_SUBMISSION]['submission_type']).to eq('online_url')
+            expect(result.reload.extensions[Lti::Result::AGS_EXT_SUBMISSION]['submission_data']).to eq('http://www.instructure.com')
+            expect(result.submission.submission_type).to eq('online_url')
+            expect(result.submission.url).to eq('http://www.instructure.com')
+          end
+        end
+
+        context 'with basic_lti_launch' do
+          let(:params_overrides) {
+            super().merge(Lti::Result::AGS_EXT_SUBMISSION => {
+              submission_type: 'basic_lti_launch',
+              submission_data: 'http://www.instructure.com/launch_url'
+            })
+          }
+
+          it 'updates the submission and result url' do
+            result
+            send_request
+            expect(result.reload.extensions[Lti::Result::AGS_EXT_SUBMISSION]['submission_type']).to eq('basic_lti_launch')
+            expect(result.reload.extensions[Lti::Result::AGS_EXT_SUBMISSION]['submission_data']).to eq('http://www.instructure.com/launch_url')
+            expect(result.submission.submission_type).to eq('basic_lti_launch')
+            expect(result.submission.url).to eq('http://www.instructure.com/launch_url')
+          end
+        end
+
+        context 'with online_text_entry' do
+          let(:params_overrides) {
+            super().merge(Lti::Result::AGS_EXT_SUBMISSION => {
+              submission_type: 'online_text_entry',
+              submission_data: '<p>Here is some text</p>'
+            })
+          }
+
+          it 'updates the submission and result body' do
+            result
+            send_request
+            expect(result.reload.extensions[Lti::Result::AGS_EXT_SUBMISSION]['submission_type']).to eq('online_text_entry')
+            expect(result.reload.extensions[Lti::Result::AGS_EXT_SUBMISSION]['submission_data']).to eq('<p>Here is some text</p>')
+            expect(result.submission.submission_type).to eq('online_text_entry')
+            expect(result.submission.body).to eq('<p>Here is some text</p>')
+          end
+        end
+
+        context 'when previously graded and score not given' do
+          let(:result) { lti_result_model line_item: line_item, user: user, result_score: 100, result_maximum: 200 }
+          let(:params_overrides) { super().except(:scoreGiven, :scoreMaximum) }
+
+          it 'clears the score' do
+            expect(result.submission.score).to eq(100)
+            expect(result.result_score).to eq(100)
+            expect(result.result_maximum).to eq(200)
+            send_request
+            expect(result.reload.result_score).to be_nil
+            expect(result.reload.result_maximum).to be_nil
+            expect(result.submission.reload.score).to be_nil
+          end
+        end
+
+
       end
 
       context 'with invalid params' do

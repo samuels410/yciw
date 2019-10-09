@@ -24,6 +24,7 @@ module Lti
   class VariableExpander
 
     SUBSTRING_REGEX = /(?<=\${).*?(?=})/.freeze #matches only the stuff inside `${}`
+    PARAMETERS_REGEX = /^(\$.+)\<(.+)\>$/.freeze # matches key and argument
 
     attr_reader :context, :root_account, :controller, :current_user
 
@@ -53,13 +54,25 @@ module Lti
       self.expansions.values.select { |v| v.default_name.present? }.map(&:name)
     end
 
+    def self.find_expansion(key)
+      return unless key.respond_to?(:to_sym)
+      if (md = key.to_s.match(PARAMETERS_REGEX))
+        real_key = md[1] + "<>"
+        if (expansion = self.expansions[real_key.to_sym])
+          [expansion, md[2]]
+        end
+      else
+        self.expansions[key.to_sym]
+      end
+    end
+
     CONTROLLER_GUARD = -> { !!@controller }
     COURSE_GUARD = -> { @context.is_a? Course }
     TERM_START_DATE_GUARD = -> { @context.is_a?(Course) && @context.enrollment_term &&
                                  @context.enrollment_term.start_at }
     TERM_NAME_GUARD = -> { @context.is_a?(Course) && @context.enrollment_term&.name }
     USER_GUARD = -> { @current_user }
-    SIS_USER_GUARD = -> { @current_user && @current_user.pseudonym && @current_user.pseudonym.sis_user_id }
+    SIS_USER_GUARD = -> { sis_pseudonym&.sis_user_id }
     PSEUDONYM_GUARD = -> { sis_pseudonym }
     ENROLLMENT_GUARD = -> { @current_user && @context.is_a?(Course) }
     ROLES_GUARD = -> { @current_user && (@context.is_a?(Course) || @context.is_a?(Account)) }
@@ -97,15 +110,16 @@ module Lti
 
     def [](key)
       k = (key[0] == '$' && key) || "$#{key}"
-      if (expansion = self.class.expansions[k.respond_to?(:to_sym) && k.to_sym])
-        expansion.expand(self)
-      end
+      expansion, args = self.class.find_expansion(k)
+      expansion.expand(self, *args) if expansion
     end
+
 
     def expand_variables!(var_hash)
       var_hash.update(var_hash) do |_, v|
-        if (expansion = v.respond_to?(:to_sym) && self.class.expansions[v.to_sym])
-          expansion.expand(self)
+        expansion, args = self.class.find_expansion(v)
+        if expansion
+          expansion.expand(self, *args)
         elsif v.respond_to?(:to_s) && v.to_s =~ SUBSTRING_REGEX
           expand_substring_variables(v)
         else
@@ -514,6 +528,18 @@ module Lti
                        -> { @context.workflow_state },
                        COURSE_GUARD
 
+    # returns true if the current course has the setting "Hide grade distribution graphs from students" enabled
+    # @internal
+    register_expansion 'Canvas.course.hideDistributionGraphs', [],
+      -> { @context.hide_distribution_graphs? },
+      COURSE_GUARD
+
+    # returns grade passback setting for the course.
+    # @internal
+    register_expansion 'Canvas.course.gradePassbackSetting', [],
+      -> { @context.grade_passback_setting },
+      COURSE_GUARD
+
     # returns the current course's term start date.
     # @example
     #   ```
@@ -594,6 +620,18 @@ module Lti
     register_expansion 'Canvas.membership.concludedRoles', [],
                        -> { lti_helper.concluded_lis_roles },
                        COURSE_GUARD
+
+    # Returns a comma-separated list of permissions granted to the user in the current context,
+    # given a comma-separated set to check using the format
+    # $Canvas.membership.permissions<example_permission,example_permission2,..>
+    # @internal
+    # @example
+    #   ```
+    #   example_permission_1,example_permission_2
+    #   ```
+    register_expansion 'Canvas.membership.permissions<>', [],
+                        -> (permissions_str) { lti_helper.granted_permissions(permissions_str.split(",")) },
+                        ROLES_GUARD
 
     # With respect to the current course, returns the context ids of the courses from which content has been copied (excludes cartridge imports).
     #
@@ -742,13 +780,23 @@ module Lti
                        -> { @current_user.id },
                        USER_GUARD
 
-    # Returns the Canvas user_uuid of the launching user.
+    # Returns the Canvas user_uuid of the launching user for the context.
     # @duplicates User.uuid
     # @example
     #   ```
     #   N2ST123dQ9zyhurykTkBfXFa3Vn1RVyaw9Os6vu3
     #   ```
     register_expansion 'vnd.instructure.User.uuid', [],
+                       -> { UserPastLtiId.uuid_for_user_in_context(@current_user, @context) },
+                       USER_GUARD
+
+    # Returns the current Canvas user_uuid of the launching user.
+    # @duplicates User.uuid
+    # @example
+    #   ```
+    #   N2ST123dQ9zyhurykTkBfXFa3Vn1RVyaw9Os6vu3
+    #   ```
+    register_expansion 'vnd.instructure.User.current_uuid', [],
                        -> { @current_user.uuid },
                        USER_GUARD
 
@@ -810,6 +858,16 @@ module Lti
     #   ```
     register_expansion 'Canvas.xuser.allRoles', [],
                        -> { lti_helper.all_roles }
+
+    # Same as "Canvas.xuser.allRoles", but uses roles formatted for LTI Advantage
+    # @example
+    #   ```
+    #    "http://purl.imsglobal.org/vocab/lis/v2/institution/person#Student",
+    #    "http://purl.imsglobal.org/vocab/lis/v2/membership#Instructor",
+    #    "http://purl.imsglobal.org/vocab/lis/v2/system/person#User"
+    #   ```
+    register_expansion 'com.instructure.User.allRoles', [],
+                       -> { lti_helper.all_roles('lti1_3') }
 
     # Returns the Canvas global user_id of the launching user.
     # @duplicates Canvas.root_account.global_id
@@ -918,7 +976,7 @@ module Lti
     #   da12345678cb37ba1e522fc7c5ef086b7704eff9
     #   ```
     register_expansion 'Canvas.masqueradingUser.userId', [],
-                       -> { @tool.opaque_identifier_for(@controller.logged_in_user) },
+                       -> { @tool.opaque_identifier_for(@controller.logged_in_user, context: @context) },
                        MASQUERADING_GUARD
 
     # Returns the xapi url for the user.
@@ -949,6 +1007,16 @@ module Lti
     register_expansion 'Canvas.course.sectionIds', [],
                        -> { lti_helper.section_ids },
                        ENROLLMENT_GUARD
+
+    # Returns true if the user can only view and interact with users in their own sections
+    #
+    # @example
+    #   ```
+    #   true
+    #   ```
+    register_expansion 'Canvas.course.sectionRestricted', [],
+      -> { lti_helper.section_restricted },
+      ENROLLMENT_GUARD
 
     # Returns a comma separated list of section sis_id's that the user is enrolled in.
     #
@@ -1229,7 +1297,8 @@ module Lti
     private
 
     def sis_pseudonym
-      @sis_pseudonym ||= SisPseudonym.for(@current_user, @root_account, type: :trusted, require_sis: false) if @current_user
+      context = @enrollment || @context
+      @sis_pseudonym ||= SisPseudonym.for(@current_user, context, type: :trusted, require_sis: false, root_account: @root_account) if @current_user
     end
 
     def expand_substring_variables(value)

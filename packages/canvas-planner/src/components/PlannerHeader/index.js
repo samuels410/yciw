@@ -17,21 +17,16 @@
  */
 import React, { Component } from 'react';
 import { connect } from 'react-redux';
-import themeable from '@instructure/ui-themeable/lib';
-import Button from '@instructure/ui-buttons/lib/components/Button';
-import CloseButton from '@instructure/ui-buttons/lib/components/CloseButton';
-import ScreenReaderContent from '@instructure/ui-a11y/lib/components/ScreenReaderContent';
-import AccessibleContent from '@instructure/ui-a11y/lib/components/AccessibleContent'
-import View from '@instructure/ui-layout/lib/components/View';
-import Portal from '@instructure/ui-portal/lib/components/Portal';
-import IconPlusLine from '@instructure/ui-icons/lib/Line/IconPlus';
-import IconAlertsLine from '@instructure/ui-icons/lib/Line/IconAlerts';
-import IconGradebookLine from '@instructure/ui-icons/lib/Line/IconGradebook';
-import Popover, {PopoverTrigger, PopoverContent} from '@instructure/ui-overlays/lib/components/Popover';
+import {themeable} from '@instructure/ui-themeable'
+import {Button, CloseButton} from '@instructure/ui-buttons'
+import {ScreenReaderContent, AccessibleContent} from '@instructure/ui-a11y'
+import {View} from '@instructure/ui-layout'
+import {Portal} from '@instructure/ui-portal'
+import {IconPlusLine, IconAlertsLine, IconGradebookLine} from '@instructure/ui-icons'
+import {Popover, Tray} from '@instructure/ui-overlays'
 import PropTypes from 'prop-types';
 import UpdateItemTray from '../UpdateItemTray';
-import Tray from '@instructure/ui-overlays/lib/components/Tray';
-import Badge from '@instructure/ui-elements/lib/components/Badge';
+import {Badge} from '@instructure/ui-elements'
 import Opportunities from '../Opportunities';
 import GradesDisplay from '../GradesDisplay';
 import StickyButton from '../StickyButton';
@@ -91,7 +86,7 @@ export class PlannerHeader extends Component {
       allPastItemsLoaded: PropTypes.bool,
       allFutureItemsLoaded: PropTypes.bool,
       allOpportunitiesLoaded: PropTypes.bool,
-      loadingOpportunities:  PropTypes.bool,
+      loadingOpportunities: PropTypes.bool,
       setFocusAfterLoad: PropTypes.bool,
       firstNewDayKey: PropTypes.object,
       futureNextUrl: PropTypes.string,
@@ -199,7 +194,7 @@ export class PlannerHeader extends Component {
   setUpdateItemTray (trayOpen) {
     if (trayOpen) {
       if (this.props.openEditingPlannerItem) {
-        this.props.openEditingPlannerItem();  // tell dynamic-ui we've started editing
+        this.props.openEditingPlannerItem(); // tell dynamic-ui we've started editing
       }
     } else {
       if (this.props.cancelEditingPlannerItem) {
@@ -265,7 +260,7 @@ export class PlannerHeader extends Component {
         =0 {# opportunities}
         one {# opportunity}
         other {# opportunities}
-      }. Click to open Opportunity Center popup.`, { count: this.state.newOpportunities.length })
+      }`, {count: this.state.newOpportunities.length})
     );
   }
 
@@ -335,11 +330,11 @@ export class PlannerHeader extends Component {
     return null;
   }
 
-  renderOpportunitiesBadge () {
-    const props = {}
+  renderOpportunitiesButton (margin) {
+    const badgeProps = {margin, countUntil: 100};
     if (this.props.loading.allOpportunitiesLoaded && this.state.newOpportunities.length) {
-      props.count = this.state.newOpportunities.length;
-      props.formatOutput=(formattedCount) => {
+      badgeProps.count = this.state.newOpportunities.length;
+      badgeProps.formatOutput = (formattedCount) => {
         return (
           <AccessibleContent alt={this.opportunityTitle()}>
             {formattedCount}
@@ -347,15 +342,26 @@ export class PlannerHeader extends Component {
         );
       };
     } else {
-      props.formatOutput=() => {
+      badgeProps.formatOutput = () => {
         return <AccessibleContent alt={this.opportunityTitle()}/>;
-      }
+      };
     }
+
     return (
-      <Badge {...props}>
-        <View>
-          <IconAlertsLine/>
-        </View>
+      <Badge {...badgeProps}>
+        <Button
+          onClick={this.toggleOpportunitiesDropdown}
+          variant="icon"
+          icon={IconAlertsLine}
+          ref={b => {
+            this.opportunitiesButton = b;
+          }}
+          buttonRef={b => {
+            this.opportunitiesHtmlButton = b;
+          }}
+        >
+          <ScreenReaderContent>{formatMessage('opportunities popup')}</ScreenReaderContent>
+        </Button>
       </Badge>
     );
   }
@@ -397,18 +403,8 @@ export class PlannerHeader extends Component {
           constrain="window"
           placement="bottom end"
         >
-          <PopoverTrigger>
-            <Button
-              onClick={this.toggleOpportunitiesDropdown}
-              variant="icon"
-              margin={buttonMargin}
-              ref={(b) => { this.opportunitiesButton = b; }}
-              buttonRef={(b) => { this.opportunitiesHtmlButton = b; }}
-            >
-              {this.renderOpportunitiesBadge()}
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent>
+          <Popover.Trigger>{this.renderOpportunitiesButton(buttonMargin)}</Popover.Trigger>
+          <Popover.Content>
             <Opportunities
               togglePopover={this.closeOpportunitiesDropdown}
               newOpportunities={this.state.newOpportunities}
@@ -418,7 +414,7 @@ export class PlannerHeader extends Component {
               dismiss={this.props.dismissOpportunity}
               maxHeight={verticalRoom}
             />
-          </PopoverContent>
+          </Popover.Content>
         </Popover>
         <Tray
           open={this.state.trayOpen}

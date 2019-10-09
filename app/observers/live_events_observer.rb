@@ -30,6 +30,7 @@ class LiveEventsObserver < ActiveRecord::Observer
           :assignment,
           :assignment_group,
           :submission,
+          :submission_comment,
           :attachment,
           :user,
           :user_account_association,
@@ -37,7 +38,8 @@ class LiveEventsObserver < ActiveRecord::Observer
           :course_section,
           :context_module,
           :context_module_progression,
-          :content_tag
+          :content_tag,
+          :learning_outcome_result
 
   NOP_UPDATE_FIELDS = [ "updated_at", "sis_batch_id" ].freeze
   def after_update(obj)

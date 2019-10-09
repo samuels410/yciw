@@ -243,8 +243,8 @@ module CustomSeleniumActions
 
   # this is a smell; you should know what's on the page you're testing,
   # so conditionally doing stuff based on elements == :poop:
-  def element_exists?(selector)
-    disable_implicit_wait { f(selector) }
+  def element_exists?(selector, xpath = false)
+    disable_implicit_wait { xpath ? fxpath(selector) : f(selector) }
     true
   rescue Selenium::WebDriver::Error::NoSuchElementError
     false
@@ -285,7 +285,7 @@ module CustomSeleniumActions
     # cumbersome is because tinymce has it's actual interaction point down in
     # an iframe.
     src = %Q{
-      var $iframe = $("##{tiny_controlling_element.attribute(:id)}").siblings('.mce-tinymce').find('iframe');
+      var $iframe = $("##{tiny_controlling_element.attribute(:id)}").siblings('[role="application"]').find('iframe');
       var iframeDoc = $iframe[0].contentDocument;
       var domElement = iframeDoc.getElementsByTagName("body")[0];
       var selection = iframeDoc.getSelection();
@@ -415,6 +415,30 @@ module CustomSeleniumActions
     select.select_by(select_by, option_text)
   end
 
+  def INSTUI_select(elem_or_css)
+    if elem_or_css.is_a?(String) then fj(elem_or_css) else elem_or_css end
+  end
+
+  # implementation of click_option for use with INSTU's Select
+  # (tested with the CanvasSelect wrapper, untested with a raw instui Select)
+  def click_INSTUI_Select_option(select, option_text, select_by = :text)
+    cselect = INSTUI_select(select)
+    cselect.click # open the options list
+    option_list_id = cselect.attribute('aria-controls')
+    if select_by == :text
+      fj("##{option_list_id} [role='option']:contains(#{option_text})").click
+    else
+      f("##{option_list_id} [role='option'][#{select_by}='#{option_text}']").click
+    end
+  end
+
+  def INSTUI_Select_options(select)
+    cselect = INSTUI_select(select)
+    cselect.click # open the options list
+    option_list_id = cselect.attribute('aria-controls')
+    ff("##{option_list_id} [role='option']")
+  end
+
   def close_visible_dialog
     visible_dialog_element = fj('.ui-dialog:visible')
     visible_dialog_element.find_element(:css, '.ui-dialog-titlebar-close').click
@@ -441,20 +465,28 @@ module CustomSeleniumActions
 
   MODIFIER_KEY = RUBY_PLATFORM =~ /darwin/ ? :command : :control
   def replace_content(el, value, options = {})
-    # Removed the javascript select(), it was causing stale element exceptions
     # el.clear doesn't work with textboxes that have a pattern attribute that's why we have :backspace.
     # We are treating the chrome browser different because Selenium cannot send :command key to chrome on Mac.
     # This is a known issue and hasn't been solved yet. https://bugs.chromium.org/p/chromedriver/issues/detail?id=30
-    case driver.browser
-    when :firefox, :safari, :internet_explorer
-      keys = [[MODIFIER_KEY, "a"], :backspace]
-    when :chrome
-      el.clear
-      keys = [:backspace]
+    if SeleniumDriverSetup.saucelabs_test_run?
+      el.click
+      el.send_keys [(driver.browser == :safari ? :command : :control), 'a']
+      el.send_keys(value)
+    else
+      case driver.browser
+      when :firefox, :safari, :internet_explorer
+        keys = [[MODIFIER_KEY, "a"], :backspace]
+      when :chrome
+        driver.execute_script("arguments[0].select();", el)
+        keys = value.to_s.empty? ? [:backspace] : []
+      end
+      keys << value
+      el.send_keys(*keys)
     end
-    keys << value
-    keys << :tab if options[:tab_out]
-    el.send_keys(*keys)
+
+    if options[:tab_out]
+      el.send_keys(:tab)
+    end
   end
 
   # can pass in either an element or a forms css

@@ -74,6 +74,7 @@
               %>" />
             <input class="question_input"
               placeholder="--"
+              data-question-id="<%= hash_get(question, :id) %>"
               value="<%= point_value_for_input(user_answer, question).is_a?(Float) &&
                 !point_value_for_input(user_answer, question).nan? &&
                 render_score(point_value_for_input(user_answer, question)) || ''
@@ -238,7 +239,7 @@
         </div>
       </div>
       <div class="equation_combinations_holder_holder calculated_question_answers" style="<%= hidden unless question && hash_get(question, :question_type) == 'calculated_question' %>">
-        <div style="display: none;" class="answer_tolerance"><%= hash_get(question, :answer_tolerance, 0) %></div>
+        <div style="display: none;" class="answer_tolerance"><%= render_number(hash_get(question, :answer_tolerance, 0)) %></div>
         <div style="display: none;" class="formula_decimal_places"><%= hash_get(question, :formula_decimal_places, 0) %></div>
         <div class="calculated_question_answers_header"><%= t('headers.possible_solutions', "Possible Solutions") %></div>
         <div class="calculated_question_answers_content equation_combinations_holder">
@@ -258,7 +259,7 @@
                     <% hash_get(answer, :variables).each do |variable| %>
                       <td><%= hash_get(variable, :value) %></td>
                     <% end %>
-                    <td class='final_answer'><%= hash_get(answer, :answer) || hash_get(answer, :exact) %></td>
+                    <td class='final_answer'><%= render_number(hash_get(answer, :answer) || hash_get(answer, :exact)) %></td>
                   </tr>
                 <% end %>
               </tbody>
@@ -280,9 +281,14 @@
         <% if assessing %>
           <% if question %>
             <% if question_type.display_answers == "multiple" && !["missing_word_question", "fill_in_multiple_blanks_question"].include?(hash_get(question, :question_type)) %>
-              <% list = hash_get(question, :answers, []) %>
-              <%= render :partial => "quizzes/quizzes/multi_answer", :collection => list, :locals =>
-                  {:question => question, :right_answers => right_answers, :question_type => question_type, :user_answer => user_answer} %>
+              <fieldset>
+                <legend class="screenreader-only">
+                  <%= t(:group_of_answer_choices, "Group of answer choices") %>
+                </legend>
+                <% list = hash_get(question, :answers, []) %>
+                <%= render :partial => "quizzes/quizzes/multi_answer", :collection => list, :locals =>
+                    {:question => question, :right_answers => right_answers, :question_type => question_type, :user_answer => user_answer} %>
+              </fieldset>
             <% elsif question_type.display_answers == "single" %>
               <%= render :partial => "quizzes/quizzes/single_answer", :locals =>
                     {:question => question, :right_answers => right_answers, :question_type => question_type, :user_answer => user_answer, :editable => assessing} %>
@@ -359,9 +365,9 @@
                   end %>
                   <% answer_classes = ['selected_answer']
                     if display_correct_answers && hash_get(question,:question_type) != 'file_upload_question'
-                     answer_classes << ((hash_get(user_answer, :correct) == true) ? 'correct_answer' : 'wrong_answer')
-                   end
-                   answer_classes << 'no_answer' if hash_get(user_answer, :text).blank? || hash_get(user_answer, :attachment_ids).blank?
+                      answer_classes << ((hash_get(user_answer, :correct) == true) ? 'correct_answer' : 'wrong_answer')
+                    end
+                    answer_classes << 'no_answer' if hash_get(user_answer, :text).blank? || hash_get(user_answer, :attachment_ids).blank?
                   %>
                   <div class='answer <%= answer_classes.compact.join(' ') %>'>
                     <%= render :partial => "quizzes/quizzes/single_answer", :locals =>

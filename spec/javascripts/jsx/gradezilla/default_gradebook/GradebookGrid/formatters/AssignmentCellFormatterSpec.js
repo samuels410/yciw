@@ -17,10 +17,14 @@
  */
 
 import AssignmentCellFormatter from 'jsx/gradezilla/default_gradebook/GradebookGrid/formatters/AssignmentCellFormatter'
-import {createGradebook, setFixtureHtml} from 'jsx/gradezilla/default_gradebook/__tests__/GradebookSpecHelper'
+import {
+  createGradebook,
+  setFixtureHtml
+} from 'jsx/gradezilla/default_gradebook/__tests__/GradebookSpecHelper'
 
 QUnit.module('GradebookGrid AssignmentCellFormatter', suiteHooks => {
   let $fixture
+  let columnDef
   let gradebook
   let formatter
   let student
@@ -41,11 +45,13 @@ QUnit.module('GradebookGrid AssignmentCellFormatter', suiteHooks => {
       2301: {id: '2301', name: 'Algebra 1', grading_type: 'points', points_possible: 10}
     })
 
+    columnDef = {}
     student = {id: '1101', loaded: true, initialized: true}
     submission = {
       assignment_id: '2301',
       grade: '8',
       id: '2501',
+      posted_at: null,
       score: 8,
       submission_type: 'online_text_entry',
       user_id: '1101',
@@ -70,7 +76,7 @@ QUnit.module('GradebookGrid AssignmentCellFormatter', suiteHooks => {
       0, // row
       0, // cell
       submission, // value
-      null, // column definition
+      columnDef, // column definition
       student // dataContext
     )
     return $fixture.querySelector('.gradebook-cell')
@@ -103,6 +109,12 @@ QUnit.module('GradebookGrid AssignmentCellFormatter', suiteHooks => {
       ok(renderCell().classList.contains('resubmitted'))
     })
 
+    test('excludes the "resubmitted" style when the submission is both resubmitted and late', () => {
+      submission.grade_matches_current_submission = false
+      submission.late = true
+      notOk(renderCell().classList.contains('resubmitted'))
+    })
+
     test('includes the "missing" style when the submission is missing', () => {
       submission.missing = true
       ok(renderCell().classList.contains('missing'))
@@ -126,6 +138,12 @@ QUnit.module('GradebookGrid AssignmentCellFormatter', suiteHooks => {
       notOk(renderCell().classList.contains('missing'))
     })
 
+    test('excludes the "missing" style when the submission is both missing and late', () => {
+      submission.missing = true
+      submission.late = true
+      notOk(renderCell().classList.contains('missing'))
+    })
+
     test('includes the "late" style when the submission is late', () => {
       submission.late = true
       ok(renderCell().classList.contains('late'))
@@ -139,18 +157,6 @@ QUnit.module('GradebookGrid AssignmentCellFormatter', suiteHooks => {
 
     test('excludes the "late" style when the submission is both excused and late', () => {
       excuseSubmission()
-      submission.late = true
-      notOk(renderCell().classList.contains('late'))
-    })
-
-    test('excludes the "late" style when the submission is both resubmitted and late', () => {
-      submission.grade_matches_current_submission = false
-      submission.late = true
-      notOk(renderCell().classList.contains('late'))
-    })
-
-    test('excludes the "late" style when the submission is both missing and late', () => {
-      submission.missing = true
       submission.late = true
       notOk(renderCell().classList.contains('late'))
     })
@@ -245,6 +251,12 @@ QUnit.module('GradebookGrid AssignmentCellFormatter', suiteHooks => {
       ok(renderCell().classList.contains('muted'))
     })
 
+    test('does not include the "muted" class when post policies are enabled', () => {
+      gradebook.options.post_policies_enabled = true
+      gradebook.getAssignment('2301').muted = true
+      ok(renderCell().classList.contains('muted'))
+    })
+
     test('escapes html in the grade', () => {
       gradebook.getDefaultGradingScheme().data[0][0] = '<img src=null onerror=alert(1) >'
       gradebook.getAssignment('2301').grading_type = 'letter_grade'
@@ -294,6 +306,43 @@ QUnit.module('GradebookGrid AssignmentCellFormatter', suiteHooks => {
 
     test('does not display an invalid grade indicator when no grade is pending', () => {
       strictEqual(renderCell().querySelectorAll('.Grid__GradeCell__InvalidGrade').length, 0)
+    })
+
+    test('does not display an unposted grade indicator', () => {
+      strictEqual(renderCell().querySelectorAll('.Grid__GradeCell__UnpostedGrade').length, 0)
+    })
+
+    QUnit.module('when post assignment grades tray is open', postTrayHooks => {
+      postTrayHooks.beforeEach(() => {
+        columnDef.postAssignmentGradesTrayOpenForAssignmentId = true
+      })
+
+      test('displays an unposted grade indicator when grade is graded and unposted', () => {
+        submission.workflow_state = 'graded'
+        strictEqual(renderCell().querySelectorAll('.Grid__GradeCell__UnpostedGrade').length, 1)
+      })
+
+      test('does not display an unposted grade indicator when submission is graded and posted', () => {
+        submission.workflow_state = 'graded'
+        submission.posted_at = new Date()
+        strictEqual(renderCell().querySelectorAll('.Grid__GradeCell__UnpostedGrade').length, 0)
+      })
+
+      test('does not display an unposted grade indicator when grade is posted', () => {
+        submission.posted_at = new Date()
+        strictEqual(renderCell().querySelectorAll('.Grid__GradeCell__UnpostedGrade').length, 0)
+      })
+
+      test('does not display an unposted grade indicator when submission not graded', () => {
+        submission.workflow_state = 'unsubmitted'
+        strictEqual(renderCell().querySelectorAll('.Grid__GradeCell__UnpostedGrade').length, 0)
+      })
+
+      test('does not display an unposted grade indicator when submission does not have a score', () => {
+        submission.workflow_state = 'graded'
+        submission.score = null
+        strictEqual(renderCell().querySelectorAll('.Grid__GradeCell__UnpostedGrade').length, 0)
+      })
     })
 
     QUnit.module('when a grade is pending', contextHooks => {
@@ -346,10 +395,7 @@ QUnit.module('GradebookGrid AssignmentCellFormatter', suiteHooks => {
           valid: false
         }
         gradebook.addPendingGradeInfo({assignmentId: '2301', userId: '1101'}, pendingGradeInfo)
-        strictEqual(
-          renderCell().querySelectorAll('.Grid__GradeCell__InvalidGrade').length,
-          1
-        )
+        strictEqual(renderCell().querySelectorAll('.Grid__GradeCell__InvalidGrade').length, 1)
       })
 
       test('does not display an invalid grade indicator when the pending grade is valid', () => {
@@ -361,10 +407,7 @@ QUnit.module('GradebookGrid AssignmentCellFormatter', suiteHooks => {
           valid: true
         }
         gradebook.addPendingGradeInfo({assignmentId: '2301', userId: '1101'}, pendingGradeInfo)
-        strictEqual(
-          renderCell().querySelectorAll('.Grid__GradeCell__InvalidGrade').length,
-          0
-        )
+        strictEqual(renderCell().querySelectorAll('.Grid__GradeCell__InvalidGrade').length, 0)
       })
     })
 

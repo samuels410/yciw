@@ -81,6 +81,7 @@ $(document).ready(function(event) {
     output += "<li>" + htmlEscape(I18n.t('import_counts.courses', "Courses: %{course_count}", {course_count: batch.data.counts.courses})) + "</li>";
     output += "<li>" + htmlEscape(I18n.t('import_counts.sections', "Sections: %{section_count}", {section_count: batch.data.counts.sections})) + "</li>";
     output += "<li>" + htmlEscape(I18n.t('import_counts.users', "Users: %{user_count}", {user_count: batch.data.counts.users})) + "</li>";
+    output += "<li>" + htmlEscape(I18n.t('import_counts.logins', "Logins: %{login_count}", {login_count: batch.data.counts.logins})) + "</li>";
     output += "<li>" + htmlEscape(I18n.t('import_counts.enrollments', "Enrollments: %{enrollment_count}", {enrollment_count: batch.data.counts.enrollments})) + "</li>";
     output += "<li>" + htmlEscape(I18n.t('import_counts.crosslists', "Crosslists: %{crosslist_count}", {crosslist_count: batch.data.counts.xlists})) + "</li>";
     output += "<li>" + htmlEscape(I18n.t('import_counts.admins', "Admins: %{admin_count}", {admin_count: batch.data.counts.admins})) + "</li>";
@@ -119,7 +120,7 @@ $(document).ready(function(event) {
     var checkup = function() {
       var lastProgress = null;
       var waitTime = 1500;
-      $.ajaxJSON(location.href, 'GET', {}, function(data) {
+      $.ajaxJSON(location.href, 'GET', {}, data => {
         state = "updating";
         var sis_batch = data;
         var progress = 0;
@@ -162,7 +163,7 @@ $(document).ready(function(event) {
           lastProgress = progress;
           setTimeout(checkup, 1500);
         }
-      }, function() {
+      }, () => {
         setTimeout(checkup, 3000);
       });
     };
@@ -192,7 +193,7 @@ $(document).ready(function(event) {
 
   function check_if_importing() {
       state = "checking";
-      $.ajaxJSON(location.href, 'GET', {}, function(data) {
+      $.ajaxJSON(location.href, 'GET', {}, data => {
         state = "nothing";
         var sis_batch = data;
         var progress = 0;

@@ -19,6 +19,8 @@
 import {
   START_FILE_UPLOAD,
   FAIL_FILE_UPLOAD,
+  FAIL_MEDIA_UPLOAD,
+  MEDIA_UPLOAD_SUCCESS,
   TOGGLE_UPLOAD_FORM,
   COMPLETE_FILE_UPLOAD,
   RECEIVE_FOLDER,
@@ -104,10 +106,10 @@ function folderTree(state = {}, action) {
   switch (action.type) {
     case PROCESSED_FOLDER_BATCH: {
       const folders = action.folders;
-      let tree = {};
+      const tree = {};
 
-      for (let folderId in folders) {
-        let folder = folders[folderId];
+      for (const folderId in folders) {
+        const folder = folders[folderId];
         tree[folder.id] = tree[folder.id] || [];
         if (folder.parentId) {
           tree[folder.parentId] = tree[folder.parentId] || [];
@@ -115,11 +117,9 @@ function folderTree(state = {}, action) {
         }
       }
 
-      for (let parentFolderId in tree) {
-        let children = tree[parentFolderId];
-        children.sort(function(a, b) {
-          return folders[a].name.localeCompare(folders[b].name);
-        });
+      for (const parentFolderId in tree) {
+        const children = tree[parentFolderId];
+        children.sort((a, b) => folders[a].name.localeCompare(folders[b].name));
       }
 
       return tree;
@@ -143,6 +143,19 @@ function loadingFolders(state = false, action) {
   }
 }
 
+function uploadingMediaStatus(state = false, action) {
+  switch (action.type) {
+    case START_LOADING:
+      return {loading: true, uploaded: false, error: false};
+    case FAIL_MEDIA_UPLOAD:
+      return {loading: false, uploaded: false, error: true};
+    case MEDIA_UPLOAD_SUCCESS:
+      return {loading: false, uploaded: true, error: false};
+    default:
+      return state;
+  }
+}
+
 export default combineReducers({
   uploading,
   formExpanded,
@@ -150,5 +163,6 @@ export default combineReducers({
   rootFolderId,
   folderTree,
   error,
-  loadingFolders
+  loadingFolders,
+  uploadingMediaStatus
 });

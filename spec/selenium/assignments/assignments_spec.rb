@@ -95,6 +95,7 @@ describe "assignments" do
     end
 
     it "should insert a file using RCE in the assignment", priority: "1", test_id: 126671 do
+      stub_rcs_config
       @assignment = @course.assignments.create(name: 'Test Assignment')
       file = @course.attachments.create!(display_name: 'some test file', uploaded_data: default_uploaded_data)
       file.context = @course
@@ -168,7 +169,7 @@ describe "assignments" do
       expect(driver.title).to include(assignment_name + ' edit')
     end
 
-    it "should create an assignment using main add button", priority: "1", test_id: 132582 do
+    it "should create an assignment using main add button", :xbrowser, priority: "1", test_id: 132582 do
       assignment_name = 'first assignment'
       # freeze for a certain time, so we don't get unexpected ui complications
       time = DateTime.new(Time.now.year,1,7,2,13)
@@ -176,10 +177,8 @@ describe "assignments" do
         due_at = format_time_for_view(time)
 
         get "/courses/#{@course.id}/assignments"
-        wait_for_ajaximations
-        #create assignment
-        f(".new_assignment").click
-        wait_for_ajaximations
+        # create assignment
+        wait_for_new_page_load { f(".new_assignment").click }
         f('#assignment_name').send_keys(assignment_name)
         f('#assignment_points_possible').send_keys('10')
         ['#assignment_text_entry', '#assignment_online_url', '#assignment_online_upload'].each do |element|
@@ -188,10 +187,9 @@ describe "assignments" do
         f('.DueDateInput').send_keys(due_at)
 
         submit_assignment_form
-        #confirm all our settings were saved and are now displayed
-        wait_for_ajaximations
+        # confirm all our settings were saved and are now displayed
         expect(f('h1.title')).to include_text(assignment_name)
-        expect(fj('#assignment_show .points_possible')).to include_text('10')
+        expect(f('#assignment_show .points_possible')).to include_text('10')
         expect(f('#assignment_show fieldset')).to include_text('a text entry box, a website url, or a file upload')
 
         expect(f('.assignment_dates')).to include_text(due_at)
@@ -830,14 +828,11 @@ describe "assignments" do
       it "should allow publishing from the show page", priority: "1", test_id: 647851 do
         get "/courses/#{@course.id}/assignments/#{@assignment.id}"
 
-        expect(f("#assignment-speedgrader-link")).to have_class("hidden")
-
         f("#assignment_publish_button").click
         wait_for_ajaximations
 
         expect(@assignment.reload).to be_published
         expect(f("#assignment_publish_button")).to include_text("Published")
-        expect(f("#assignment-speedgrader-link")).not_to have_class("hidden")
       end
 
       it "should have a link to speedgrader from the show page", priority: "1", test_id: 3001903 do
@@ -975,7 +970,7 @@ describe "assignments" do
     it "should not show the moderation page if it is not a moderated assignment ", priority: "2", test_id: 609653 do
       @assignment.update_attribute(:moderated_grading, false)
       get "/courses/#{@course.id}/assignments/#{@assignment.id}/moderate"
-      expect(f('#content h2').text).to eql "Page Not Found"
+      expect(f('#content h1').text).to eql "Page Not Found"
     end
   end
 

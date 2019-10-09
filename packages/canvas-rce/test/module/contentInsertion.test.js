@@ -64,7 +64,7 @@ describe("contentInsertion", () => {
       },
       focus: () => {},
       insertContent: content => {
-        editor.content = editor.content + content;
+        editor.content += content;
       },
       iframeElement: {
         getBoundingClientRect: () => {
@@ -82,7 +82,7 @@ describe("contentInsertion", () => {
         href: "/some/path",
         url: "/other/path",
         title: "Here Be Links",
-        contents: "Click On Me",
+        text: "Click On Me",
         selectionDetails: {
           node: undefined,
           range: undefined
@@ -110,6 +110,7 @@ describe("contentInsertion", () => {
 
     it("can use url if no href", () => {
       link.href = undefined;
+      link.url = '/other/path'
       contentInsertion.insertLink(editor, link);
       assert.equal(
         editor.content,
@@ -141,14 +142,14 @@ describe("contentInsertion", () => {
 
   describe("insertContent", () => {
     it("accepts string content", () => {
-      let content = "Some Chunk Of Content";
+      const content = "Some Chunk Of Content";
       contentInsertion.insertContent(editor, content);
       assert.equal(editor.content, "Some Chunk Of Content");
     });
 
     it("calls replaceTextareaSelection() when editor is hidden", () => {
-      let content = "blah";
-      let elem = { selectionStart: 0, selectionEnd: 3, value: "subcontent" };
+      const content = "blah";
+      const elem = { selectionStart: 0, selectionEnd: 3, value: "subcontent" };
       editor.isHidden = () => {
         return true;
       };
@@ -174,7 +175,7 @@ describe("contentInsertion", () => {
       contentInsertion.insertImage(editor, image);
       assert.equal(
         editor.content,
-        '<img alt="Here Be Images" src="/some/path"/>'
+        '<img alt="Here Be Images" src="/some/path" style="max-width:320px;max-height:320px"/>'
       );
     });
 
@@ -183,7 +184,7 @@ describe("contentInsertion", () => {
       contentInsertion.insertImage(editor, image);
       assert.equal(
         editor.content,
-        '<img alt="Here Be Images" src="/other/path"/>'
+        '<img alt="Here Be Images" src="/other/path" style="max-width:320px;max-height:320px"/>'
       );
     });
 
@@ -194,12 +195,12 @@ describe("contentInsertion", () => {
           return "http://bogus.edu";
         }
       };
-      let ed = Object.assign({}, editor);
+      const ed = { ...editor};
       ed.insertContent = content => {
-        ed.content = ed.content + content;
+        ed.content += content;
       };
       ed.selection.getNode = () => {
-        return Object.assign({}, node, { nodeName: "IMG" });
+        return { ...node, nodeName: "IMG"};
       };
       ed.selection.getRng = () => ({
         startContainer: containerElem,

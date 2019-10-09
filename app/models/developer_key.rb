@@ -34,6 +34,7 @@ class DeveloperKey < ActiveRecord::Base
   has_one :tool_configuration, class_name: 'Lti::ToolConfiguration', dependent: :destroy, inverse_of: :developer_key
   serialize :scopes, Array
 
+  before_validation :normalize_public_jwk_url
   before_validation :validate_scopes!
   before_create :generate_api_key
   before_create :set_auto_expire_tokens
@@ -43,17 +44,32 @@ class DeveloperKey < ActiveRecord::Base
   before_save :set_require_scopes
   after_save :clear_cache
   after_update :invalidate_access_tokens_if_scopes_removed!
+  after_update :destroy_external_tools!, if: :destroy_external_tools?
   after_create :create_default_account_binding
 
-  validates_as_url :redirect_uri, allowed_schemes: nil
+  validates_as_url :redirect_uri, :oidc_initiation_url, :public_jwk_url, allowed_schemes: nil
   validate :validate_redirect_uris
   validate :validate_public_jwk
+  validate :validate_lti_fields
 
   attr_reader :private_jwk
 
   scope :nondeleted, -> { where("workflow_state<>'deleted'") }
   scope :not_active, -> { where("workflow_state<>'active'") } # search for deleted & inactive keys
   scope :visible, -> { where(visible: true) }
+  scope :site_admin_lti, -> (key_ids) do
+    # Select site admin shard developer key ids
+    site_admin_key_ids = key_ids.select do |id|
+      Shard.local_id_for(id).second == Account.site_admin.shard
+    end
+
+    Account.site_admin.shard.activate do
+      lti_key_ids = Lti::ToolConfiguration.joins(:developer_key).
+        where(developer_keys: { id: site_admin_key_ids }).
+        pluck(:developer_key_id)
+      DeveloperKey.where(id: lti_key_ids)
+    end
+  end
 
   workflow do
     state :active do
@@ -65,6 +81,8 @@ class DeveloperKey < ActiveRecord::Base
     state :deleted
   end
 
+  self.ignored_columns = %i[oidc_login_uri tool_id]
+
   alias_method :destroy_permanently!, :destroy
   def destroy
     self.workflow_state = 'deleted'
@@ -75,6 +93,10 @@ class DeveloperKey < ActiveRecord::Base
     return false if DeveloperKey.test_cluster_checks_enabled? &&
       test_cluster_only? && !ApplicationController.test_cluster?
     active?
+  end
+
+  def usable_in_context?(context)
+    account_binding_for(context.try(:account) || context)&.on? && usable?
   end
 
   def redirect_uri=(value)
@@ -242,7 +264,165 @@ class DeveloperKey < ActiveRecord::Base
     account_binding_for(target_account)&.workflow_state == DeveloperKeyAccountBinding::ON_STATE
   end
 
+  def disable_external_tools!(binding_account)
+    manage_external_tools(
+      tool_management_enqueue_args,
+      :disable_tools_on_active_shard!,
+      binding_account
+    )
+  end
+
+  def enable_external_tools!(binding_account)
+    manage_external_tools(
+      tool_management_enqueue_args,
+      :enable_tools_on_active_shard!,
+      binding_account
+    )
+  end
+
+  def restore_external_tools!(binding_account)
+    manage_external_tools(
+      tool_management_enqueue_args,
+      :restore_tools_on_active_shard!,
+      binding_account
+    )
+  end
+
+  def update_external_tools!
+    manage_external_tools(
+      tool_management_enqueue_args,
+      :update_tools_on_active_shard!,
+      account
+    )
+  end
+
   private
+
+  def validate_lti_fields
+    return unless self.is_lti_key?
+    return if self.public_jwk.present? || self.public_jwk_url.present?
+    errors.add(:lti_key, "developer key must have public jwk or public jwk url")
+  end
+
+  def normalize_public_jwk_url
+    self.public_jwk_url = nil if self.public_jwk_url.blank?
+  end
+
+  def manage_external_tools(enqueue_args, method, affected_account)
+    return if tool_configuration.blank?
+
+    if affected_account.blank? || affected_account.site_admin?
+      # Cleanup tools across all shards
+      Shard.with_each_shard do
+        send_later_enqueue_args(
+          method,
+          enqueue_args,
+          affected_account
+        )
+      end
+    else
+      send_later_enqueue_args(
+        method,
+        enqueue_args,
+        affected_account
+      )
+    end
+  end
+
+  def tool_management_enqueue_args
+    {
+      n_strand: ['developer_key_tool_management', account&.global_id || 'site_admin'],
+      priority: Delayed::LOW_PRIORITY
+    }
+  end
+
+  def destroy_external_tools?
+    saved_change_to_workflow_state? && workflow_state == 'deleted' && tool_configuration.present?
+  end
+
+  def destroy_external_tools!
+    manage_external_tools(
+      tool_management_enqueue_args,
+      :destroy_tools_from_active_shard!,
+      account
+    )
+  end
+
+  def destroy_tools_from_active_shard!(affected_account)
+    base_scope = ContextExternalTool.where.not(workflow_state: 'deleted')
+    tool_management_scope(base_scope, affected_account).select(:id).find_in_batches do |tool_ids|
+      ContextExternalTool.where(id: tool_ids).destroy_all
+    end
+  end
+
+  def set_tool_workflow_state_on_active_shard!(state, scope, binding_account)
+    tool_management_scope(scope, binding_account).select(:id).find_in_batches do |tool_ids|
+      ContextExternalTool.where(id: tool_ids).update(
+        workflow_state: state
+      )
+    end
+  end
+
+  def tool_management_scope(base_scope, affected_account)
+    if affected_account&.site_admin? || affected_account.blank?
+      return base_scope.where(developer_key: self)
+    end
+
+    # Don't update tools in another root account on the same shard
+    base_scope.where(developer_key: self, root_account: affected_account)
+  end
+
+  def update_tools_on_active_shard!(account)
+    return if tool_configuration.blank?
+
+    base_scope = ContextExternalTool.where.not(workflow_state: 'deleted')
+    tool_management_scope(base_scope, account).select(:id).find_in_batches do |tool_ids|
+      ContextExternalTool.where(id: tool_ids).preload(:context).each do |tool|
+        tool_configuration.new_external_tool(
+          tool.context,
+          existing_tool: tool
+        ).save
+      end
+    end
+  end
+
+  def restore_tools_on_active_shard!(_binding_account)
+    return if tool_configuration.blank?
+    Account.root_accounts.each do |root_account|
+      next if root_account.site_admin?
+
+      binding = DeveloperKeyAccountBinding.find_by(
+        developer_key: self,
+        account: root_account
+      )
+
+      return nil if binding.blank?
+
+      if binding.on?
+        enable_tools_on_active_shard!(root_account)
+      elsif binding.off?
+        disable_tools_on_active_shard!(root_account)
+      end
+    end
+  end
+
+  def disable_tools_on_active_shard!(binding_account)
+    return if tool_configuration.blank?
+    set_tool_workflow_state_on_active_shard!(
+      ContextExternalTool::DISABLED_STATE,
+      ContextExternalTool.active,
+      binding_account
+    )
+  end
+
+  def enable_tools_on_active_shard!(binding_account)
+    return if tool_configuration.blank?
+    set_tool_workflow_state_on_active_shard!(
+      tool_configuration.privacy_level,
+      ContextExternalTool.disabled,
+      binding_account
+    )
+  end
 
   def validate_public_jwk
     return true if public_jwk.blank?
@@ -269,7 +449,7 @@ class DeveloperKey < ActiveRecord::Base
 
   def set_require_scopes
     # Prevent RSA keys from having API access
-    self.require_scopes = true if public_jwk.present?
+    self.require_scopes = true if public_jwk.present? || public_jwk_url.present?
   end
 
   def validate_scopes!

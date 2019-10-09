@@ -29,8 +29,8 @@ module CanvasHttp
       @code = code
     end
   end
-  class RelativeUriError < ArgumentError; end
-  class InsecureUriError < ArgumentError; end
+  class RelativeUriError < CanvasHttp::Error; end
+  class InsecureUriError < CanvasHttp::Error; end
 
   def self.put(*args, &block)
     CanvasHttp.request(Net::HTTP::Put, *args, &block)
@@ -123,12 +123,17 @@ module CanvasHttp
   def self.validate_url(value, host: nil, scheme: nil, allowed_schemes: %w{http https}, check_host: false)
     value = value.strip
     raise ArgumentError if value.empty?
-    uri = begin
-            URI.parse(value)
-          rescue URI::InvalidURIError => e
-            return URI.parse(Addressable::URI.normalized_encode(value).chomp("/")) if e.message =~ /URI must be ascii only/
-            raise e
-          end
+    uri = nil
+    begin
+      uri = URI.parse(value)
+    rescue URI::InvalidURIError => e
+      if e.message =~ /URI must be ascii only/
+        uri = URI.parse(Addressable::URI.normalized_encode(value).chomp("/"))
+        value = uri.to_s
+      else
+        raise
+      end
+    end
     uri.host ||= host
     unless uri.scheme
       scheme ||= "http"

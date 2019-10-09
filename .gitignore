@@ -19,7 +19,7 @@
 /config/*.yml
 /config/environments/*-local.rb
 /config/locales/generated/
-/config/RAILS5_2
+/config/RAILS6_0
 /coverage/
 /coverage-js/
 /db/schema.rb
@@ -27,7 +27,7 @@
 /db/*sql
 /exports/
 Gemfile.lock
-Gemfile.lock.52
+Gemfile.lock.next
 /log/
 mkmf.log
 /node_modules
@@ -61,9 +61,9 @@ docker-compose.local.*
 
 # sub-packages
 /packages/*/node_modules
-/packages/canvas-planner/lib
-/packages/canvas-planner/es
-/packages/canvas-planner/coverage/
+/packages/*/es
+/packages/*/lib
+/packages/*/coverage/
 /packages/canvas-planner/.babel-cache
 
 # pact artifacts

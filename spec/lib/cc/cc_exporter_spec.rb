@@ -72,7 +72,7 @@ describe "Common Cartridge exporting" do
     end
 
     def mig_id(obj)
-      CC::CCHelper.create_key(obj)
+      CC::CCHelper.create_key(obj, global: true)
     end
 
     def check_resource_node(obj, type, selected=true)
@@ -224,10 +224,10 @@ describe "Common Cartridge exporting" do
       check_resource_node(@q1, CC::CCHelper::QTI_ASSESSMENT_TYPE)
       check_resource_node(@q2, CC::CCHelper::QTI_ASSESSMENT_TYPE)
 
-      alt_mig_id1 = CC::CCHelper.create_key(@q1, 'canvas_')
+      alt_mig_id1 = CC::CCHelper.create_key(@q1, 'canvas_', global: true)
       expect(@manifest_doc.at_css("resource[identifier=#{alt_mig_id1}][type=\"#{CC::CCHelper::LOR}\"]")).not_to be_nil
 
-      alt_mig_id2 = CC::CCHelper.create_key(@q2, 'canvas_')
+      alt_mig_id2 = CC::CCHelper.create_key(@q2, 'canvas_', global: true)
       expect(@manifest_doc.at_css("resource[identifier=#{alt_mig_id2}][type=\"#{CC::CCHelper::LOR}\"]")).not_to be_nil
     end
 
@@ -322,6 +322,65 @@ describe "Common Cartridge exporting" do
       check_resource_node(@att2, CC::CCHelper::WEBCONTENT, false)
 
       path = @manifest_doc.at_css("resource[identifier=#{mig_id(@att)}]")['href']
+      expect(@zip_file.find_entry(path)).not_to be_nil
+    end
+
+    it "should include media objects" do
+      @q1 = @course.quizzes.create(:title => 'quiz1')
+      @media_object = @course.media_objects.create!(
+        :media_id => "some-kaltura-id",
+        :media_type => "video"
+      )
+
+      qq = @q1.quiz_questions.create!
+      data = {
+        :correct_comments => "",
+        :question_type => "multiple_choice_question",
+        :question_bank_name => "Quiz",
+        :assessment_question_id => "9270",
+        :migration_id => "QUE_1014",
+        :incorrect_comments => "",
+        :question_name => "test fun",
+        :name => "test fun",
+        :points_possible => 1,
+        :question_text => "<p><a id=\"media_comment_some-kaltura-id\" class=\"instructure_inline_media_comment video_comment\" href=\"/media_objects/some-kaltura-id\"></a></p>",
+        :answers => [{
+          :migration_id => "QUE_1016_A1", :text => "True", :weight => 100, :id => 8080
+        }, {
+          :migration_id => "QUE_1017_A2", :text => "False", :weight => 0, :id => 2279
+        }]
+      }.with_indifferent_access
+      qq.write_attribute(:question_data, data)
+      qq.save!
+
+      @ce.export_type = ContentExport::QTI
+      @ce.selected_content = { :all_quizzes => "1" }
+      @ce.save!
+
+      allow(CC::CCHelper).to receive(:media_object_info).and_return({
+        :asset => { :id => "some-kaltura-id", :size => 1234, :status => '2' },
+        :filename => "some-kaltura-id"
+      })
+      allow(CanvasKaltura::ClientV3).to receive(:config).and_return({})
+      allow(CanvasKaltura::ClientV3).to receive(:startSession)
+      allow(CanvasKaltura::ClientV3).to receive(:flavorAssetGetPlaylistUrl).and_return("some-url")
+      mock_http_response = Struct.new(:code) do
+        def read_body(stream)
+          stream.puts("lalala")
+        end
+      end
+      allow(CanvasHttp).to receive(:get).and_yield(mock_http_response.new(200))
+
+      run_export
+
+      check_resource_node(@q1, CC::CCHelper::QTI_ASSESSMENT_TYPE)
+
+      doc = Nokogiri::XML.parse(@zip_file.read("#{mig_id(@q1)}/#{mig_id(@q1)}.xml"))
+      expect(doc.at_css("presentation material mattext").text).to eq "<div><p><a id=\"media_comment_some-kaltura-id\" class=\"instructure_inline_media_comment video_comment\" href=\"%24IMS-CC-FILEBASE%24/media_objects/some-kaltura-id\"></a></p></div>"
+
+      resource_node = @manifest_doc.at_css("resource[identifier=#{mig_id(@media_object)}]")
+      expect(resource_node).to_not be_nil
+      path = resource_node['href']
       expect(@zip_file.find_entry(path)).not_to be_nil
     end
 
@@ -512,11 +571,12 @@ describe "Common Cartridge exporting" do
       @ce.export_type = ContentExport::COMMON_CARTRIDGE
       @ce.save!
       run_export
-      file_node = @manifest_doc.at_css("resource[identifier='id4164d7d594985594573e63f8ca15975'] file[href$='/blah.flv.tlh.subtitles']")
+      key = CC::CCHelper.create_key(track.content, global: true)
+      file_node = @manifest_doc.at_css("resource[identifier='#{key}'] file[href$='/blah.flv.tlh.subtitles']")
       expect(file_node).to be_present
       expect(@zip_file.read(file_node['href'])).to eql(track.content)
       track_doc = Nokogiri::XML(@zip_file.read('course_settings/media_tracks.xml'))
-      expect(track_doc.at_css('media_tracks media track[locale=tlh][kind=subtitles][identifierref=id4164d7d594985594573e63f8ca15975]')).to be_present
+      expect(track_doc.at_css("media_tracks media track[locale=tlh][kind=subtitles][identifierref=#{key}]")).to be_present
       expect(ccc_schema.validate(track_doc)).to be_empty
     end
 

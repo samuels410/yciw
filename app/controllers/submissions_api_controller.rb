@@ -184,6 +184,11 @@
 #           "description": "A unique short ID identifying this submission without reference to the owning user. Only included if the caller has administrator access for the current account.",
 #           "example": "acJ4Q",
 #           "type": "string"
+#         },
+#         "posted_at" : {
+#           "description": "The date this submission was posted to the student, or nil if it has not been posted.",
+#           "example": "2020-01-02T11:10:30Z",
+#           "type": "datetime"
 #         }
 #       }
 #     }
@@ -194,6 +199,7 @@ class SubmissionsApiController < ApplicationController
 
   include Api::V1::Progress
   include Api::V1::Submission
+  include Submissions::ShowHelper
 
   # @API List assignment submissions
   #
@@ -224,13 +230,13 @@ class SubmissionsApiController < ApplicationController
   # @returns [Submission]
   def index
     if authorized_action(@context, @current_user, [:manage_grades, :view_all_grades])
-      @assignment = @context.assignments.active.find(params[:assignment_id])
+      @assignment = api_find(@context.assignments.active, params[:assignment_id])
       includes = Array.wrap(params[:include])
 
       student_ids = if value_to_boolean(params[:grouped])
                       # this provides one assignment object(and
                       # submission object within), per user group
-                      @assignment.representatives(@current_user).map(&:id)
+                      @assignment.representatives(user: @current_user).map(&:id)
                     else
                       @context.apply_enrollment_visibility(@context.student_enrollments,
                                                            @current_user, section_ids).
@@ -565,10 +571,10 @@ class SubmissionsApiController < ApplicationController
   #
   # Get a single submission, based on user id.
   #
-  # @argument include[] [String, "submission_history"|"submission_comments"|"rubric_assessment"|"visibility"|"course"|"user"]
+  # @argument include[] [String, "submission_history"|"submission_comments"|"rubric_assessment"|"full_rubric_assessment"|"visibility"|"course"|"user"]
   #   Associations to include with the group.
   def show
-    @assignment = @context.assignments.active.find(params[:assignment_id])
+    @assignment = api_find(@context.assignments.active, params[:assignment_id])
     @user = get_user_considering_section(params[:user_id])
     @submission = @assignment.submission_for_student(@user)
     bulk_load_attachments_and_previews([@submission])
@@ -598,20 +604,29 @@ class SubmissionsApiController < ApplicationController
   # +online_upload+ assignment with these file ids.
   #
   def create_file
-    @assignment = @context.assignments.active.find(params[:assignment_id])
+    @assignment = api_find(@context.assignments.active, params[:assignment_id])
     @user = get_user_considering_section(params[:user_id])
+    if @assignment.root_account.feature_enabled?(:check_submission_file_type) && @assignment.allowed_extensions.any?
+      filetype = infer_upload_content_type(params)
+      reject!(t('unable to find filetype')) unless filetype
+      extension = File.mime_types[filetype]
+      reject!(t('unable to find extension')) unless extension
+      reject!(t('filetype not allowed')) unless @assignment.allowed_extensions.include?(extension)
+    end
     permission = @assignment.submission_types.include?("online_upload") ? :submit : :nothing
-    # rationale for allowing other user ids at all: eventually, you'll be able
-    # to use this api for uploading an attachment to a submission comment.
-    # teachers will be able to do that for any submission they can grade, so
-    # they need to be able to specify the target user.
-    permission = :nothing if @user != @current_user
+    submit_assignment = params.key?(:submit_assignment) ? value_to_boolean(params[:submit_assignment]) : true
+
+    # teachers can upload on behalf of students for a submission. eventually,
+    # you'll also be able to use this api for uploading an attachment to
+    # a submission comment.
+    permission = :grade if @user != @current_user
     if authorized_action(@assignment, @current_user, permission)
       api_attachment_preflight(
         @user, request,
         check_quota: false, # we don't check quota when uploading a file for assignment submission
         folder: @user.submissions_folder(@context), # organize attachment into the course submissions folder
-        assignment: @assignment
+        assignment: @assignment,
+        submit_assignment: submit_assignment
       )
     end
   end
@@ -708,6 +723,9 @@ class SubmissionsApiController < ApplicationController
   #   The points awarded for this row.
   #     rubric_assessment[criterion_id][points]
   #
+  #   The rating id for the row.
+  #     rubric_assessment[criterion_id][rating_id]
+  #
   #   Comments to add for this row.
   #     rubric_assessment[criterion_id][comments]
   #
@@ -721,8 +739,8 @@ class SubmissionsApiController < ApplicationController
   #         'description': 'Criterion 1',
   #         'ratings':
   #         [
-  #           { 'description': 'Good', 'points': 10 },
-  #           { 'description': 'Poor', 'points': 3 }
+  #           { 'id': 'rat1', 'description': 'Good', 'points': 10 },
+  #           { 'id': 'rat2', 'description': 'Poor', 'points': 3 }
   #         ]
   #       },
   #       {
@@ -731,16 +749,17 @@ class SubmissionsApiController < ApplicationController
   #         'description': 'Criterion 2',
   #         'ratings':
   #         [
-  #           { 'description': 'Complete', 'points': 5 },
-  #           { 'description': 'Incomplete', 'points': 0 }
+  #           { 'id': 'rat1', 'description': 'Exemplary', 'points': 5 },
+  #           { 'id': 'rat2', 'description': 'Complete', 'points': 5 },
+  #           { 'id': 'rat3', 'description': 'Incomplete', 'points': 0 }
   #         ]
   #       }
   #     ]
   #
   #   Then a possible set of values for rubric_assessment would be:
-  #       rubric_assessment[crit1][points]=3&rubric_assessment[crit2][points]=5&rubric_assessment[crit2][comments]=Well%20Done.
+  #       rubric_assessment[crit1][points]=3&rubric_assessment[crit1][rating_id]=rat1&rubric_assessment[crit2][points]=5&rubric_assessment[crit2][rating_id]=rat2&rubric_assessment[crit2][comments]=Well%20Done.
   def update
-    @assignment = @context.assignments.active.find(params[:assignment_id])
+    @assignment = api_find(@context.assignments.active, params[:assignment_id])
 
     if params[:submission] && params[:submission][:posted_grade] && !params[:submission][:provisional] &&
         @assignment.moderated_grading && !@assignment.grades_published?
@@ -822,7 +841,7 @@ class SubmissionsApiController < ApplicationController
         comment = {
           comment: comment[:text_comment],
           author: @current_user,
-          hidden: @assignment.muted? && admin_in_context
+          hidden: @submission.hide_grade_from_student? && admin_in_context
         }.merge(
           comment.permit(:media_comment_id, :media_comment_type, :group_comment).to_unsafe_h
         ).with_indifferent_access
@@ -887,7 +906,7 @@ class SubmissionsApiController < ApplicationController
   #   allow_new_anonymous_id parameter is true
   def gradeable_students
     if authorized_action(@context, @current_user, [:manage_grades, :view_all_grades])
-      @assignment = @context.assignments.active.find(params[:assignment_id])
+      @assignment = api_find(@context.assignments.active, params[:assignment_id])
       includes = Array(params[:include])
 
       # When mobile supports new anonymous we can remove the allow_new flag
@@ -1030,7 +1049,7 @@ class SubmissionsApiController < ApplicationController
     end
 
     assignment_ids = grade_data.keys
-    @assignments = @context.assignments.active.find(assignment_ids)
+    @assignments = api_find_all(@context.assignments.active, assignment_ids)
 
     unless @assignments.all?(&:published?) &&
            @context.grants_right?(@current_user, session, :manage_grades)
@@ -1092,9 +1111,9 @@ class SubmissionsApiController < ApplicationController
   #   }
   def submission_summary
     if authorized_action(@context, @current_user, [:manage_grades, :view_all_grades])
-      @assignment = @context.assignments.active.find(params[:assignment_id])
+      @assignment = api_find(@context.assignments.active, params[:assignment_id])
       student_ids = if should_group?
-                      @assignment.representatives(@current_user).map(&:id)
+                      @assignment.representatives(user: @current_user).map(&:id)
                     else
                       student_scope = @context.students_visible_to(@current_user).
                         where("enrollments.type<>'StudentViewEnrollment' AND enrollments.workflow_state = 'active'").distinct
@@ -1126,7 +1145,7 @@ class SubmissionsApiController < ApplicationController
   private
 
   def change_topic_read_state(new_state)
-    @assignment = @context.assignments.active.find(params[:assignment_id])
+    @assignment = api_find(@context.assignments.active, params[:assignment_id])
     @user = get_user_considering_section(params[:user_id])
     @submission = @assignment.submissions.find_or_create_by!(user: @user)
 
@@ -1146,14 +1165,6 @@ class SubmissionsApiController < ApplicationController
     else
       render :json => result.try(:errors) || {}, :status => :bad_request
     end
-  end
-
-  def get_user_considering_section(user_id)
-    students = @context.students_visible_to(@current_user, include: :priors)
-    if @section
-      students = students.where(:enrollments => { :course_section_id => @section })
-    end
-    api_find(students, user_id)
   end
 
   def section_ids

@@ -42,7 +42,7 @@ module SpecTimeLimit
   class << self
     def enforce(example)
       type, timeout = timeout_for(example)
-      Timeout.timeout(timeout, Error.new(Error.message_for(type, timeout))) do
+      Timeout.timeout(timeout, Error, Error.message_for(type, timeout)) do
         example.run
       end
       # no error handling needed, since rspec will catch the error and
@@ -51,7 +51,9 @@ module SpecTimeLimit
 
     # find an appropriate timeout for this spec
     def timeout_for(example)
-      if ENV.fetch("SELENIUM_REMOTE_URL", "undefined remote url").include? "saucelabs"
+      if example.metadata[:custom_timeout]
+        [:target, example.metadata[:custom_timeout].to_i]
+      elsif ENV.fetch("SELENIUM_REMOTE_URL", "undefined remote url").include? "saucelabs"
         [:status_quo, SAUCELABS_ABSOLUTE_TIMEOUT]
       elsif example.file_path.match? /\.\/spec\/selenium\/.*rcs/ # files in ./spec/selenium/**/rcs
         [:target, SIDEBAR_LOADING_TIMEOUT]
@@ -91,7 +93,7 @@ module SpecTimeLimit
       #
       # furthermore, these are exempt from rerun thresholds so your build
       # will likely still pass if it was a total fluke.
-      ((stats[stat_key] * 2) + 5).ceil
+      ((stats[stat_key] * 3) + 5).ceil
     end
 
     def stats

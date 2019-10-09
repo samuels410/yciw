@@ -15,6 +15,7 @@
 // You should have received a copy of the GNU Affero General Public License along
 // with this program. If not, see <http://www.gnu.org/licenses/>.
 
+import $ from 'jquery'
 import Ember from 'ember'
 import _ from 'underscore'
 import GradebookHeaderMenu from '../../../gradebook/GradebookHeaderMenu'
@@ -39,13 +40,16 @@ const AssignmentsView = Ember.View.extend({
         context_url: ENV.GRADEBOOK_OPTIONS.context_url,
         speed_grader_enabled: ENV.GRADEBOOK_OPTIONS.speed_grader_enabled,
         change_grade_url: ENV.GRADEBOOK_OPTIONS.change_grade_url,
-        isAdmin: _.contains(ENV.current_user_roles, 'admin')
+        isAdmin: _.includes(ENV.current_user_roles, 'admin')
       }
 
       const dialogs = {
         assignment_details: GradebookHeaderMenu.prototype.showAssignmentDetails,
         message_students: GradebookHeaderMenu.prototype.messageStudentsWho,
-        set_default_grade: GradebookHeaderMenu.prototype.setDefaultGrade,
+        set_default_grade(opts) {
+          const onClose = () => $('#set_default_grade').focus()
+          return GradebookHeaderMenu.prototype.setDefaultGrade.call(this, {...opts, onClose})
+        },
         curve_grades: GradebookHeaderMenu.prototype.curveGrades,
         submission: SubmissionDetailsDialog.open
       }

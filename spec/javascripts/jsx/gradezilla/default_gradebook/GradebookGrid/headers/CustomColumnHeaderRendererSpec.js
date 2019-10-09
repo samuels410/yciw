@@ -16,9 +16,12 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-import I18n from 'i18n!gradebook'
+import I18n from 'i18n!gradezilla'
 import ReactDOM from 'react-dom'
-import {createGradebook, setFixtureHtml} from 'jsx/gradezilla/default_gradebook/__tests__/GradebookSpecHelper'
+import {
+  createGradebook,
+  setFixtureHtml
+} from 'jsx/gradezilla/default_gradebook/__tests__/GradebookSpecHelper'
 import CustomColumnHeaderRenderer from 'jsx/gradezilla/default_gradebook/GradebookGrid/headers/CustomColumnHeaderRenderer'
 
 QUnit.module('GradebookGrid CustomColumnHeaderRenderer', suiteHooks => {

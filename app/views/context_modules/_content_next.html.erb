@@ -17,7 +17,6 @@
 %>
 
 <%
-  @body_classes << 'padless-content'
   course_home ||= false
   js_env({
     :COLLAPSED_MODULES => @collapsed_modules,
@@ -26,8 +25,6 @@
     :COURSE_ID => @context.id,
     :NO_MODULE_PROGRESSIONS => @context.large_roster,
   })
-  js_bundle :context_modules
-  css_bundle :content_next
 %>
 <% if course_home %>
   <div class="screenreader-only"><%= @context.name %></div>
@@ -46,7 +43,7 @@
 <div class="header-bar">
   <div class="header-bar-right header-bar__module-layout">
     <div class="header-bar-right__buttons">
-      <% if @can_edit %>
+      <% if @can_view_grades %>
         <a class="btn module_progressions_link" href="<%= progressions_course_context_modules_path(@context) %>"><%= t('links.student_progress', 'View Progress') %></a>
       <% end %>
       <% if @allow_web_export_download %>

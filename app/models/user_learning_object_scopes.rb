@@ -82,7 +82,7 @@ module UserLearningObjectScopes
 
   def group_ids_for_todo_lists(group_ids: nil, contexts: nil)
     shard.activate do
-      group_ids_result = cached_current_group_memberships.map(&:group_id)
+      group_ids_result = cached_current_group_memberships_by_date.map(&:group_id)
       group_ids_result &= group_ids if group_ids
       group_ids_result &= contexts.select{|g| g.is_a? Group}.map(&:id) if contexts
       group_ids_result
@@ -90,7 +90,7 @@ module UserLearningObjectScopes
   end
 
   def objects_needing(
-    object_type, purpose, participation_type, params_cache_key, expires_in,
+    object_type, purpose, participation_type, params, expires_in,
     limit: ULOS_DEFAULT_LIMIT, scope_only: false,
     course_ids: nil, group_ids: nil, contexts: nil, include_concluded: false,
     include_ignored: false, include_ungraded: false
@@ -126,8 +126,10 @@ module UserLearningObjectScopes
         end
       else
         course_ids_cache_key = Digest::MD5.hexdigest(course_ids.sort.join('/'))
+        params_cache_key = Digest::MD5.hexdigest(ActiveSupport::Cache.expand_cache_key(params))
         cache_key = [self, "#{object_type}_needing_#{purpose}", course_ids_cache_key, params_cache_key].cache_key
-        Rails.cache.fetch(cache_key, expires_in: expires_in) do
+
+        Rails.cache.fetch_with_batched_keys(cache_key, expires_in: expires_in, batch_object: self, batched_keys: :todo_list) do
           result = Shackles.activate(:slave) do
             ids_by_shard.flat_map do |shard, shard_hash|
               shard.activate do
@@ -274,14 +276,17 @@ module UserLearningObjectScopes
   end
 
   # opts forwaded to course_ids_for_todo_lists
-  def assignments_needing_grading_count(**opts)
+  def submissions_needing_grading_count(**opts)
     course_ids = course_ids_for_todo_lists(:instructor, **opts)
     Submission.active.
       needs_grading.
-      joins(assignment: :course).
-      where(courses: { id: course_ids }).
+      joins("INNER JOIN #{Enrollment.quoted_table_name} AS grader_enrollments ON assignments.context_id = grader_enrollments.course_id").
+      where(assignments: {context_id: course_ids}).
       merge(Assignment.expecting_submission).
       merge(Assignment.published).
+      where(grader_enrollments: {workflow_state: 'active', user_id: self, type: ['TeacherEnrollment', 'TaEnrollment']}).
+      where("grader_enrollments.limit_privileges_to_course_section = 'f'
+        OR grader_enrollments.course_section_id = enrollments.course_section_id").
       where("NOT EXISTS (?)",
         Ignore.where(asset_type: 'Assignment',
                      user_id: self,
@@ -296,9 +301,12 @@ module UserLearningObjectScopes
     params = _params_hash(binding)
     # not really any harm in extending the expires_in since we touch the user anyway when grades change
     objects_needing('Assignment', 'grading', :instructor, params, 120.minutes, **params) do |assignment_scope|
-      as = assignment_scope.active.
-        expecting_submission.
-        need_grading_info
+      as = assignment_scope.
+        joins("INNER JOIN #{Enrollment.quoted_table_name} ON enrollments.course_id = assignments.context_id").
+        where(enrollments: {user_id: self, workflow_state: 'active', type: ['TeacherEnrollment', 'TaEnrollment']}).
+        where("EXISTS (#{grader_visible_submissions_sql})").
+        group('assignments.id').
+        order('assignments.due_at')
       ActiveRecord::Associations::Preloader.new.preload(as, :context)
       if scope_only
         as # This needs the below `select` somehow to work
@@ -306,6 +314,27 @@ module UserLearningObjectScopes
         as.lazy.reject{|a| Assignments::NeedsGradingCountQuery.new(a, self).count == 0 }.take(limit).to_a
       end
     end
+  end
+
+  def grader_visible_submissions_sql
+    "SELECT submissions.id
+       FROM #{Submission.quoted_table_name}
+       INNER JOIN #{Enrollment.quoted_table_name} AS student_enrollments ON student_enrollments.user_id = submissions.user_id
+                                                                        AND student_enrollments.course_id = assignments.context_id
+      WHERE submissions.assignment_id = assignments.id
+        AND enrollments.limit_privileges_to_course_section = 'f'
+        AND #{Submission.needs_grading_conditions}
+        AND student_enrollments.workflow_state = 'active'
+      UNION
+     SELECT submissions.id
+       FROM #{Submission.quoted_table_name}
+      INNER JOIN #{Enrollment.quoted_table_name} AS student_enrollments ON student_enrollments.user_id = submissions.user_id
+                                                                       AND student_enrollments.course_id = assignments.context_id
+      WHERE submissions.assignment_id = assignments.id
+        AND #{Submission.needs_grading_conditions}
+        AND enrollments.limit_privileges_to_course_section = 't'
+        AND enrollments.course_section_id = student_enrollments.course_section_id
+        AND student_enrollments.workflow_state = 'active'"
   end
 
   def assignments_needing_moderation(

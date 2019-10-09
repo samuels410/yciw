@@ -38,7 +38,7 @@ class ContextController < ApplicationController
         @media_object.user_entered_title = CanvasTextHelper.truncate_text(params[:user_entered_title], :max_length => 255) if params[:user_entered_title] && !params[:user_entered_title].empty?
         @media_object.save
       end
-      render :json => @media_object
+      render :json => @media_object.as_json.merge(:embedded_iframe_url => media_object_iframe_url(@media_object.media_id))
     end
   end
 
@@ -168,7 +168,7 @@ class ContextController < ApplicationController
         end
       end
       if @context.grants_right? @current_user, session, :read_as_admin
-        js_env STUDENT_CONTEXT_CARDS_ENABLED: @domain_root_account.feature_enabled?(:student_context_cards)
+        set_student_context_cards_js_env
       end
     elsif @context.is_a?(Group)
       if @context.grants_right?(@current_user, :read_as_admin)
@@ -224,19 +224,21 @@ class ContextController < ApplicationController
   end
 
   def roster_user_usage
-    if authorized_action(@context, @current_user, :read_reports)
-      @user = @context.users.find(params[:user_id])
-      contexts = [@context] + @user.group_memberships_for(@context).to_a
-      @accesses = AssetUserAccess.for_user(@user).polymorphic_where(:context => contexts).most_recent
-      respond_to do |format|
-        format.html do
-          @accesses = @accesses.paginate(page: params[:page], per_page: 50)
-          js_env(context_url: context_url(@context, :context_user_usage_url, @user, :format => :json),
-                 accesses_total_pages: @accesses.total_pages)
-        end
-        format.json do
-          @accesses = Api.paginate(@accesses, self, polymorphic_url([@context, :user_usage], user_id: @user), default_per_page: 50)
-          render :json => @accesses.map{ |a| a.as_json(methods: [:readable_name, :asset_class_name, :icon]) }
+    Shackles.activate(:slave) do
+      if authorized_action(@context, @current_user, :read_reports)
+        @user = @context.users.find(params[:user_id])
+        contexts = [@context] + @user.group_memberships_for(@context).to_a
+        @accesses = AssetUserAccess.for_user(@user).polymorphic_where(:context => contexts).most_recent
+        respond_to do |format|
+          format.html do
+            @accesses = @accesses.paginate(page: params[:page], per_page: 50)
+            js_env(context_url: context_url(@context, :context_user_usage_url, @user, :format => :json),
+                   accesses_total_pages: @accesses.total_pages)
+          end
+          format.json do
+            @accesses = Api.paginate(@accesses, self, polymorphic_url([@context, :user_usage], user_id: @user), default_per_page: 50)
+            render :json => @accesses.map {|a| a.as_json(methods: [:readable_name, :asset_class_name, :icon])}
+          end
         end
       end
     end
@@ -286,6 +288,10 @@ class ContextController < ApplicationController
 
       js_env(CONTEXT_USER_DISPLAY_NAME: @user.short_name)
 
+      js_bundle :user_name, "legacy/context_roster_user"
+      css_bundle :roster_user, :pairing_code
+      @google_analytics_page_title = "#{@context.name} People"
+
       if @domain_root_account.enable_profiles?
         @user_data = profile_data(
           @user.profile,
@@ -293,7 +299,14 @@ class ContextController < ApplicationController
           session,
           ['links', 'user_services']
         )
-        render :new_roster_user
+        add_body_class 'not-editing'
+
+        add_crumb(t('#crumbs.people', 'People'), context_url(@context, :context_users_url))
+        add_crumb(@user.name, context_url(@context, :context_user_url, @user))
+        add_crumb(t('#crumbs.access_report', "Access Report"))
+        set_active_tab "people"
+
+        render :new_roster_user, stream: can_stream_template?
         return false
       end
 
@@ -309,6 +322,11 @@ class ContextController < ApplicationController
         @messages = @messages.select{|m| m.grants_right?(@current_user, session, :read) }.sort_by{|e| e.created_at }.reverse
       end
 
+      add_crumb(t('#crumbs.people', "People"), context_url(@context, :context_users_url))
+      add_crumb(context_user_name(@context, @user), context_url(@context, :context_user_url, @user))
+      set_active_tab "people"
+
+      render stream: can_stream_template?
       true
     end
   end

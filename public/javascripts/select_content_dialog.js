@@ -27,12 +27,15 @@ import htmlEscape from 'str/htmlEscape'
 import { uploadFile } from 'jsx/shared/upload_file'
 import iframeAllowances from 'jsx/external_apps/lib/iframeAllowances'
 import SelectContent from './lti/select_content'
+import setDefaultToolValues from './lti/setDefaultToolValues'
+import processSingleContentItem from 'jsx/deep_linking/processors/processSingleContentItem'
+import {findLinkForService, getUserServices} from './findLinkForService'
 import './jquery.instructure_date_and_time' /* datetime_field */
 import './jquery.ajaxJSON'
 import './jquery.instructure_forms' /* formSubmit, ajaxJSONFiles, getFormData, errorBox */
 import 'jqueryui/dialog'
 import 'compiled/jquery/fixDialogButtons'
-import './jquery.instructure_misc_helpers' /* replaceTags, getUserServices, findLinkForService */
+import './jquery.instructure_misc_helpers' /* replaceTags */
 import './jquery.instructure_misc_plugins' /* showIf */
 import './jquery.keycodes'
 import './jquery.loadingImg'
@@ -40,17 +43,77 @@ import './jquery.templateData'
 
   var SelectContentDialog = {};
 
+  SelectContentDialog.deepLinkingListener = (event) => {
+    if (
+      event.origin === ENV.DEEP_LINKING_POST_MESSAGE_ORIGIN &&
+      event.data &&
+      event.data.messageType === 'LtiDeepLinkingResponse'
+    ) {
+      processSingleContentItem(event)
+        .then((result) => {
+          const $dialog = $("#resource_selection_dialog")
+          const tool = $("#context_external_tools_select .tools .tool.selected").data('tool')
+
+          $dialog.off("dialogbeforeclose", SelectContentDialog.dialogCancelHandler)
+          $(window).off('beforeunload', SelectContentDialog.beforeUnloadHandler)
+
+          if (result.type !== 'ltiResourceLink') {
+            $.flashError(I18n.t('Selected content is not an LTI link.'))
+            return
+          }
+
+          SelectContentDialog.handleContentItemResult(result, tool)
+        })
+        .catch((e) => {
+          $.flashError(I18n.t('Error retrieving content'))
+          console.error(e)
+        })
+        .finally(() => {
+          const $dialog = $("#resource_selection_dialog")
+          $dialog.dialog('close')
+        })
+    }
+  }
+
+  SelectContentDialog.attachDeepLinkingListner = function() {
+    window.addEventListener('message', this.deepLinkingListener)
+  }
+
+  SelectContentDialog.detachDeepLinkingListener = function() {
+    window.removeEventListener('message', this.deepLinkingListener)
+  }
+
+  SelectContentDialog.dialogCancelHandler = function(event) {[]
+    const response = confirm(I18n.t("Are you sure you want to cancel? Changes you made may not be saved."))
+    if (!response) {
+      event.preventDefault()
+    }
+  }
+
+  SelectContentDialog.beforeUnloadHandler = function(e) {
+    return (e.returnValue = I18n.t("Changes you made may not be saved."))
+  }
+
+  SelectContentDialog.handleContentItemResult = function(result, tool) {
+    if (ENV.DEFAULT_ASSIGNMENT_TOOL_NAME && ENV.DEFAULT_ASSIGNMENT_TOOL_URL) {
+      setDefaultToolValues(result, tool)
+    }
+    $("#external_tool_create_url").val(result.url)
+    $("#external_tool_create_title").val(result.title || tool.name)
+    $("#context_external_tools_select .domain_message").hide()
+  }
+
   SelectContentDialog.Events = {
     init: function() {
       $("#context_external_tools_select .tools").on('click', '.tool', this.onContextExternalToolSelect);
     },
 
-    onContextExternalToolSelect : function(e) {
+    onContextExternalToolSelect : function(e, existingTool) {
       e.preventDefault();
-      var $tool = $(this);
+      var $tool = existingTool || $(this);
       var toolName = $tool.find('a').text();
-      if($(this).hasClass('selected') && !$(this).hasClass('resource_selection')) {
-        $(this).removeClass('selected');
+      if($tool.hasClass('selected') && !$tool.hasClass('resource_selection')) {
+        $tool.removeClass('selected');
         $("#external_tool_create_url").val('');
         $.screenReaderFlashMessage(I18n.t('Unselected external tool %{tool}', {tool: toolName}));
         return;
@@ -68,15 +131,6 @@ import './jquery.templateData'
         var width = placement.selection_width;
         var height = placement.selection_height;
         var $dialog = $("#resource_selection_dialog");
-        var beforeUnloadHandler = function(e) {
-          return (e.returnValue = I18n.t("Changes you made may not be saved."));
-        };
-        var dialogCancelHandler = function(event, ui) {
-          var r = confirm(I18n.t("Are you sure you want to cancel? Changes you made may not be saved."));
-          if (r == false){
-            event.preventDefault();
-          }
-        };
         if($dialog.length == 0) {
           $dialog = $("<div/>", {id: 'resource_selection_dialog', style: 'padding: 0; overflow-y: hidden;'});
           $dialog.append(`<div class="before_external_content_info_alert screenreader-only" tabindex="0">
@@ -132,22 +186,24 @@ import './jquery.templateData'
           });
 
           $("body").append($dialog.hide());
-          $dialog.on("dialogbeforeclose", dialogCancelHandler);
+          $dialog.on("dialogbeforeclose", SelectContentDialog.dialogCancelHandler);
           $dialog
             .dialog({
               autoOpen: false,
               width: 'auto',
               resizable: true,
               close: function() {
-                $(window).off('beforeunload', beforeUnloadHandler);
+                SelectContentDialog.detachDeepLinkingListener()
+                $(window).off('beforeunload', SelectContentDialog.beforeUnloadHandler);
                 $dialog.find("iframe").attr('src', '/images/ajax-loader-medium-444.gif');
               },
+              open: () => { SelectContentDialog.attachDeepLinkingListner() },
               title: I18n.t('link_from_external_tool', "Link Resource from External Tool")
             })
             .bind('dialogresize', function() {
               $(this).find('iframe').add('.fix_for_resizing_over_iframe').height($(this).height()).width($(this).width());
             })
-            .bind('dialogresizestop', function() {
+            .bind('dialogresizestop', () => {
               $(".fix_for_resizing_over_iframe").remove();
             })
             .bind('dialogresizestart', function() {
@@ -161,19 +217,17 @@ import './jquery.templateData'
                   .appendTo("body");
               });
             })
-            .bind('selection', function(event) {
+            .bind('selection', event => {
               var item = event.contentItems[0];
               if(item["@type"] === 'LtiLinkItem' && item.url) {
-                $("#external_tool_create_url").val(item.url);
-                $("#external_tool_create_title").val(item.title || tool.name);
-                $("#context_external_tools_select .domain_message").hide();
+                SelectContentDialog.handleContentItemResult(item, tool)
               } else {
                 alert(I18n.t('invalid_lti_resource_selection', "There was a problem retrieving a valid link from the external tool"));
                 $("#external_tool_create_url").val('');
                 $("#external_tool_create_title").val('');
               }
               $("#resource_selection_dialog iframe").attr('src', 'about:blank');
-              $dialog.off("dialogbeforeclose", dialogCancelHandler);
+              $dialog.off("dialogbeforeclose", SelectContentDialog.dialogCancelHandler);
               $("#resource_selection_dialog").dialog('close');
 
               if (item.placementAdvice.presentationDocumentTarget.toLowerCase() === 'window') {
@@ -189,7 +243,7 @@ import './jquery.templateData'
         var url = $.replaceTags($("#select_content_resource_selection_url").attr('href'), 'id', tool.definition_id);
         url = url + '?placement=' + placement_type + '&secure_params=' + $('#secure_params').val();
         $dialog.find("iframe").attr('src', url);
-        $(window).on('beforeunload', beforeUnloadHandler);
+        $(window).on('beforeunload', SelectContentDialog.beforeUnloadHandler);
       } else {
         var placements = $tool.data('tool').placements
         var placement = placements.assignment_selection || placements.link_selection
@@ -219,7 +273,7 @@ import './jquery.templateData'
       $dialog.find(".select_item_name").showIf(!options.no_name_input);
       if(allow_external_urls && !external_services) {
         var $services = $("#content_tag_services").empty();
-        $.getUserServices('BookmarkService', function(data) {
+        getUserServices('BookmarkService', function(data) {
           for(var idx in data) {
             var service = data[idx].user_service;
             var $service = $("<a href='#' class='bookmark_service no-hover'/>");
@@ -231,7 +285,7 @@ import './jquery.templateData'
             $service.append($img);
             $service.click(function(event) {
               event.preventDefault();
-              $.findLinkForService($(this).data('service').service, function(data) {
+              findLinkForService($(this).data('service').service, data => {
                 $("#content_tag_create_url").val(data.url);
                 $("#content_tag_create_title").val(data.title);
               });
@@ -266,7 +320,7 @@ import './jquery.templateData'
       }
       $("#select_context_content_dialog").dialog('option', 'title', dialog_title);
     }
-    $("#select_context_content_dialog .cancel_button").click(function() {
+    $("#select_context_content_dialog .cancel_button").click(() => {
       $dialog.find('.alert').remove();
       $dialog.dialog('close');
     });
@@ -282,7 +336,7 @@ import './jquery.templateData'
         if(submitted && $.isFunction(submitted)) {
           submitted(item_data);
         }
-        setTimeout(function() {
+        setTimeout(() => {
           $dialog.dialog('close');
           $dialog.find('.alert').remove();
         }, 0);
@@ -407,16 +461,16 @@ import './jquery.templateData'
                 on_duplicate: 'rename',
                 no_redirect: true
               };
-              uploadFile(url, data, file).then(function(attachment) {
+              uploadFile(url, data, file).then(attachment => {
                 callback(attachment)
-              }).catch(function(response) {
+              }).catch(response => {
                 $("#select_context_content_dialog").loadingImage('remove');
                 $("#select_context_content_dialog").errorBox(I18n.t('errors.failed_to_create_item', 'Failed to Create new Item'));
               });
             } else {
-              $.ajaxJSON(url, 'POST', data, function(data) {
+              $.ajaxJSON(url, 'POST', data, data => {
                 callback(data);
-              }, function(data) {
+              }, data => {
                 $("#select_context_content_dialog").loadingImage('remove');
                 if (data && data.errors && data.errors.title[0] && data.errors.title[0].message && data.errors.title[0].message === "blank") {
                   $("#select_context_content_dialog").errorBox(I18n.t('errors.assignment_name_blank', 'Assignment name cannot be blank.'));
@@ -438,7 +492,7 @@ import './jquery.templateData'
     $("#add_module_item_select").change(function() {
       // Don't disable the form button for these options
       var selectedOption = $(this).val();
-      var doNotDisable = _.contains(['external_url', 'context_external_tool', 'context_module_sub_header'], selectedOption);
+      var doNotDisable = ['external_url', 'context_external_tool', 'context_module_sub_header'].includes(selectedOption);
       if (doNotDisable) {
         $(".add_item_button").removeClass('disabled').attr('aria-disabled', false);
       } else {
@@ -455,7 +509,7 @@ import './jquery.templateData'
         if(!$select.hasClass('loaded')) {
           $select.find(".message").text("Loading...");
           var url = $("#select_context_content_dialog .external_tools_url").attr('href');
-          $.ajaxJSON(url, 'GET', {}, function(data) {
+          $.ajaxJSON(url, 'GET', {}, data => {
             $select.find(".message").remove();
             $select.addClass('loaded');
             $select.find(".tools").empty();
@@ -474,7 +528,7 @@ import './jquery.templateData'
               $tool.data('tool', tool);
               $select.find(".tools").append($tool.show());
             }
-          }, function(data) {
+          }, data => {
             $select.find(".message").text(I18n.t('errors.loading_failed', "Loading Failed"));
           });
         }

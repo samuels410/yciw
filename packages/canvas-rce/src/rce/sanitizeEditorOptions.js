@@ -33,7 +33,7 @@ const extPluginsToRemove = ["instructure_embed"];
 
 function sanitizeExternalPlugins(external_plugins) {
   if (external_plugins !== undefined) {
-    let cleanExternalPlugins = {};
+    const cleanExternalPlugins = {};
     Object.keys(external_plugins).forEach(key => {
       if (external_plugins.hasOwnProperty(key)) {
         if (extPluginsToRemove.indexOf(key) == -1) {
@@ -46,8 +46,8 @@ function sanitizeExternalPlugins(external_plugins) {
   return external_plugins;
 }
 
-function sanitizeEditorOptions(options) {
-  let fixed = Object.assign({}, options);
+export default function sanitizeEditorOptions(options) {
+  const fixed = { ...options};
 
   fixed.plugins = sanitizePlugins(options.plugins);
   fixed.external_plugins = sanitizeExternalPlugins(options.external_plugins);
@@ -55,5 +55,3 @@ function sanitizeEditorOptions(options) {
 
   return fixed;
 }
-
-module.exports = sanitizeEditorOptions;

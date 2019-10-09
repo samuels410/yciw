@@ -16,18 +16,17 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-import Button from '@instructure/ui-buttons/lib/components/Button'
-import Heading from '@instructure/ui-elements/lib/components/Heading'
-import Spinner from '@instructure/ui-elements/lib/components/Spinner'
-import TabList, {TabPanel} from '@instructure/ui-tabs/lib/components/TabList'
-import View from '@instructure/ui-layout/lib/components/View'
+import {Button} from '@instructure/ui-buttons'
+import {Heading, Spinner} from '@instructure/ui-elements'
+import {TabList, TabPanel} from '@instructure/ui-tabs'
+import {View} from '@instructure/ui-layout'
 
 import I18n from 'i18n!react_developer_keys'
 import React from 'react'
 import PropTypes from 'prop-types'
 import DeveloperKeysTable from './AdminTable'
 import DeveloperKey from './DeveloperKey'
-import DeveloperKeyModal from './NewKeyModal'
+import NewKeyModal from './NewKeyModal'
 import DeveloperKeyModalTrigger from "./NewKeyTrigger"
 
 class DeveloperKeysApp extends React.Component {
@@ -128,7 +127,7 @@ class DeveloperKeysApp extends React.Component {
               actions={actions}
               setAddKeyButtonRef={this.setAddKeyButtonRef}
             />
-            <DeveloperKeyModal
+            <NewKeyModal
               store={store}
               actions={actions}
               createLtiKeyState={createLtiKey}

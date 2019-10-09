@@ -250,6 +250,63 @@ describe "Importing assignments" do
     expect(assignment.lock_at).not_to be_nil
   end
 
+  context 'when assignment uses a 1.3 tool' do
+    subject do
+      Importers::AssignmentImporter.import_from_migration(assignment_hash, course, migration)
+      assignment.reload
+    end
+
+    let(:course) { course_model }
+    let(:use_1_3) { true }
+    let(:dev_key) { DeveloperKey.create! }
+    let(:migration) { course.content_migrations.create! }
+    let(:assignment) do
+      course.assignments.create!(
+        title: "test",
+        due_at: Time.zone.now,
+        unlock_at: 1.day.ago,
+        lock_at: 1.day.from_now,
+        peer_reviews_due_at: 2.days.from_now,
+        migration_id: "ib4834d160d180e2e91572e8b9e3b1bc6"
+      )
+    end
+    let(:tool) do
+      course.context_external_tools.create!(
+        consumer_key: 'key',
+        shared_secret: 'secret',
+        name: 'test tool',
+        url: 'http://www.tool.com/launch',
+        settings: { use_1_3: use_1_3 },
+        workflow_state: 'public',
+        developer_key: dev_key
+      )
+    end
+    let(:assignment_hash) do
+      {
+        "migration_id" => "ib4834d160d180e2e91572e8b9e3b1bc6",
+        "assignment_group_migration_id" => "i2bc4b8ea8fac88f1899e5e95d76f3004",
+        "workflow_state" => "published",
+        "title" => "LTI 1.3 Tool Assignment",
+        "grading_type" => "points",
+        "submission_types" => "external_tool",
+        "points_possible" => 10,
+        "due_at" => nil,
+        "peer_reviews_due_at" => nil,
+        "lock_at" => nil,
+        "unlock_at" => nil,
+        "external_tool_url" => tool.url
+      }
+    end
+
+    it 'creates the assignment line item' do
+      expect { subject }.to change { assignment.line_items.count }.from(0).to 1
+    end
+
+    it 'creates a resource link' do
+      expect { subject }.to change { assignment.line_items.first&.resource_link.present? }.from(false).to true
+    end
+  end
+
   describe '#create_tool_settings' do
     include_context 'lti2_spec_helper'
 
@@ -452,4 +509,52 @@ describe "Importing assignments" do
 
   end
 
+  describe "post_policy" do
+    let(:migration_id) { "ib4834d160d180e2e91572e8b9e3b1bc6" }
+    let(:course) { Course.create! }
+    let(:migration) { course.content_migrations.create! }
+    let(:assignment_hash) do
+      {
+        "migration_id" => migration_id,
+        "post_policy" => {"post_manually" => false}
+      }.with_indifferent_access
+    end
+
+    let(:imported_assignment) do
+      Importers::AssignmentImporter.import_from_migration(assignment_hash, course, migration)
+      course.assignments.find_by(migration_id: migration_id)
+    end
+
+    before(:each) do
+      course.enable_feature!(:anonymous_marking)
+      course.enable_feature!(:moderated_grading)
+    end
+
+    it "sets the assignment to manually-posted if post_policy['post_manually'] is true" do
+      assignment_hash[:post_policy][:post_manually] = true
+      expect(imported_assignment.post_policy).to be_post_manually
+    end
+
+    it "sets the assignment to manually-posted if the assignment is anonymous" do
+      assignment_hash.delete(:post_policy)
+      assignment_hash[:anonymous_grading] = true
+      expect(imported_assignment.post_policy).to be_post_manually
+    end
+
+    it "sets the assignment to manually-posted if the assignment is moderated" do
+      assignment_hash.delete(:post_policy)
+      assignment_hash[:moderated_grading] = true
+      assignment_hash[:grader_count] = 2
+      expect(imported_assignment.post_policy).to be_post_manually
+    end
+
+    it "sets the assignment to auto-posted if post_policy['post_manually'] is false and not anonymous or moderated" do
+      expect(imported_assignment.post_policy).not_to be_post_manually
+    end
+
+    it "does not update the assignment's post policy if no post_policy element is present and not anonymous or moderated" do
+      assignment_hash.delete(:post_policy)
+      expect(imported_assignment.post_policy).not_to be_post_manually
+    end
+  end
 end

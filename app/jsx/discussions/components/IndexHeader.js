@@ -16,26 +16,23 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-import I18n from 'i18n!discussions_v2'
-import React, {Component} from 'react'
-import {string, func, bool} from 'prop-types'
+import actions from '../actions'
+import {bindActionCreators} from 'redux'
+import {bool, func, string} from 'prop-types'
 import {connect} from 'react-redux'
 import {debounce} from 'lodash'
-import {bindActionCreators} from 'redux'
-
-import Button from '@instructure/ui-buttons/lib/components/Button'
-import TextInput from '@instructure/ui-forms/lib/components/TextInput'
-import Select from '@instructure/ui-core/lib/components/Select'
-import Grid, {GridCol, GridRow} from '@instructure/ui-layout/lib/components/Grid'
-import View from '@instructure/ui-layout/lib/components/View'
-import ScreenReaderContent from '@instructure/ui-a11y/lib/components/ScreenReaderContent'
-import PresentationContent from '@instructure/ui-a11y/lib/components/PresentationContent'
-import IconPlus from '@instructure/ui-icons/lib/Line/IconPlus'
-import IconSearchLine from '@instructure/ui-icons/lib/Line/IconSearch'
-import DiscussionSettings from './DiscussionSettings'
-import select from '../../shared/select'
+import I18n from 'i18n!discussions_v2'
 import propTypes from '../propTypes'
-import actions from '../actions'
+import React, {Component} from 'react'
+import select from '../../shared/select'
+
+import {Button} from '@instructure/ui-buttons'
+import DiscussionSettings from './DiscussionSettings'
+import {FormField} from '@instructure/ui-form-field'
+import {Grid, GridCol, GridRow, View} from '@instructure/ui-layout'
+import {IconPlusLine, IconSearchLine} from '@instructure/ui-icons'
+import {PresentationContent, ScreenReaderContent} from '@instructure/ui-a11y'
+import {TextInput} from '@instructure/ui-forms'
 
 const filters = {
   all: I18n.t('All'),
@@ -98,18 +95,25 @@ export default class IndexHeader extends Component {
           <Grid>
             <GridRow hAlign="space-between">
               <GridCol width={2}>
-                <Select
-                  name="filter-dropdown"
-                  onChange={this.onFilterChange}
-                  size="medium"
+                <FormField
+                  id="discussion-filter"
                   label={<ScreenReaderContent>{I18n.t('Discussion Filter')}</ScreenReaderContent>}
                 >
-                  {Object.keys(filters).map(filter => (
-                    <option key={filter} value={filter}>
-                      {filters[filter]}
-                    </option>
-                  ))}
-                </Select>
+                  <select
+                    name="filter-dropdown"
+                    onChange={this.onFilterChange}
+                    style={{
+                      margin: '0',
+                      width: '100%'
+                    }}
+                  >
+                    {Object.keys(filters).map(filter => (
+                      <option key={filter} value={filter}>
+                        {filters[filter]}
+                      </option>
+                    ))}
+                  </select>
+                </FormField>
               </GridCol>
               <GridCol width={4}>
                 <TextInput
@@ -118,7 +122,7 @@ export default class IndexHeader extends Component {
                       {I18n.t('Search discussion by title')}
                     </ScreenReaderContent>
                   }
-                  placeholder={I18n.t('Search')}
+                  placeholder={I18n.t('Search by title or author...')}
                   icon={() => <IconSearchLine />}
                   onChange={this.onSearchStringChange}
                   name="discussion_search"
@@ -127,13 +131,11 @@ export default class IndexHeader extends Component {
               <GridCol width={6} textAlign="end">
                 {this.props.permissions.create && (
                   <Button
-                    href={`/${this.props.contextType}s/${
-                      this.props.contextId
-                    }/discussion_topics/new`}
+                    href={`/${this.props.contextType}s/${this.props.contextId}/discussion_topics/new`}
                     variant="primary"
                     id="add_discussion"
                   >
-                    <IconPlus />
+                    <IconPlusLine />
                     <ScreenReaderContent>{I18n.t('Add discussion')}</ScreenReaderContent>
                     <PresentationContent>{I18n.t('Discussion')}</PresentationContent>
                   </Button>

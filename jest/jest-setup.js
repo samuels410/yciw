@@ -18,6 +18,14 @@
 
 import Enzyme from 'enzyme'
 import Adapter from 'enzyme-adapter-react-16'
+import {filterUselessConsoleMessages} from '@instructure/js-utils'
+
+filterUselessConsoleMessages(console)
+
+global.fetch = require('jest-fetch-mock')
+
+window.scroll = () => {}
+window.ENV = {}
 
 Enzyme.configure({ adapter: new Adapter() })
 
@@ -29,14 +37,18 @@ require('@instructure/ui-themes')
 if (process.env.DEPRECATION_SENTRY_DSN) {
   const Raven = require('raven-js')
   Raven.config(process.env.DEPRECATION_SENTRY_DSN, {
-    release: process.env.GIT_COMMIT
+    ignoreErrors: ['renderIntoDiv', 'renderSidebarIntoDiv'], // silence the `Cannot read property 'renderIntoDiv' of null` errors we get from the pre- rce_enhancements old rce code
+    release: process.env.GIT_COMMIT,
+    autoBreadcrumbs: {
+      xhr: false
+    }
   }).install();
 
-  const setupRavenConsoleLoggingPlugin = require('../app/jsx/shared/helpers/setupRavenConsoleLoggingPlugin');
+  const setupRavenConsoleLoggingPlugin = require('../app/jsx/shared/helpers/setupRavenConsoleLoggingPlugin').default;
   setupRavenConsoleLoggingPlugin(Raven, { loggerName: 'console-jest' });
 }
 
 // set up mocks for native APIs
 if (!('MutationObserver' in window)) {
-  Object.defineProperty(window, 'MutationObserver', { value: require('mutation-observer') })
+  Object.defineProperty(window, 'MutationObserver', { value: require('@sheerun/mutationobserver-shim') })
 }

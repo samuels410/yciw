@@ -162,7 +162,7 @@ module Importers
         # be very explicit about draft state courses, but be liberal toward legacy courses
         if course.wiki.has_no_front_page
           if migration.for_course_copy? && (source = migration.source_course || Course.where(id: migration.migration_settings[:source_course_id]).first)
-            mig_id = CC::CCHelper.create_key(source.wiki.front_page)
+            mig_id = migration.content_export.create_key(source.wiki.front_page)
             if new_front_page = course.wiki_pages.where(migration_id: mig_id).first
               course.wiki.set_front_page_url!(new_front_page.url)
             end
@@ -196,7 +196,7 @@ module Importers
         migration.migration_settings[:imported_assets] = imported_asset_hash
         migration.workflow_state = :imported unless post_processing?(migration)
         migration.save
-        ActiveRecord::Base.skip_touch_context(false)
+
         if course.changed?
           course.save!
         else
@@ -209,6 +209,8 @@ module Importers
       migration.trigger_live_events!
       Auditors::Course.record_copied(migration.source_course, course, migration.user, source: migration.initiated_source)
       migration.imported_migration_items
+    ensure
+      ActiveRecord::Base.skip_touch_context(false)
     end
 
     def self.adjust_dates(course, migration)
@@ -225,6 +227,9 @@ module Importers
               event.unlock_at = shift_date(event.unlock_at, shift_options)
               event.peer_reviews_due_at = shift_date(event.peer_reviews_due_at, shift_options)
               event.save_without_broadcasting
+              if event.errors.any?
+                migration.add_warning(t("Couldn't adjust dates on assignment %{name} (ID %{id})", name: event.name, id: event.id.to_s))
+              end
             end
           end
 
@@ -306,25 +311,6 @@ module Importers
       rescue
         migration.add_warning(t(:due_dates_warning, "Couldn't adjust the due dates."), $!)
       end
-      migration.progress=100
-      migration.migration_settings ||= {}
-
-      imported_asset_hash = {}
-      migration.imported_migration_items_hash.each{|k, assets| imported_asset_hash[k] = assets.values.map(&:id).join(',') if assets.present?}
-      migration.migration_settings[:imported_assets] = imported_asset_hash
-      migration.workflow_state = :imported unless post_processing?(migration)
-      migration.save
-      ActiveRecord::Base.skip_touch_context(false)
-      if course.changed?
-        course.save!
-      else
-        course.touch
-      end
-
-      DueDateCacher.recompute_course(course, update_grades: true, executing_user: migration.user)
-
-      Auditors::Course.record_copied(migration.source_course, course, migration.user, source: migration.initiated_source)
-      migration.imported_migration_items
     end
 
     def self.post_processing?(migration)
@@ -351,7 +337,8 @@ module Importers
                 course.context_external_tools.having_setting('course_navigation') :
                 ContextExternalTool.find_all_for(course, :course_navigation)
             if tool = (all_tools.detect{|t| t.migration_id == tool_mig_id} ||
-                all_tools.detect{|t| CC::CCHelper.create_key(t) == tool_mig_id})
+                all_tools.detect{|t| CC::CCHelper.create_key(t) == tool_mig_id ||
+                  CC::CCHelper.create_key(t, global: true) == tool_mig_id})
               # translate the migration_id to a real id
               tab['id'] = "context_external_tool_#{tool.id}"
               tab_config << tab
@@ -379,6 +366,10 @@ module Importers
         end
       end
 
+      if settings.has_key?('overridden_course_visibility')
+        course.apply_overridden_course_visibility(settings.delete('overridden_course_visibility'))
+      end
+
       if migration.for_master_course_import?
         course.start_at    = Canvas::Migration::MigratorHelper.get_utc_time_from_timestamp(settings['start_at']) if settings.has_key?('start_at')
         course.conclude_at = Canvas::Migration::MigratorHelper.get_utc_time_from_timestamp(settings['conclude_at']) if settings.has_key?('conclude_at')
@@ -387,20 +378,25 @@ module Importers
       settings.slice(*atts.map(&:to_s)).each do |key, val|
         course.send("#{key}=", val)
       end
-      if settings[:grading_standard_enabled]
-        course.grading_standard_enabled = true
-        if settings[:grading_standard_identifier_ref]
-          if gs = course.grading_standards.where(migration_id: settings[:grading_standard_identifier_ref]).first
-            course.grading_standard = gs
-          else
-            migration.add_warning(t(:copied_grading_standard_warning, "Couldn't find copied grading standard for the course."))
+      if settings.has_key?(:grading_standard_enabled)
+        if settings[:grading_standard_enabled]
+          course.grading_standard_enabled = true
+          if settings[:grading_standard_identifier_ref]
+            if gs = course.grading_standards.where(migration_id: settings[:grading_standard_identifier_ref]).first
+              course.grading_standard = gs
+            else
+              migration.add_warning(t(:copied_grading_standard_warning, "Couldn't find copied grading standard for the course."))
+            end
+          elsif settings[:grading_standard_id].present?
+            if gs = GradingStandard.for(course).where(id: settings[:grading_standard_id]).first
+              course.grading_standard = gs
+            else
+              migration.add_warning(t(:account_grading_standard_warning,"Couldn't find account grading standard for the course." ))
+            end
           end
-        elsif settings[:grading_standard_id].present?
-          if gs = GradingStandard.for(course).where(id: settings[:grading_standard_id]).first
-            course.grading_standard = gs
-          else
-            migration.add_warning(t(:account_grading_standard_warning,"Couldn't find account grading standard for the course." ))
-          end
+        elsif migration.for_master_course_import?
+          course.grading_standard_enabled = false
+          course.grading_standard = nil
         end
       end
       if image_url = settings[:image_url]
@@ -414,6 +410,11 @@ module Importers
       end
       if settings[:lock_all_announcements]
         Announcement.lock_from_course(course)
+      end
+
+      if settings.key?(:default_post_policy)
+        post_manually = Canvas::Plugin.value_to_boolean(settings.dig(:default_post_policy, :post_manually))
+        course.default_post_policy.update!(post_manually: post_manually)
       end
     end
 

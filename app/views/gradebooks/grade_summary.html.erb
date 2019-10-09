@@ -15,18 +15,18 @@
 # You should have received a copy of the GNU Affero General Public License along
 # with this program. If not, see <http://www.gnu.org/licenses/>.
 %>
+<%
+  provide :page_title, join_title(t(:page_title, "Grades for %{student}", :student => @presenter.student_name), @context.name)
+%>
+<% load_grade_summary_data %>
+<%
+  whatif_instructions = t("You can view your grades based on What-If scores so that you know how grades will be affected by upcoming or resubmitted assignments. You can test scores for an assignment that already includes a score, or an assignment that has yet to be graded.")
 
-<%
-  js_env ga_page_title: "Grades for Student"
+  hidden_text = t("Instructor is working on grades")
+  hidden_icon_class = @context.post_policies_enabled? ? "icon-off" : "icon-muted"
 %>
-<%
-  js_bundle :grade_summary, :rubric_assessment
-  css_bundle :grade_summary
-  content_for :page_title, join_title(t(:page_title, "Grades for %{student}", :student => @presenter.student_name), @context.name)
-%>
-<% whatif_instructions = t("You can view your grades based on What-If scores so that you know how grades will be affected by upcoming or resubmitted assignments. You can test scores for an assignment that already includes a score, or an assignment that has yet to be graded.") %>
 <div id="grade-summary-content" style="display: none;">
-  <% content_for :right_side do %>
+  <% provide :right_side do %>
     <div id="student-grades-right-content" style="display: none;">
       <% if @exclude_total %>
         <div id="student-grades-final" class="student_assignment final_grade" style="font-size: 1.2em;">
@@ -36,9 +36,7 @@
         <div class="student_assignment final_grade">
           <%= before_label(:total, "Total") %> <span class="grade"></span>
           <% if @context.grading_standard_enabled? %>
-            <span class="final_letter_grade">
-              (<span class="grade" id="final_letter_grade_text">-</span>)
-            </span>
+            (<span class="letter_grade" id="final_letter_grade_text">–</span>)
           <% end %>
         </div>
       <% end %>
@@ -85,8 +83,8 @@
     </div>
 
     <div id="print-grades-button-container" class="ic-Action-header__Secondary">
-      <a id="print-grades-button" class="Button print-grades icon-printer" href="javascript:window.print()">
-        <%= t :print_grades, "Print" %>
+      <a role="button" id="print-grades-button" class="Button print-grades icon-printer" href="javascript:window.print()">
+        <%= t("Print Grades") %>
       </a>
     </div>
   </div>
@@ -118,7 +116,7 @@
   <% end %>
 
   <div id="assignments">
-    <span id="aria-announcer" class="hide-text affix" aria-live="polite" aria-relevant="additions"></span>
+    <span id="aria-announcer" class="hide-text affix" aria-live="polite"></span>
   <table id="grades_summary" class="<%= 'editable' if @presenter.editable? %> ic-Table ic-Table--hover-row">
     <% if @presenter.editable? %>
       <caption class="screenreader-only"><%= whatif_instructions %></caption>
@@ -145,7 +143,7 @@
          can_view_distribution = can_do(@context, @current_user, :read_as_admin) || !assignment_presenter.hide_distribution_graphs?
       %>
     <tr class="<%= assignment_presenter.classes %>"
-        data-muted="<%= assignment.muted? %>"
+        data-muted="<%= assignment_presenter.hide_grade_from_student? %>"
         id="<%= "submission_" + assignment.id.to_s %>"
         <% if assignment_presenter.excused? %>
           <% excused_label = t "This assignment is excused and will not be considered in the total calculation" %>
@@ -185,7 +183,7 @@
         <td class="assignment_score" title="<%= t(:click_to_change, "Click to test a different score") unless assignment_presenter.unchangeable? %>">
           <div style="position: relative; height: 100%;" class="score_holder">
             <% if !assignment_presenter.upload_status.present?  %>
-              <% js_bundle 'progress_pill' %>
+              <% js_bundle :progress_pill %>
               <span class="assignment_presenter_for_submission" style="display: none;"><%= assignment_presenter.upload_status %></span>
               <span class="react_pill_container"></span>
             <% end %>
@@ -199,10 +197,10 @@
                 <span class="tooltip_wrap right" aria-hidden="true">
                   <% if @presenter.editable? || assignment.special_class %>
                     <span class="tooltip_text score_teaser">
-                      <% if assignment.muted? %>
-                        <%= t(:student_mute_notification, "Instructor is working on grades") %>
+                      <% if assignment_presenter.hide_grade_from_student? %>
+                        <%= hidden_text %>
                       <% elsif submission.try :pending_review? %>
-                        <%= t(:grading_in_progress, "Instructor is working on grades") %>
+                        <%= hidden_text %>
                       <% elsif assignment.special_class %>
                         <%= t(:total, "Total") %>
                       <% else %>
@@ -211,14 +209,14 @@
                     </span>
                   <% end %>
                 </span>
-                <% if assignment.muted? %>
-                  <i class="icon-muted" title="<%= t("#gradebooks.grade.muted", "Muted") %>"></i>
+                <% if assignment_presenter.hide_grade_from_student? %>
+                  <i class="<%= hidden_icon_class %>" title="<%= hidden_text %>"></i>
                 <% else %>
-                  <span class="screenreader-only" role="link">
+                  <span class="screenreader-only" role="button">
                     <%= t(:click_to_change, "Click to test a different score") unless assignment_presenter.unchangeable? %>
                   </span>
                   <% if submission.try :pending_review? %>
-                    <span class="screenreader-only"><%=t(:grading_in_progress, "Instructor is working on grades")%></span>
+                    <span class="screenreader-only"><%= hidden_text %></span>
                   <% end %>
                   <%= student_score_display_for(submission, !can_do(@context, @current_user, :manage_grades)) %>
                 <% end %>
@@ -264,7 +262,7 @@
           <a href="#"
               class="toggle_final_grade_info tooltip"
               aria-label="<%= t('This assignment does not count toward the final grade.') %>"
-            <% if assignment.omit_from_final_grade? && !assignment.muted? %>
+            <% if assignment.omit_from_final_grade? && !assignment_presenter.hide_grade_from_student? %>
                 aria-expanded="false"
                 aria-controls="final_grade_info_<%= assignment.id %>"
             <% else %>
@@ -282,9 +280,10 @@
             class="toggle_comments_link tooltip"
             aria-label="<%= t('Read comments') %>"
             aria-describedby="comment_count_for_assignment_<%= assignment.id %>"
-            <% if assignment_presenter.has_comments? && !assignment.muted? %>
+            <% if assignment_presenter.has_comments? && !assignment_presenter.hide_grade_from_student? %>
               aria-expanded="false"
               aria-controls="comments_thread_<%= assignment.id %>"
+              role="button"
             <% else %>
               aria-hidden='true'
               role='presentation'
@@ -329,7 +328,7 @@
             <i class="icon-rubric"></i>
           </a>
           <% if assignment_presenter.show_submission_details? %>
-            <% if @presenter.turnitin_enabled? || assignment_presenter.originality_report? %>
+            <% if @presenter.turnitin_enabled? || assignment_presenter.originality_report? || assignment_presenter.turnitin %>
               <%
                 turnitin = nil
                 url = '#'
@@ -491,7 +490,7 @@
           </tr>
       <tr id="comments_thread_<%= assignment.id %>" class="comments comments_thread <%= 'assignment_graded' if assignment_presenter.graded? %>" style="display: none;">
         <td colspan="6">
-          <% if assignment_presenter.has_comments? %>
+          <% if !assignment_presenter.hide_grade_from_student? && assignment_presenter.has_comments? %>
               <table class="score_details_table ic-Table ic-Table--condensed">
                 <thead>
                   <tr>
@@ -566,8 +565,8 @@
     <% end %>
   </table>
   </div>
-  <% if @presenter.has_muted_assignments? %>
-    <small><i class="icon-muted" role="presentation"></i><%= t(:student_mute_legend, "Your instructor is working on grades. While your instructor is working on grades, grade and comment information is unavailable.") %></small>
+  <% if @presenter.hidden_submissions? %>
+    <small><i class="<%= hidden_icon_class %>" role="presentation"></i><%= t(:student_mute_legend, "Your instructor is working on grades. While your instructor is working on grades, grade and comment information is unavailable.") %></small>
   <% end %>
   <div id="total_groups_weight" style="display: none;"><%= @presenter.total_weight %></div>
   <%= render :partial => "shared/rubric_criterion_dialog" %>

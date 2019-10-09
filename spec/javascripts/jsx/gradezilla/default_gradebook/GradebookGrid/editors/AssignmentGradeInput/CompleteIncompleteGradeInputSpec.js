@@ -20,18 +20,14 @@ import React from 'react'
 import {mount} from 'enzyme'
 import AssignmentGradeInput from 'jsx/gradezilla/default_gradebook/GradebookGrid/editors/AssignmentGradeInput'
 
-QUnit.module('GradebookGrid AssignmentGradeInput using CompleteIncompleteGradeInput', suiteHooks => {
+QUnit.module('GradebookGrid CompleteIncompleteGradeInput', suiteHooks => {
   let $container
   let props
   let $menuContent
   let resolveClose
-  let qunitTimeout
   let wrapper
 
   suiteHooks.beforeEach(() => {
-    qunitTimeout = QUnit.config.testTimeout
-    QUnit.config.testTimeout = 500 // protect against unresolved async mistakes
-
     const assignment = {
       pointsPossible: 10
     }
@@ -63,7 +59,6 @@ QUnit.module('GradebookGrid AssignmentGradeInput using CompleteIncompleteGradeIn
   suiteHooks.afterEach(() => {
     wrapper.unmount()
     $container.remove()
-    QUnit.config.testTimeout = qunitTimeout
   })
 
   function mountComponent() {
@@ -149,7 +144,12 @@ QUnit.module('GradebookGrid AssignmentGradeInput using CompleteIncompleteGradeIn
   })
 
   test('sets the value to "Excused" when the submission is excused', () => {
-    props.submission = {...props.submission, enteredScore: null, enteredGrade: null, excused: true}
+    props.submission = {
+      ...props.submission,
+      enteredScore: null,
+      enteredGrade: null,
+      excused: true
+    }
     mountComponent()
     equal(getTextValue(), 'Excused')
   })

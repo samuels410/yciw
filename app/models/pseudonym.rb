@@ -52,18 +52,34 @@ class Pseudonym < ActiveRecord::Base
   include StickySisFields
   are_sis_sticky :unique_id
 
-  validates_each :password, {:if => :require_password?}, &Canvas::PasswordPolicy.method("validate")
+  validates :unique_id, format: { with: /\A[[:print:]]+\z/ },
+            length: { within: 1..MAX_UNIQUE_ID_LENGTH },
+            uniqueness: {
+              case_sensitive: false,
+              scope: [:account_id, :workflow_state, :authentication_provider_id],
+              if: ->(p) { (p.unique_id_changed? || p.workflow_state_changed?) && p.active? }
+            }
+
+  validates :password,
+            confirmation: true,
+            if: :require_password?
+
+  validates_each :password, if: :require_password?,
+            &Canvas::PasswordPolicy.method("validate")
+  validates :password_confirmation,
+            presence: true,
+            if: :require_password?
+
   acts_as_authentic do |config|
-    config.validates_format_of_login_field_options = {:with => /\A[[:print:]]+\z/}
     config.login_field :unique_id
     config.perishable_token_valid_for = 30.minutes
-    config.validates_length_of_login_field_options = {:within => 1..MAX_UNIQUE_ID_LENGTH}
-    config.validates_uniqueness_of_login_field_options = {
-        case_sensitive: false,
-        scope: [:account_id, :workflow_state, :authentication_provider_id],
-        if: ->(p) { (p.unique_id_changed? || p.workflow_state_changed?) && p.active? }
-    }
-    config.crypto_provider = Authlogic::CryptoProviders::Sha512
+    # if changing this to a new provider, add the _new_ provider to the transition
+    # list for a full deploy first before moving it to primary, so that
+    # a) there won't be any possibility of split brain where old-still-running code
+    #   can't understand the new hash in the db from new code, and
+    # b) if we have to roll back to old code, users won't be locked out
+    config.crypto_provider = ScryptProvider.new("4000$8$1$")
+    config.transition_from_crypto_providers = [Authlogic::CryptoProviders::Sha512]
   end
 
   attr_writer :require_password
@@ -394,25 +410,6 @@ class Pseudonym < ActiveRecord::Base
     self.reset_password
     self.password_auto_generated = true
     self.password
-  end
-
-  def move_to_user(user, migrate=true)
-    return unless user
-    return true if self.user_id == user.id
-    old_user = self.user
-    old_user_id = self.user_id
-    self.user = user
-    unless self.crypted_password
-      self.generate_temporary_password
-    end
-    self.save
-    if old_user_id
-      CommunicationChannel.by_path(self.unique_id).where(:user_id => old_user_id).update_all(:user_id => user)
-      User.where(:id => [old_user_id, user]).update_all(:update_at => Time.now.utc)
-    end
-    if User.find(old_user_id).pseudonyms.empty? && migrate
-      UserMerge.from(old_user).into(user)
-    end
   end
 
   def valid_ssha?(plaintext_password)

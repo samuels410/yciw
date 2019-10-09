@@ -85,7 +85,7 @@ class ContentZipper
       # This neglects the complexity of group assignments
       students = User.where(id: submissions.pluck(:user_id)).index_by(&:id)
     else
-      students    = assignment.representatives(user).index_by(&:id)
+      students    = assignment.representatives(user: user).index_by(&:id)
       submissions = assignment.submissions.where(user_id: students.keys,
                                                  submission_type: downloadable_submissions)
     end
@@ -107,10 +107,6 @@ class ContentZipper
       assignment.increment!(:submissions_downloads)
       complete_attachment!(zip_attachment, zip_name)
     end
-  end
-
-  def self.zip_eportfolio(*args)
-    ContentZipper.new.zip_eportfolio(*args)
   end
 
   class StaticAttachment
@@ -143,9 +139,9 @@ class ContentZipper
     portfolio_entries.each do |entry|
       entry.readonly!
 
-      index = rewrite_eportfolio_richtext_entry(index, rich_text_attachments, entry)
+      index = rewrite_eportfolio_richtext_entry(index, rich_text_attachments, entry, zip_attachment.user)
 
-      static_attachments += entry.attachments
+      static_attachments += entry.attachments.select {|x| x.grants_right?(zip_attachment.user, :download)}
       submissions += entry.submissions
     end
 
@@ -194,8 +190,12 @@ class ContentZipper
     @portfolio = @portfolio
     @static_attachments = static_attachments
     @submissions_hash = submissions_hash
-    av = ActionView::Base.new()
-    av.view_paths = ActionController::Base.view_paths
+    if CANVAS_RAILS5_2
+      av = ActionView::Base.new()
+      av.view_paths = ActionController::Base.view_paths
+    else
+      av = ActionView::Base.with_view_paths(ActionController::Base.view_paths)
+    end
     av.extend TextHelper
     res = av.render(:partial => "eportfolios/static_page", :locals => {:page => page, :portfolio => portfolio, :static_attachments => static_attachments, :submissions_hash => submissions_hash})
     res
@@ -350,7 +350,7 @@ class ContentZipper
   end
 
   private
-  def rewrite_eportfolio_richtext_entry(index, attachments, entry)
+  def rewrite_eportfolio_richtext_entry(index, attachments, entry, user)
     # In each rich_text section, find any referenced images, replace
     # the text with the image name, and add the image to the
     # attachments to be downloaded. If the rich_text attachment
@@ -362,8 +362,8 @@ class ContentZipper
     if entry.content.is_a?(Array) && entry.content.present?
       entry.content.select { |c| c.is_a?(Hash) && c[:section_type] == "rich_text" }.each do |rt|
         rt[:content].gsub!(StaticAttachment::FILES_REGEX) do |match|
-          att = Attachment.find_by_id(Regexp.last_match(:obj_id))
-          if att.nil?
+          att = Attachment.find_by(id: Regexp.last_match(:obj_id))
+          if att.nil? || !att.grants_right?(user, :download)
             match
           else
             sa = StaticAttachment.new(att, index)
@@ -377,7 +377,6 @@ class ContentZipper
 
     index
   end
-
 
   def add_file(attachment, zipfile, fn)
     if attachment.deleted?
@@ -434,14 +433,15 @@ class ContentZipper
 
     uploaded_files.each do |file|
       @logger.debug("  found attachment: #{file.display_name}")
-      full_filename = "#{filename}_#{file.id}_#{file.display_name}"
+      full_filename = "#{filename}_#{file.id}_#{sanitize_attachment_filename(file.display_name)}"
 
       add_file(file, zipfile, full_filename)
     end
   end
 
   def get_filename(users_name, submission)
-    filename = [users_name, submission.late? ? 'LATE' : nil, submission.user_id].compact.join('_')
+    id = @assignment.anonymize_students? ? "anon_#{submission.anonymous_id}" : submission.user_id
+    filename = [users_name, submission.late? ? 'LATE' : nil, id].compact.join('_')
     sanitize_file_name(filename)
   end
 
@@ -450,7 +450,7 @@ class ContentZipper
     # they do not include submissions for group assignments for anyone
     # but the original submitter of the group submission
     attachment_ids = submission.attachment_ids.try(:split, ",")
-    Attachment.where(id: Array.wrap(attachment_ids))
+    submission.shard.activate { Attachment.where(id: Array.wrap(attachment_ids)) }
   end
 
   def get_user_name(students, submission)
@@ -461,7 +461,11 @@ class ContentZipper
   end
 
   def sanitize_file_name(filename)
-    filename.gsub(/[^[[:word:]]]/, '').downcase
+    filename.gsub(/[^[[:word:]]]/, '')
+  end
+
+  def sanitize_attachment_filename(filename)
+    filename.gsub(/[\x00\/\\:\*\?\"<>\|]+/, '_')
   end
 
   def sanitize_user_name(user_name)
@@ -469,6 +473,6 @@ class ContentZipper
     # ids when teachers upload graded submissions
     user_name.gsub!(/_(\d+)_/, '\1')
     user_name.gsub!(/^(\d+)$/, '\1')
-    user_name
+    user_name.downcase
   end
 end

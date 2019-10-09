@@ -24,7 +24,6 @@ describe 'quizzes question with html answers' do
 
   before(:each) do
     course_with_teacher_logged_in
-    enable_all_rcs @course.account
     stub_rcs_config
   end
 
@@ -63,7 +62,7 @@ describe 'quizzes question with html answers' do
   end
 
   it 'should preserve HTML image answers for multiple choice', priority: "2", test_id: 3103797 do
-    img_url = "http://invalid.nowhere.com/nothing.jpg"
+    img_url = "http://invalid.nowhere.test/nothing.jpg"
     img_alt = "sample alt text"
     img_cls = "sample_image"
     quiz_with_new_questions(true, {id: 1}, {id: 2},

@@ -17,15 +17,14 @@
  */
 
 import React, { Component } from 'react'
-import I18n from 'i18n!blueprint_settings'
+import I18n from 'i18n!blueprint_settingsUnsyncedChanges'
 import { connect } from 'react-redux'
 import { bindActionCreators } from 'redux'
 import select from '../../shared/select'
 
-import Alert from '@instructure/ui-alerts/lib/components/Alert'
-import Heading from '@instructure/ui-elements/lib/components/Heading'
-import Table from '@instructure/ui-elements/lib/components/Table'
-import ScreenReaderContent from '@instructure/ui-a11y/lib/components/ScreenReaderContent'
+import {Alert} from '@instructure/ui-alerts'
+import {Heading, Table} from '@instructure/ui-elements'
+import {ScreenReaderContent} from '@instructure/ui-a11y'
 
 import UnsyncedChange from './UnsyncedChange'
 import { ConnectedMigrationOptions as MigrationOptions } from './MigrationOptions'

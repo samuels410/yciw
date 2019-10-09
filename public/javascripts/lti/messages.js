@@ -16,6 +16,8 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
+/* eslint no-console: 0 */
+
 import $ from 'jquery'
 import 'compiled/jquery.rails_flash_notifications'
 import htmlEscape from 'str/htmlEscape'
@@ -49,6 +51,27 @@ function findDomForWindow(sourceWindow) {
 }
 
 export function ltiMessageHandler(e) {
+  const {messageType, data} = e.data;
+  if (messageType) {
+    if (messageType === "requestFullWindowLaunch") {
+      let context = ENV.context_asset_string.replace("_", "s/");
+      if (!(context.startsWith("account") || context.startsWith("course"))) {
+        context = "accounts/" + ENV.DOMAIN_ROOT_ACCOUNT_ID;
+      }
+
+      const tool_launch_url = new URL(data);
+      tool_launch_url.searchParams.append("full_win_launch_requested", "1");
+      // xsslint safeString.property window.location
+      tool_launch_url.searchParams.append("platform_redirect_url", window.location);
+
+      const launch_url = `${window.location.origin}/${context}/external_tools/retrieve?display=borderless&url=${encodeURIComponent(tool_launch_url.toString())}`;
+      window.location.assign(launch_url);
+    } else {
+      console.error(`invalid messageType: ${e.data.messageType}`);
+    }
+    return;
+  }
+
   try {
     var message = JSON.parse(e.data);
     switch (message.subject) {
@@ -73,6 +96,19 @@ export function ltiMessageHandler(e) {
         }
       }
       break;
+
+      case 'lti.fetchWindowSize': {
+          const iframe = findDomForWindow(e.source);
+          if (iframe) {
+              message.height = window.innerHeight;
+              message.width = window.innerWidth;
+              message.offset = $('.tool_content_wrapper').offset();
+              const strMessage = JSON.stringify(message);
+
+              iframe.contentWindow.postMessage(strMessage, '*');
+          }
+          break;
+      }
 
       case 'lti.showModuleNavigation':
         if(message.show === true || message.show === false){
@@ -104,7 +140,7 @@ export function ltiMessageHandler(e) {
 }
 
 export function monitorLtiMessages() {
-  window.addEventListener('message', function(e) {
-    ltiMessageHandler(e);
+  window.addEventListener('message', e => {
+    if (e.data !== "") ltiMessageHandler(e);
   });
 }

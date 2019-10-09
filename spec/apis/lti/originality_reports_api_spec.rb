@@ -59,7 +59,6 @@ module Lti
         create: "/api/lti/assignments/#{@assignment.id}/submissions/#{@submission.id}/originality_report"
       }
 
-      allow_any_instance_of(Account).to receive(:feature_enabled?).with(:plagiarism_detection_platform).and_return(true)
     end
 
     describe 'service definition' do
@@ -120,7 +119,9 @@ module Lti
           'updated_at',
           'submission_id',
           'workflow_state',
-          'link_id'
+          'link_id',
+          'error_message',
+          'submission_time'
         ].freeze
 
         get @endpoints[:show], headers: request_headers
@@ -149,7 +150,6 @@ module Lti
       end
 
       it "requires the plagiarism feature flag" do
-        allow_any_instance_of(Account).to receive(:feature_enabled?).with(:plagiarism_detection_platform).and_return(false)
         post @endpoints[:show]
         expect(response).not_to be_success
       end
@@ -211,7 +211,9 @@ module Lti
             'updated_at',
             'submission_id',
             'workflow_state',
-            'link_id'
+            'link_id',
+            'error_message',
+            'submission_time'
           ].freeze
           get @endpoints[:alt_show], headers: request_headers
           expect(response).to be_successful
@@ -237,7 +239,6 @@ module Lti
         end
 
         it "requires the plagiarism feature flag" do
-          allow_any_instance_of(Account).to receive(:feature_enabled?).with(:plagiarism_detection_platform).and_return(false)
           post @endpoints[:alt_show]
           expect(response).not_to be_success
         end
@@ -331,6 +332,12 @@ module Lti
         expect(OriginalityReport.find(@report.id).originality_report_url).to eq "http://www.test.com"
       end
 
+      it "updates error_message" do
+        put @endpoints[:update], params: {originality_report: {error_message: "An error occured."}}, headers: request_headers
+        expect(response).to be_successful
+        expect(OriginalityReport.find(@report.id).error_message).to eq "An error occured."
+      end
+
       it "updates the associated resource_url" do
         put @endpoints[:update],
             params: {
@@ -403,7 +410,6 @@ module Lti
       end
 
       it "requires the plagiarism feature flag" do
-        allow_any_instance_of(Account).to receive(:feature_enabled?).with(:plagiarism_detection_platform).and_return(false)
 
         put @endpoints[:udpate], params: {originality_report: {originality_report_lti_url: "http://www.lti-test.com"}}, headers: request_headers
         expect(response).not_to be_success
@@ -548,7 +554,6 @@ module Lti
         end
 
         it "requires the plagiarism feature flag" do
-          allow_any_instance_of(Account).to receive(:feature_enabled?).with(:plagiarism_detection_platform).and_return(false)
           put @endpoints[:udpate], params: {originality_report: {originality_report_lti_url: "http://www.lti-test.com"}}, headers: request_headers
           expect(response).not_to be_success
         end
@@ -648,7 +653,9 @@ module Lti
           'updated_at',
           'submission_id',
           'workflow_state',
-          'link_id'
+          'link_id',
+          'error_message',
+          'submission_time'
         ].freeze
 
         post @endpoints[:create], params: {originality_report: {file_id: @attachment.id, originality_score: 0.4}}, headers: request_headers
@@ -751,8 +758,21 @@ module Lti
         expect(response_body['workflow_state']).to eq 'pending'
       end
 
+      it 'sets the error_message' do
+        post @endpoints[:create],
+             params: {
+                originality_report: {
+                  file_id: @attachment.id,
+                  workflow_state: 'error',
+                  error_message: 'error message'
+                }
+             },
+             headers: request_headers
+        expect(json_parse['error_message']).to eq 'error message'
+      end
+
       it 'allows creating reports for any attachment in submission history' do
-        shard_two = Shard.create!
+        shard_two = @shard1
         a = @course.assignments.create!(
           title: "some assignment",
           assignment_group: @group,
@@ -802,28 +822,58 @@ module Lti
         expect(response_body['tool_setting']['resource_url']).to eq launch_url
       end
 
-      it 'updates the originality report if it has already been created' do
-        originality_score = 50
-        post @endpoints[:create],
-             params: {
-               originality_report: {
-                 file_id: @attachment.id,
-                 workflow_state: 'pending'
-               }
-             },
-             headers: request_headers
+      context 'when the originality report already exists' do
+        let(:submission) { @submission }
+        let(:originality_score) { 50 }
+        let(:existing_report) do
+          OriginalityReport.create!(
+            attachment: @attachment,
+            workflow_state: 'pending',
+            submission: submission
+          )
+        end
 
-        post @endpoints[:create],
-             params: {
-               originality_report: {
-                 file_id: @attachment.id,
-                 originality_score: originality_score
-               }
-             },
-             headers: request_headers
+        before { existing_report }
 
-        response_body = JSON.parse(response.body)
-        expect(response_body['originality_score']).to eq 50
+        it 'updates the originality report' do
+          post @endpoints[:create],
+               params: {
+                 originality_report: {
+                   file_id: @attachment.id,
+                   originality_score: originality_score
+                 }
+               },
+               headers: request_headers
+ 
+          response_body = JSON.parse(response.body)
+          expect(response_body['originality_score']).to eq 50
+        end
+
+        context 'when the attachment matches, but the submission does not' do
+          let(:new_assignment) do
+            a = @submission.assignment.dup
+            a.lti_context_id = SecureRandom.uuid
+            a.tool_settings_tool = message_handler
+            a.save!
+            a
+          end
+          let(:new_submission) { new_assignment.submit_homework(@student, attachments: [@attachment]) }
+
+
+          it 'does not update the originality report' do
+            post "/api/lti/assignments/#{new_assignment.id}/submissions/#{new_submission.id}/originality_report",
+               params: {
+                 originality_report: {
+                   file_id: @attachment.id,
+                   workflow_state: 'pending'
+                 }
+               },
+               headers: request_headers
+
+            response_body = JSON.parse(response.body)
+            expect(response_body['workflow_state']).to eq 'pending'
+          end
+        end
       end
 
       it 'updates the originality report if it has already been created without an attachment' do

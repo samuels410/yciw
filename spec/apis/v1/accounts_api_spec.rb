@@ -675,10 +675,18 @@ describe "Accounts API", type: :request do
     it "should include enrollment term information for each course" do
       @c1 = course_model(:name => 'c1', :account => @a1, :root_account => @a1)
       @a1.account_users.create!(user: @user)
-      json = api_call(:get, "/api/v1/accounts/#{@a1.id}/courses?include[]=term",
+      json = api_call(:get, "/api/v1/accounts/#{@a1.id}/courses?include[]=term&include[]=concluded",
                       { :controller => 'accounts', :action => 'courses_api', :account_id => @a1.to_param,
-                        :format => 'json', :include => ['term'] })
-      expect(json[0].has_key?('term')).to be_truthy
+                        :format => 'json', :include => ['term', 'concluded'] })
+      expect(json[0]).to have_key('term')
+      expect(json[0]['concluded']).to eq false
+
+      @c1.enrollment_term.update_attribute :end_at, 1.week.ago
+      json = api_call(:get, "/api/v1/accounts/#{@a1.id}/courses?include[]=term&include[]=concluded",
+                      { :controller => 'accounts', :action => 'courses_api', :account_id => @a1.to_param,
+                        :format => 'json', :include => ['term', 'concluded'] })
+      expect(json[0]).to have_key('term')
+      expect(json[0]['concluded']).to eq true
     end
 
     it "should return a teacher count if too many teachers are found" do
@@ -695,6 +703,22 @@ describe "Accounts API", type: :request do
       c2_hash = json.detect{|h| h['id'] == @c2.id}
       expect(c2_hash.has_key?('teachers')).to eq false
       expect(c2_hash['teacher_count']).to eq 2
+    end
+
+    it "should return a better teacher count if a teacher is in too many sections" do
+      @c1 = course_with_teacher(:account => @a1, :course_name => 'c1').course
+      s2 = @c1.course_sections.create!
+      # should not think there are two teachers if one is in multiple sections
+      @c1.enroll_teacher(@teacher, :section => s2, :allow_multiple_enrollments => true)
+      @c2 = course_with_teacher(:account => @a1, :course_name => 'c2', :user => @teacher).course
+
+      @a1.account_users.create!(user: @user)
+      json = api_call(:get, "/api/v1/accounts/#{@a1.id}/courses?include[]=teachers&teacher_limit=1",
+        { :controller => 'accounts', :action => 'courses_api', :account_id => @a1.to_param,
+          :format => 'json', :include => ['teachers'], :teacher_limit => "1" })
+      [@c1, @c2].each do |c|
+        expect(json.detect{|h| h['id'] == c.id}['teachers'].map{|t| t['id']}).to eq [@teacher.id]
+      end
     end
 
     describe 'sort' do
@@ -931,6 +955,14 @@ describe "Accounts API", type: :request do
                           :format => 'json', :completed => "no" })
         expect(json.collect{|row|row['name']}).to eql ['c1']
       end
+
+      it "should filter and sort without asploding" do
+        json = api_call(:get, "/api/v1/accounts/#{@a1.id}/courses?completed=yes&sort=course_name&order=desc",
+                        { :controller => 'accounts', :action => 'courses_api',
+                          :account_id => @a1.to_param, :format => 'json', :completed => "yes",
+                          :sort => 'course_name', :order => 'desc' })
+        expect(json.collect{|row|row['name']}).to eql ['c4', 'c3', 'c2']
+      end
     end
 
     describe "?by_teachers" do
@@ -1064,13 +1096,6 @@ describe "Accounts API", type: :request do
           :format => 'json', :search_term => search_term })
       expect(json.length).to eql 3
 
-      search_term = Shard.global_id_for(@course)
-      json = api_call(:get, "/api/v1/accounts/#{@a1.id}/courses?search_term=#{search_term}",
-        { :controller => 'accounts', :action => 'courses_api', :account_id => @a1.to_param,
-          :format => 'json', :search_term => search_term })
-      expect(json.length).to eql 1
-      expect(json.first['name']).to eq @course.name
-
       # Should return empty result set
       search_term = "0000000000"
       json = api_call(:get, "/api/v1/accounts/#{@a1.id}/courses?search_term=#{search_term}",
@@ -1097,6 +1122,20 @@ describe "Accounts API", type: :request do
           :format => 'json', :search_term => search_term })
       expect(json.length).to be 2
       expect(json.map{ |c| [c['id'], c['name']] }).to match_array([[@courses.first.id, @courses.first.name], [@courses.last.id, @courses.last.name]])
+    end
+
+    context "sharding" do
+      specs_require_sharding
+
+      it "should be able to search on global id" do
+        @course = @a1.courses.create!(:name => "whee")
+        search_term = Shard.global_id_for(@course)
+        json = api_call(:get, "/api/v1/accounts/#{@a1.id}/courses?search_term=#{search_term}",
+          { :controller => 'accounts', :action => 'courses_api', :account_id => @a1.to_param,
+            :format => 'json', :search_term => search_term })
+        expect(json.length).to eql 1
+        expect(json.first['name']).to eq @course.name
+      end
     end
 
     context "blueprint courses" do

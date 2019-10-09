@@ -25,7 +25,6 @@ describe "discussion assignments" do
 
   before :once do
     course_with_teacher(:active_all => true)
-    enable_all_rcs @course.account
     @course.assignment_groups.create!(:name => "Assignment Group")
     @category1 = @course.group_categories.create!(:name => "category 1")
     @category1.configure_self_signup(true, false)
@@ -65,6 +64,34 @@ describe "discussion assignments" do
       expect(f('#discussion_container').text).to include("Since this is a group discussion,"\
                                                   " each group has its own conversation for this topic."\
                                                   " Here are the ones you have access to:\nsome group")
+    end
+  end
+
+  context "student reply and total count" do
+    before do
+      @discussion_topic = @course.discussion_topics.create!(user: @teacher,
+                                                            title: 'assignment topic title',
+                                                            message: 'assignment topic message',
+                                                            group_category: @category1)
+      @student1 = user_with_pseudonym(:username => 'student1@example.com', :active_all => 1)
+      @course.enroll_student(@student1).accept!
+      @g1.add_user @student1
+    end
+
+    it "should allow the student to reply and teacher to see the unread count", priority: "1", test_id: 150519, ignore_js_errors: true do
+      get "/courses/#{@course.id}/discussion_topics/#{@discussion_topic.id}"
+      expect(f('.new-and-total-badge .new-items').text).to include ""
+      user_session(@student1)
+      get "/courses/#{@course.id}/discussion_topics"
+      expect_new_page_load{f('.discussion-title').click}
+      expect(f('#breadcrumbs').text).to include('some group')
+      f('.discussion-reply-action').click
+      type_in_tiny 'textarea', 'something to submit'
+      f('button[type="submit"]').click
+      wait_for_ajaximations
+      user_session(@teacher)
+      get "/courses/#{@course.id}/discussion_topics/#{@discussion_topic.id}"
+      expect(f('.new-and-total-badge .new-items').text).to include "1"
     end
   end
 end

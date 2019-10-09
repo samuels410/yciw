@@ -160,6 +160,22 @@ describe MasterCourses::MasterTemplatesController, type: :request do
       @template.reload
       expect(@template.child_subscriptions.active.pluck(:child_course_id)).to match_array([c1.id, c2.id])
     end
+
+    it "should be able to add and remove courses by sis_source_id" do
+      existing_child = course_factory(:sis_source_id => "bleep")
+      existing_sub = @template.add_child_course!(existing_child)
+
+      subaccount1 = Account.default.sub_accounts.create!
+      subaccount2 = subaccount1.sub_accounts.create!
+      c1 = course_factory(:account => subaccount1, :sis_source_id => "beep")
+      c2 = course_factory(:account => subaccount2, :sis_source_id => "beep2")
+
+      api_call(:put, @url, @params, {:course_ids_to_add => ["sis_course_id:#{c1.sis_source_id}", "sis_course_id:#{c2.sis_source_id}"],
+        :course_ids_to_remove => "sis_course_id:#{existing_child.sis_source_id}"})
+
+      @template.reload
+      expect(@template.child_subscriptions.active.pluck(:child_course_id)).to match_array([c1.id, c2.id])
+    end
   end
 
   describe "#queue_migration" do
@@ -381,8 +397,8 @@ describe MasterCourses::MasterTemplatesController, type: :request do
     end
   end
 
-  def run_master_migration
-    @migration = MasterCourses::MasterMigration.start_new_migration!(@template, @admin)
+  def run_master_migration(opts={})
+    @migration = MasterCourses::MasterMigration.start_new_migration!(@template, @admin, opts)
     run_jobs
     @migration.reload
   end
@@ -416,7 +432,7 @@ describe MasterCourses::MasterTemplatesController, type: :request do
       @file.update_attribute :display_name, 'I Can Rename Files Too'
       @assignment.destroy
       @master.syllabus_body = 'syllablah frd'; @master.save!
-      run_master_migration
+      run_master_migration(:copy_settings => true)
     end
 
     it "returns change information from the blueprint side" do
@@ -436,7 +452,9 @@ describe MasterCourses::MasterTemplatesController, type: :request do
           "locked"=>false,"exceptions"=>[{"course_id"=>@minions.first.id, "conflicting_changes"=>["content"]}]},
          {"asset_id"=>@master.id,"asset_type"=>"syllabus","asset_name"=>"Syllabus","change_type"=>"updated",
            "html_url"=>"http://www.example.com/courses/#{@master.id}/assignments/syllabus","locked"=>false,
-           "exceptions"=>[{"course_id"=>@minions.first.id,"conflicting_changes"=>["content"]}]}
+           "exceptions"=>[{"course_id"=>@minions.first.id,"conflicting_changes"=>["content"]}]},
+         {"asset_id"=>@master.id,"asset_type"=>"settings","asset_name"=>"Course Settings","change_type"=>"updated",
+           "html_url"=>"http://www.example.com/courses/#{@master.id}/settings","locked"=>false,"exceptions"=>[]}
       ])
     end
 
@@ -465,7 +483,9 @@ describe MasterCourses::MasterTemplatesController, type: :request do
           "locked"=>false,"exceptions"=>[{"course_id"=>minion.id, "conflicting_changes"=>["content"]}]},
          {"asset_id"=>minion.id,"asset_type"=>"syllabus","asset_name"=>"Syllabus","change_type"=>"updated",
           "html_url"=>"http://www.example.com/courses/#{minion.id}/assignments/syllabus","locked"=>false,
-          "exceptions"=>[{"course_id"=>minion.id,"conflicting_changes"=>["content"]}]}
+          "exceptions"=>[{"course_id"=>minion.id,"conflicting_changes"=>["content"]}]},
+         {"asset_id"=>minion.id,"asset_type"=>"settings","asset_name"=>"Course Settings","change_type"=>"updated",
+          "html_url"=>"http://www.example.com/courses/#{minion.id}/settings","locked"=>false,"exceptions"=>[]}
       ])
     end
 

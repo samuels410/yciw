@@ -79,7 +79,7 @@ module Importers
         end
       end
 
-      context.touch_admins if context.respond_to?(:touch_admins)
+      context.clear_todo_list_cache(:admins) if context.is_a?(Course)
     end
 
     def self.create_tool_settings(tool_setting_hash, tool_proxy, assignment)
@@ -103,6 +103,14 @@ module Importers
         custom_parameters: ts_custom_params,
         vendor_code: ts_vendor_code,
         product_code: ts_product_code
+      )
+    end
+
+    def self.create_default_line_item(assignment, migration)
+      assignment.create_assignment_line_item!
+    rescue
+      migration.add_warning(
+        t('Error associating assignment "%{assignment_name}" with an LTI tool.', assignment_name: assignment.title)
       )
     end
 
@@ -292,13 +300,20 @@ module Importers
         item.group_category ||= context.group_categories.active.where(:name => t("Project Groups")).first_or_create
       end
 
+      if hash.has_key?(:moderated_grading) && context.feature_enabled?(:moderated_grading)
+        item.moderated_grading = hash[:moderated_grading]
+      end
+      if hash.has_key?(:anonymous_grading) && context.feature_enabled?(:anonymous_marking)
+        item.anonymous_grading = hash[:anonymous_grading]
+      end
+
       [:peer_reviews,
        :automatic_peer_reviews, :anonymous_peer_reviews,
        :grade_group_students_individually, :allowed_extensions,
        :position, :peer_review_count,
        :omit_from_final_grade, :intra_group_peer_reviews, :post_to_sis,
-       :moderated_grading, :grader_count, :grader_comments_visible_to_graders,
-       :anonymous_grading, :graders_anonymous_to_graders, :grader_names_visible_to_final_grader,
+       :grader_count, :grader_comments_visible_to_graders,
+       :graders_anonymous_to_graders, :grader_names_visible_to_final_grader,
        :anonymous_instructor_annotations
       ].each do |prop|
         item.send("#{prop}=", hash[prop]) unless hash[prop].nil?
@@ -367,6 +382,7 @@ module Importers
             item.association(:external_tool_tag).target = nil # otherwise it will trigger destroy on the tag
           end
         end
+        create_default_line_item(item, migration)
       end
 
       if hash["similarity_detection_tool"].present?
@@ -395,6 +411,12 @@ module Importers
           create_tool_settings(hash['tool_setting'], active_proxies.first, item)
         end
       end
+
+      # Ensure anonymous and moderated assignments always start out manually
+      # posted, even if the moderated assignment in the old course was switched
+      # to automatically post after it had grades published
+      post_manually = hash.dig(:post_policy, :post_manually) || item.anonymous_grading || item.moderated_grading
+      item.post_policy.update!(post_manually: !!post_manually)
 
       item
     end

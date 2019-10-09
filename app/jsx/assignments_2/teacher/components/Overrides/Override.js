@@ -17,31 +17,73 @@
  */
 
 import React from 'react'
-import {bool} from 'prop-types'
+import {bool, func, number} from 'prop-types'
 import I18n from 'i18n!assignments_2'
 import {OverrideShape} from '../../assignmentData'
-import ToggleGroup from '@instructure/ui-toggle-details/lib/components/ToggleGroup'
-import View from '@instructure/ui-layout/lib/components/View'
+import {ToggleGroup} from '@instructure/ui-toggle-details'
+import {View} from '@instructure/ui-layout'
 import OverrideSummary from './OverrideSummary'
+import OverrideDetail from './OverrideDetail'
 
-Override.propTypes = {
-  override: OverrideShape,
-  readOnly: bool
-}
-Override.defaultProps = {
-  readOnly: true
-}
+export default class Override extends React.Component {
+  static propTypes = {
+    override: OverrideShape.isRequired,
+    onChangeOverride: func.isRequired,
+    onValidate: func.isRequired,
+    invalidMessage: func.isRequired,
+    index: number.isRequired, // offset of this override in the assignment
+    readOnly: bool
+  }
 
-export default function Override(props) {
-  return (
-    <View as="div" margin="0 0 small 0">
-      <ToggleGroup
-        toggleLabel={I18n.t('Expand')}
-        summary={<OverrideSummary override={props.override} />}
-        background="default"
-      >
-        <div style={{padding: '.5rem'}}>OverrideDetail goes here</div>
-      </ToggleGroup>
-    </View>
-  )
+  static defaultProps = {
+    readOnly: false
+  }
+
+  constructor(props) {
+    super(props)
+
+    this.state = {
+      expanded: false
+    }
+  }
+
+  handleChangeOverride = (path, value) => {
+    return this.props.onChangeOverride(this.props.index, path, value)
+  }
+
+  handleValidate = (path, value) => {
+    return this.props.onValidate(this.props.index, path, value)
+  }
+
+  invalidMessage = path => {
+    return this.props.invalidMessage(this.props.index, path)
+  }
+
+  handleToggle = (_event, expanded) => {
+    this.setState({expanded})
+  }
+
+  render() {
+    return (
+      <View as="div" margin="0 0 small 0" data-testid="Override">
+        <ToggleGroup
+          expanded={this.state.expanded}
+          onToggle={this.handleToggle}
+          toggleLabel={
+            this.state.expanded ? I18n.t('Click to hide details') : I18n.t('Click to show details')
+          }
+          summary={<OverrideSummary override={this.props.override} />}
+          background="default"
+        >
+          <OverrideDetail
+            override={this.props.override}
+            onChangeOverride={this.handleChangeOverride}
+            onValidate={this.handleValidate}
+            invalidMessage={this.invalidMessage}
+            readOnly={this.props.readOnly}
+          />
+        </ToggleGroup>
+      </View>
+    )
+  }
 }

@@ -18,44 +18,43 @@
 
 import React from 'react'
 import {string, func, shape, arrayOf} from 'prop-types'
-import IconGroupLine from '@instructure/ui-icons/lib/Line/IconGroup'
-import IconMoreLine from '@instructure/ui-icons/lib/Line/IconMore'
-import IconPlusLine from '@instructure/ui-icons/lib/Line/IconPlus'
-import IconStudentViewLine from '@instructure/ui-icons/lib/Line/IconStudentView'
-
-import Button from '@instructure/ui-buttons/lib/components/Button'
-import FormFieldGroup from '@instructure/ui-forms/lib/components/FormFieldGroup'
-import {GridCol} from '@instructure/ui-layout/lib/components/Grid'
-import Menu, {MenuItem} from '@instructure/ui-menu/lib/components/Menu'
-
-import ScreenReaderContent from '@instructure/ui-a11y/lib/components/ScreenReaderContent'
-import Select from '@instructure/ui-core/lib/components/Select'
-import TextInput from '@instructure/ui-forms/lib/components/TextInput'
-
+import {IconGroupLine, IconMoreLine, IconPlusLine, IconStudentViewLine} from '@instructure/ui-icons'
+import {Button} from '@instructure/ui-buttons'
+import {FormFieldGroup} from '@instructure/ui-form-field'
+import {GridCol} from '@instructure/ui-layout'
+import {Menu, MenuItem} from '@instructure/ui-menu'
+import {ScreenReaderContent} from '@instructure/ui-a11y'
+import {TextInput} from '@instructure/ui-forms'
+import CanvasSelect from 'jsx/shared/components/CanvasSelect'
 import I18n from 'i18n!account_course_user_search'
 import preventDefault from 'compiled/fn/preventDefault'
 import CreateOrUpdateUserModal from '../../shared/components/CreateOrUpdateUserModal'
 
 export default function UsersToolbar(props) {
+  function handleRoleSelect(event, value) {
+    props.onUpdateFilters({role_filter_id: value})
+  }
+
   const placeholder = I18n.t('Search people...')
   return (
     <form onSubmit={preventDefault(props.onApplyFilters)}>
       <FormFieldGroup layout="columns" description="">
         <GridCol width="auto">
-          <Select
+          <CanvasSelect
+            id="userType"
             label={<ScreenReaderContent>{I18n.t('Filter by user type')}</ScreenReaderContent>}
             value={props.role_filter_id}
-            onChange={e => props.onUpdateFilters({role_filter_id: e.target.value})}
+            onChange={handleRoleSelect}
           >
-            <option key="all" value="">
+            <CanvasSelect.Option key="all" id="all" value="">
               {I18n.t('All Roles')}
-            </option>
+            </CanvasSelect.Option>
             {props.roles.map(role => (
-              <option key={role.id} value={role.id}>
+              <CanvasSelect.Option key={role.id} id={role.id} value={role.id}>
                 {role.label}
-              </option>
+              </CanvasSelect.Option>
             ))}
-          </Select>
+          </CanvasSelect>
         </GridCol>
 
         <TextInput
@@ -103,8 +102,8 @@ function renderKabobMenu(accountId) {
     return (
       <Menu
         trigger={
-          <Button theme={{iconPlusTextMargin: '0'}}>
-            <IconMoreLine margin="0" title={I18n.t('More People Options')} />
+          <Button icon={IconMoreLine}>
+            <ScreenReaderContent>{I18n.t('More People Options')}</ScreenReaderContent>
           </Button>
         }
       >
@@ -145,6 +144,5 @@ UsersToolbar.defaultProps = {
   role_filter_id: '',
   errors: {},
   accountId: '',
-  handlers: {},
   roles: []
 }

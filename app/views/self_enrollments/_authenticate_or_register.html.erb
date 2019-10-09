@@ -48,12 +48,15 @@
         <label class="ic-Label" for="student_name"><%= t "labels.name", "Full Name" %></label>
         <input class="ic-Input" type="text" id="student_name" name="user[name]">
       </div>
-      <div class="ic-Checkbox-group">
-        <div class="ic-Form-control ic-Form-control--checkbox">
-          <input type="checkbox" id="selfEnrollmentAuthRegLoginAgreeTerms" name="user[terms_of_use]" value="1">
-          <label class="ic-Label" for="selfEnrollmentAuthRegLoginAgreeTerms"><%= agree_to_terms %></label>
+      <% if @domain_root_account.terms_required? %>
+        <% js_bundle :terms_of_service_modal %>
+        <div class="ic-Checkbox-group">
+          <div class="ic-Form-control ic-Form-control--checkbox">
+            <input type="checkbox" id="selfEnrollmentAuthRegLoginAgreeTerms" name="user[terms_of_use]" value="1">
+            <label class="ic-Label" for="selfEnrollmentAuthRegLoginAgreeTerms"><%= agree_to_terms %></label>
+          </div>
         </div>
-      </div>
+      <% end %>
     </div>
   </div>
   <div class="ic-Self-enrollment-footer">

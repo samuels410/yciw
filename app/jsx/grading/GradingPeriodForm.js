@@ -21,10 +21,9 @@ import PropTypes from 'prop-types'
 import ReactDOM from 'react-dom'
 import update from 'immutability-helper'
 import _ from 'underscore'
-import Button from '@instructure/ui-buttons/lib/components/Button'
-import I18n from 'i18n!external_tools'
+import {Button} from '@instructure/ui-buttons'
+import I18n from 'i18n!gradingPeriodForm'
 import DueDateCalendarPicker from '../due_dates/DueDateCalendarPicker'
-import accessibleDateFormat from '../shared/helpers/accessibleDateFormat'
 import numberHelper from '../shared/helpers/numberHelper'
 import round from 'compiled/util/round'
 
@@ -244,6 +243,7 @@ class GradingPeriodForm extends React.Component {
                   rowKey="end-date"
                   labelledBy="end-date-label"
                   isFancyMidnight
+                  defaultToEndOfMinute
                 />
               </div>
 
@@ -261,6 +261,7 @@ class GradingPeriodForm extends React.Component {
                   rowKey="close-date"
                   labelledBy="close-date-label"
                   isFancyMidnight
+                  defaultToEndOfMinute
                 />
               </div>
 

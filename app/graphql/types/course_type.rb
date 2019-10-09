@@ -17,18 +17,17 @@
 #
 
 module Types
-  SubmissionOrderInputType = GraphQL::InputObjectType.define do
-    name "SubmissionOrderCriteria"
-    argument :field, !GraphQL::EnumType.define {
-      name "SubmissionOrderField"
-      value "_id", value: "id"
-      value "gradedAt", value: "graded_at"
-    }
-    argument :direction, GraphQL::EnumType.define {
-      name "OrderDirection"
-      value "ascending", value: "ASC"
-      value "descending", value: "DESC NULLS LAST"
-    }
+  class SubmissionOrderFieldType < BaseEnum
+    graphql_name "SubmissionOrderField"
+    value :_id, value: :id
+    value :gradedAt, value: :graded_at
+  end
+
+  class SubmissionOrderInputType < BaseInputObject
+    graphql_name "SubmissionOrderCriteria"
+
+    argument :field, SubmissionOrderFieldType, required: true
+    argument :direction, OrderDirectionType, required: false
   end
 
   class CourseType < ApplicationObjectType
@@ -36,8 +35,8 @@ module Types
 
     alias :course :object
 
-    CourseWorkflowState = GraphQL::EnumType.define do
-      name "CourseWorkflowState"
+    class CourseWorkflowState < BaseEnum
+      graphql_name "CourseWorkflowState"
       description "States that Courses can be in"
       value "created"
       value "claimed"
@@ -46,8 +45,8 @@ module Types
       value "deleted"
     end
 
-    CourseFilterableEnrollmentWorkflowState = GraphQL::EnumType.define do
-      name "CourseFilterableEnrollmentState"
+    class CourseFilterableEnrollmentWorkflowState < BaseEnum
+      graphql_name "CourseFilterableEnrollmentState"
       description "Users in a course can be returned based on these enrollment states"
       value "invited"
       value "creation_pending"
@@ -75,8 +74,8 @@ module Types
 
     implements GraphQL::Types::Relay::Node
     implements Interfaces::TimestampInterface
+    implements Interfaces::LegacyIDInterface
 
-    field :_id, ID, "legacy canvas id", method: :id, null: false
     global_id_field :id
     field :name, String, null: false
     field :course_code, String, "course short name", null: true
@@ -95,6 +94,12 @@ module Types
     def sections_connection
       course.active_course_sections.
         order(CourseSection.best_unicode_collation_key('name'))
+    end
+
+    field :modules_connection, ModuleType.connection_type, null: true
+    def modules_connection
+      course.modules_visible_to(current_user).
+        order('name')
     end
 
     field :users_connection, UserType.connection_type, null: true do
@@ -136,30 +141,42 @@ module Types
 
       argument :student_ids, [ID], "Only return submissions for the given students.",
         prepare: GraphQLHelpers.relay_or_legacy_ids_prepare_func("User"),
-        required: true
+        required: false
       argument :order_by, [SubmissionOrderInputType], required: false
       argument :filter, SubmissionFilterInputType, required: false
     end
-    def submissions_connection(student_ids:, order_by: [], filter: {})
-      user_ids = student_ids.map(&:to_i)
+    def submissions_connection(student_ids: nil, order_by: [], filter: {})
       if course.grants_any_right?(current_user, session, :manage_grades, :view_all_grades)
         # TODO: make a preloader for this???
         allowed_user_ids = course.apply_enrollment_visibility(course.all_student_enrollments, current_user).pluck(:user_id)
-        allowed_user_ids &= user_ids
       elsif course.grants_right?(current_user, session, :read_grades)
-        allowed_user_ids = user_ids & [current_user.id]
+        allowed_user_ids = [current_user.id]
       else
         allowed_user_ids = []
       end
 
+      if student_ids.present?
+        allowed_user_ids &= student_ids.map(&:to_i)
+      end
+
+      filter ||= {}
+
       submissions = Submission.active.joins(:assignment).where(
         user_id: allowed_user_ids,
         assignment_id: course.assignments.published,
-        workflow_state: (filter || {})[:states] || DEFAULT_SUBMISSION_STATES
+        workflow_state: filter[:states] || DEFAULT_SUBMISSION_STATES
       )
 
+      if filter[:submitted_since]
+        submissions = submissions.where("submitted_at > ?", filter[:submitted_since])
+      end
+      if filter[:graded_since]
+        submissions = submissions.where("graded_at > ?", filter[:graded_since])
+      end
+
       (order_by || []).each { |order|
-        submissions = submissions.order("#{order[:field]} #{order[:direction]}")
+        direction = order[:direction] == 'descending' ? "DESC NULLS LAST" : "ASC"
+        submissions = submissions.order("#{order[:field]} #{direction}")
       }
 
       submissions
@@ -186,6 +203,14 @@ module Types
       end
     end
 
+    field :external_tools_connection, ExternalToolType.connection_type, null: true do
+      argument :filter, ExternalToolFilterInputType, required: false, default_value: {}
+    end
+    def external_tools_connection(filter:)
+      scope = ContextExternalTool.all_tools_for(course, {placements: filter.placement})
+      filter.state.nil? ? scope : scope.where(workflow_state: filter.state)
+    end
+
     field :term, TermType, null: true
     def term
       load_association(:enrollment_term)
@@ -194,13 +219,27 @@ module Types
     field :permissions, CoursePermissionsType,
       "returns permission information for the current user in this course",
       null: true
-
     def permissions
       Loaders::CoursePermissionsLoader.for(
         course,
         current_user: current_user, session: session
       )
     end
+
+    field :post_policy, PostPolicyType, "A course-specific post policy", null: true
+    def post_policy
+      return nil unless course.grants_right?(current_user, :manage_grades)
+      load_association(:default_post_policy)
+    end
+
+    field :assignment_post_policies, PostPolicyType.connection_type,
+      <<~DOC,
+        PostPolicies for assignments within a course
+      DOC
+      null: true
+    def assignment_post_policies
+      return nil unless course.grants_right?(current_user, :manage_grades)
+      course.assignment_post_policies
+    end
   end
 end
-

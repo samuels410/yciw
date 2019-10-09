@@ -15,25 +15,23 @@
 # You should have received a copy of the GNU Affero General Public License along
 # with this program. If not, see <http://www.gnu.org/licenses/>.
 
-define [
-  'i18nObj'
-  'i18n!gradebook'
-  'jquery'
-  'underscore'
-  '../util/natcompare'
-  '../views/gradebook/HeaderFilterView'
-  '../views/gradebook/OutcomeColumnView'
-  '../util/NumberCompare'
-  'jst/gradebook/outcome_gradebook_cell'
-  'jst/gradebook/outcome_gradebook_student_cell'
-  'jsx/context_cards/StudentContextCardTrigger'
-], (i18nObj, I18n, $, _, natcompare, HeaderFilterView, OutcomeColumnView, numberCompare, cellTemplate, studentCellTemplate) ->
+import i18nObj from 'i18nObj'
+import I18n from 'i18n!gradebookOutcomeGradebookGrid'
+import $ from 'jquery'
+import _ from 'underscore'
+import natcompare from '../util/natcompare'
+import HeaderFilterView from '../views/gradebook/HeaderFilterView'
+import OutcomeColumnView from '../views/gradebook/OutcomeColumnView'
+import numberCompare from '../util/NumberCompare'
+import cellTemplate from 'jst/gradebook/outcome_gradebook_cell'
+import studentCellTemplate from 'jst/gradebook/outcome_gradebook_student_cell'
+import 'jsx/context_cards/StudentContextCardTrigger'
 
-  ###
-  xsslint safeString.method cellHtml
-  ###
+###
+xsslint safeString.method cellHtml
+###
 
-  Grid =
+export default Grid =
     filter: []
 
     ratings: []
@@ -265,7 +263,7 @@ define [
         outcome     = Grid.Util.lookupOutcome(columnDef.field)
         return unless outcome and _.isNumber(score)
         [className, color, description] = Grid.View.masteryDetails(score, outcome)
-        return '' if shouldFilter and !_.include(Grid.filter, className)
+        return '' if shouldFilter and !_.includes(Grid.filter, className)
         cssColor = if color then "background-color:#{color};" else ''
         if hide_points
           cellTemplate(color: cssColor, className: className, description: description)

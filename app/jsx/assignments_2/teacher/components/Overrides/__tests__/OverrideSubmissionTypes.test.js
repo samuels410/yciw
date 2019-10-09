@@ -17,33 +17,100 @@
  */
 
 import React from 'react'
-import {render} from 'react-testing-library'
+import {render} from '@testing-library/react'
 import {mockOverride} from '../../../test-utils'
 import OverrideSubmissionTypes from '../OverrideSubmissionTypes'
 
-it('renders an override', () => {
+it('renders an OverrideSubmissionType summary', () => {
   const override = mockOverride({
     submissionTypes: [
-      'arc',
       'none',
       'external_tool',
-      'o365',
       'online_upload',
       'on_paper',
-      'google',
       'online_text_entry',
-      'image',
-      'online_url',
-      'media_recording',
-      'any',
-      'foo'
+      'online_url'
     ]
   })
-  const {getByText} = render(<OverrideSubmissionTypes variant="simple" override={override} />)
-
-  const submission_types =
-    'Arc & No Submission & External Tool & O365 Template & File & On Paper & Google Template & Text Entry & Image & Url & Media & Student Choice & Other'
-
-  const elem = getByText(/^Arc/)
+  const {getByText} = render(
+    <OverrideSubmissionTypes variant="summary" override={override} onChangeOverride={() => {}} />
+  )
+  const submission_types = 'No Submission & App & File & On Paper & Text Entry & URL'
+  const elem = getByText(/^No Submission/)
   expect(elem.textContent).toEqual(submission_types)
+})
+
+it('renders details of a file submission type', () => {
+  const override = mockOverride({
+    submissionTypes: ['online_upload']
+  })
+  const {getByText} = render(
+    <OverrideSubmissionTypes variant="detail" override={override} onChangeOverride={() => {}} />
+  )
+  expect(getByText('Item 1')).toBeInTheDocument()
+  expect(getByText('File')).toBeInTheDocument()
+  expect(getByText('All Types Allowed')).toBeInTheDocument()
+})
+
+it('renders details of a restricted-type file submission type', () => {
+  const override = mockOverride({
+    submissionTypes: ['online_upload'],
+    allowedExtensions: ['doc', 'xls']
+  })
+  const {getByText} = render(
+    <OverrideSubmissionTypes variant="detail" override={override} onChangeOverride={() => {}} />
+  )
+  expect(getByText('Item 1')).toBeInTheDocument()
+  expect(getByText('File')).toBeInTheDocument()
+  expect(getByText('DOC')).toBeInTheDocument()
+  expect(getByText('XLS')).toBeInTheDocument()
+})
+
+it('renders details of an external tool submission type', () => {
+  const override = mockOverride({
+    submissionTypes: ['external_tool']
+  })
+  const {getByText} = render(
+    <OverrideSubmissionTypes variant="detail" override={override} onChangeOverride={() => {}} />
+  )
+  expect(getByText('Item 1')).toBeInTheDocument()
+  expect(getByText('App')).toBeInTheDocument()
+})
+
+it('renders details of a text submission type', () => {
+  const override = mockOverride({
+    submissionTypes: ['online_text_entry']
+  })
+  const {getByText} = render(
+    <OverrideSubmissionTypes variant="detail" override={override} onChangeOverride={() => {}} />
+  )
+  expect(getByText('Item 1')).toBeInTheDocument()
+  expect(getByText('Text Entry')).toBeInTheDocument()
+})
+
+it('renders details of a url submission type', () => {
+  const override = mockOverride({
+    submissionTypes: ['online_url']
+  })
+  const {getByText} = render(
+    <OverrideSubmissionTypes variant="detail" override={override} onChangeOverride={() => {}} />
+  )
+  expect(getByText('Item 1')).toBeInTheDocument()
+  expect(getByText('URL')).toBeInTheDocument()
+})
+
+it('renders details of multiple submission types', () => {
+  const override = mockOverride({
+    submissionTypes: ['online_text_entry', 'online_url', 'online_upload']
+  })
+  const {getByText} = render(
+    <OverrideSubmissionTypes variant="detail" override={override} onChangeOverride={() => {}} />
+  )
+  expect(getByText('Item 1')).toBeInTheDocument()
+  expect(getByText('Text Entry')).toBeInTheDocument()
+  expect(getByText('Item 2')).toBeInTheDocument()
+  expect(getByText('URL')).toBeInTheDocument()
+  expect(getByText('Item 3')).toBeInTheDocument()
+  expect(getByText('File')).toBeInTheDocument()
+  expect(getByText('All Types Allowed')).toBeInTheDocument()
 })

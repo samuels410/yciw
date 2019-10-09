@@ -18,11 +18,11 @@
 
 import React from 'react'
 import PropTypes from 'prop-types'
-import Button from '@instructure/ui-buttons/lib/components/Button'
-import Checkbox from '@instructure/ui-forms/lib/components/Checkbox'
-import I18n from 'i18n!grading_periods'
+import {Button} from '@instructure/ui-buttons'
+import {Checkbox} from '@instructure/ui-forms'
+import I18n from 'i18n!NewGradingPeriodSetForm'
 import setsApi from 'compiled/api/gradingPeriodSetsApi'
-import EnrollmentTermInput from '../grading/EnrollmentTermInput'
+import EnrollmentTermInput from './EnrollmentTermInput'
 import {showFlashAlert} from '../shared/FlashAlert'
 
 class NewGradingPeriodSetForm extends React.Component {

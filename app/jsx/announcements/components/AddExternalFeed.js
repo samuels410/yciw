@@ -22,17 +22,13 @@ import {bool, func} from 'prop-types'
 import {connect} from 'react-redux'
 import {bindActionCreators} from 'redux'
 import $ from 'jquery'
-import 'compiled/jquery.rails_flash_notifications' // eslint-disable-line
+import 'compiled/jquery.rails_flash_notifications'
 
-import Button from '@instructure/ui-buttons/lib/components/Button'
-import View from '@instructure/ui-layout/lib/components/View'
-import Checkbox from '@instructure/ui-forms/lib/components/Checkbox'
-import Dialog from '@instructure/ui-a11y/lib/components/Dialog'
-import TextInput from '@instructure/ui-forms/lib/components/TextInput'
-import RadioInput from '@instructure/ui-forms/lib/components/RadioInput'
-import RadioInputGroup from '@instructure/ui-forms/lib/components/RadioInputGroup'
-import ScreenReaderContent from '@instructure/ui-a11y/lib/components/ScreenReaderContent'
-import ToggleDetails from '@instructure/ui-toggle-details/lib/components/ToggleDetails'
+import {Button} from '@instructure/ui-buttons'
+import {View} from '@instructure/ui-layout'
+import {Checkbox, TextInput, RadioInput, RadioInputGroup} from '@instructure/ui-forms'
+import {Dialog, ScreenReaderContent} from '@instructure/ui-a11y'
+import {ToggleDetails} from '@instructure/ui-toggle-details'
 import {ConnectedRSSFeedList} from './RSSFeedList'
 
 import actions from '../actions'
@@ -47,7 +43,7 @@ const verbosityTypes = [
 export default class AddExternalFeed extends React.Component {
   static propTypes = {
     defaultOpen: bool,
-    isSaving: bool.isRequired, // eslint-disable-line
+    isSaving: bool.isRequired,
     addExternalFeed: func.isRequired
   }
 

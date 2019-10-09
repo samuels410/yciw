@@ -30,12 +30,12 @@ import React from 'react'
 import ReactDOM from 'react-dom'
 import gradingPeriodSetsApi from 'compiled/api/gradingPeriodSetsApi'
 import htmlEscape from 'str/htmlEscape'
-import I18n from 'i18n!gradebook'
+import I18n from 'i18n!gradingGradeSummary'
 import round from 'compiled/util/round'
 import numberHelper from '../shared/helpers/numberHelper'
 import CourseGradeCalculator from '../gradebook/CourseGradeCalculator'
 import {scopeToUser} from '../gradebook/EffectiveDueDates'
-import {gradeToScoreLowerBound, scoreToGrade} from '../gradebook/GradingSchemeHelper'
+import {scoreToGrade} from '../gradebook/GradingSchemeHelper'
 import GradeFormatHelper from '../gradebook/shared/helpers/GradeFormatHelper'
 import StatusPill from '../grading/StatusPill'
 import SelectMenuGroup from '../grade_summary/SelectMenuGroup'
@@ -145,9 +145,17 @@ const GradeSummary = {
 
     $('#grade_entry').hide().appendTo($('body'))
 
+    const $grade = $assignment.find('.grade')
+
+    if (score.numericalValue == null) {
+      $grade.html($grade.data('originalValue'))
+    } else {
+      $grade.html(htmlEscape(score.formattedValue))
+    }
+
+    addTooltipElementForAssignment($assignment)
     const $assignmentScore = $assignment.find('.assignment_score')
     const $scoreTeaser = $assignmentScore.find('.score_teaser')
-    const $grade = $assignment.find('.grade')
 
     if (isChanged) {
       $assignmentScore.attr('title', '')
@@ -162,23 +170,14 @@ const GradeSummary = {
         setTimeout(() => { $assignment.find('.revert_score_link').focus() }, 0)
       }
     } else {
-      const tooltip = $assignment.data('muted') ?
-          I18n.t('Instructor is working on grades') :
-          I18n.t('Click to test a different score')
+      setTooltipForScore($assignment)
       $assignmentScore.attr('title', I18n.t('Click to test a different score'))
-      $scoreTeaser.text(tooltip)
       $grade.removeClass('changed')
       $assignment.find('.revert_score_link').remove()
 
       if (options.refocus) {
         setTimeout(() => { $assignment.find('.grade').focus() }, 0)
       }
-    }
-
-    if (score.numericalValue == null) {
-      $grade.html($grade.data('originalValue'))
-    } else {
-      $grade.html(htmlEscape(score.formattedValue))
     }
 
     if (!isChanged) {
@@ -191,29 +190,33 @@ const GradeSummary = {
   },
 
   onScoreRevert ($assignment, options) {
+    const $assignmentScore = $assignment.find('.assignment_score')
+    const $grade = $assignmentScore.find('.grade')
     const opts = { refocus: true, skipEval: false, ...options }
     const score = GradeSummary.getOriginalScore($assignment)
-    let tooltip
+    let title
 
-    if ($assignment.data('muted')) {
-      tooltip = I18n.t('Instructor is working on grades')
-    } else {
-      tooltip = I18n.t('Click to test a different score')
+    if (score.numericalValue == null) {
+      score.formattedValue = GradeSummary.parseScoreText(null).formattedValue
     }
 
-    const $assignmentScore = $assignment.find('.assignment_score')
+    if ($assignment.data('muted')) {
+      title = I18n.t('Instructor is working on grades')
+      const className = ENV.post_policies_enabled ? 'icon-off' : 'icon-muted muted_icon'
+      // xsslint safeString.identifier className title
+      $grade.html(`<i class="${className}" aria-hidden="true" title="${title}"=></i>`)
+    } else {
+      title = I18n.t('Click to test a different score')
+      $grade.text(score.formattedValue)
+    }
+
+    setTooltipForScore($assignment)
+
     $assignment.find('.what_if_score').text(score.formattedValue)
-    $assignmentScore.attr('title', I18n.t('Click to test a different score'))
-    $assignmentScore.find('.score_teaser').text(tooltip)
-    $assignmentScore.find('.grade').removeClass('changed')
     $assignment.find('.revert_score_link').remove()
     $assignment.find('.score_value').text(score.formattedValue)
-
-    if ($assignment.data('muted')) {
-      $assignment.find('.grade').html('<i class="icon-muted muted_icon" aria-hidden="true"></i>')
-    } else {
-      $assignment.find('.grade').text(score.formattedValue)
-    }
+    $assignmentScore.attr('title', title)
+    $grade.removeClass('changed')
 
     const assignmentId = $assignment.getTemplateValue('assignment_id')
     GradeSummary.updateScoreForAssignment(assignmentId, score.numericalValue)
@@ -222,12 +225,46 @@ const GradeSummary = {
     }
 
     const $screenreaderLinkClone = $assignment.find('.grade').data('screenreader_link')
-    $assignment.find('.grade').prepend($screenreaderLinkClone)
+    $grade.prepend($screenreaderLinkClone)
 
     if (opts.refocus) {
       setTimeout(() => { $assignment.find('.grade').focus() }, 0)
     }
   }
+}
+
+function addTooltipElementForAssignment($assignment) {
+  const $grade = $assignment.find('.grade')
+  let $tooltipWrapRight
+  let $tooltipScoreTeaser
+
+  $tooltipWrapRight = $grade.find('.tooltip_wrap right')
+
+  if ($tooltipWrapRight.length === 0) {
+    $tooltipWrapRight = $('<span class="tooltip_wrap right"></span>')
+    $grade.append($tooltipWrapRight)
+
+    $tooltipScoreTeaser = $tooltipWrapRight.find('.tooltip_text score_teaser')
+
+    if ($tooltipScoreTeaser.length === 0) {
+      $tooltipScoreTeaser = $('<span class="tooltip_text score_teaser"></span>')
+      $tooltipWrapRight.append($tooltipScoreTeaser)
+    }
+  }
+}
+
+function setTooltipForScore($assignment) {
+  let tooltipText
+
+  if ($assignment.data('muted')) {
+    tooltipText = I18n.t('Instructor is working on grades')
+  } else {
+    tooltipText = I18n.t('Click to test a different score')
+  }
+
+  addTooltipElementForAssignment($assignment)
+  const $tooltipScoreTeaser = $assignment.find('.tooltip_text.score_teaser')
+  $tooltipScoreTeaser.text(tooltipText)
 }
 
 function getGradingPeriodSet () {
@@ -363,8 +400,17 @@ function calculateTotals (calculatedGrades, currentOrFinal, groupWeightingScheme
   let finalGrade
   let teaserText
 
-  if (!gradeChanged && ENV.grading_scheme && ENV.effective_final_grade) {
-    finalGrade = formatPercentGrade(gradeToScoreLowerBound(ENV.effective_final_grade, ENV.grading_scheme))
+  if (gradingSchemeEnabled()) {
+    const scoreToUse = overrideScorePresent() ?
+      ENV.effective_final_score :
+      calculatePercentGrade(finalScore, finalPossible)
+
+    const letterGrade = scoreToGrade(scoreToUse, ENV.grading_scheme)
+    $('.final_grade .letter_grade').text(letterGrade)
+  }
+
+  if (!gradeChanged && overrideScorePresent()) {
+    finalGrade = formatPercentGrade(ENV.effective_final_score)
     teaserText = scoreAsPoints
   } else if (showTotalGradeAsPoints && groupWeightingScheme !== 'percent') {
     finalGrade = scoreAsPoints
@@ -391,13 +437,19 @@ function calculateTotals (calculatedGrades, currentOrFinal, groupWeightingScheme
     $.screenReaderFlashMessageExclusive(msg)
   }
 
-  if (ENV.grading_scheme) {
-    $('.final_letter_grade .grade').text(
-      ENV.effective_final_grade || scoreToGrade(calculatePercentGrade(finalScore, finalPossible), ENV.grading_scheme)
-    )
-  }
-
   $('.revert_all_scores').showIf($('#grades_summary .revert_score_link').length > 0)
+}
+
+// This element is only rendered by the erb if the course has enabled grading
+// schemes. We can't rely on only checking for the presence of
+// ENV.grading_scheme as that, in this case, always returns Canvas's default
+// grading scheme even if grading schemes are not enabled.
+function gradingSchemeEnabled() {
+  return $('.final_grade .letter_grade').length > 0 && ENV.grading_scheme
+}
+
+function overrideScorePresent() {
+  return ENV.effective_final_score != null
 }
 
 function updateStudentGrades () {

@@ -41,9 +41,7 @@ import parseLinkHeader from 'compiled/fn/parseLinkHeader'
   // -------------------
 
   function studentEnrollments(student) {
-    return _.filter(student.enrollments, function(enrollment) {
-      return enrollment.type === "StudentEnrollment" || enrollment.type === "StudentViewEnrollment";
-    });
+    return _.filter(student.enrollments, enrollment => enrollment.type === "StudentEnrollment" || enrollment.type === "StudentViewEnrollment");
   }
 
   function sectionIDs(enrollments) {
@@ -158,7 +156,7 @@ import parseLinkHeader from 'compiled/fn/parseLinkHeader'
       student.enrollments = studentEnrollments(student);
       student.sections = sectionIDs(student.enrollments);
     });
-    let newStudentsHash = _.indexBy(newlyFetchedStudents, (student) => student.id)
+    let newStudentsHash = _.keyBy(newlyFetchedStudents, (student) => student.id)
     let newStudentState = _.extend(newStudentsHash, this.getState().students)
     this.setState({
       students: newStudentState
@@ -197,7 +195,7 @@ import parseLinkHeader from 'compiled/fn/parseLinkHeader'
   }
 
   OverrideStudentStore.alreadySearchingForName = function(name){
-    return _.contains(this.getState().activeNameSearches, name)
+    return _.includes(this.getState().activeNameSearches, name)
   }
 
   OverrideStudentStore.markNameSearched = function(name){

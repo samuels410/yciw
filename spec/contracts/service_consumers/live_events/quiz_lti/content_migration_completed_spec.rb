@@ -41,7 +41,6 @@ RSpec.describe 'Canvas LMS Live Events', :pact_live_events do
           :tool_id => 'Quizzes 2'
         }
         account = Account.default
-        account.enable_feature!(:lor_for_account)
         account.context_external_tools.create!(params)
         account.settings[:provision] = {'lti' => 'lti url'}
         account.lti_context_id = '1'

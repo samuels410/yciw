@@ -19,10 +19,9 @@
 import React from 'react'
 import PropTypes from 'prop-types'
 import I18n from 'i18n!appointment_groups'
-import Button from '@instructure/ui-buttons/lib/components/Button'
-import IconMiniArrowEnd from '@instructure/ui-icons/lib/Solid/IconMiniArrowEnd'
-import IconMiniArrowDown from '@instructure/ui-icons/lib/Solid/IconMiniArrowDown'
-import Grid, { GridCol, GridRow } from '@instructure/ui-layout/lib/components/Grid'
+import {Button} from '@instructure/ui-buttons'
+import {IconMiniArrowEndSolid, IconMiniArrowDownSolid} from '@instructure/ui-icons'
+import {Grid, GridCol, GridRow} from '@instructure/ui-layout'
 
   class ContextSelector extends React.Component {
     static propTypes = {
@@ -218,9 +217,7 @@ import Grid, { GridCol, GridRow } from '@instructure/ui-layout/lib/components/Gr
                     checked={this.isSubContextChecked(context.asset_string, section.asset_string)}
                     disabled={this.isSubContextDisabled(context.asset_string, section.asset_string)}
                   />
-                  {
-                    // eslint-disable-next-line
-                  }<label
+                  { }<label
                     className="ContextLabel CourseListItem-section-item"
                     htmlFor={`${section.asset_string}_checkbox`}>{section.name}</label>
                 </div>
@@ -242,7 +239,7 @@ import Grid, { GridCol, GridRow } from '@instructure/ui-layout/lib/components/Gr
                 <div key={context.asset_string} className="CourseListItem">
                   <div className="CourseListItem-horizontal">
                     <Button onClick={() => this.toggleCourseExpanded(context)} variant="icon">
-                      {expanded ? <IconMiniArrowDown /> : <IconMiniArrowEnd /> }
+                      {expanded ? <IconMiniArrowDownSolid /> : <IconMiniArrowEndSolid /> }
                     </Button>
                     <span className="screenreader-only">{context.name}</span>
                     <input
@@ -256,9 +253,7 @@ import Grid, { GridCol, GridRow } from '@instructure/ui-layout/lib/components/Gr
                       checked={this.isContextChecked(context.asset_string)}
                       disabled={this.isContextDisabled(context.asset_string)}
                     />
-                    {
-                      // eslint-disable-next-line
-                    }<label className="ContextLabel CourseListItem-item" htmlFor={inputId}>{context.name}</label>
+                    { }<label className="ContextLabel CourseListItem-item" htmlFor={inputId}>{context.name}</label>
                   </div>
                   {this.renderSections(context)}
                 </div>

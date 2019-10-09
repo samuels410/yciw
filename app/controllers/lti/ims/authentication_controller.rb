@@ -63,14 +63,14 @@ module Lti
       def validate_client_id!
         binding_context = context.respond_to?(:account) ? context.account : context
 
-        unless developer_key.usable? && developer_key.account_binding_for(binding_context).workflow_state == 'on'
+        unless developer_key.usable? && developer_key.account_binding_for(binding_context)&.workflow_state == 'on'
           set_oidc_error!('unauthorized_client', 'Client not authorized in requested context')
         end
       end
 
       def validate_current_user!
-        if Lti::Asset.opaque_identifier_for(@current_user) != oidc_params[:login_hint]
-          set_oidc_error!('login_required', 'The user is not logged in')
+        if !@current_user || Lti::Asset.opaque_identifier_for(@current_user, context: context) != oidc_params[:login_hint]
+          set_oidc_error!('login_required', 'Must have an active user session')
         end
       end
 
@@ -126,7 +126,9 @@ module Lti
 
       def authorize_redirect_url
         url = URI.parse(lti_1_3_authorization_url(params: oidc_params))
-        url.host = canvas_domain
+        parts = canvas_domain.split(':')
+        url.host = parts.first
+        url.port = parts.last if parts.size > 1
         url.to_s
       end
 
@@ -136,11 +138,19 @@ module Lti
 
       def redirect_uri
         @redirect_uri ||= begin
-          requested_redirect_base = oidc_params[:redirect_uri].split('?').first
-
-          unless developer_key.redirect_uris.include? requested_redirect_base
-            reject! 'Invalid redirect_uri' and return
+          requested_redirect_base, requested_query_string = oidc_params[:redirect_uri].split('?')
+          is_valid = developer_key.redirect_uris.any? do |uri|
+            if uri.include? '?'
+              # Verify the required query params are present
+              required_params = CGI.parse(uri.split('?').last).to_a
+              requested_params = CGI.parse(requested_query_string).to_a
+              (required_params - requested_params).empty?
+            else
+              uri == requested_redirect_base
+            end
           end
+
+          reject! 'Invalid redirect_uri' and return unless is_valid
 
           oidc_params[:redirect_uri]
         end

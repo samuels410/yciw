@@ -20,13 +20,11 @@ require File.expand_path(File.dirname(__FILE__) + '/common')
 describe "course people" do
   include_context "in-process server selenium tests"
 
-  before(:once) do
+  before :each do
     # in the people table, the kyle menu can be off the screen
     # and uninteractable if the window is too small
     make_full_screen
-  end
 
-  before (:each) do
     course_with_teacher_logged_in :limit_privileges_to_course_section => false
     @account = @course.account # for custom roles
     @custom_student_role = custom_student_role("custom stu")
@@ -39,8 +37,8 @@ describe "course people" do
     add_button.click
     wait_for_ajaximations
 
-    click_option("#peoplesearch_select_role", type)
-    click_option("#peoplesearch_select_section", section_name) if section_name
+    click_INSTUI_Select_option("#peoplesearch_select_role", type)
+    click_INSTUI_Select_option("#peoplesearch_select_section", section_name) if section_name
     replace_content(f(".addpeople__peoplesearch textarea"), email)
 
     f("#addpeople_next").click
@@ -358,7 +356,7 @@ describe "course people" do
         add_button = f('#addUsers')
         keep_trying_until { expect(add_button).to be_displayed }
         add_button.click
-        click_option('#role_id', type)
+        click_INSTUI_Select_option('#role_id', type)
       end
 
       %w[student teacher ta designer observer].each do |base_type|
@@ -376,7 +374,7 @@ describe "course people" do
       add_user(@teacher.name, "Mentor")
       teacher_row = f("#user_#{@teacher.id}")
       expect(teacher_row).to have_class("TeacherEnrollment")
-      expect(teacher_row).to have_class("Mentor")
+      expect(teacher_row).to_not have_class("Mentor")
     end
   end
 

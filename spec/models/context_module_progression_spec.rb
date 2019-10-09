@@ -96,6 +96,7 @@ describe ContextModuleProgression do
       @module.publish
       expect(ContextModuleProgression.prerequisites_satisfied?(@user, @module2)).to eq false
       @module.unpublish
+      @module2.reload
       expect(ContextModuleProgression.prerequisites_satisfied?(@user, @module2)).to eq true
     end
   end
@@ -156,6 +157,71 @@ describe ContextModuleProgression do
         module_progression.evaluate
 
         expect(module_progression.workflow_state).not_to eq 'bogus'
+      end
+    end
+
+    context "when post policies enabled" do
+      let(:assignment) { @course.assignments.create! }
+      let(:tag) { @module.add_item({id: assignment.id, type: "assignment"}) }
+
+      before(:each) do
+        @course.enable_feature!(:new_gradebook)
+        PostPolicy.enable_feature!
+        @module.update!(completion_requirements: {tag.id => {type: "min_score", min_score: 90}})
+        @submission = assignment.submit_homework(@user, body: "my homework")
+      end
+
+      it "doesn't mark students that haven't submitted as in-progress" do
+        other_student = student_in_course(:course => @course, :active_all => true).user
+        progression = @module.evaluate_for(other_student)
+        # yes technically the requirement is "incomplete" if they haven't done anything
+        # and the jerk who named the column should feel bad
+        # but we actually use it for marking requirements that they've done something for
+        # and either need to wait for grading or improve their score to continue (hence the "i" icon)
+        expect(progression.incomplete_requirements).to be_empty
+      end
+
+      it "does not evaluate requirements when grade has not posted" do
+        @submission.update!(score: 100, posted_at: nil)
+        progression = @module.context_module_progressions.find_by(user: @user)
+        requirement = {id: tag.id, type: "min_score", min_score: 90.0, score: nil}
+        expect(progression.incomplete_requirements).to include requirement
+      end
+
+      it "evaluates requirements when grade has posted" do
+        @submission.update!(score: 100, posted_at: 1.second.ago)
+        progression = @module.context_module_progressions.find_by(user: @user)
+        requirement = {id: tag.id, type: "min_score", min_score: 90.0}
+        expect(progression.requirements_met).to include requirement
+      end
+    end
+
+    context "when post policies not enabled" do
+      let(:assignment) { @course.assignments.create! }
+      let(:tag) { @module.add_item({id: assignment.id, type: "assignment"}) }
+
+      before(:each) do
+        PostPolicy.disable_feature!
+        @module.update!(completion_requirements: {tag.id => {type: "min_score", min_score: 90}})
+        @submission = assignment.submit_homework(@user, body: "my homework")
+      end
+
+      it "does not evaluate requirements when assignment is muted" do
+        assignment.mute!
+        assignment.reload
+        @submission.update!(score: 100)
+        progression = @module.context_module_progressions.find_by(user: @user)
+        requirement = {id: tag.id, type: "min_score", min_score: 90.0, score: nil}
+        expect(progression.incomplete_requirements).to include requirement
+      end
+
+      it "evaluates requirements when assignment is not muted" do
+        assignment.unmute!
+        assignment.reload
+        @submission.update!(score: 100)
+        progression = @module.context_module_progressions.find_by(user: @user)
+        requirement = {id: tag.id, type: "min_score", min_score: 90.0}
+        expect(progression.requirements_met).to include requirement
       end
     end
   end

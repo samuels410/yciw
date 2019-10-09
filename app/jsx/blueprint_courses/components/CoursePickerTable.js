@@ -16,15 +16,13 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-import I18n from 'i18n!blueprint_settings'
+import I18n from 'i18n!blueprint_settingsCoursePickerTable'
 import $ from 'jquery'
 import React from 'react'
 import PropTypes from 'prop-types'
-import Text from '@instructure/ui-elements/lib/components/Text'
-import ScreenReaderContent from '@instructure/ui-a11y/lib/components/ScreenReaderContent'
-import PresentationContent from '@instructure/ui-a11y/lib/components/PresentationContent'
-import Table from '@instructure/ui-elements/lib/components/Table'
-import Checkbox from '@instructure/ui-forms/lib/components/Checkbox'
+import {Text, Table} from '@instructure/ui-elements'
+import {ScreenReaderContent, PresentationContent} from '@instructure/ui-a11y'
+import {Checkbox} from '@instructure/ui-forms'
 import 'compiled/jquery.rails_flash_notifications'
 
 import propTypes from '../propTypes'
@@ -87,7 +85,7 @@ export default class CoursePickerTable extends React.Component {
       : I18n.t('Unselected all courses'))
 
     const selected = this.props.courses.reduce((selectedMap, course) => {
-      selectedMap[course.id] = e.target.checked // eslint-disable-line
+      selectedMap[course.id] = e.target.checked
       return selectedMap
     }, {})
     this.updateSelected(selected, e.target.checked)
@@ -107,7 +105,7 @@ export default class CoursePickerTable extends React.Component {
 
   parseSelectedCourses (courses = []) {
     return courses.reduce((selected, courseId) => {
-      selected[courseId] = true // eslint-disable-line
+      selected[courseId] = true
       return selected
     }, {})
   }

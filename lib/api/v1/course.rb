@@ -27,11 +27,14 @@ module Api::V1::Course
 
   def course_settings_json(course)
     settings = {}
+    settings[:allow_final_grade_override] = course.allow_final_grade_override?
     settings[:allow_student_discussion_topics] = course.allow_student_discussion_topics?
     settings[:allow_student_forum_attachments] = course.allow_student_forum_attachments?
     settings[:allow_student_discussion_editing] = course.allow_student_discussion_editing?
+    settings[:filter_speed_grader_by_student_group] = course.filter_speed_grader_by_student_group?
     settings[:grading_standard_enabled] = course.grading_standard_enabled?
     settings[:grading_standard_id] = course.grading_standard_id
+    settings[:grade_passback_setting] = course.grade_passback_setting
     settings[:allow_student_organized_groups] = course.allow_student_organized_groups?
     settings[:hide_final_grades] = course.hide_final_grades?
     settings[:hide_distribution_graphs] = course.hide_distribution_graphs?
@@ -98,7 +101,7 @@ module Api::V1::Course
       hash['sections'] = section_enrollments_json(enrollments) if includes.include?('sections')
       hash['total_students'] = course.student_count || course.student_enrollments.not_fake.distinct.count(:user_id) if includes.include?('total_students')
       hash['passback_status'] = post_grades_status_json(course) if includes.include?('passback_status')
-      hash['is_favorite'] = course.favorite_for_user?(user) if includes.include?('favorites')
+      hash['is_favorite'] = course.favorite_for_user?(subject_user) if includes.include?('favorites')
       if includes.include?('teachers')
         if course.teacher_count
           hash['teacher_count'] = course.teacher_count
@@ -115,7 +118,7 @@ module Api::V1::Course
       apply_nickname(hash, course, user) if user
 
       hash['image_download_url'] = course.image if includes.include?('course_image') && course.feature_enabled?('course_card_images')
-
+      hash['concluded'] = course.concluded? if includes.include?('concluded')
       apply_master_course_settings(hash, course, user)
 
       # return hash from the block for additional processing in Api::V1::CourseJson
@@ -156,16 +159,16 @@ module Api::V1::Course
     hash
   end
 
-  def apply_master_course_settings(hash, course, user)
+  def apply_master_course_settings(hash, course, _user)
     is_mc = MasterCourses::MasterTemplate.is_master_course?(course)
     hash['blueprint'] = is_mc
 
     if is_mc
       template = MasterCourses::MasterTemplate.full_template_for(course)
-      if template.use_default_restrictions_by_type
+      if template&.use_default_restrictions_by_type
         hash['blueprint_restrictions_by_object_type'] = template.default_restrictions_by_type_for_api
       else
-        hash['blueprint_restrictions'] = template.default_restrictions
+        hash['blueprint_restrictions'] = template&.default_restrictions
       end
     end
   end
@@ -173,7 +176,8 @@ module Api::V1::Course
   def preload_teachers(courses)
     threshold = params[:teacher_limit].presence&.to_i
     if threshold
-      teacher_counts = Course.where(:id => courses).joins(:teacher_enrollments).group("courses.id").count
+      scope = TeacherEnrollment.active_or_pending.where(:course_id => courses).distinct.select(:user_id, :course_id)
+      teacher_counts = Enrollment.from("(#{scope.to_sql}) AS t").group("t.course_id").count
       to_preload = []
       courses.each do |course|
         next unless count = teacher_counts[course.id]

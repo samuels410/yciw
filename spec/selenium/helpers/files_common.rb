@@ -104,15 +104,16 @@ module FilesCommon
     elsif permission_type == :unpublish
       driver.find_elements(:name, 'permissions')[1].click
     else
-      driver.find_elements(:name, 'permissions')[2].click
       if restricted_access_option == :available_with_link
-        driver.find_elements(:name, 'restrict_options')[0].click
+        driver.find_elements(:name, 'permissions')[2].click
       else
-        driver.find_elements(:name, 'restrict_options')[1].click
+        driver.find_elements(:name, 'permissions')[3].click
         ff('.ui-datepicker-trigger.btn')[0].click
         fln("15").click
+        ff('.ui-datepicker-trigger.btn')[0].send_keys(:enter) # close the calendar
         ff('.ui-datepicker-trigger.btn')[1].click
         fln("25").click
+        ff('.ui-datepicker-trigger.btn')[1].send_keys(:enter) # close the calendar
       end
     end
     ff('.btn.btn-primary')[1].click
@@ -168,7 +169,7 @@ module FilesCommon
 
   def create_new_folder
     f('.btn-add-folder').click
-    f('.ef-edit-name-form').submit
+    f("input[aria-label='Folder Name']").send_keys(:return)
     wait_for_ajaximations
     all_files_folders.first
   end
@@ -178,29 +179,18 @@ module FilesCommon
     driver.find_elements(:class, 'ef-item-row')
   end
 
-  def insert_file_from_rce(insert_into = nil)
+  def insert_file_from_rce(insert_into = nil, filename = nil)
+    fj('[role=tablist] [role=presentation]:not([aria-disabled]):contains("Files")').click
+    fj('[role=tabpanel] button:contains("unfiled")').click
+    fj('[role=tabpanel] button:contains("some test file")').click
     if insert_into == :quiz
-      ff(".ui-tabs-anchor")[6].click
-    else
-      file_tab = ff(".ui-tabs-anchor")[1]
-      expect(file_tab).to be_displayed
-      ff(".ui-tabs-anchor")[1].click
-    end
-    ff(".name.text")[0].click
-    wait_for_ajaximations
-    ff(".name.text")[1].click
-    wait_for_ajaximations
-    ff(".name.text")[2].click
-    wait_for_ajaximations
-    if insert_into == :quiz
-      ff(".name.text")[3].click
-      ff(".btn-primary")[3].click
+      fj("[role=tabpanel] button:contains('#{filename}')").click
+      f(".save_quiz_button").click
     elsif insert_into == :discussion
       f("#edit_discussion_form_buttons .btn-primary").click
     else
       f(".btn-primary").click
     end
-    wait_for_ajaximations
     expect(fln("some test file")).to be_displayed
   end
 end

@@ -29,9 +29,9 @@ module Types
 
     implements GraphQL::Types::Relay::Node
     implements Interfaces::TimestampInterface
+    implements Interfaces::LegacyIDInterface
 
     global_id_field :id
-    field :_id, ID, "legacy canvas id", null: false, method: :id
 
     field :name, String, null: true
     field :sortable_name, String,
@@ -79,6 +79,11 @@ module Types
             enrollment.grants_right?(context[:current_user], context[:session], :read)
         }
       end
+    end
+
+    field :groups, [GroupType], null: true
+    def groups
+      load_association(:current_groups)
     end
 
     field :summary_analytics, StudentSummaryAnalyticsType, null: true do

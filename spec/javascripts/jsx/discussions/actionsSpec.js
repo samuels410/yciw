@@ -19,7 +19,7 @@
 import actions from 'jsx/discussions/actions'
 import * as apiClient from 'jsx/discussions/apiClient'
 import $ from 'jquery';
-import 'compiled/jquery.rails_flash_notifications' // eslint-disable-line
+import 'compiled/jquery.rails_flash_notifications'
 
 function getState() {
   return ([{ id: 1 }, { id: 2, shouldGetFocus: true }] )
@@ -28,7 +28,7 @@ function getState() {
 let sandbox = []
 
 const mockApiClient = (method, res) => {
-  sandbox.push(sinon.sandbox.create())
+  sandbox.push(sinon.createSandbox())
   sandbox[sandbox.length - 1].stub(apiClient, method).returns(res)
 }
 
@@ -177,7 +177,7 @@ test('handleDrop throws exception if updating a field that does not exist on the
   const dispatchSpy = sinon.spy()
 
   assert.throws(
-    function() {
+    () => {
       actions.handleDrop(discussion, updateFields, {})(dispatchSpy, () => state)
     },
     "field foobar does not exist in the discussion"

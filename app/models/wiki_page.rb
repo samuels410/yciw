@@ -232,7 +232,7 @@ class WikiPage < ActiveRecord::Base
 
   def low_level_locked_for?(user, opts={})
     return false unless self.could_be_locked
-    Rails.cache.fetch([locked_cache_key(user), opts[:deep_check_if_needed]].cache_key, :expires_in => 1.minute) do
+    RequestCache.cache(locked_request_cache_key(user), opts[:deep_check_if_needed]) do
       locked = false
       if item = locked_by_module_item?(user, opts)
         locked = {object: self, :module => item.context_module}
@@ -394,11 +394,13 @@ class WikiPage < ActiveRecord::Base
   end
 
   def increment_view_count(user, context = nil)
-    unless self.new_record?
-      self.with_versioning(false) do |p|
-        context ||= p.context
-        WikiPage.where(id: p).update_all("view_count=COALESCE(view_count, 0) + 1")
-        p.context_module_action(user, context, :read)
+    Shackles.activate(:master) do
+      unless self.new_record?
+        self.with_versioning(false) do |p|
+          context ||= p.context
+          WikiPage.where(id: p).update_all("view_count=COALESCE(view_count, 0) + 1")
+          p.context_module_action(user, context, :read)
+        end
       end
     end
   end

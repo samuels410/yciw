@@ -170,7 +170,7 @@ class RoleOverridesController < ApplicationController
 
       js_bundle :permissions_index
       css_bundle :permissions
-      @active_tab = 'permissions'
+      set_active_tab 'permissions'
     end
   end
 
@@ -249,6 +249,7 @@ class RoleOverridesController < ApplicationController
   #     site_admin                       -- Use the Site Admin section and admin all other accounts
   #     view_course_changes              -- Courses - view change logs
   #     view_error_reports               -- View error reports
+  #     view_feature_flags               -- Feature Options - view
   #     view_grade_changes               -- Grades - view change logs
   #     view_jobs                        -- View background jobs
   #     view_notifications               -- Notifications - view
@@ -263,7 +264,6 @@ class RoleOverridesController < ApplicationController
   #            A missing letter indicates the permission cannot be enabled for the role
   #            or any derived custom roles.
   #     change_course_state              -- [ TaD ] Course State - manage
-  #     comment_on_others_submissions    -- [sTAD ] Submissions - view and make comments
   #     create_collaborations            -- [STADo] Student Collaborations - create
   #     create_conferences               -- [STADo] Web conferences - create
   #     create_forum                     -- [STADo] Discussions - create
@@ -492,7 +492,6 @@ class RoleOverridesController < ApplicationController
     unless result
       return render json: {message: t('Permission must be enabled for someone')}, status: :bad_request
     end
-    RoleOverride.clear_cached_contexts
     render :json => role_json(@context, @role, @current_user, session)
   end
 
@@ -676,6 +675,7 @@ class RoleOverridesController < ApplicationController
 
     # Add group_permissions
     RoleOverride.manageable_permissions(context).each do |p|
+      next if !context.root_account? && p[0].to_s == 'manage_developer_keys'
       # NOTE: p[1][:label_v2].call could eventually be removed if we copied everything over to :label
       hash = {:label => p[1].key?(:label_v2) ? p[1][:label_v2].call : p[1][:label].call, :permission_name => p[0]}
       if p[1][:account_only]

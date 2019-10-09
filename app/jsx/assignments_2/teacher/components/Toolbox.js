@@ -17,37 +17,50 @@
  */
 
 import React from 'react'
-import {func} from 'prop-types'
+import {bool, func} from 'prop-types'
 
 import I18n from 'i18n!assignments_2'
 
-import Checkbox from '@instructure/ui-forms/lib/components/Checkbox'
-import Flex, {FlexItem} from '@instructure/ui-layout/lib/components/Flex'
-import Link from '@instructure/ui-elements/lib/components/Link'
-import Text from '@instructure/ui-elements/lib/components/Text'
-import Button from '@instructure/ui-buttons/lib/components/Button'
-import ScreenReaderContent from '@instructure/ui-a11y/lib/components/ScreenReaderContent'
-
-import IconEmail from '@instructure/ui-icons/lib/Line/IconEmail'
-import IconSpeedGrader from '@instructure/ui-icons/lib/Line/IconSpeedGrader'
-import IconTrash from '@instructure/ui-icons/lib/Line/IconTrash'
-
+import {Checkbox} from '@instructure/ui-forms'
+import {Flex, FlexItem} from '@instructure/ui-layout'
+import {Button} from '@instructure/ui-buttons'
+import {ScreenReaderContent} from '@instructure/ui-a11y'
+import {IconTrashLine} from '@instructure/ui-icons'
 import {TeacherAssignmentShape} from '../assignmentData'
+import AssignmentPoints from './Editables/AssignmentPoints'
 
 export default class Toolbox extends React.Component {
   static propTypes = {
     assignment: TeacherAssignmentShape.isRequired,
-    onUnsubmittedClick: func,
-    onPublishChange: func
+    onChangeAssignment: func.isRequired,
+    onValidate: func.isRequired,
+    invalidMessage: func.isRequired,
+    onSetWorkstate: func.isRequired,
+    onDelete: func,
+    readOnly: bool
   }
 
   static defaultProps = {
-    onUnsubmittedClick: () => {},
-    onPublishChange: () => {}
+    onDelete: () => {},
+    readOnly: false
+  }
+
+  state = {
+    pointsMode: 'view'
+  }
+
+  // TODO: publish => save all pending edits, including state
+  //     unpublish => just update state
+  // so if event.target.checked, we need to call back up to whatever will
+  // do the save.
+  handlePublishChange = event => {
+    const newState = event.target.checked ? 'published' : 'unpublished'
+    this.props.onSetWorkstate(newState)
   }
 
   renderPublished() {
     // TODO: put the label on the left side of the toggle when checkbox supports it
+    // TODO: handle error when updating published
     return (
       <Checkbox
         label={I18n.t('Published')}
@@ -55,56 +68,39 @@ export default class Toolbox extends React.Component {
         size="medium"
         inline
         checked={this.props.assignment.state === 'published'}
-        onChange={this.props.onPublishChange}
+        onChange={this.handlePublishChange}
       />
     )
   }
 
   renderDelete() {
     return (
-      <Button margin="0 0 0 x-small" icon={<IconTrash />}>
-        <ScreenReaderContent>{I18n.t('Delete')}</ScreenReaderContent>
+      <Button margin="0 0 0 x-small" icon={<IconTrashLine />} onClick={this.props.onDelete}>
+        <ScreenReaderContent>{I18n.t('delete assignment')}</ScreenReaderContent>
       </Button>
-    )
-  }
-
-  renderSpeedGraderLink() {
-    const assignmentLid = this.props.assignment.lid
-    const courseLid = this.props.assignment.course.lid
-    const speedgraderLink = `/courses/${courseLid}/gradebook/speed_grader?assignment_id=${assignmentLid}`
-    return (
-      <Link href={speedgraderLink} icon={<IconSpeedGrader />} iconPlacement="end" target="_blank">
-        <Text transform="uppercase" size="small" color="primary">
-          {I18n.t('%{number} to grade', {number: 'X'})}
-        </Text>
-      </Link>
-    )
-  }
-
-  renderUnsubmittedButton() {
-    return (
-      <Link icon={<IconEmail />} iconPlacement="end" onClick={this.props.onUnsubmittedClick}>
-        <Text transform="uppercase" size="small" color="primary">
-          {I18n.t('%{number} unsubmitted', {number: 'X'})}
-        </Text>
-      </Link>
     )
   }
 
   renderPoints() {
     return (
-      <Text as="div" size="x-large" lineHeight="fit">
-        {this.props.assignment.pointsPossible}
-      </Text>
+      <AssignmentPoints
+        mode={this.state.pointsMode}
+        pointsPossible={this.props.assignment.pointsPossible}
+        onChange={this.handlePointsChange}
+        onChangeMode={this.handlePointsChangeMode}
+        onValidate={this.props.onValidate}
+        invalidMessage={this.props.invalidMessage}
+        readOnly={this.props.readOnly}
+      />
     )
   }
 
-  renderPointsLabel() {
-    return (
-      <Text as="div" lineHeight="fit">
-        {I18n.t('Points')}
-      </Text>
-    )
+  handlePointsChange = value => {
+    this.props.onChangeAssignment('pointsPossible', value)
+  }
+
+  handlePointsChangeMode = mode => {
+    this.setState({pointsMode: mode})
   }
 
   render() {
@@ -115,11 +111,8 @@ export default class Toolbox extends React.Component {
             {this.renderPublished()}
             {this.renderDelete()}
           </FlexItem>
-          <FlexItem padding="xx-small xx-small xxx-small">{this.renderSpeedGraderLink()}</FlexItem>
-          <FlexItem padding="xxx-small xx-small">{this.renderUnsubmittedButton()}</FlexItem>
-          <FlexItem padding="medium xx-small large">
+          <FlexItem padding="medium xx-small large" align="end">
             {this.renderPoints()}
-            {this.renderPointsLabel()}
           </FlexItem>
         </Flex>
       </div>

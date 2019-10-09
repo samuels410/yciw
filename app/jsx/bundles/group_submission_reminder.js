@@ -17,11 +17,11 @@
  */
 
 import $ from 'jquery'
-import I18n from 'i18n!assignments'
+import I18n from 'i18n!GroupSubmissionAlert'
 import {string} from 'prop-types'
 import React from 'react'
 import ReactDOM from 'react-dom'
-import Alert from '@instructure/ui-alerts/lib/components/Alert'
+import {Alert} from '@instructure/ui-alerts'
 
 
 export default function GroupSubmissionAlert ({groupType}) {

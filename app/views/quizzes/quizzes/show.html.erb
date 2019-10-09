@@ -16,7 +16,7 @@
 # with this program. If not, see <http://www.gnu.org/licenses/>.
 %>
 
-<% content_for :page_title do %><%= join_title(@quiz.quiz_title || @quiz.readable_type, @context.name) %><% end %>
+<% provide :page_title do %><%= join_title(@quiz.quiz_title || @quiz.readable_type, @context.name) %><% end %>
 
 <%
   # These titles are used in different elements/scopes below
@@ -38,7 +38,7 @@
 %>
 
 <% if @headers %>
-  <% content_for :right_side do %>
+  <% provide :right_side do %>
     <div id="sidebar_content" class="rs-margin-bottom">
       <ul class="page-action-list" style="display:none;">
         <h2><%= t 'titles.related_items', "Related Items" %></h2>
@@ -60,9 +60,6 @@
                 </a>
               </li>
             <% end %>
-
-            <%= render :partial => 'download_file_upload_submissions' %>
-
           <% end %>
         <% elsif can_do(@quiz, @current_user, :review_grades) %>
           <% if @submitted_student_count && @submitted_student_count > 0 %>
@@ -79,6 +76,10 @@
               <i class="icon-quiz"><span class="screenreader-only"><%= see_full_quiz_title %></span></i> <%= see_full_quiz_title %>
             </a>
           </li>
+        <% end %>
+
+        <% if can_do(@quiz, @current_user, :grade) %>
+          <%= render :partial => 'download_file_upload_submissions' %>
         <% end %>
 
         <% if (can_do(@quiz, @current_user, :grade) || can_do(@quiz, @current_user, :review_grades)) && @quiz.available? &&
@@ -114,10 +115,9 @@
       <% end %>
     <% end %>
   <% end %>
+<% else %>
+  <% provide_blank :right_side %>
 <% end %>
-
-<% js_bundle :quiz_show %>
-<% css_bundle :quizzes, :learning_outcomes %>
 
 <div id="quiz_show">
   <% if can_do(@quiz, @current_user, :update) || can_do(@quiz, @current_user, :manage) %>
@@ -226,7 +226,7 @@
             <% end %>
 
             <% if can_do(@quiz, @current_user, :grade) && can_do(@context, @current_user, :send_messages) && @quiz.available? && !@quiz.anonymous_submissions? && @quiz.graded? %>
-              <% message_students_who_title = t('links.message_students_who', "Message Students Who...") %>
+              <% message_students_who_title = t("Message Students Who...") %>
               <li role="presentation">
                 <a href="#" class="message_students_link" tabindex="-1" role="menuitem">
                   <i class="icon-email"><span class="screenreader-only"><%= message_students_who_title %></span></i> <%= message_students_who_title %>
@@ -382,7 +382,7 @@
     <%= render 'cant_go_back_warning' %>
   <% end %>
 
-  <div id="assignment_external_tools"></div>
+  <%= prefetch_assignment_external_tools %>
 
   <div id="module_sequence_footer"></div>
 

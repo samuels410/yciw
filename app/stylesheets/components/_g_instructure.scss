@@ -30,7 +30,7 @@
   position: fixed;
   top: 10px;
   #{direction(left)}: 50px;
-  z-index: 9999;
+  z-index: 99999;
   background-color: #fff;
   border: 2px solid #888;
 }
@@ -140,10 +140,6 @@
     text-decoration: underline;
   }
 
-  h3, .h3 {
-    margin-top: 1em;
-    margin-bottom: 1em;
-  }
   table:not([cellpadding]) {
     margin-#{direction(left)}: 5px;
     td {
@@ -151,6 +147,7 @@
     }
   }
 }
+
 
 .user_content iframe,
 .user_content video
@@ -1764,9 +1761,13 @@ form.user_content_post_form {
       vertical-align: middle;
       margin-#{direction(right)}: 10px;
     }
-    b {
+    b, div {
       line-height: 28px;
       vertical-align: middle;
+    }
+    i.icon-x {
+      padding-bottom: 3px;
+      margin: 0px;
     }
   }
   .fixed_warning {
@@ -1795,6 +1796,11 @@ form.user_content_post_form {
   width: 0;
 }
 
+.nav-icon {
+  @include ic-badge-maker(18px, $ic-content-background-color, $ic-color-dark);
+  float: direction(right);
+}
+
 .nav-badge {
   @include ic-badge-maker;
   float: direction(right);
@@ -1813,4 +1819,22 @@ form.user_content_post_form {
 
 .clear {
   clear: both;
+}
+
+.ic-Error-page {
+  text-align: center;
+  h1 {
+    margin-top: 3rem;
+  }
+  .ic-Error-img
+  {
+    margin-top: 2rem;
+    max-width: 350px;
+  }
+  .ic-Error-form {
+    text-align: #{direction(left)};
+    max-width: 410px;
+    margin-#{direction(left)}: auto;
+    margin-#{direction(right)}: auto;
+  }
 }

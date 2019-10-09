@@ -16,15 +16,15 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-import I18n from 'i18n!blueprint_settings'
+import I18n from 'i18n!blueprint_settingsSyncChange'
 import React, { Component } from 'react'
 import cx from 'classnames'
 
 import get from 'lodash/get'
-import Grid, { GridRow, GridCol } from '@instructure/ui-layout/lib/components/Grid'
-import Text from '@instructure/ui-elements/lib/components/Text'
-import ScreenReaderContent from '@instructure/ui-a11y/lib/components/ScreenReaderContent'
-import ToggleDetails from '@instructure/ui-toggle-details/lib/components/ToggleDetails'
+import {Grid,  GridRow, GridCol } from '@instructure/ui-layout'
+import {Text} from '@instructure/ui-elements'
+import {ScreenReaderContent} from '@instructure/ui-a11y'
+import {ToggleDetails} from '@instructure/ui-toggle-details'
 import { IconLock, IconUnlock } from './BlueprintLocks'
 
 import propTypes from '../propTypes'
@@ -68,7 +68,7 @@ class SyncChange extends Component {
   renderExceptions () {
     const exGroups = this.props.change.exceptions.reduce((groups, ex) => {
       ex.conflicting_changes.forEach((conflict) => {
-        groups[conflict] = groups[conflict] || [] // eslint-disable-line
+        groups[conflict] = groups[conflict] || []
         groups[conflict].push(ex)
       })
       return groups

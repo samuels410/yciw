@@ -304,12 +304,28 @@ class Folder < ActiveRecord::Base
     context.shard.activate do
       Folder.unique_constraint_retry do
         root_folder = context.folders.active.where(parent_folder_id: nil, name: name).first
-        root_folder ||= context.folders.create!(:name => name, :full_name => name, :workflow_state => "visible")
+        root_folder ||= Shackles.activate(:master) {context.folders.create!(:name => name, :full_name => name, :workflow_state => "visible")}
         root_folders = [root_folder]
       end
     end
 
     root_folders
+  end
+
+  def self.unique_folder(context, unique_type, default_name_proc)
+    folder = nil
+    context.shard.activate do
+      Folder.unique_constraint_retry do
+        folder = context.folders.active.where(:unique_type => unique_type).take
+        folder ||= context.folders.create!(:unique_type => unique_type, :name => default_name_proc.call, :parent_folder_id => Folder.root_folders(context).first)
+      end
+    end
+    folder
+  end
+
+  MEDIA_TYPE = "media"
+  def self.media_folder(context)
+    unique_folder(context, MEDIA_TYPE, ->{ t("Uploaded Media") })
   end
 
   def self.is_locked?(folder_id)

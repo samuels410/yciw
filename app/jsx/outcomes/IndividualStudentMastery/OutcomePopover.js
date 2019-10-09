@@ -18,16 +18,15 @@
 
 import React from 'react'
 import _ from 'lodash'
-import I18n from 'i18n!outcomes'
-import View from '@instructure/ui-layout/lib/components/View'
-import Flex, { FlexItem } from '@instructure/ui-layout/lib/components/Flex'
-import Text from '@instructure/ui-elements/lib/components/Text'
-import Link from '@instructure/ui-elements/lib/components/Link'
-import ScreenReaderContent from '@instructure/ui-a11y/lib/components/ScreenReaderContent'
+import I18n from 'i18n!IndividualStudentMasteryOutcomePopover'
+import {View, Flex, FlexItem} from '@instructure/ui-layout'
+import {Text, Link} from '@instructure/ui-elements'
+import {ScreenReaderContent} from '@instructure/ui-a11y'
 import CalculationMethodContent from 'compiled/models/grade_summary/CalculationMethodContent'
-import Popover, {PopoverTrigger, PopoverContent} from '@instructure/ui-overlays/lib/components/Popover'
-import IconInfo from '@instructure/ui-icons/lib/Line/IconInfo'
+import {Popover} from '@instructure/ui-overlays'
+import {IconInfoLine} from '@instructure/ui-icons'
 import DatetimeDisplay from '../../shared/DatetimeDisplay'
+import {CloseButton} from '@instructure/ui-buttons'
 import * as shapes from './shapes'
 
 export default class OutcomePopover extends React.Component {
@@ -42,7 +41,7 @@ export default class OutcomePopover extends React.Component {
 
   constructor () {
     super()
-    this.state = { moreInformation: false }
+    this.state = { linkHover: false, linkClicked: false }
   }
 
   getSelectedRating () {
@@ -80,8 +79,6 @@ export default class OutcomePopover extends React.Component {
     return null
   }
 
-  expandDetails = () => { this.setState({ moreInformation: !this.state.moreInformation }) }
-
   renderPopoverContent () {
     const selectedRating = this.getSelectedRating()
     const latestTime = this.latestTime()
@@ -92,8 +89,12 @@ export default class OutcomePopover extends React.Component {
       exampleScores,
       exampleResult
     } = popoverContent
+    const { outcome } = this.props
     return (
-      <View as='div' padding='small' maxWidth='30rem'>
+      <View as='div' padding='large' maxWidth='30rem'>
+        <CloseButton placement='end' onClick={() => this.setState({linkHover: false, linkClicked: false})}>
+          {I18n.t('Click to close outcome details popover')}
+        </CloseButton>
         <Text size='small'>
           <Flex
             alignItems='stretch'
@@ -101,6 +102,8 @@ export default class OutcomePopover extends React.Component {
             justifyItems='space-between'
           >
             <FlexItem grow shrink>
+              { /* word-wrap used for IE support */ }
+              <div style={{wordWrap: 'break-word', overflowWrap: 'break-word'}}>{outcome.title}</div>
               <div>{I18n.t('Last Assessment: ')}
                 { latestTime ?
                   <DatetimeDisplay datetime={latestTime} format='%b %d, %l:%M %p' /> :
@@ -138,28 +141,30 @@ export default class OutcomePopover extends React.Component {
     return (
       <span>
         <Popover
+          show={this.state.linkHover || this.state.linkClicked}
+          onDismiss={() => this.setState({linkHover: false, linkClicked: false})}
           placement="bottom"
+          on={['hover', 'click']}
+          shouldContainFocus
         >
-          <PopoverTrigger>
-            <Link onClick={() => this.expandDetails()}>
-              <span style={{color: 'black'}}><IconInfo /></span>
+          <Popover.Trigger>
+            <Link
+              onClick={() => this.setState(prevState => ({linkClicked: !prevState.linkClicked}))}
+              onMouseEnter={() => this.setState({linkHover: true})}
+              onMouseLeave={() => this.setState({linkHover: false})}
+            >
+              <span style={{color: 'black'}}><IconInfoLine /></span>
               <span>
-              {!this.state.moreInformation ?
-                <ScreenReaderContent>{I18n.t('Click to expand outcome details')}</ScreenReaderContent> :
-                <ScreenReaderContent>{I18n.t('Click to collapse outcome details')}</ScreenReaderContent>
+              {!this.state.linkClicked &&
+                <ScreenReaderContent>{I18n.t('Click to expand outcome details')}</ScreenReaderContent>
               }
               </span>
             </Link>
-          </PopoverTrigger>
-          <PopoverContent>
+          </Popover.Trigger>
+          <Popover.Content>
             {popoverContent}
-          </PopoverContent>
+          </Popover.Content>
         </Popover>
-        <FlexItem>
-          {this.state.moreInformation &&
-            <ScreenReaderContent>{popoverContent}</ScreenReaderContent>
-          }
-        </FlexItem>
       </span>
     )
   }

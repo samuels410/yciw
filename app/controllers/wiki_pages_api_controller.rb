@@ -241,6 +241,7 @@ class WikiPagesApiController < ApplicationController
   # @returns [Page]
   def index
     if authorized_action(@context.wiki, @current_user, :read) && tab_enabled?(@context.class::TAB_PAGES)
+      log_api_asset_access([ "pages", @context ], "pages", "other")
       pages_route = polymorphic_url([:api_v1, @context, :wiki_pages])
       # omit body from selection, since it's not included in index results
       scope = @context.wiki_pages.select(WikiPage.column_names - ['body']).preload(:user)
@@ -467,20 +468,22 @@ class WikiPagesApiController < ApplicationController
   #
   # @returns PageRevision
   def show_revision
-    if params.has_key?(:revision_id)
-      permission = :read_revisions
-      revision = @page.versions.where(number: params[:revision_id].to_i).first!
-    else
-      permission = :read
-      revision = @page.versions.current
-    end
-    if authorized_action(@page, @current_user, permission)
-      include_content = if params.has_key?(:summary)
-                          !value_to_boolean(params[:summary])
-                        else
-                          true
-                        end
-      render :json => wiki_page_revision_json(revision, @current_user, session, include_content, @page.current_version)
+    Shackles.activate(:slave) do
+      if params.has_key?(:revision_id)
+        permission = :read_revisions
+        revision = @page.versions.where(number: params[:revision_id].to_i).first!
+      else
+        permission = :read
+        revision = @page.versions.current
+      end
+      if authorized_action(@page, @current_user, permission)
+        include_content = if params.has_key?(:summary)
+                            !value_to_boolean(params[:summary])
+                          else
+                            true
+                          end
+        render :json => wiki_page_revision_json(revision, @current_user, session, include_content, @page.current_version)
+      end
     end
   end
 

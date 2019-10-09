@@ -24,6 +24,7 @@ class ContextExternalTool < ActiveRecord::Base
 
   belongs_to :context, polymorphic: [:course, :account]
   belongs_to :developer_key
+  belongs_to :root_account, class_name: 'Account'
 
   include MasterCourses::Restrictor
   restrict_columns :content, [:name, :description]
@@ -36,6 +37,7 @@ class ContextExternalTool < ActiveRecord::Base
   validates_presence_of :config_xml, :if => lambda { |t| t.config_type == "by_xml" }
   validates_length_of :domain, :maximum => 253, :allow_blank => true
   validate :url_or_domain_is_set
+  validate :validate_urls
   serialize :settings
   attr_accessor :config_type, :config_url, :config_xml
 
@@ -43,20 +45,30 @@ class ContextExternalTool < ActiveRecord::Base
   after_save :touch_context, :check_global_navigation_cache, :clear_tool_domain_cache
   validate :check_for_xml_error
 
+  scope :disabled, -> { where(workflow_state: DISABLED_STATE) }
+  scope :quiz_lti, -> { where(tool_id: QUIZ_LTI) }
+
+  CUSTOM_EXTENSION_KEYS = {
+    :file_menu => [:accept_media_types].freeze,
+    :editor_button => [:use_tray].freeze
+  }.freeze
+
+  DISABLED_STATE = 'disabled'.freeze
+  QUIZ_LTI = 'Quizzes 2'.freeze
+
   workflow do
     state :anonymous
     state :name_only
     state :email_only
     state :public
     state :deleted
+    state DISABLED_STATE.to_sym # The tool's developer key is "off" but not deleted
   end
 
   set_policy do
     given { |user, session| self.context.grants_right?(user, session, :lti_add_edit) }
     can :read and can :update and can :delete and can :update_manually
   end
-
-  CUSTOM_EXTENSION_KEYS = {:file_menu => [:accept_media_types].freeze}.freeze
 
   Lti::ResourcePlacement::PLACEMENTS.each do |type|
     class_eval <<-RUBY, __FILE__, __LINE__ + 1
@@ -78,7 +90,7 @@ class ContextExternalTool < ActiveRecord::Base
   end
 
   def deployment_id
-    "#{self.id}:#{Lti::Asset.opaque_identifier_for(self.context)}"
+    "#{self.id}:#{Lti::Asset.opaque_identifier_for(self.context)}"[0..254]
   end
 
   def content_migration_configured?
@@ -86,10 +98,6 @@ class ContextExternalTool < ActiveRecord::Base
       settings['content_migration'].is_a?(Hash) &&
       settings['content_migration'].key?('export_start_url') &&
       settings['content_migration'].key?('import_start_url')
-  end
-
-  def lti_1_3_enabled?
-    use_1_3? && context.root_account.feature_enabled?(:lti_1_3)
   end
 
   def extension_setting(type, property = nil)
@@ -127,11 +135,13 @@ class ContextExternalTool < ActiveRecord::Base
       :icon_url,
       :message_type,
       :prefer_sis_email,
+      :required_permissions,
       :selection_height,
       :selection_width,
       :text,
       :windowTarget,
-      :url
+      :url,
+      :target_link_uri
     ]
 
     if custom_keys = CUSTOM_EXTENSION_KEYS[type]
@@ -174,11 +184,33 @@ class ContextExternalTool < ActiveRecord::Base
   def url_or_domain_is_set
     placements = Lti::ResourcePlacement::PLACEMENTS
     # url or domain (or url on canvas lti extension) is required
-    if url.blank? && domain.blank? && placements.all?{|k| !settings[k] || settings[k]['url'].blank? }
+    if url.blank? && domain.blank? && placements.all?{|k| !settings[k] || (settings[k]['url'].blank? && settings[k]['target_link_uri'].blank?) }
       errors.add(:url, t('url_or_domain_required', "Either the url or domain should be set."))
       errors.add(:domain, t('url_or_domain_required', "Either the url or domain should be set."))
     end
   end
+
+  def validate_urls
+    (
+      [url] + Lti::ResourcePlacement::PLACEMENTS.map do |p|
+        settings[p]&.with_indifferent_access&.fetch('url', nil) ||
+        settings[p]&.with_indifferent_access&.fetch('target_link_uri', nil)
+
+      end
+    ).
+      compact.
+      map { |u| validate_url(u) }
+  end
+  private :validate_urls
+
+  def validate_url(u)
+    u = URI.parse(u)
+  rescue
+    errors.add(:url,
+      t('url_or_domain_no_valid', "Incorrect url for %{url}", url: u)
+    )
+  end
+  private :validate_url
 
   def settings
     read_or_initialize_attribute(:settings, {})
@@ -264,6 +296,7 @@ class ContextExternalTool < ActiveRecord::Base
   def process_extended_configuration
     return unless (config_type == 'by_url' && config_url) || (config_type == 'by_xml' && config_xml)
     tool_hash = nil
+    @config_errors = []
     begin
        converter = CC::Importer::BLTIConverter.new
        if config_type == 'by_url'
@@ -275,8 +308,6 @@ class ContextExternalTool < ActiveRecord::Base
        tool_hash = {:error => e.message}
     end
 
-
-    @config_errors = []
     error_field = config_type == 'by_xml' ? 'config_xml' : 'config_url'
     converter = CC::Importer::BLTIConverter.new
     tool_hash = if config_type == 'by_url'
@@ -296,7 +327,7 @@ class ContextExternalTool < ActiveRecord::Base
     self.name = real_name unless real_name.blank?
   rescue CC::Importer::BLTIConverter::CCImportError => e
     @config_errors << [error_field, e.message]
-  rescue URI::Error
+  rescue URI::Error, CanvasHttp::Error
     @config_errors << [:config_url, "Invalid URL"]
   rescue ActiveRecord::RecordInvalid => e
     @config_errors += Array(e.record.errors)
@@ -310,13 +341,16 @@ class ContextExternalTool < ActiveRecord::Base
     settings[:use_1_3] = bool
   end
 
-  def custom_fields_string=(str)
-    hash = {}
-    str.split(/[\r\n]+/).each do |line|
+  def self.find_custom_fields_from_string(str)
+    return {} if str.nil?
+    str.split(/[\r\n]+/).each_with_object({}) do |line, hash|
       key, val = line.split(/=/)
       hash[key] = val if key.present? && val.present?
     end
-    settings[:custom_fields] = hash
+  end
+
+  def custom_fields_string=(str)
+    settings[:custom_fields] = ContextExternalTool.find_custom_fields_from_string(str)
   end
 
   def custom_fields=(hash)
@@ -379,9 +413,19 @@ class ContextExternalTool < ActiveRecord::Base
     extension_setting(extension_type, :display_type) || 'in_context'
   end
 
+  def login_or_launch_url(extension_type: nil, content_tag_uri: nil)
+    (use_1_3? && developer_key&.oidc_initiation_url) ||
+    content_tag_uri ||
+    (use_1_3? && extension_setting(extension_type, :target_link_uri)) ||
+    extension_setting(extension_type, :url) ||
+    url
+  end
+
   def extension_default_value(type, property)
     case property
       when :url
+        url
+      when :target_link_uri
         url
       when :selection_width
         800
@@ -413,6 +457,7 @@ class ContextExternalTool < ActiveRecord::Base
   def infer_defaults
     self.url = nil if url.blank?
     self.domain = nil if domain.blank?
+    self.root_account ||= context.root_account
 
     ContextExternalTool.normalize_sizes!(self.settings)
 
@@ -513,11 +558,15 @@ class ContextExternalTool < ActiveRecord::Base
       res.normalize!
       return true if res.to_s == standard_url
     end
-    if domain.present?
-      host = Addressable::URI.parse(url).normalize.host rescue nil
-      !!(host && ('.' + host).match(/\.#{domain}\z/))
-    end
   end
+
+  def matches_tool_domain?(url)
+    return false if domain.blank?
+    url = ContextExternalTool.standardize_url(url)
+    host = Addressable::URI.parse(url).normalize.host rescue nil
+    d = domain.gsub(/http[s]?\:\/\//, '')
+    !!(host && ('.' + host).match(/\.#{d}\z/))
+end
 
   def matches_domain?(url)
     url = ContextExternalTool.standardize_url(url)
@@ -556,21 +605,8 @@ class ContextExternalTool < ActiveRecord::Base
     end
   end
 
-  LOR_TYPES = [:course_home_sub_navigation, :course_settings_sub_navigation, :global_navigation,
-               :assignment_menu, :file_menu, :discussion_topic_menu, :module_menu, :quiz_menu,
-               :wiki_page_menu]
   def self.all_tools_for(context, options={})
-    #options[:type] is deprecated, use options[:placements] instead
     placements =* options[:placements] || options[:type]
-
-    #special LOR feature flag
-    unless (options[:root_account] && options[:root_account].feature_enabled?(:lor_for_account)) ||
-        (options[:current_user] && options[:current_user].feature_enabled?(:lor_for_user))
-      valid_placements = placements.select{|placement| !LOR_TYPES.include?(placement.to_sym)}
-      return [] if valid_placements.size == 0 && placements.size > 0
-      placements = valid_placements
-    end
-
     contexts = []
     if options[:user]
       contexts << options[:user]
@@ -630,7 +666,7 @@ class ContextExternalTool < ActiveRecord::Base
     res = sorted_external_tools.detect{ |tool| tool.url && tool.matches_url?(url, false) && tool.id != exclude_tool_id }
     return res if res
 
-    res = sorted_external_tools.detect{ |tool| tool.domain && tool.matches_url?(url) && tool.id != exclude_tool_id }
+    res = sorted_external_tools.detect{ |tool| tool.domain && tool.matches_tool_domain?(url) && tool.id != exclude_tool_id }
     return res if res
 
     nil
@@ -703,7 +739,9 @@ class ContextExternalTool < ActiveRecord::Base
 
     tool
   end
-  scope :active, -> { where("context_external_tools.workflow_state<>'deleted'") }
+  scope :active, -> do
+    where.not(workflow_state: ['deleted', 'disabled'])
+  end
 
   def self.find_all_for(context, type)
     tools = []
@@ -737,15 +775,34 @@ class ContextExternalTool < ActiveRecord::Base
     settings[:resource_selection]
   end
 
-  def opaque_identifier_for(asset)
-    ContextExternalTool.opaque_identifier_for(asset, self.shard)
+  def opaque_identifier_for(asset, context: nil)
+    ContextExternalTool.opaque_identifier_for(asset, self.shard, context: context)
   end
 
-  def self.opaque_identifier_for(asset, shard)
+  def self.opaque_identifier_for(asset, shard, context: nil)
     shard.activate do
       lti_context_id = context_id_for(asset, shard)
-      Lti::Asset.set_asset_context_id(asset, lti_context_id)
+      Lti::Asset.set_asset_context_id(asset, lti_context_id, context: context)
     end
+  end
+
+  def visible_with_permission_check?(launch_type, user, context, session=nil)
+    return false unless self.class.visible?(self.extension_setting(launch_type, 'visibility'), user, context, session)
+    permission_given?(launch_type, user, context, session)
+  end
+
+  def permission_given?(launch_type, user, context, session=nil)
+    if (required_permissions_str = self.extension_setting(launch_type, 'required_permissions'))
+      # if configured with a comma-separated string of permissions, will only show the link
+      # if all permissions are granted
+      required_permissions_str.split(",").map(&:to_sym).all?{|p| context&.grants_right?(user, session, p)}
+    else
+      true
+    end
+  end
+
+  def quiz_lti?
+    tool_id == QUIZ_LTI
   end
 
   private
@@ -771,7 +828,8 @@ class ContextExternalTool < ActiveRecord::Base
   end
 
   def self.global_navigation_visibility_for_user(root_account, user)
-    Rails.cache.fetch(['external_tools/global_navigation/visibility', root_account.asset_string, user].cache_key) do
+    Rails.cache.fetch_with_batched_keys(['external_tools/global_navigation/visibility', root_account.asset_string].cache_key,
+        batch_object: user, batched_keys: [:enrollments, :account_users]) do
       # let them see admin level tools if there are any courses they can manage
       if root_account.grants_right?(user, :manage_content) ||
         Course.manageable_by_user(user.id, true).not_deleted.where(:root_account_id => root_account).exists?
@@ -783,12 +841,14 @@ class ContextExternalTool < ActiveRecord::Base
   end
 
   def self.global_navigation_tools(root_account, visibility)
-    tools = root_account.context_external_tools.active.having_setting(:global_navigation).to_a
-    if visibility == 'members'
-      # reject the admin only tools
-      tools.reject!{|tool| tool.global_navigation[:visibility] == 'admins'}
+    RequestCache.cache('global_navigation_tools', root_account, visibility) do
+      tools = root_account.context_external_tools.active.having_setting(:global_navigation).to_a
+      if visibility == 'members'
+        # reject the admin only tools
+        tools.reject!{|tool| tool.global_navigation[:visibility] == 'admins'}
+      end
+      tools
     end
-    tools
   end
 
   def self.global_navigation_menu_cache_key(root_account, visibility)
@@ -820,7 +880,8 @@ class ContextExternalTool < ActiveRecord::Base
           :icon_url => tool.editor_button(:icon_url),
           :canvas_icon_class => tool.editor_button(:canvas_icon_class),
           :width => tool.editor_button(:selection_width),
-          :height => tool.editor_button(:selection_height)
+          :height => tool.editor_button(:selection_height),
+          :use_tray => tool.editor_button(:use_tray) == "true"
       }
     end
   end

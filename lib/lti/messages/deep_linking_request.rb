@@ -18,32 +18,53 @@
 module Lti::Messages
   class DeepLinkingRequest < JwtMessage
     ACCEPT_TYPES = {
-      'editor_button' => %w(link file html ltiResourceLink image).freeze
+      'migration_selection' => %w(file).freeze,
+      'editor_button' => %w(link file html ltiResourceLink image).freeze,
+      'assignment_selection' => %w(ltiResourceLink).freeze,
+      'homework_submission' => %w(file).freeze,
+      'link_selection' => %w(ltiResourceLink).freeze
     }.freeze
 
     DOCUMENT_TARGETS = {
-      'editor_button' => %w(embed iframe window).freeze
+      'migration_selection' => %w(iframe).freeze,
+      'editor_button' => %w(embed iframe window).freeze,
+      'assignment_selection' => %w(iframe window).freeze,
+      'homework_submission' => %w(iframe).freeze,
+      'link_selection' => %w(iframe window).freeze,
     }.freeze
 
     MEDIA_TYPES = {
-      'editor_button' => %w(image/* text/html application/vnd.ims.lti.v1.ltilink */*).freeze
+      'migration_selection' => %w(
+        application/vnd.ims.imsccv1p1
+        application/vnd.ims.imsccv1p2
+        application/vnd.ims.imsccv1p3
+        application/zip
+        application/xml
+      ).freeze,
+      'editor_button' => %w(image/* text/html application/vnd.ims.lti.v1.ltilink */*).freeze,
+      'assignment_selection' => %w(application/vnd.ims.lti.v1.ltilink).freeze,
+      'homework_submission' => %w(*/*).freeze,
+      'link_selection' => %w(application/vnd.ims.lti.v1.ltilink).freeze
     }.freeze
 
     AUTO_CREATE = {
-      'editor_button' => false
+      'migration_selection' => false,
+      'editor_button' => false,
+      'assignment_selection' => false,
+      'homework_submission' => false,
+      'link_selection' => false
     }.freeze
 
-    MODAL_PLACEMENTS = ['editor_button'].freeze
+    MODAL_PLACEMENTS = %w(editor_button assignment_selection link_selection migration_selection).freeze
 
     def initialize(tool:, context:, user:, expander:, return_url:, opts: {})
       super
       @message = LtiAdvantage::Messages::DeepLinkingRequest.new
     end
 
-    def generate_post_payload_message
-      super
+    def generate_post_payload_message(validate_launch: true)
       add_deep_linking_request_claims!
-      @message
+      super(validate_launch: validate_launch)
     end
 
     private

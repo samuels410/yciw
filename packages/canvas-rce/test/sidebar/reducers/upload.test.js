@@ -32,7 +32,8 @@ describe("Upload reducer", () => {
       rootFolderId: null,
       folderTree: {},
       error: {},
-      loadingFolders: false
+      loadingFolders: false,
+      uploadingMediaStatus: false
     };
   });
 
@@ -171,27 +172,27 @@ describe("Upload reducer", () => {
       action = {
         type: actions.PROCESSED_FOLDER_BATCH,
         folders: {
-          [1]: { id: 1, name: "course files", parentId: null },
-          [2]: { id: 2, name: "b", parentId: 1 },
-          [3]: { id: 3, name: "a", parentId: 1 },
-          [4]: { id: 4, name: "c", parentId: 1 },
-          [5]: { id: 5, name: "ac", parentId: 3 },
-          [6]: { id: 6, name: "ab", parentId: 3 },
-          [7]: { id: 7, name: "ba", parentId: 2 },
-          [8]: { id: 8, name: "aa", parentId: 3 },
-          [9]: { id: 9, name: "bc", parentId: 2 }
+          1: { id: 1, name: "course files", parentId: null },
+          2: { id: 2, name: "b", parentId: 1 },
+          3: { id: 3, name: "a", parentId: 1 },
+          4: { id: 4, name: "c", parentId: 1 },
+          5: { id: 5, name: "ac", parentId: 3 },
+          6: { id: 6, name: "ab", parentId: 3 },
+          7: { id: 7, name: "ba", parentId: 2 },
+          8: { id: 8, name: "aa", parentId: 3 },
+          9: { id: 9, name: "bc", parentId: 2 }
         }
       };
-      let desiredTree = {
-        [1]: [3, 2, 4],
-        [2]: [7, 9],
-        [3]: [8, 6, 5],
-        [4]: [],
-        [5]: [],
-        [6]: [],
-        [7]: [],
-        [8]: [],
-        [9]: []
+      const desiredTree = {
+        1: [3, 2, 4],
+        2: [7, 9],
+        3: [8, 6, 5],
+        4: [],
+        5: [],
+        6: [],
+        7: [],
+        8: [],
+        9: []
       };
       assert.deepEqual(upload(state, action).folderTree, desiredTree);
     });
@@ -204,6 +205,30 @@ describe("Upload reducer", () => {
 
     it("sets loadingFolders to true", () => {
       assert.equal(true, upload(state, action).loadingFolders);
+    });
+
+    it("sets uploadingMediaStatus loading true", () => {
+      assert.deepEqual({loading: true, uploaded: false, error: false}, upload(state, action).uploadingMediaStatus);
+    });
+  });
+
+  describe("FAIL_MEDIA_UPLOAD", () => {
+    beforeEach(() => {
+      action = { type: actions.FAIL_MEDIA_UPLOAD };
+    });
+
+    it("sets uploadingMediaStatus error to true", () => {
+      assert.deepEqual({loading: false, uploaded: false, error: true}, upload(state, action).uploadingMediaStatus);
+    });
+  });
+
+  describe("MEDIA_UPLOAD_SUCCESS", () => {
+    beforeEach(() => {
+      action = { type: actions.MEDIA_UPLOAD_SUCCESS };
+    });
+
+    it("sets uploadingMediaStatus uploaded to true", () => {
+      assert.deepEqual({loading: false, uploaded: true, error: false}, upload(state, action).uploadingMediaStatus);
     });
   });
 

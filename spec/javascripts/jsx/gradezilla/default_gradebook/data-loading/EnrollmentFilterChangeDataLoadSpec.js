@@ -17,7 +17,10 @@
  */
 
 import DataLoader from 'jsx/gradezilla/DataLoader'
-import {createGradebook, setFixtureHtml} from 'jsx/gradezilla/default_gradebook/__tests__/GradebookSpecHelper'
+import {
+  createGradebook,
+  setFixtureHtml
+} from 'jsx/gradezilla/default_gradebook/__tests__/GradebookSpecHelper'
 import {createExampleStudents} from './DataLoadingSpecHelpers'
 import DataLoadingWrapper from './DataLoadingWrapper'
 
@@ -71,6 +74,7 @@ QUnit.module('Gradebook Enrollment Filter Change Data Loading', suiteHooks => {
         },
         selected_view_options_filters: []
       },
+      student_groups: [],
       students_stateless_url: '/students-url',
       submissions_url: '/submissions-url'
     }

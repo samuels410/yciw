@@ -7,7 +7,7 @@ exports[`The CriterionInfo component renders the root component as expected 1`] 
     buttonRef={[Function]}
     cursor="pointer"
     fluidWidth={false}
-    icon={<IconQuestion />}
+    icon={<IconQuestionLine />}
     margin="0"
     onClick={[Function]}
     size="medium"
@@ -30,7 +30,7 @@ exports[`The CriterionInfo component renders the root component as expected 2`] 
     buttonRef={[Function]}
     cursor="pointer"
     fluidWidth={false}
-    icon={<IconQuestion />}
+    icon={<IconQuestionLine />}
     margin="0"
     onClick={[Function]}
     size="medium"
@@ -62,12 +62,16 @@ exports[`The CriterionInfo component renders the root component as expected 2`] 
     onExiting={[Function]}
     onOpen={[Function]}
     open={true}
+    overflow="scroll"
     shouldCloseOnDocumentClick={true}
     shouldReturnFocus={true}
     size="medium"
     transition="fade"
+    variant="default"
   >
-    <ModalHeader>
+    <ModalHeader
+      variant="default"
+    >
       <CloseButton
         buttonRef={[Function]}
         margin="0"
@@ -91,12 +95,14 @@ exports[`The CriterionInfo component renders the root component as expected 2`] 
     <ModalBody
       as="div"
       padding="medium"
+      variant="default"
     >
       <Text
         as="span"
         letterSpacing="normal"
         lineHeight="double"
         size="medium"
+        wrap="normal"
       >
         
 Learning outcomes can be included in assignment rubrics as an easy way to assess

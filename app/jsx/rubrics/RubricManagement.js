@@ -19,8 +19,8 @@ import React from 'react'
 import ReactDOM from 'react-dom'
 import _ from 'lodash'
 import PropTypes from 'prop-types'
-import I18n from 'i18n!rubrics'
-import TabList, { TabPanel } from '@instructure/ui-tabs/lib/components/TabList'
+import I18n from 'i18n!RubricManagement'
+import {TabList,  TabPanel } from '@instructure/ui-tabs'
 import ProficiencyTable from 'jsx/rubrics/ProficiencyTable'
 import RubricPanel from 'jsx/rubrics/RubricPanel'
 
@@ -30,7 +30,6 @@ export default class RubricManagement extends React.Component {
   }
 
   focusTab = _.memoize((ix) => () => {
-    // eslint-disable-next-line react/no-find-dom-node
     ReactDOM.findDOMNode(this.tabList._tabs[ix]).focus()
   })
 

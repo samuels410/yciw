@@ -17,30 +17,41 @@
  */
 
 import React from 'react'
-import {render} from 'react-testing-library'
-import {closest, mockAssignment} from '../../test-utils'
+import {render} from '@testing-library/react'
+import CanvasValidatedMockedProvider from 'jsx/__tests__/CanvasValidatedMockedProvider'
+import {closest, mockAssignment, mockSubmission} from '../../test-utils'
 import Toolbox from '../Toolbox'
 
-it('renders basic information', () => {
-  const assignment = mockAssignment()
-  const {getByText, getByLabelText} = render(<Toolbox assignment={assignment} />)
-  expect(getByLabelText('Published').getAttribute('checked')).toBe('')
-  const sgLink = closest(getByText('X to grade'), 'a')
-  expect(sgLink).toBeTruthy()
-  expect(sgLink.getAttribute('href')).toMatch(
-    /\/courses\/course-lid\/gradebook\/speed_grader\?assignment_id=assignment-lid/
+function renderToolbox(assignment) {
+  return render(
+    <CanvasValidatedMockedProvider>
+      <Toolbox
+        assignment={assignment}
+        onChangeAssignment={() => {}}
+        onSetWorkstate={() => {}}
+        onValidate={() => true}
+        invalidMessage={() => undefined}
+      />
+    </CanvasValidatedMockedProvider>
   )
-  expect(closest(getByText('X unsubmitted'), 'button')).toBeTruthy()
-})
+}
 
-it('renders unpublished value checkbox', () => {
-  const {getByLabelText} = render(<Toolbox assignment={mockAssignment({state: 'unpublished'})} />)
-  expect(getByLabelText('Published').getAttribute('checked')).toBeFalsy()
-})
+describe('assignments 2 teacher view toolbox', () => {
+  it('renders basic information', () => {
+    const assignment = mockAssignment({
+      needsGradingCount: 1,
+      submissions: {
+        nodes: [mockSubmission({submittedAt: null}), mockSubmission()]
+      }
+    })
 
-it('should open speedgrader link in a new tab', () => {
-  const assignment = mockAssignment()
-  const {getByText} = render(<Toolbox assignment={assignment} />)
-  const sgLink = closest(getByText('X to grade'), 'a')
-  expect(sgLink.getAttribute('target')).toEqual('_blank')
+    const {getByLabelText, getByTestId} = renderToolbox(assignment)
+    expect(getByLabelText('Published').getAttribute('checked')).toBe('')
+    expect(getByTestId('AssignmentPoints')).toBeInTheDocument()
+  })
+
+  it('renders unpublished value checkbox', () => {
+    const {getByLabelText} = renderToolbox(mockAssignment({state: 'unpublished'}))
+    expect(getByLabelText('Published').getAttribute('checked')).toBeFalsy()
+  })
 })

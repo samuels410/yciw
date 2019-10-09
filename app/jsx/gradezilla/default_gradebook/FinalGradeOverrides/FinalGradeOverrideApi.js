@@ -18,7 +18,9 @@
 
 import axios from 'axios'
 import {camelize} from 'convert_case'
-import I18n from 'i18n!gradebook'
+import I18n from 'i18n!gradezilla'
+
+import {createClient, gql} from '../../../canvas-apollo'
 import {showFlashAlert} from '../../../shared/FlashAlert'
 
 export function getFinalGradeOverrides(courseId) {
@@ -53,6 +55,37 @@ export function getFinalGradeOverrides(courseId) {
     .catch(() => {
       showFlashAlert({
         message: I18n.t('There was a problem loading final grade overrides.'),
+        type: 'error'
+      })
+    })
+}
+
+export function updateFinalGradeOverride(enrollmentId, gradingPeriodId, grade) {
+  const gradingPeriodQuery = gradingPeriodId ? `gradingPeriodId: ${gradingPeriodId}` : ''
+
+  const mutation = gql`
+    mutation {
+      setOverrideScore(input: {
+        enrollmentId: ${enrollmentId}
+        ${gradingPeriodQuery}
+        overrideScore: ${grade && grade.percentage}
+      }) {
+        grades {
+          overrideScore
+        }
+      }
+    }
+  `
+
+  return createClient()
+    .mutate({mutation})
+    .then(response => {
+      const {overrideScore} = response.data.setOverrideScore.grades
+      return overrideScore != null ? {percentage: overrideScore} : null
+    })
+    .catch((/* error */) => {
+      showFlashAlert({
+        message: I18n.t('There was a problem overriding the grade.'),
         type: 'error'
       })
     })

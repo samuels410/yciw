@@ -16,13 +16,13 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-import I18n from 'i18n!roster'
+import I18n from 'i18n!PeopleReadyList'
 import React from 'react'
 import PropTypes from 'prop-types'
 import {personReadyToEnrollShape} from './shapes'
-import Alert from '@instructure/ui-alerts/lib/components/Alert'
-import Table from '@instructure/ui-elements/lib/components/Table'
-import ScreenReaderContent from '@instructure/ui-a11y/lib/components/ScreenReaderContent'
+import {Alert} from '@instructure/ui-alerts'
+import {Table} from '@instructure/ui-elements'
+import {ScreenReaderContent} from '@instructure/ui-a11y'
 
   class PeopleReadyList extends React.Component {
     static propTypes = {

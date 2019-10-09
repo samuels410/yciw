@@ -16,7 +16,6 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-import _ from 'underscore'
 import createStore from '../helpers/createStore'
 import $ from 'jquery'
   var ProgressStore = createStore({}),
@@ -25,7 +24,7 @@ import $ from 'jquery'
   ProgressStore.get = function(progress_id) {
     var url = "/api/v1/progress/" + progress_id;
 
-    $.getJSON(url, function(data) {
+    $.getJSON(url, data => {
       _progresses[data.id] = data;
       ProgressStore.setState(_progresses);
     });

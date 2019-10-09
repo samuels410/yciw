@@ -85,7 +85,7 @@ export function uploadFile(preflightUrl, preflightData, file, ajaxLib = axios) {
 
   return ajaxLib.post(preflightUrl, preflightData)
     .catch(preflightFailed)
-    .then((response) => exports.completeUpload(response.data, file, { ajaxLib }));
+    .then((response) => completeUpload(response.data, file, { ajaxLib }));
 }
 
 /*
@@ -183,4 +183,61 @@ export function completeUpload(preflightResponse, file, options={}) {
       return response.data;
     }
   });
+}
+
+/*
+ * This is a helper file for uploading a file to a submissions comment
+ * for a logged in user before actually creating the submissions comment
+ *
+ * @returns an array of attachment objects. The attachment objects contain ids
+ * that a submissions comment can link to
+ */
+export function submissionCommentAttachmentsUpload(files, courseId, assignmentId) {
+  const preflightFileUploadUrl = `/api/v1/courses/${courseId}/assignments/${assignmentId}/submissions/self/comments/files`
+  const uploadPromises = files.map(currentFile => {
+    const preflightFileData = {
+      name: currentFile.name,
+      content_type: currentFile.type
+    }
+    return uploadFile(preflightFileUploadUrl, preflightFileData, currentFile)
+  })
+  return Promise.all(uploadPromises)
+}
+
+/*
+ * This is a helper function for uploading multiple files to a given
+ * upload url
+ *
+ * @returns an array of attachment objects.
+ */
+export function uploadFiles(files, uploadUrl) {
+  // We differentiate between a normal file and an lti content item
+  // based on the existence of a url attribute on the object. Then we invoke
+  // the uploadFile function with different parameters based on whether its a
+  // normal file or a content item backed by a file url. The parameters we are
+  // providing are determined by the file uploads api whose documentation can
+  // be found at /doc/api/file_uploads.md
+  const uploadPromises = files.map(file => {
+    if (file.url) {
+      return uploadFile(
+        uploadUrl,
+        {
+          url: file.url,
+          name: file.title,
+          content_type: file.mediaType,
+          submit_assignment: false
+        }
+      )
+    } else {
+      return uploadFile(
+        uploadUrl,
+        {
+          name: file.name,
+          content_type: file.type
+        },
+        file
+      )
+    }
+  })
+  return Promise.all(uploadPromises)
 }

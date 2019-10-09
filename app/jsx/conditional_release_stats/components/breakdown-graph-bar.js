@@ -18,7 +18,7 @@
 
 import React from 'react'
 import PropTypes from 'prop-types'
-import I18n from 'i18n!cyoe_assignment_sidebar'
+import I18n from 'i18n!cyoe_assignment_sidebar_breakdown_graph_bar'
   const { string, number, func } = PropTypes
 
   class BreakdownGraph extends React.Component {
@@ -32,15 +32,10 @@ import I18n from 'i18n!cyoe_assignment_sidebar'
       selectRange: func.isRequired,
     }
 
-    constructor () {
-      super()
-      this.selectRange = this.selectRange.bind(this)
-    }
-
-    selectRange (e) {
+    selectRange = e => {
       this.props.openSidebar(e.target)
       this.props.selectRange(this.props.rangeIndex)
-    }
+    };
 
     renderInnerBar() {
       const width = Math.min((this.props.rangeStudents / this.props.totalStudents) * 100, 100)

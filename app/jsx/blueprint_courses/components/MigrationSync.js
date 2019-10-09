@@ -16,7 +16,7 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-import I18n from 'i18n!blueprint_settings'
+import I18n from 'i18n!blueprint_settingsMigrationSync'
 import React, { Component } from 'react'
 import PropTypes from 'prop-types'
 import { connect } from 'react-redux'
@@ -25,10 +25,9 @@ import select from '../../shared/select'
 import cx from 'classnames'
 import 'compiled/jquery.rails_flash_notifications'
 
-import Progress from '@instructure/ui-elements/lib/components/Progress'
-import Button from '@instructure/ui-buttons/lib/components/Button'
-import Text from '@instructure/ui-elements/lib/components/Text'
-import IconRefreshLine from '@instructure/ui-icons/lib/Line/IconRefresh'
+import {Progress, Text} from '@instructure/ui-elements'
+import {Button} from '@instructure/ui-buttons'
+import {IconRefreshLine} from '@instructure/ui-icons'
 
 import MigrationStates from '../migrationStates'
 import propTypes from '../propTypes'

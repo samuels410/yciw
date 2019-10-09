@@ -56,6 +56,7 @@ module CC::Importer::Canvas
       ['title', 'course_code', 'default_wiki_editing_roles',
        'turnitin_comments', 'default_view', 'license', 'locale',
        'group_weighting_scheme', 'storage_quota', 'grading_standard_identifier_ref',
+       'overridden_course_visibility',
        'root_account_uuid', 'image_url', 'image_identifier_ref'].each do |string_type|
         val = get_node_val(doc, string_type)
         course[string_type] = val unless val.nil?
@@ -94,6 +95,9 @@ module CC::Importer::Canvas
           add_warning(I18n.t('errors.bad_navigation_config', "Invalid course tab configuration"), $!)
         end
       end
+
+      post_manually = get_bool_val(doc, 'default_post_policy post_manually')
+      course[:default_post_policy] = {post_manually: post_manually} unless post_manually.nil?
 
       course
     end

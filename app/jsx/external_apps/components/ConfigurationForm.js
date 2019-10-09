@@ -23,6 +23,7 @@ import PropTypes from 'prop-types'
 import ConfigurationFormManual from '../../external_apps/components/ConfigurationFormManual'
 import ConfigurationFormUrl from '../../external_apps/components/ConfigurationFormUrl'
 import ConfigurationFormXml from '../../external_apps/components/ConfigurationFormXml'
+import ConfigurationFormLti13 from './ConfigurationFormLti13'
 import ConfigurationFormLti2 from '../../external_apps/components/ConfigurationFormLti2'
 import ConfigurationTypeSelector from '../../external_apps/components/ConfigurationTypeSelector'
 
@@ -38,7 +39,7 @@ export default class ConfigurationForm extends React.Component {
   }
 
   static defaultProps = {
-    showConfigurationSelector: true
+    showConfigurationSelector: true,
   }
 
   constructor(props, context) {
@@ -114,6 +115,9 @@ export default class ConfigurationForm extends React.Component {
         break
       case 'xml':
         form = this.refs.configurationFormXml
+        break
+      case 'byClientId':
+        form = this.lti13Form
         break
       case 'lti2':
         form = this.refs.configurationFormLti2
@@ -200,6 +204,14 @@ export default class ConfigurationForm extends React.Component {
         <ConfigurationFormLti2
           ref="configurationFormLti2"
           registrationUrl={this.state.registrationUrl}
+        />
+      )
+    }
+
+    if (this.state.configurationType === 'byClientId') {
+      return(
+        <ConfigurationFormLti13
+          ref={(el) => { this.lti13Form = el }}
         />
       )
     }

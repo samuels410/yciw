@@ -81,7 +81,7 @@ import parseLinkHeader from 'compiled/fn/parseLinkHeader'
   }
 
   StudentGroupStore.addGroups = function(newlyFetchedGroups){
-    const newGroupsHash = _.indexBy(newlyFetchedGroups, "id")
+    const newGroupsHash = _.keyBy(newlyFetchedGroups, "id")
     const newGroupsState = _.extend(newGroupsHash, this.getState().groups)
     this.setState({
       groups: newGroupsState
@@ -122,9 +122,7 @@ import parseLinkHeader from 'compiled/fn/parseLinkHeader'
   StudentGroupStore.groupsFilteredForSelectedSet = function(){
     const groups = this.getState().groups
     const setId = this.getState().selectedGroupSetId
-    return _.filter( groups, function(value, key) {
-      return value.group_category_id === setId
-    })
+    return _.filter( groups, (value, key) => value.group_category_id === setId);
   }
 
   // -------------------

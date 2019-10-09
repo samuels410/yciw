@@ -24,13 +24,18 @@ module Canvas::Security
 
     let(:validator) do
       described_class.new(
-        jwt: jwt, expected_aud: expected_aud, require_iss: require_iss, skip_jti_check: skip_jti_check
+        jwt: jwt,
+        expected_aud: expected_aud,
+        require_iss: require_iss,
+        skip_jti_check: skip_jti_check,
+        max_iat_age: max_iat_age
       )
     end
     let(:aud) { Rails.application.routes.url_helpers.oauth2_token_url }
     let(:expected_aud) { Rails.application.routes.url_helpers.oauth2_token_url }
     let(:iat) { 1.minute.ago.to_i }
     let(:exp) { 10.minutes.from_now.to_i }
+    let(:max_iat_age) { nil }
     let(:require_iss) { false }
     let(:skip_jti_check) { false }
     let(:jwt) do
@@ -45,13 +50,36 @@ module Canvas::Security
     end
 
     before do |ex|
-      Rails.application.routes.default_url_options[:host] = 'example.com'
+      allow(Rails.application.routes).to receive(:default_url_options).and_return({:host => 'example.com'})
       unless ex.metadata[:skip_before]
         validator.validate
       end
     end
 
     it { is_expected.to be_empty }
+
+    context 'when the max_iat_age is provided' do
+      let(:iat) { 45.minutes.ago.to_i }
+
+      context 'when the specified max_iat_age has not been exceeded' do
+        let(:max_iat_age) { 60.minutes.seconds.to_i.seconds }
+
+        it { is_expected.to be_empty }
+      end
+
+      context 'when the specified max_iat_age has been exceeded' do
+        let(:max_iat_age) { 30.minutes.seconds.to_i.seconds }
+
+        it { is_expected.not_to be_empty }
+      end
+    end
+
+    context 'with aud array' do
+      let(:aud) { 'https://canvas.instructure.com/login/oauth2/token' }
+      let(:expected_aud) { [aud, 'foo'] }
+
+      it { is_expected.to be_empty }
+    end
 
     context 'with bad aud' do
       let(:aud) { 'doesnotexist' }
@@ -63,6 +91,12 @@ module Canvas::Security
       let(:exp) { 1.minute.ago.to_i }
 
       it { is_expected.not_to be_empty }
+
+      context 'with non-numeric exp' do
+        let(:exp) { 1.minute.ago.to_i.to_s }
+
+        it { is_expected.not_to be_empty }
+      end
     end
 
     context 'with bad iat' do
@@ -72,6 +106,12 @@ module Canvas::Security
 
       context 'with iat too far in future' do
         let(:iat) { 6.minutes.from_now.to_i }
+
+        it { is_expected.not_to be_empty }
+      end
+
+      context 'with non-numeric iat' do
+        let(:iat) { Time.zone.now.to_i.to_s }
 
         it { is_expected.not_to be_empty }
       end

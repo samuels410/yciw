@@ -31,11 +31,7 @@ QUnit.module('AssignmentMuterDialogManager', suiteHooks => {
   })
 
   function createManager() {
-    return new AssignmentMuterDialogManager(
-      assignment,
-      url,
-      submissionsLoaded
-    )
+    return new AssignmentMuterDialogManager(assignment, url, submissionsLoaded)
   }
 
   QUnit.module('#assignment', () => {
@@ -58,8 +54,8 @@ QUnit.module('AssignmentMuterDialogManager', suiteHooks => {
 
   QUnit.module('#showDialog()', hooks => {
     hooks.beforeEach(() => {
-      sinon.spy(AssignmentMuter.prototype, 'confirmUnmute')
-      sinon.spy(AssignmentMuter.prototype, 'showDialog')
+      sinon.stub(AssignmentMuter.prototype, 'confirmUnmute')
+      sinon.stub(AssignmentMuter.prototype, 'showDialog')
     })
 
     hooks.afterEach(() => {

@@ -39,22 +39,18 @@ import 'compiled/jquery.rails_flash_notifications'
     }
   };
 
-  const store = createStore({
+  const defaultState = {
     externalTools: [],
     links: {},
     isLoading: false,    // flag to indicate fetch is in progress
     isLoaded: false,     // flag to indicate data has loaded
     hasMore: false       // flag to indicate if there are more pages of external tools
-  });
+  }
+
+  const store = createStore(defaultState);
 
   store.reset = function() {
-    this.setState({
-      externalTools: [],
-      links: {},
-      isLoading: false,
-      isLoaded: false,
-      hasMore: false
-    })
+    this.setState(defaultState)
   };
 
   store.fetch = function() {
@@ -123,7 +119,7 @@ import 'compiled/jquery.rails_flash_notifications'
       url = '/api/v1' + ENV.CONTEXT_BASE_URL + '/tool_proxies/' + tool.app_id;
     }
 
-    var tools = _.filter(this.getState().externalTools, function(t) { return t.app_id !== tool.app_id; });
+    var tools = _.filter(this.getState().externalTools, t => t.app_id !== tool.app_id);
     this.setState({ externalTools: sort(tools) });
 
     $.ajax({
@@ -167,7 +163,7 @@ import 'compiled/jquery.rails_flash_notifications'
 
   store.activate = function(tool, success, error) {
     var url = '/api/v1' + ENV.CONTEXT_BASE_URL + '/tool_proxies/' + tool.app_id;
-    var tools = _.map(this.getState().externalTools, function(t) {
+    var tools = _.map(this.getState().externalTools, t => {
       if (t.app_id === tool.app_id) {
         t['enabled'] = true;
       }
@@ -186,7 +182,7 @@ import 'compiled/jquery.rails_flash_notifications'
 
   store.deactivate = function(tool, success, error) {
     var url = '/api/v1' + ENV.CONTEXT_BASE_URL + '/tool_proxies/' + tool.app_id;
-    var tools = _.map(this.getState().externalTools, function(t) {
+    var tools = _.map(this.getState().externalTools, t => {
       if (t.app_id === tool.app_id) {
         t['enabled'] = false;
       }
@@ -204,9 +200,7 @@ import 'compiled/jquery.rails_flash_notifications'
   };
 
   store.findById = function(toolId) {
-    return _.find(this.getState().externalTools, function(tool) {
-      return tool.app_id === toolId;
-    });
+    return _.find(this.getState().externalTools, tool => tool.app_id === toolId);
   };
 
   store._generateParams = function(configurationType, data) {
@@ -230,7 +224,7 @@ import 'compiled/jquery.rails_flash_notifications'
         } else {
           var pairs = (data.customFields || '').split('\n');
           params.custom_fields = {}
-          _.forEach(pairs, function(pair) {
+          _.forEach(pairs, pair => {
             var vals = pair.trim().split(/=(.+)?/);
             params.custom_fields[vals[0]] = vals[1];
           });
@@ -262,9 +256,7 @@ import 'compiled/jquery.rails_flash_notifications'
 
   store._fetchSuccessHandler = function(tools, status, xhr) {
     var links = parseLinkHeader(xhr);
-    if (links.current !== links.first) {
-      tools = this.getState().externalTools.concat(tools);
-    }
+    tools = this.getState().externalTools.concat(tools);
 
     this.setState({
       links: links,

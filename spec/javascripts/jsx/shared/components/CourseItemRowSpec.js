@@ -17,10 +17,10 @@
  */
 
 import React from 'react'
-import { mount } from 'enzyme'
+import {mount} from 'enzyme'
 import CourseItemRow from 'jsx/shared/components/CourseItemRow'
 import AnnouncementModel from 'compiled/models/Announcement'
-import IconAssignment from '@instructure/ui-icons/lib/Line/IconAssignment'
+import {IconAssignmentLine} from '@instructure/ui-icons'
 
 QUnit.module('CourseItemRow component')
 
@@ -105,13 +105,13 @@ test('renders a drag handle if draggable: true', () => {
   const tree = mount(
     <CourseItemRow {...props} draggable connectDragSource={component => component} />
   )
-  const node = tree.find('IconDragHandle')
+  const node = tree.find('IconDragHandleLine')
   ok(node.exists())
 })
 
 test('renders inputted icon', () => {
-  const tree = mount(<CourseItemRow {...props} icon={<IconAssignment />} />)
-  const node = tree.find(IconAssignment)
+  const tree = mount(<CourseItemRow {...props} icon={<IconAssignmentLine />} />)
+  const node = tree.find(IconAssignmentLine)
   ok(node.exists())
 })
 
@@ -138,17 +138,17 @@ test('renders unread indicator if isRead: false', () => {
   const rowNode = tree.find('Badge')
   ok(rowNode.exists())
 
-  const srNode = tree.find('.ic-item-row__content-col ScreenReaderContent')
+  const srNode = tree.find('.ic-item-row__content-col Heading ScreenReaderContent')
   ok(srNode.exists())
-  ok(srNode.text().includes('Unread'))
+  ok(srNode.text().includes('unread,'))
 })
 
 test('renders no unread indicator if isRead: true', () => {
   const tree = mount(<CourseItemRow {...props} isRead />)
-  const rowNode = tree.find('.ic-item-row')
-  notOk(rowNode.hasClass('ic-item-row__unread'))
+  const rowNode = tree.find('Badge')
+  notOk(rowNode.exists())
 
-  const srNode = tree.find('.ic-item-row__content-col ScreenReaderContent')
+  const srNode = tree.find('.ic-item-row__content-col Heading ScreenReaderContent')
   notOk(srNode.exists())
 })
 

@@ -47,7 +47,7 @@ describe Canvas::Migration::Helpers::SelectiveContentFormatter do
       allow(@migration).to receive(:cache_key).and_return('1')
       allow(@migration).to receive(:close)
       allow(@migration).to receive(:read).and_return(@overview.to_json)
-      @formatter = Canvas::Migration::Helpers::SelectiveContentFormatter.new(@migration, "https://example.com")
+      @formatter = Canvas::Migration::Helpers::SelectiveContentFormatter.new(@migration, "https://example.com", global_identifiers: true)
     end
 
     it "should list top-level items" do
@@ -56,7 +56,7 @@ describe Canvas::Migration::Helpers::SelectiveContentFormatter do
                                              {:type=>"context_modules", :property=>"copy[all_context_modules]", :title=>"Modules", :count=>1, :sub_items_url=>"https://example.com?type=context_modules"},
                                              {:type=>"assignments", :property=>"copy[all_assignments]", :title=>"Assignments", :count=>2, :sub_items_url=>"https://example.com?type=assignments"},
                                              {:type=>"quizzes", :property=>"copy[all_quizzes]", :title=>"Quizzes", :count=>1, :sub_items_url=>"https://example.com?type=quizzes"},
-                                             {:type=>"wiki_pages", :property=>"copy[all_wiki_pages]", :title=>"Wiki Pages", :count=>1, :sub_items_url=>"https://example.com?type=wiki_pages"},
+                                             {:type=>"wiki_pages", :property=>"copy[all_wiki_pages]", :title=>"Pages", :count=>1, :sub_items_url=>"https://example.com?type=wiki_pages"},
                                              {:type=>"context_external_tools", :property=>"copy[all_context_external_tools]", :title=>"External Tools", :count=>1, :sub_items_url=>"https://example.com?type=context_external_tools"},
                                              {:type=>"tool_profiles", :property=>"copy[all_tool_profiles]", :title=>"Tool Profiles", :count=>1, :sub_items_url=>"https://example.com?type=tool_profiles"},
                                              {:type=>"learning_outcomes", :property=>"copy[all_learning_outcomes]", :title=>"Learning Outcomes", :count=>1},
@@ -175,7 +175,7 @@ describe Canvas::Migration::Helpers::SelectiveContentFormatter do
 
   context "course copy" do
     include_context "lti2_course_spec_helper"
-    let(:formatter) { Canvas::Migration::Helpers::SelectiveContentFormatter.new(@migration) }
+    let(:formatter) { Canvas::Migration::Helpers::SelectiveContentFormatter.new(@migration, global_identifiers: true) }
 
     before do
       course_model
@@ -191,6 +191,8 @@ describe Canvas::Migration::Helpers::SelectiveContentFormatter do
       @migration = double()
       allow(@migration).to receive(:migration_type).and_return('course_copy_importer')
       allow(@migration).to receive(:source_course).and_return(@course)
+      export = @course.content_exports.create!(:export_type => ContentExport::COURSE_COPY)
+      allow(@migration).to receive(:content_export).and_return(export)
       @course_outcome = outcome_model
       @account_outcome = outcome_model(:outcome_context => @course.account)
     end
@@ -202,7 +204,7 @@ describe Canvas::Migration::Helpers::SelectiveContentFormatter do
                                              {:type=>"context_modules", :property=>"copy[all_context_modules]", :title=>"Modules", :count=>1},
                                              {:type=>"tool_profiles", :property=>"copy[all_tool_profiles]", :title=>"Tool Profiles", :count=>1},
                                              {:type=>"discussion_topics", :property=>"copy[all_discussion_topics]", :title=>"Discussion Topics", :count=>1},
-                                             {:type=>"wiki_pages", :property=>"copy[all_wiki_pages]", :title=>"Wiki Pages", :count=>1},
+                                             {:type=>"wiki_pages", :property=>"copy[all_wiki_pages]", :title=>"Pages", :count=>1},
                                              {:type=>"announcements", :property=>"copy[all_announcements]", :title=>"Announcements", :count=>1},
                                              {:type=>"learning_outcomes", :property=>"copy[all_learning_outcomes]", :title=>"Learning Outcomes", :count=>2},
                                              {:type=>"attachments", :property=>"copy[all_attachments]", :title=>"Files", :count=>1}]

@@ -87,9 +87,8 @@ module DiscussionsCommon
       wait_for_ajaximations
       @last_entry.find_element(:css, '.discussion-reply-attachments input').send_keys(fullpath)
     end
-
-    scroll_to_submit_button_and_click(@last_entry.find_element(:css, ".discussion-reply-form"))
-    wait_for_ajaximations
+    fj('button:contains("Post Reply"):visible').click
+    wait_for(method: nil, timeout: 5) { f('#discussion_subentries .discussion_entry').displayed? }
     id = DiscussionEntry.last.id
     @last_entry = f "#entry-#{id}"
   end
@@ -167,7 +166,7 @@ module DiscussionsCommon
     yield if block_given?
     expect_new_page_load { submit_form('.form-actions') }
     wait_for_ajaximations
-    expect(f('.zip')).to include_text(filename)
+    expect(fxpath('//a[contains(text(), ".zip")]')).to include_text(filename)
   end
 
   def edit(title, message)

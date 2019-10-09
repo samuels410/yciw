@@ -36,6 +36,9 @@ describe("Sidebar initialState", () => {
       },
       initializeFlickr() {
         return {};
+      },
+      initializeDocuments() {
+        return {}
       }
     };
     apiSource = new RceApiSource();
@@ -81,7 +84,7 @@ describe("Sidebar initialState", () => {
     });
 
     it("initial collections using source", () => {
-      let state = initialState({
+      const state = initialState({
         source: Object.assign(source, {
           initializeCollection(endpoint) {
             return { links: [], bookmark: endpoint, loading: false };

@@ -17,13 +17,13 @@
  */
 
 import React, {Component} from 'react'
-import Billboard from '@instructure/ui-billboard/lib/components/Billboard'
-import Pagination, {PaginationButton} from '@instructure/ui-pagination/lib/components/Pagination'
-import Spinner from '@instructure/ui-elements/lib/components/Spinner'
+import {Billboard} from '@instructure/ui-billboard'
+import {Pagination, PaginationButton} from '@instructure/ui-pagination'
+import {Spinner} from '@instructure/ui-elements'
 import {array, func, string, shape, oneOf} from 'prop-types'
 import I18n from 'i18n!account_course_user_search'
-import View from '@instructure/ui-layout/lib/components/View'
-import EmptyDesert from './EmptyDesert'
+import {View} from '@instructure/ui-layout'
+import EmptyDesert from '../../shared/EmptyDesert'
 
 const linkPropType = shape({
   url: string.isRequired,
@@ -115,7 +115,7 @@ export default class SearchMessage extends Component {
     } else if (collection.loading) {
       return (
         <View display="block" textAlign="center" padding="medium">
-          <Spinner size="medium" title={I18n.t('Loading...')} />
+          <Spinner size="medium" renderTitle={I18n.t('Loading...')} />
         </View>
       )
     } else if (!collection.data.length) {

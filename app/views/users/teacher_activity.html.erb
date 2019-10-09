@@ -20,8 +20,8 @@
 <% js_bundle :teacher_activity_report %>
 <% add_crumb(t('crumbs.interaction_report', "Student Interactions Report")) %>
 
-<% content_for :page_title, t('title', 'Teacher Activity Report') %>
-<% content_for :stylesheets do %>
+<% provide :page_title, t('title', 'Teacher Activity Report') %>
+
 <style type="text/css" media="screen">
   a.view_full_link {
     font-size: 85%;
@@ -30,7 +30,6 @@
     vertical-align: top;
   }
 </style>
-<% end %>
 
 <h1><%= t('headings.teacher_activity', "Teacher Activity Report for %{teacher}", :teacher => @teacher.name) %></h1>
 
@@ -83,7 +82,7 @@
           <td><%= n(student[:enrollment].computed_final_score, percentage: true, precision: 1) %></td>
           <td data-number="<%= (student[:ungraded].map(&:submitted_at).compact.min || 1.day.from_now).to_i / 3600 %>">
             <% student[:ungraded].each do |submission| %>
-              <%= link_to(submission.assignment.title, speed_grader_course_gradebook_path(course, :assignment_id => submission.assignment.id, :anchor => { :student_id => student[:enrollment].user_id }.to_json)) %><br/>
+              <%= link_to(submission.assignment.title, speed_grader_course_gradebook_path(course, assignment_id: submission.assignment.id, student_id: student[:enrollment].user_id)) %><br/>
               <div style="padding-bottom: 5px; margin-top: -2px; padding-<%= direction('left') %>: 20px; font-size: 0.8em; color: #888;">
                 <% if submission.submitted_at %>
                   <%= t 'submitted_time', { :zero => "submitted less than 1 day ago", :one => "submitted 1 day ago", :other => "submitted %{count} days ago" }, :count => (((Time.now - submission.submitted_at)/60)/1440).abs.to_i %>

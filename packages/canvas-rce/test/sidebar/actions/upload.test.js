@@ -18,6 +18,7 @@
 
 import assert from "assert";
 import sinon from "sinon";
+import K5Uploader from '@instructure/k5uploader'
 import * as actions from "../../../src/sidebar/actions/upload";
 import * as filesActions from "../../../src/sidebar/actions/files";
 import * as imagesActions from "../../../src/sidebar/actions/images";
@@ -41,6 +42,26 @@ describe("Upload data actions", () => {
       });
     },
 
+    mediaServerSession() {
+      return Promise.resolve({
+        "ks":"averylongstring",
+        "subp_id":"0",
+        "partner_id":"9",
+        "uid":"1234_567",
+        "serverTime":1234,
+        "kaltura_setting": {
+          "uploadUrl": "url.url.url",
+          "entryUrl": "url.url.url",
+          "uiconfUrl": "url.url.url",
+          "partnerData": "data from our partners"
+        }
+      });
+    },
+
+    uploadMediaToCanvas() {
+      return Promise.resolve({"media_object": {"media_id": 2}});
+    },
+
     preflightUpload() {
       return Promise.resolve(results);
     },
@@ -49,7 +70,8 @@ describe("Upload data actions", () => {
 
     setUsageRights: sinon.spy(),
 
-    getFile: sinon.stub().returns(Promise.resolve(file))
+    getFile: sinon.stub().returns(Promise.resolve(file)),
+    fetchMediaFolder: sinon.stub().returns(Promise.resolve({folders: [{id: 24}]}))
   };
 
   beforeEach(() => {
@@ -64,15 +86,16 @@ describe("Upload data actions", () => {
   };
 
   function setupState(props) {
-    let { jwt, source } = Object.assign({}, defaults, props);
+    const { jwt, source } = { ...defaults, ...props};
     return { jwt, source };
   }
 
+
   describe("fetchFolders", () => {
     it("fetches if there are no folders loaded yet", () => {
-      let baseState = setupState();
+      const baseState = setupState();
       baseState.upload = { folders: [] };
-      let store = spiedStore(baseState);
+      const store = spiedStore(baseState);
       return store.dispatch(actions.fetchFolders()).then(() => {
         assert.ok(
           store.spy.calledWith({
@@ -86,9 +109,9 @@ describe("Upload data actions", () => {
     });
 
     it("skips the fetch if there are folders already", () => {
-      let baseState = setupState();
+      const baseState = setupState();
       baseState.upload = { folders: [{ id: 1, name: "course files" }] };
-      let store = spiedStore(baseState);
+      const store = spiedStore(baseState);
       store.dispatch(actions.fetchFolders());
       assert.ok(
         store.spy.neverCalledWith({
@@ -116,12 +139,12 @@ describe("Upload data actions", () => {
         }
       };
 
-      let baseState = {
+      const baseState = {
         source: bookmarkSource,
         jwt: "theJWT",
         upload: { folders: [] }
       };
-      let store = spiedStore(baseState);
+      const store = spiedStore(baseState);
       return store.dispatch(actions.fetchFolders()).then(() => {
         assert.ok(
           store.spy.calledWith({
@@ -143,9 +166,9 @@ describe("Upload data actions", () => {
     });
 
     it("dispatches a batch action", () => {
-      let baseState = setupState();
+      const baseState = setupState();
       baseState.upload = { folders: [] };
-      let store = spiedStore(baseState);
+      const store = spiedStore(baseState);
       return store.dispatch(actions.fetchFolders()).then(() => {
         // folder is empty because we didn't actually process the action
         assert.ok(
@@ -175,6 +198,47 @@ describe("Upload data actions", () => {
       sinon.assert.notCalled(successSource.setUsageRights);
     });
   });
+
+  describe('uploadToMediaFolder', () => {
+    const fakeFileMetaData = {
+        parentFolderId: 'media',
+        name: 'foo.png',
+        size: 3000,
+        contentType: 'image/png',
+        domObject: {
+          name: 'foo.png',
+          size: 3000,
+          type: 'image/png'
+        }
+    }
+    it('dispatches a uploadPreflight with the proper parentFolderId set', () => {
+      const baseState = setupState();
+      const store = spiedStore(baseState);
+      return store.dispatch(actions.uploadToMediaFolder('images', fakeFileMetaData)).then(() => {
+        assert.ok(
+          store.spy.calledWith({ type: actions.START_FILE_UPLOAD, file: {
+            parentFolderId: 24,
+            name: 'foo.png',
+            size: 3000,
+            contentType: 'image/png',
+            domObject: {
+              name: 'foo.png',
+              size: 3000,
+              type: 'image/png'
+            }
+        } })
+        );
+      })
+    })
+
+    it('results in a START_MEDIA_UPLOADING action being fired', () => {
+      const baseState = setupState();
+      const store = spiedStore(baseState);
+      return store.dispatch(actions.uploadToMediaFolder('images', fakeFileMetaData)).then(() => {
+        sinon.assert.calledWith(store.spy, { type: 'START_MEDIA_UPLOADING', payload: fakeFileMetaData })
+      })
+    })
+  })
 
   describe("generateThumbnailUrl", () => {
     it("returns the results if the file is not an image", () => {
@@ -207,13 +271,11 @@ describe("Upload data actions", () => {
 
     function getBaseState() {
       const baseState = setupState();
-      return Object.assign({}, baseState, {
-        contextId: 42,
+      return { ...baseState, contextId: 42,
         contextType: "course",
         ui: {
           selectedTabIndex: 2
-        }
-      });
+        }};
     }
 
     beforeEach(() => {
@@ -330,7 +392,7 @@ describe("Upload data actions", () => {
 
     it("inserts the image content through the bridge", () => {
       props.fileReader = fakeFileReader;
-      let bridgeSpy = sinon.spy(Bridge, "insertImage");
+      const bridgeSpy = sinon.spy(Bridge, "insertImage");
       successSource.uploadFRD.returns(
         Promise.resolve({
           "content-type": "image/jpeg",
@@ -346,8 +408,8 @@ describe("Upload data actions", () => {
 
     it("inserts the file content through the bridge", () => {
       props.fileReader = fakeFileReader;
-      let bridgeSpy = sinon.spy(Bridge, "insertLink");
-      let state = getBaseState();
+      const bridgeSpy = sinon.spy(Bridge, "insertLink");
+      const state = getBaseState();
       state.ui.selectedTabIndex = 1;
       store = spiedStore(state);
       successSource.uploadFRD.returns(
@@ -366,11 +428,11 @@ describe("Upload data actions", () => {
 
   describe("allUploadCompleteActions", () => {
     it("returns a list of actions", () => {
-      let fileMetaProps = {
+      const fileMetaProps = {
         pranetFolderId: 12
       };
-      let results = {};
-      let actionSet = actions.allUploadCompleteActions(results, fileMetaProps);
+      const results = {};
+      const actionSet = actions.allUploadCompleteActions(results, fileMetaProps);
       assert.equal(actionSet.length, 3);
     });
   });
@@ -390,14 +452,28 @@ describe("Upload data actions", () => {
       it("inserts link with display_name as title", () => {
         const expected = "foo";
         actions.embedUploadResult({ display_name: expected });
-        sinon.assert.calledWithMatch(Bridge.insertLink, { title: expected });
+        sinon.assert.calledWithMatch(Bridge.insertLink, { title: expected }, false);
       });
 
       it("inserts link with url as href", () => {
         const expected = "http://github.com";
         actions.embedUploadResult({ url: expected });
-        sinon.assert.calledWithMatch(Bridge.insertLink, { href: expected });
+        sinon.assert.calledWithMatch(Bridge.insertLink, { href: expected }, false);
       });
+
+      it("inserts link with data-canvas-previewable if the content-type is previewable by canvas", () => {
+        const uploadResult = {
+          display_name: 'display_name',
+          url: 'http://somewhere',
+          'content-type': 'application/pdf'
+        }
+        actions.embedUploadResult(uploadResult)
+        sinon.assert.calledWithMatch(Bridge.insertLink, {
+          'data-canvas-previewable': true,
+          title: uploadResult.display_name,
+          href: uploadResult.url
+        }, false)
+      })
 
       it("delegates to fileEmbed for embed data", () => {
         actions.embedUploadResult({ preview_url: "http://a.preview.com/url" });
@@ -420,17 +496,6 @@ describe("Upload data actions", () => {
         actions.embedUploadResult({ "content-type": "image/png" }, "files");
         sinon.assert.calledWithMatch(Bridge.insertLink, {
           embed: { type: "image" }
-        });
-        Bridge.existingContentToLink.restore();
-        Bridge.existingContentToLinkIsImg.restore();
-      });
-
-      it("embed image on image type and image selected", () => {
-        sinon.stub(Bridge, "existingContentToLink").callsFake(() => true);
-        sinon.stub(Bridge, "existingContentToLinkIsImg").callsFake(() => true);
-        actions.embedUploadResult({ "content-type": "image/png" }, "images");
-        sinon.assert.calledWithMatch(Bridge.insertImage, {
-          "content-type": "image/png"
         });
         Bridge.existingContentToLink.restore();
         Bridge.existingContentToLinkIsImg.restore();
@@ -468,5 +533,98 @@ describe("Upload data actions", () => {
         );
       })
     })
+
+    it('calls failUpload if there is no response property on the error', () => {
+      const fakeDispatch = sinon.spy();
+      const error = new Error('Fake Client Side Error')
+      return actions.handleFailures(error, fakeDispatch).then(() => {
+        sinon.assert.calledWith(fakeDispatch,
+          sinon.match({
+            type: 'FAIL_FILE_UPLOAD',
+            error
+          })
+        );
+      })
+    })
   })
+
+  describe('activateMediaUpload', () => {
+    it("inserts the placeholder through the bridge", () => {
+      const bridgeSpy = sinon.spy(Bridge, "insertImagePlaceholder");
+      const store = spiedStore({});
+      store.dispatch(actions.activateMediaUpload({}))
+      sinon.assert.called(bridgeSpy)
+    });
+
+    it('dispatches a START_MEDIA_UPLOADING action', () => {
+      const store = spiedStore({});
+      store.dispatch(actions.activateMediaUpload({}))
+      sinon.assert.calledWith(store.spy, { type: 'START_MEDIA_UPLOADING', payload: {} })
+    })
+  });
+
+  describe('removePlaceholdersFor', () => {
+    it("removes the placeholder through the bridge", () => {
+      const bridgeSpy = sinon.spy(Bridge, "removePlaceholders");
+      const store = spiedStore({});
+      store.dispatch(actions.removePlaceholdersFor('image1'))
+      sinon.assert.calledWith(bridgeSpy, 'image1')
+    });
+
+    it('dispatches a STOP_MEDIA_UPLOADING action', () => {
+      const store = spiedStore({});
+      store.dispatch(actions.removePlaceholdersFor('image1'))
+      sinon.assert.calledWith(store.spy, { type: 'STOP_MEDIA_UPLOADING' })
+    })
+  });
+
+  describe("saveMediaRecording", () => {
+    it("dispatches startLoading when action is called", () => {
+      const store = spiedStore(setupState());
+      return store.dispatch(actions.saveMediaRecording({}, {}, ()=>{})).then(() => {
+        assert.ok(
+          store.spy.calledWith({
+            type: actions.START_LOADING
+          })
+        );
+      });
+    });
+
+    it("dispatches failMediaUpload when error is caught", () => {
+      const store = spiedStore(setupState());
+      return store.dispatch(actions.saveMediaRecording({}, {}, ()=>{})).then(() => {
+        assert.ok(
+          store.spy.args[2][0].type === "FAIL_MEDIA_UPLOAD"
+        );
+      });
+    });
+
+    it("dispatches failMediaUpload when k5.fileError is dispatched", () => {
+      const store = spiedStore(setupState());
+      sinon.stub(K5Uploader.prototype, 'loadUiConf').callsFake(() => 'mock');
+      return store.dispatch(actions.saveMediaRecording({}, {}, ()=>{})).then((uploader) => {
+        uploader.dispatchEvent("K5.fileError", {error: "womp womp"}, uploader);
+        sinon.assert.calledWith(store.spy, { type: 'FAIL_MEDIA_UPLOAD', error: {error: "womp womp"}})
+      });
+    });
+
+    it('dispatches mediaUploadSuccess when K5.complete is dispatched', () => {
+      const store = spiedStore(setupState());
+      return store.dispatch(actions.saveMediaRecording({}, {getBody: () =>{}, dom: {add: ()=>{}, setStyles: () => {}}}, ()=>{})).then( async (uploader) => {
+        uploader.dispatchEvent("K5.complete", {data : "datatatatatatatat"}, uploader);
+        await new Promise(setTimeout)
+        sinon.assert.calledWith(store.spy, { type: 'MEDIA_UPLOAD_SUCCESS'})
+      });
+    });
+
+    it('calls dismiss when upload to canvas has succeed during K5.complete is dispatched', () => {
+      const store = spiedStore(setupState());
+      const fakeDismissDispatch = sinon.spy();
+      return store.dispatch(actions.saveMediaRecording({}, {getBody: () =>{}, dom: {add: ()=>{}, setStyles: () =>{}}}, fakeDismissDispatch)).then( async (uploader) => {
+        uploader.dispatchEvent("K5.complete", {data : "datatatatatatatat"}, uploader);
+        await new Promise(setTimeout)
+        sinon.assert.calledOnce(fakeDismissDispatch);
+      });
+    });
+  });
 });

@@ -324,7 +324,7 @@ class OutcomeResultsController < ApplicationController
       format.csv do
         build_outcome_paths
         send_data(
-          outcome_results_rollups_csv(user_rollups, @outcomes, @outcome_paths),
+          outcome_results_rollups_csv(@current_user, @context, user_rollups, @outcomes, @outcome_paths),
           :type => "text/csv",
           :filename => t('outcomes_filename', "Outcomes").gsub(/ /, "_") + "-" + @context.name.to_s.gsub(/ /, "_") + ".csv",
           :disposition => "attachment"
@@ -451,7 +451,7 @@ class OutcomeResultsController < ApplicationController
   end
 
   def include_assignments
-    assignments = @results.map(&:assignment)
+    assignments = @results.map { |result| result.assignment || result.alignment&.content }
     outcome_results_assignments_json(assignments)
   end
 
@@ -580,7 +580,7 @@ class OutcomeResultsController < ApplicationController
   def users_for_outcome_context
     # this only works for courses; when other context types are added, this will
     # need to treat them differently.
-    apply_sort_order(@context.students)
+    apply_sort_order(@context.all_students).select("users.*, #{User.sortable_name_order_by_clause('users')}").distinct
   end
 
   def apply_sort_order(relation)

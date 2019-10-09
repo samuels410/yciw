@@ -285,7 +285,7 @@ describe "content migrations", :non_parallel do
       cm = @course.content_migrations.last
       expect(cm.migration_settings["source_course_id"]).to eq @copy_from.id
       expect(cm.source_course).to eq @copy_from
-      expect(cm.initiated_source).to eq :api
+      expect(cm.initiated_source).to eq :api_in_app
 
       source_link = f('.migrationProgressItem .sourceLink a')
       expect(source_link.text).to eq @copy_from.name
@@ -301,7 +301,9 @@ describe "content migrations", :non_parallel do
       expect(f("option[value=\"#{@copy_from.id}\"]")).not_to be_nil
       expect(f("#content")).not_to contain_css("option[value=\"#{new_course.id}\"]")
 
-      admin_logged_in
+      user_logged_in(:active_all => true)
+      @course.enroll_teacher(@user, :enrollment_state => "active")
+      new_course.enroll_teacher(@user, :enrollment_state => "active")
 
       visit_page
       select_migration_type
@@ -319,10 +321,11 @@ describe "content migrations", :non_parallel do
 
       select_migration_type
       wait_for_ajaximations
+      expect(f("#content")).to contain_css("option[value=\"#{new_course.id}\"]")
 
-      expect(f("#content")).not_to contain_css("option[value=\"#{new_course.id}\"]")
       f('#include_completed_courses').click
-      expect(f("option[value=\"#{new_course.id}\"]")).not_to be_nil
+      wait_for_ajaximations
+      expect(f("#content")).not_to contain_css("option[value=\"#{new_course.id}\"]")
     end
 
     it "should find courses in other accounts", priority: "1", test_id: 2890402 do
@@ -339,8 +342,17 @@ describe "content migrations", :non_parallel do
       select_migration_type
       wait_for_ajaximations
 
-      expect(f("option[value=\"#{admin_course.id}\"]")).not_to be_nil
-      expect(f("option[value=\"#{enrolled_course.id}\"]")).not_to be_nil
+      search = f('#courseSearchField')
+      search.send_keys("another")
+      wait_for_ajaximations
+      divs = ff('div', fj('.ui-autocomplete li a:visible'))
+      expect(divs[0].text).to eq admin_course.name
+
+      search.clear
+      search.send_keys("faraway")
+      wait_for_ajaximations
+      divs = ff('div', fj('.ui-autocomplete li a:visible'))
+      expect(divs[0].text).to eq enrolled_course.name
     end
 
     it "should copy all content from a course", priority: "1", test_id: 126677 do
@@ -513,7 +525,6 @@ describe "content migrations", :non_parallel do
   context "importing LTI content" do
     let(:import_course) {
       account = account_model
-      account.enable_feature!(:lor_for_account)
       course_with_teacher_logged_in(:account => account).course
     }
     let(:import_tool) do

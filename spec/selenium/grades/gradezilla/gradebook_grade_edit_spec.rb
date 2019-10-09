@@ -63,7 +63,7 @@ describe "Gradezilla editing grades" do
     expect(final_score_for_row(1)).to eq @student_2_total_ignoring_ungraded
   end
 
-  it "changes grades and validate course total is correct", priority: "1", test_id: 220312 do
+  it "changes grades and validate course total is correct", :xbrowser, priority: "1", test_id: 220312 do
     expected_edited_total = "33.33%"
     Gradezilla.visit(@course)
 

@@ -41,12 +41,6 @@ export default class EditToDoItemDetails extends ValidatedFormView {
       details: htmlEscape(event.description)
     })
 
-    this.onSaveFail = this.onSaveFail.bind(this)
-    this.onSaveSuccess = this.onSaveSuccess.bind(this)
-    this.getFormData = this.getFormData.bind(this)
-    this.setupTimeAndDatePickers = this.setupTimeAndDatePickers.bind(this)
-    this.activate = this.activate.bind(this)
-
     this.event = event
     this.closeCB = closeCB
 
@@ -129,15 +123,15 @@ export default class EditToDoItemDetails extends ValidatedFormView {
   }
 
   validateBeforeSave(data, errors) {
-    errors = this._validateTitle(data, errors)  // eslint-disable-line no-param-reassign
-    errors = this._validateDate(data, errors)   // eslint-disable-line no-param-reassign
+    errors = this._validateTitle(data, errors)
+    errors = this._validateDate(data, errors)
     return errors
   }
 
   _validateTitle(data, errors) {
     const title = data.title || data['wiki_page[title]']
     if (!title || $.trim(title.toString()).length === 0) {
-      errors.title = [{message: I18n.t('Title is required!')}]  // eslint-disable-line no-param-reassign
+      errors.title = [{message: I18n.t('Title is required!')}]
     }
     return errors
   }
@@ -145,7 +139,7 @@ export default class EditToDoItemDetails extends ValidatedFormView {
   _validateDate(data, errors) {
     const todo_date = data.todo_date || data['wiki_page[student_todo_at]']
     if (!todo_date || $.trim(todo_date.toString()).length === 0) {
-      errors.date = [{message: I18n.t('Date is required!')}]  // eslint-disable-line no-param-reassign
+      errors.date = [{message: I18n.t('Date is required!')}]
     }
     return errors
   }

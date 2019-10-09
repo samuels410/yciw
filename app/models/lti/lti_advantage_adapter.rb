@@ -30,6 +30,7 @@ module Lti
       @return_url = return_url
       @expander = expander
       @opts = opts
+      @target_link_uri = opts[:launch_url]
     end
 
     def generate_post_payload_for_assignment(*args)
@@ -45,10 +46,15 @@ module Lti
     end
 
     def launch_url
-      resource_type ? @tool.extension_setting(resource_type, :url) : @tool.url
+      @tool.login_or_launch_url(extension_type: resource_type)
     end
 
     private
+
+    def target_link_uri
+      return @target_link_uri if @target_link_uri.present?
+      resource_type ? @tool.extension_setting(resource_type, :target_link_uri) : @tool.url
+    end
 
     def generate_lti_params
       message_type = @tool.extension_setting(resource_type, :message_type)
@@ -63,9 +69,11 @@ module Lti
       message_hint = cache_payload(lti_params)
       LtiAdvantage::Messages::LoginRequest.new(
         iss: Canvas::Security.config['lti_iss'],
-        login_hint: Lti::Asset.opaque_identifier_for(@user),
-        target_link_uri: 'a new endpoint',
-        lti_message_hint: message_hint
+        login_hint: Lti::Asset.opaque_identifier_for(@user, context: @context),
+        client_id: @tool.global_developer_key_id,
+        target_link_uri: target_link_uri,
+        lti_message_hint: message_hint,
+        canvas_region: @context.shard.database_server.config[:region] || 'not_configured'
       ).as_json
     end
 
@@ -89,7 +97,7 @@ module Lti
         user: @user,
         expander: @expander,
         return_url: @return_url,
-        opts: @opts
+        opts: @opts.merge(option_overrides)
       )
     end
 
@@ -101,9 +109,15 @@ module Lti
           user: @user,
           expander: @expander,
           return_url: @return_url,
-          opts: @opts
+          opts: @opts.merge(option_overrides)
         )
       end
+    end
+
+    def option_overrides
+      {
+        target_link_uri: target_link_uri
+      }
     end
 
     def resource_type

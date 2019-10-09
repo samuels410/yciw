@@ -19,6 +19,7 @@
 import FileUploadQuestionView from 'compiled/views/quizzes/FileUploadQuestionView'
 import File from 'compiled/models/File'
 import I18n from 'i18n!quizzes.take_quiz'
+import numberHelper from 'jsx/shared/helpers/numberHelper'
 import $ from 'jquery'
 import autoBlurActiveInput from 'compiled/behaviors/autoBlurActiveInput'
 import _ from 'underscore'
@@ -116,18 +117,18 @@ import 'compiled/behaviors/quiz_selectmenu'
 
             quizSubmission.currentlyBackingUp = false;
 
-            setTimeout(function() { quizSubmission.updateSubmission(true, true) }, 30000);
+            setTimeout(() => { quizSubmission.updateSubmission(true, true) }, 30000);
             return;
           }
           $.ajaxJSON(url, 'PUT', submissionData,
             // Success callback
-            function(data) {
+            data => {
               lastSuccessfulSubmissionData = thisSubmissionData;
               $lastSaved.text(I18n.t('saved_at', 'Quiz saved at %{t}', { t: $.friendlyDatetime(new Date()) }));
               quizSubmission.currentlyBackingUp = false;
               quizSubmission.inBackground = false;
               if(repeat) {
-                setTimeout(function() {quizSubmission.updateSubmission(true, true) }, 30000);
+                setTimeout(() => {quizSubmission.updateSubmission(true, true) }, 30000);
               }
               if(data && data.end_at) {
                 var endAtFromServer     = Date.parse(data.end_at),
@@ -152,7 +153,7 @@ import 'compiled/behaviors/quiz_selectmenu'
               }
             },
             // Error callback
-            function(resp, ec) {
+            (resp, ec) => {
               quizSubmission.currentlyBackingUp = false;
 
               // has the user logged out?
@@ -171,15 +172,15 @@ import 'compiled/behaviors/quiz_selectmenu'
                 $.ajaxJSON(
                   location.protocol + '//' + location.host + "/simple_response.json?user_id=" + current_user_id + "&rnd=" + Math.round(Math.random() * 9999999),
                   'GET', {},
-                  function() {},
-                  function() {
+                  () => {},
+                  () => {
                     $.flashError(I18n.t('errors.connection_lost', "Connection to %{host} was lost.  Please make sure you're connected to the Internet before continuing.", {'host': location.host}));
                   }
                 );
               }
 
               if(repeat) {
-                setTimeout(function() {quizSubmission.updateSubmission(true) }, 30000);
+                setTimeout(() => {quizSubmission.updateSubmission(true) }, 30000);
               }
             },
             {
@@ -363,17 +364,17 @@ import 'compiled/behaviors/quiz_selectmenu'
     };
   })();
 
-  $(window).focus(function(evt) {
+  $(window).focus(evt => {
     quizSubmission.updateSubmission();
   });
 
-  $(window).blur(function(evt) {
+  $(window).blur(evt => {
     quizSubmission.inBackground = true;
   });
 
-  $(document).mousedown(function(event) {
+  $(document).mousedown(event => {
     lastAnswerSelected = $(event.target).parents(".answer")[0];
-  }).keydown(function() {
+  }).keydown(() => {
     lastAnswerSelected = null;
   });
 
@@ -389,18 +390,18 @@ import 'compiled/behaviors/quiz_selectmenu'
 
       var unloadWarned = false;
 
-      window.addEventListener('beforeunload', function(e) {
+      window.addEventListener('beforeunload', e => {
         if (!quizSubmission.navigatingToRelogin) {
           if(!quizSubmission.submitting && !quizSubmission.alreadyAcceptedNavigatingAway && !unloadWarned) {
             quizSubmission.clearAccessCode = true
-            setTimeout(function() { unloadWarned = false; }, 0);
+            setTimeout(() => { unloadWarned = false; }, 0);
             unloadWarned = true;
             e.returnValue = I18n.t('confirms.unfinished_quiz', "You're about to leave the quiz unfinished.  Continue anyway?");
             return e.returnValue;
           }
         }
       });
-      window.addEventListener('unload', function(e) {
+      window.addEventListener('unload', e => {
         var data = $("#submit_quiz_form").getFormData();
         var url = $(".backup_quiz_submission_url").attr('href');
 
@@ -485,7 +486,7 @@ import 'compiled/behaviors/quiz_selectmenu'
       }
     });
 
-    $('.file-upload-question-holder').each(function(i,el) {
+    $('.file-upload-question-holder').each((i, el) => {
       var $el = $(el);
       var attachID = parseInt($el.find('input.attachment-id').val(), 10);
       var model = new File(ENV.ATTACHMENTS[attachID], {preflightUrl: ENV.UPLOAD_URL});
@@ -495,7 +496,7 @@ import 'compiled/behaviors/quiz_selectmenu'
         $el.find('.file-upload-box').addClass('file-upload-box-with-file');
       }
 
-      fileUploadView.on('attachmentManipulationComplete', function () {
+      fileUploadView.on('attachmentManipulationComplete', () => {
         quizSubmission.updateSubmission();
       })
 
@@ -506,22 +507,21 @@ import 'compiled/behaviors/quiz_selectmenu'
       .delegate(":checkbox,:radio", 'change', function(event) {
         var $answer = $(this).parents(".answer");
         if (lastAnswerSelected == $answer[0]) {
-          $answer.find(":checkbox,:radio").blur();
           quizSubmission.updateSubmission();
         }
       })
-      .delegate("label.upload-label", 'mouseup', function(event) {
+      .delegate("label.upload-label", 'mouseup', event => {
           quizSubmission.updateSubmission();
       })
       .delegate(":text,textarea,select", 'change', function(event, update) {
         var $this = $(this);
         if ($this.hasClass('numerical_question_input')) {
-          var val = parseFloat($this.val().replace(/,/g, ''));
-          $this.val(isNaN(val) ? "" : val.toFixed(4).replace(/\.?0+(e.*)?$/,"$1"));
+          var val = numberHelper.parse($this.val());
+          $this.val(isNaN(val) ? "" : I18n.n(val.toFixed(4), {strip_insignificant_zeros: true}))
         }
         if ($this.hasClass('precision_question_input')) {
-          var val = parseFloat($this.val().replace(/,/g, ''));
-          $this.val(isNaN(val) ? "" : val.toPrecision(16).replace(/\.?0+(e.*)?$/,"$1"));
+          var val = numberHelper.parse($this.val());
+          $this.val(isNaN(val) ? "" : I18n.n(val.toPrecision(16), {strip_insignificant_zeros: true}))
         }
         if (update !== false) {
           quizSubmission.updateSubmission();
@@ -530,10 +530,10 @@ import 'compiled/behaviors/quiz_selectmenu'
       .delegate(".numerical_question_input", {
         keyup: function(event) {
           var $this = $(this);
-          var val = $this.val().replace(/,/g, '');
+          var val = $this.val() + '';
           var $errorBox = $this.data('associated_error_box');
 
-          if (val.match(/^$|^-$/) || !isNaN(parseFloat(val))) {
+          if (val.match(/^$|^-$/) || numberHelper.validate(val)) {
             if ($errorBox) {
               $this.triggerHandler('click');
             }
@@ -623,12 +623,12 @@ import 'compiled/behaviors/quiz_selectmenu'
     }, 1000);
 
     // Suppress "<ENTER>" key from submitting a form when clicked inside a text input.
-    $("#submit_quiz_form input[type=text]").keypress(function(e){
+    $("#submit_quiz_form input[type=text]").keypress(e => {
       if (e.keyCode == 13)
         return false;
     });
 
-    $(".quiz_submit").click(function(event) {
+    $(".quiz_submit").click(event => {
       quizSubmission.finalSubmitButtonClicked = true;
     });
 
@@ -680,7 +680,7 @@ import 'compiled/behaviors/quiz_selectmenu'
       quizSubmission.submitting = true;
     });
 
-    $(".submit_quiz_button").click(function(event) {
+    $(".submit_quiz_button").click(event => {
       event.preventDefault();
       $("#times_up_dialog").dialog('close');
     });
@@ -693,7 +693,7 @@ import 'compiled/behaviors/quiz_selectmenu'
     }, 2000);
 
     if (quizTakingPolice) {
-      quizTakingPolice.addEventListener('message', function(e) {
+      quizTakingPolice.addEventListener('message', e => {
         if (e.data === 'stopwatchTick') {
           quizSubmission.updateTime();
         }
@@ -708,7 +708,7 @@ import 'compiled/behaviors/quiz_selectmenu'
       setInterval(quizSubmission.updateTime, quizSubmission.clockInterval);
     }
 
-    setTimeout(function() { quizSubmission.updateSubmission(true) }, 15000);
+    setTimeout(() => { quizSubmission.updateSubmission(true) }, 15000);
 
     var $submit_buttons = $("#submit_quiz_form button[type=submit]");
 
@@ -748,17 +748,17 @@ import 'compiled/behaviors/quiz_selectmenu'
 
     ldbLoginPopup = new LDBLoginPopup();
     ldbLoginPopup
-    .on('login_success.take_quiz', function() {
+    .on('login_success.take_quiz', () => {
       $.flashMessage(I18n.t('login_successful', 'Login successful.'));
     })
-    .on('login_failure.take_quiz', function() {
+    .on('login_failure.take_quiz', () => {
       $.flashError(I18n.t('login_failed', 'Login failed.'));
     });
 
-    showDeauthorizedDialog = _.bind(ldbLoginPopup.exec, ldbLoginPopup);
+    showDeauthorizedDialog = ldbLoginPopup.exec.bind(ldbLoginPopup);
   }
 
-  $(function() {
+  $(() => {
     var KC_T = 84;
     var $timeRunningTimeRemaining = $(".time_running,.time_remaining");
 
@@ -787,9 +787,11 @@ import 'compiled/behaviors/quiz_selectmenu'
     }
   });
 
-  $( document ).ready(function() {
+  $( document ).ready(() => {
     $('.loaded').show();
     $('.loading').hide();
   });
 
-  $('.essay_question .answers .rce_links').append((new KeyboardShortcuts()).render().el);
+  if (!ENV.use_rce_enhancements) {
+    $('.essay_question .answers .rce_links').append((new KeyboardShortcuts()).render().el);
+  }

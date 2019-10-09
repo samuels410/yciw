@@ -46,5 +46,14 @@ class AssignmentPage
     def title
       f('.title')
     end
+
+    def student_group_speedgrader_dropdown(group)
+      f('select').click
+      ff('option').find { |option| option.text == group.name }.click
+    end
+
+    def speedgrader_link
+      f('a.icon-speed-grader')
+    end
   end
 end

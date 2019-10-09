@@ -17,12 +17,13 @@
 #
 
 require_relative '../../spec_helper'
-require_relative '../../helpers/graphql_type_tester'
+require_relative "../graphql_spec_helper"
 
 describe Types::GradesType do
   let!(:account) { Account.create! }
   let!(:course) { account.courses.create!(grading_standard_enabled: true) }
   let!(:student_enrollment) { course.enroll_student(User.create!, enrollment_state: 'active') }
+  let!(:score) { student_enrollment.find_score(grading_period_id: grading_period.id) }
   let!(:grading_period) do
     group = account.grading_period_groups.create!(title: "a test group")
     group.enrollment_terms << course.enrollment_term
@@ -39,7 +40,6 @@ describe Types::GradesType do
   let(:enrollment_type) { GraphQLTypeTester.new(student_enrollment, current_user: teacher) }
 
   before(:each) do
-    score = student_enrollment.find_score(grading_period_id: grading_period.id)
     score.update!(
       current_score: 68.0,
       final_score: 78.1,
@@ -64,6 +64,20 @@ describe Types::GradesType do
 
     it "resolves the overrideScore field to the corresponding Score's override_score" do
       expect(resolve_grades_field("overrideScore")).to eq 88.2
+    end
+
+    it "resolves the overrideGrade field to the corresponding Score's override grade" do
+      expect(resolve_grades_field("overrideGrade")).to eq "B+"
+    end
+
+    it "resolves the overrideGrade field to nil when grading standards are not enabled" do
+      course.update!(grading_standard_id: nil)
+      expect(resolve_grades_field("overrideGrade")).to be nil
+    end
+
+    it "resolves the overrideGrade field to nil when an override score is not present" do
+      score.update!(override_score: nil)
+      expect(resolve_grades_field("overrideGrade")).to be nil
     end
 
     it "resolves the unpostedCurrentScore field to the corresponding Score's unposted_current_score" do
@@ -92,6 +106,10 @@ describe Types::GradesType do
 
     it "resolves the gradingPeriod field to the score's associated grading period" do
       expect(resolve_grades_field("gradingPeriod { title }")).to eq 'Pleistocene'
+    end
+
+    it "resolves the state field to the Score's workflow_state" do
+      expect(resolve_grades_field("state")).to eq 'active'
     end
   end
 end

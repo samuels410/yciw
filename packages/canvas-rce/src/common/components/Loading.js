@@ -20,11 +20,11 @@ import PropTypes from "prop-types";
 
 import React, { Component } from "react";
 import formatMessage from "../../format-message";
-import ScreenReaderContent from "@instructure/ui-a11y/lib/components/ScreenReaderContent";
+import { ScreenReaderContent } from '@instructure/ui-a11y'
 import { StyleSheet, css } from "aphrodite";
 
 function Loading(props) {
-  var className = (css(styles.loading) + " " + props.className).trim();
+  const className = (css(styles.loading) + " " + props.className).trim();
   return (
     <span className={className}>
       <ScreenReaderContent>{formatMessage("Loading...")}</ScreenReaderContent>

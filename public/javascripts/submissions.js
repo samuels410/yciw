@@ -44,7 +44,9 @@ import './rubric_assessment' /*global rubricAssessment*/
     for(var jdx in data) {
       var submission = data[jdx].submission;
       var comments = submission.visible_submission_comments || submission.submission_comments;
-      if(submission.user_id != ENV.SUBMISSION.user_id) { continue; }
+      const anonymizableId = ENV.SUBMISSION.user_id ? 'user_id' : 'anonymous_id'
+      // Be sure not to compare numeric and stringified user IDs
+      if (submission[anonymizableId].toString() !== ENV.SUBMISSION[anonymizableId]) { continue; }
 
       for(var idx in comments) {
         var comment = comments[idx].submission_comment || comments[idx];
@@ -134,7 +136,7 @@ import './rubric_assessment' /*global rubricAssessment*/
       };
     });
     $tabs.each(function(){
-      $(this).bind('keydown', function(e){
+      $(this).bind('keydown', e => {
         if(keyCodes[e.which] == "esc")
           $(".hide_rubric_link").click()
       });
@@ -146,7 +148,7 @@ import './rubric_assessment' /*global rubricAssessment*/
           if(isLeavingHolder) {
             e.preventDefault();
             var thisEl = this
-            var target = $.grep(tabBounds,function(el){return el != thisEl})
+            var target = $.grep(tabBounds,el => el != thisEl)
             $(target).focus();
           };
         };
@@ -188,27 +190,30 @@ import './rubric_assessment' /*global rubricAssessment*/
     $(document).ready(function() {
       $(".comments .comment_list .play_comment_link").mediaCommentThumbnail('small');
       $(window).bind('resize', windowResize).triggerHandler('resize');
-      $(".comments_link").click(function(event) {
+      $(".comments_link").click(event => {
         event.preventDefault();
-        $(".comments").slideToggle(function() {
+        $(".comments").slideToggle(() => {
           $(".comments .media_comment_content").empty();
           $(".comments textarea:visible").focus().select();
         });
       });
-      $(".save_comment_button").click(function(event) {
+      $(".save_comment_button").click(event => {
         $(document).triggerHandler('comment_change');
       });
       // post new comment but no grade
-      $(document).bind('comment_change', function(event) {
+      $(document).bind('comment_change', event => {
         $(".save_comment_button").attr('disabled','disabled');
         $(".submission_header").loadingImage();
         var url = $(".update_submission_url").attr('href');
         var method = $(".update_submission_url").attr('title');
         var formData = {
           'submission[assignment_id]': ENV.SUBMISSION.assignment_id,
-          'submission[user_id]': ENV.SUBMISSION.user_id,
           'submission[group_comment]': ($("#submission_group_comment").attr('checked') ? "1" : "0")
         };
+
+        const anonymizableIdKey = ENV.SUBMISSION.user_id ? 'user_id' : 'anonymous_id'
+        formData[`submission[${anonymizableIdKey}]`] = ENV.SUBMISSION[anonymizableIdKey]
+
         if($("#media_media_recording:visible").length > 0) {
           var comment_id = $("#media_media_recording").data('comment_id');
           var comment_type = $("#media_media_recording").data('comment_type');
@@ -233,15 +238,15 @@ import './rubric_assessment' /*global rubricAssessment*/
           $.ajaxJSON(url, method, formData, submissionLoaded);
         }
       });
-      $(".cancel_comment_button").click(function(event) {
+      $(".cancel_comment_button").click(event => {
         $(".grading_comment").val("");
         $(".comments_link").click();
       });
-      $(".grading_value").change(function(event) {
+      $(".grading_value").change(event => {
         $(document).triggerHandler('grading_change');
       });
       // post new grade but no comments
-      $(document).bind('grading_change', function(event) {
+      $(document).bind('grading_change', event => {
         $(".save_comment_button").attr('disabled','disabled');
         $(".submission_header").loadingImage();
         var url = $(".update_submission_url").attr('href');
@@ -259,7 +264,7 @@ import './rubric_assessment' /*global rubricAssessment*/
           $(".save_comment_button").attr('disabled',null);
         }
       });
-      $(".attach_comment_file_link").click(function(event) {
+      $(".attach_comment_file_link").click(event => {
         event.preventDefault();
         var $attachment = $("#comment_attachment_input_blank").clone(true).removeAttr('id');
         $attachment.find("input").attr('name', 'attachments[' + (fileIndex++) + '][uploaded_data]');
@@ -277,7 +282,7 @@ import './rubric_assessment' /*global rubricAssessment*/
         var url = $(".update_rubric_assessment_url").attr('href');
         var method = "POST";
         $rubric.loadingImage();
-        $.ajaxJSON(url, method, submitted_data, function(data) {
+        $.ajaxJSON(url, method, submitted_data, data => {
           $rubric.loadingImage('remove');
           var assessment = data;
           var found = false;
@@ -304,10 +309,15 @@ import './rubric_assessment' /*global rubricAssessment*/
           $("#rubric_assessment_option_" + assessment.id).text(assessment.assessor_name);
           $("#new_rubric_assessment_option").remove();
           $("#rubric_assessments_list").show();
+
+          if(assessment.assessment_type === 'peer_review') {
+            $('.save_rubric_button').remove()
+          }
+
           /* the 500 timeout is due to the fadeOut in the closeRubric function, which defaults to 400.
           We need to ensure any warning messages are read out after the fadeOut manages the page focus
           so that any messages are not interrupted in voiceover utilities */
-          setTimeout(function () {
+          setTimeout(() => {
             rubricAssessment.populateRubric($rubric, assessment, submitted_data);
             var submission = assessment.artifact;
             if (submission) {
@@ -319,11 +329,11 @@ import './rubric_assessment' /*global rubricAssessment*/
       });
       $("#rubric_holder .rubric").css({'width': 'auto', 'marginTop': 0});
       makeRubricAccessible($("#rubric_holder"));
-      $(".hide_rubric_link").click(function(event) {
+      $(".hide_rubric_link").click(event => {
         event.preventDefault();
         closeRubric();
       });
-      $(".assess_submission_link").click(function(event) {
+      $(".assess_submission_link").click(event => {
         event.preventDefault();
         $("#rubric_assessments_select").change();
         openRubric();
@@ -344,22 +354,22 @@ import './rubric_assessment' /*global rubricAssessment*/
         var current_user = (!found || found.assessor_id == ENV.RUBRIC_ASSESSMENT.assessor_id);
         $("#rubric_holder .save_rubric_button").showIf(current_user);
       }).change();
-      $(".media_comment_link").click(function(event) {
+      $(".media_comment_link").click(event => {
         event.preventDefault();
         $("#media_media_recording").show();
         var $recording = $("#media_media_recording").find(".media_recording");
-        $recording.mediaComment('create', 'any', function(id, type) {
+        $recording.mediaComment('create', 'any', (id, type) => {
           $("#media_media_recording").data('comment_id', id).data('comment_type', type);
           $(document).triggerHandler('comment_change');
           $("#add_comment_form").show();
           $("#media_media_recording").hide();
           $recording.empty();
-        }, function() {
+        }, () => {
           $("#add_comment_form").show();
           $("#media_media_recording").hide();
         });
       });
-      $("#media_recorder_container a").live('click', function(event) {
+      $("#media_recorder_container a").live('click', event => {
         $("#add_comment_form").show();
         $("#media_media_recording").hide();
       });
@@ -377,7 +387,7 @@ import './rubric_assessment' /*global rubricAssessment*/
         // are actually selecting the same links I just wanted to use the different selectors because
         // instructure.js uses 'a.instructure_inline_media_comment' as the selector for its .live handler
         // to show things inline.
-        .delegate('a.instructure_inline_media_comment', 'click', function(e){
+        .delegate('a.instructure_inline_media_comment', 'click', e => {
           // dont let it bubble past this so it doesnt get to the .live handler to show the video inline
           e.preventDefault();
           e.stopPropagation();
@@ -392,7 +402,7 @@ import './rubric_assessment' /*global rubricAssessment*/
     $(document).unbind('comment_change');
     $(document).unbind('grading_change');
   };
-  $(document).fragmentChange(function(event, hash) {
+  $(document).fragmentChange((event, hash) => {
     if(hash == '#rubric') {
       $(".assess_submission_link:visible:first").click();
     } else if(hash.match(/^#comment/)) {
@@ -408,13 +418,13 @@ import './rubric_assessment' /*global rubricAssessment*/
   });
   INST.refreshGrades = function() {
     var url = $(".submission_data_url").attr('href');
-    setTimeout(function() {
+    setTimeout(() => {
       $.ajaxJSON(url, 'GET', {}, submissionLoaded);
     }, 500);
   };
 
-  $(document).ready(function() {
-    window.addEventListener('message', function(event) {
+  $(document).ready(() => {
+    window.addEventListener('message', event => {
       if (event.data === 'refreshGrades') {
         INST.refreshGrades();
       }

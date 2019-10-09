@@ -68,8 +68,14 @@ QUnit.module('GradingPeriodForm', suiteHooks => {
 
   function getDateInput(inputLabel) {
     const labels = wrapper.find('label')
-    const $label = labels.filterWhere(label => label.text() === inputLabel).at(0).instance()
-    return wrapper.find(`input[aria-labelledby="${$label.id}"]`).at(0).instance()
+    const $label = labels
+      .filterWhere(label => label.text() === inputLabel)
+      .at(0)
+      .instance()
+    return wrapper
+      .find(`input[aria-labelledby="${$label.id}"]`)
+      .at(0)
+      .instance()
   }
 
   function getDateTimeSuggestions(inputLabel) {
@@ -82,7 +88,10 @@ QUnit.module('GradingPeriodForm', suiteHooks => {
   }
 
   function getInput(id) {
-    return wrapper.find(`input#${id}`).at(0).instance()
+    return wrapper
+      .find(`input#${id}`)
+      .at(0)
+      .instance()
   }
 
   function setDateInputValue(label, value) {
@@ -139,6 +148,14 @@ QUnit.module('GradingPeriodForm', suiteHooks => {
       mountComponent()
       strictEqual(getDateTimeSuggestions('Start Date').length, 0)
     })
+
+    test('does not alter the seconds value when emitting the new date', () => {
+      mountComponent()
+      setDateInputValue('Start Date', 'Dec 31, 2015 11pm')
+
+      const startDate = tz.parse(wrapper.state().period.startDate)
+      strictEqual(tz.format(startDate, '%S'), '00')
+    })
   })
 
   QUnit.module('"End Date" input', () => {
@@ -175,6 +192,14 @@ QUnit.module('GradingPeriodForm', suiteHooks => {
     test('does not show local and server time for end date when they are the same', () => {
       mountComponent()
       strictEqual(getDateTimeSuggestions('End Date').length, 0)
+    })
+
+    test('sets the seconds value to 59 when emitting the updated date', () => {
+      mountComponent()
+      setDateInputValue('End Date', 'Dec 31, 2015 11pm')
+
+      const endDate = tz.parse(wrapper.state().period.endDate)
+      strictEqual(tz.format(endDate, '%S'), '59')
     })
   })
 
@@ -241,6 +266,14 @@ QUnit.module('GradingPeriodForm', suiteHooks => {
       setDateInputValue('Close Date', '')
       setDateInputValue('End Date', 'Dec 31, 2015 12pm')
       equal(getDateInput('Close Date').value, 'Dec 31, 2015 12pm')
+    })
+
+    test('sets the seconds value to 59 when emitting the updated date', () => {
+      mountComponent()
+      setDateInputValue('Close Date', 'Dec 31, 2015 11pm')
+
+      const closeDate = tz.parse(wrapper.state().period.closeDate)
+      strictEqual(tz.format(closeDate, '%S'), '59')
     })
   })
 
@@ -322,7 +355,7 @@ QUnit.module('GradingPeriodForm', suiteHooks => {
       mountComponent()
       setDateInputValue('End Date', 'Dec 30, 2015 12pm')
       getButton('Save').simulate('click')
-      deepEqual(getSavedGradingPeriod().endDate, new Date('2015-12-30T12:00:00Z'))
+      deepEqual(getSavedGradingPeriod().endDate, new Date('2015-12-30T12:00:59Z'))
     })
 
     test('includes the grading period close date', () => {
@@ -335,7 +368,7 @@ QUnit.module('GradingPeriodForm', suiteHooks => {
       mountComponent()
       setDateInputValue('Close Date', 'Dec 31, 2015 12pm')
       getButton('Save').simulate('click')
-      deepEqual(getSavedGradingPeriod().closeDate, new Date('2015-12-31T12:00:00Z'))
+      deepEqual(getSavedGradingPeriod().closeDate, new Date('2015-12-31T12:00:59Z'))
     })
 
     test('includes the grading period weight', () => {

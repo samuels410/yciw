@@ -380,6 +380,29 @@ describe SIS::CSV::EnrollmentImporter do
     expect(importer.batch.data[:counts][:enrollments]).to eq 1
   end
 
+  it "should always update sis_batch_id" do
+    # because people get confused otherwise
+    course = course_model(account: @account, sis_source_id: 'C001')
+    user = user_with_managed_pseudonym(account: @account, sis_user_id: 'U001')
+
+    importer = process_csv_data_cleanly(
+      "course_id,user_id,role,status",
+      "C001,U001,student,active"
+    )
+    enrollment = Enrollment.where(course_id: course.id, user_id: user.id).take
+    expect(enrollment.sis_batch_id).to eq importer.batch.id
+    importer = process_csv_data_cleanly(
+      "course_id,user_id,role,status",
+      "C001,U001,student,deleted"
+    )
+    expect(enrollment.reload.sis_batch_id).to eq importer.batch.id
+    importer = process_csv_data_cleanly(
+      "course_id,user_id,role,status",
+      "C001,U001,student,deleted"
+    )
+    expect(enrollment.reload.sis_batch_id).to eq importer.batch.id
+  end
+
   it "should allow one user multiple enrollment types in the same section" do
     process_csv_data_cleanly(
       "course_id,short_name,long_name,account_id,term_id,status",
@@ -820,7 +843,7 @@ describe SIS::CSV::EnrollmentImporter do
     student = Pseudonym.where(:unique_id => "user1").first.user
 
     observer = user_with_pseudonym(:account => @account)
-    student.linked_observers << observer
+    add_linked_observer(student, observer, root_account: @account)
 
     process_csv_data_cleanly(
         "course_id,user_id,role,section_id,status,associated_user_id",
@@ -930,6 +953,33 @@ describe SIS::CSV::EnrollmentImporter do
     expect(student.enrollments.first).to be_deleted
   end
 
+  it "do not create enrollments for deleted pseudonyms except when they have an active pseudonym too" do
+    process_csv_data_cleanly(
+        "course_id,short_name,long_name,account_id,term_id,status",
+        "test_1,TC 101,Test Course 101,,,active"
+    )
+    process_csv_data_cleanly(
+        "user_id,login_id,first_name,last_name,email,status",
+        "student_user,user1,User,Uno,user@example.com,active"
+    )
+    p = Pseudonym.where(sis_user_id: "student_user").first
+    p.user.pseudonyms.create(account: p.account, sis_user_id: 'second_sis', unique_id: 'second_sis')
+    process_csv_data_cleanly(
+        "user_id,login_id,first_name,last_name,email,status",
+        "student_user,user1,User,Uno,user@example.com,deleted"
+    )
+    importer = process_csv_data(
+        "course_id,user_id,role,section_id,status,associated_user_id",
+        "test_1,student_user,student,,active,",
+    )
+    errors = importer.errors.map { |r| r.last }
+    expect(errors).to eq ["Enrolled a user student_user in course test_1, but referenced a deleted sis login"]
+
+    student = p.user
+    expect(student.enrollments.count).to eq 1
+    expect(student.enrollments.first).to be_active
+  end
+
   it "should not enroll users into deleted sections" do
     process_csv_data_cleanly(
       "course_id,short_name,long_name,account_id,term_id,status",
@@ -967,6 +1017,58 @@ describe SIS::CSV::EnrollmentImporter do
     student = Pseudonym.where(:sis_user_id => "student_user").first.user
     expect(student.enrollments.count).to eq 1
     expect(student.enrollments.first).to be_completed
+  end
+
+  it "should complete last and delete the rest" do
+    process_csv_data_cleanly(
+      "course_id,short_name,long_name,account_id,term_id,status",
+      "test_1,TC 101,Test Course 101,,,active"
+    )
+    process_csv_data_cleanly(
+      "user_id,login_id,first_name,last_name,email,status",
+      "student_user,user1,User,Uno,user@example.com,active"
+    )
+    process_csv_data_cleanly(
+      "section_id,course_id,name,status,start_date,end_date",
+      "S001,test_1,Sec1,active,,",
+      "S002,test_1,Sec1,active,,",
+      "S003,test_1,Sec1,active,,"
+    )
+    process_csv_data_cleanly(
+      "course_id,user_id,role,section_id,status,associated_user_id",
+      "test_1,student_user,student,S001,deleted_last_completed,",
+      "test_1,student_user,student,S002,deleted_last_completed,",
+      "test_1,student_user,student,S003,deleted_last_completed,",
+    )
+    student = Pseudonym.where(sis_user_id: "student_user").first.user
+    expect(Enrollment.where(user: student, workflow_state: 'completed').count).to eq 1
+    expect(Enrollment.where(user: student, workflow_state: 'deleted').count).to eq 2
+  end
+
+  it "should delete enrollments if active exists" do
+    process_csv_data_cleanly(
+      "course_id,short_name,long_name,account_id,term_id,status",
+      "test_1,TC 101,Test Course 101,,,active"
+    )
+    process_csv_data_cleanly(
+      "user_id,login_id,first_name,last_name,email,status",
+      "student_user,user1,User,Uno,user@example.com,active"
+    )
+    process_csv_data_cleanly(
+      "section_id,course_id,name,status,start_date,end_date",
+      "S001,test_1,Sec1,active,,",
+      "S002,test_1,Sec1,active,,",
+      "S003,test_1,Sec1,active,,"
+    )
+    process_csv_data_cleanly(
+      "course_id,user_id,role,section_id,status,associated_user_id",
+      "test_1,student_user,student,S001,active,",
+      "test_1,student_user,student,S002,deleted_last_completed,",
+      "test_1,student_user,student,S003,deleted_last_completed,",
+    )
+    student = Pseudonym.where(sis_user_id: "student_user").first.user
+    expect(Enrollment.where(user: student, workflow_state: 'active').count).to eq 1
+    expect(Enrollment.where(user: student, workflow_state: 'deleted').count).to eq 2
   end
 
   it "doesn't die if the last record is invalid" do

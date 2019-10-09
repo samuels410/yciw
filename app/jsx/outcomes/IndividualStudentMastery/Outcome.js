@@ -19,20 +19,15 @@
 import React from 'react'
 import _ from 'lodash'
 import PropTypes from 'prop-types'
-import I18n from 'i18n!outcomes'
-import View from '@instructure/ui-layout/lib/components/View'
-import Flex, { FlexItem } from '@instructure/ui-layout/lib/components/Flex'
-import ToggleGroup from '@instructure/ui-toggle-details/lib/components/ToggleGroup'
-import List, { ListItem } from '@instructure/ui-elements/lib/components/List'
-import Pill from '@instructure/ui-elements/lib/components/Pill'
-import Text from '@instructure/ui-elements/lib/components/Text'
-import TruncateText from '@instructure/ui-elements/lib/components/TruncateText'
+import I18n from 'i18n!IndividualStudentMasteryOutcome'
+import {View, Flex, FlexItem} from '@instructure/ui-layout'
+import {ToggleGroup} from '@instructure/ui-toggle-details'
+import {List, ListItem, Pill, Text, TruncateText} from '@instructure/ui-elements'
 import natcompare from 'compiled/util/natcompare'
 import AssignmentResult from './AssignmentResult'
 import UnassessedAssignment from './UnassessedAssignment'
 import OutcomePopover from './OutcomePopover'
-import ScreenReaderContent from '@instructure/ui-a11y/lib/components/ScreenReaderContent'
-import PresentationContent from '@instructure/ui-a11y/lib/components/PresentationContent'
+import {ScreenReaderContent, PresentationContent} from '@instructure/ui-a11y'
 import * as shapes from './shapes'
 
 export default class Outcome extends React.Component {
@@ -53,7 +48,7 @@ export default class Outcome extends React.Component {
 
   renderHeader () {
     const { outcome, outcomeProficiency } = this.props
-    const { assignments, mastered, title, score, points_possible, results } = outcome
+    const { assignments, display_name, mastered, title, score, points_possible, results } = outcome
     const numAlignments = assignments.length
     const pillAttributes = {margin: "0 0 0 x-small", text: I18n.t('Not mastered')}
     if (mastered) {
@@ -70,7 +65,7 @@ export default class Outcome extends React.Component {
                   <FlexItem>
                     <OutcomePopover outcome={outcome} outcomeProficiency={outcomeProficiency}/>
                   </FlexItem>
-                  <FlexItem shrink padding="0 x-small"><TruncateText>{ title }</TruncateText></FlexItem>
+                  <FlexItem shrink padding="0 x-small"><TruncateText>{ display_name || title }</TruncateText></FlexItem>
                 </Flex>
               </Text>
             </FlexItem>
@@ -98,10 +93,14 @@ export default class Outcome extends React.Component {
   renderDetails () {
     const { outcome, outcomeProficiency } = this.props
     const { assignments, results } = outcome
-    const assignmentsWithResults = results.map((r) => r.assignment.id.split('_')[1])
-    const unassessedAssignments = _.reject(assignments, (a) => (
-      _.includes(assignmentsWithResults, a.assignment_id.toString()
-    )))
+    const assignmentsWithResults = _.filter(results,
+      (r) => r.assignment.id.startsWith('assignment_')).map((r) => r.assignment.id.split('_')[1])
+    const assessmentsWithResults = _.filter(results,
+      (r) => r.assignment.id.startsWith('live_assessments/assessment_')).map((r) => r.assignment.id.split('_')[2])
+    const unassessed = _.filter(assignments, (a) => (
+      a.assignment_id && !_.includes(assignmentsWithResults, a.assignment_id.toString()) ||
+      a.assessment_id && !_.includes(assessmentsWithResults, a.assessment_id.toString())
+    ))
     return (
       <List variant="unstyled" delimiter="dashed">
       {
@@ -112,8 +111,10 @@ export default class Outcome extends React.Component {
         ))
       }
       {
-        unassessedAssignments.map((assignment) => (
-          <UnassessedAssignment assignment={assignment}/>
+        unassessed.map((assignment) => (
+          <UnassessedAssignment
+            key={assignment.assessment_id ? `a${assignment.assessment_id}` : assignment.assignment_id}
+            assignment={assignment}/>
         ))
       }
       </List>

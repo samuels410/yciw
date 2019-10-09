@@ -334,6 +334,12 @@ class CalendarEventsApiController < ApplicationController
   #   underscore, followed by the context id. For example: course_42
   # @argument excludes[] [Array]
   #   Array of attributes to exclude. Possible values are "description", "child_events" and "assignment"
+  # @argument submission_types[] [Array]
+  #   When type is "assignment", specifies the allowable submission types for returned assignments.
+  #   Ignored if type is not "assignment" or if exclude_submission_types is provided.
+  # @argument exclude_submission_types[] [Array]
+  #   When type is "assignment", specifies the submission types to be excluded from the returned
+  #   assignments. Ignored if type is not "assignment".
   #
   # @returns [CalendarEvent]
   def user_index
@@ -341,7 +347,16 @@ class CalendarEventsApiController < ApplicationController
   end
 
   def render_events_for_user(user, route_url)
-    scope = @type == :assignment ? assignment_scope(user) : calendar_event_scope(user)
+    scope = if @type == :assignment
+      assignment_scope(
+        user,
+        submission_types: params.fetch(:submission_types, []),
+        exclude_submission_types: params.fetch(:exclude_submission_types, [])
+      )
+    else
+      calendar_event_scope(user)
+    end
+
     events = Api.paginate(scope, self, route_url)
     ActiveRecord::Associations::Preloader.new.preload(events, :child_events) if @type == :event
     if @type == :assignment
@@ -555,7 +570,7 @@ class CalendarEventsApiController < ApplicationController
   def participants
     get_event
     if authorized_action(@event, @current_user, :read_child_events)
-      participants = Api.paginate(@event.child_event_participants.order(:id), self, api_v1_calendar_event_participants_url)
+      participants = Api.paginate( @event.child_event_participants_scope.order(:id), self, api_v1_calendar_event_participants_url)
       json = participants.map do |user|
         user_display_json(user)
       end
@@ -1084,7 +1099,7 @@ class CalendarEventsApiController < ApplicationController
     end
   end
 
-  def assignment_scope(user)
+  def assignment_scope(user, submission_types: [], exclude_submission_types: [])
     collections = []
     bookmarker = BookmarkedCollection::SimpleBookmarker.new(Assignment, :due_at, :id)
     last_scope = nil
@@ -1096,6 +1111,11 @@ class CalendarEventsApiController < ApplicationController
       next unless scope
 
       scope = scope.active.order(:due_at, :id)
+      if exclude_submission_types.any?
+        scope = scope.where.not(submission_types: exclude_submission_types)
+      elsif submission_types.any?
+        scope = scope.where(submission_types: submission_types)
+      end
       scope = scope.send(*date_scope_and_args(:due_between_with_overrides)) unless @all_events
 
       last_scope = scope
@@ -1204,7 +1224,7 @@ class CalendarEventsApiController < ApplicationController
 
       if courses_user_has_been_enrolled_in[:student].include?(assignment.context_id)
         assignment = assignment.overridden_for(user)
-        assignment.infer_all_day
+        assignment.infer_all_day(Time.zone)
         assignments << assignment
       else
         dates_list = assignment.all_dates_visible_to(user,
@@ -1331,7 +1351,19 @@ class CalendarEventsApiController < ApplicationController
   def require_user_or_observer
     return render_unauthorized_action unless @current_user.present?
     @observee = api_find(User, params[:user_id])
-    authorized_action(@observee, @current_user, :read)
+
+    if @observee.grants_right?(@current_user, session, :read)
+      true # parent or admin
+    else
+      # possibly an observer without a full link
+      shards = @current_user.in_region_associated_shards & @observee.in_region_associated_shards
+      @observed_course_ids = @current_user.observer_enrollments.shard(shards).active_or_pending.where(associated_user_id: @observee).pluck(:course_id)
+      if @observed_course_ids.any?
+        true
+      else
+        render_unauthorized_action
+      end
+    end
   end
 
   def require_authorization

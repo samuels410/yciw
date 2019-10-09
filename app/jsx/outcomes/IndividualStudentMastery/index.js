@@ -18,18 +18,15 @@
 
 import React from 'react'
 import PropTypes from 'prop-types'
-import I18n from 'i18n!outcomes'
-import Flex, { FlexItem } from '@instructure/ui-layout/lib/components/Flex'
-import List, { ListItem } from '@instructure/ui-elements/lib/components/List'
-import Spinner from '@instructure/ui-elements/lib/components/Spinner'
-import Text from '@instructure/ui-elements/lib/components/Text'
+import I18n from 'i18n!IndividualStudentMasteryIndex'
+import {Flex, FlexItem} from '@instructure/ui-layout'
+import {List, ListItem, Spinner, Text} from '@instructure/ui-elements'
 import natcompare from 'compiled/util/natcompare'
 import OutcomeGroup from './OutcomeGroup'
 import fetchOutcomes from './fetchOutcomes'
 import { Set } from 'immutable'
 import * as shapes from './shapes'
 
-// eslint-disable-next-line
 class IndividualStudentMastery extends React.Component {
   static propTypes = {
     courseId: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
@@ -50,7 +47,7 @@ class IndividualStudentMastery extends React.Component {
 
   componentDidMount () {
     const { courseId, studentId } = this.props
-    fetchOutcomes(courseId, studentId)
+    return fetchOutcomes(courseId, studentId)
       .then(({ outcomeGroups, outcomes }) => {
         this.setState({ outcomeGroups, outcomes })
       })

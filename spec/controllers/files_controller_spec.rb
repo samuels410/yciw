@@ -154,19 +154,6 @@ describe FilesController do
       expect(assigns[:contexts][0]).to eql(@course)
     end
 
-    it "should return a json format for wiki sidebar" do
-      user_session(@teacher)
-      r1 = Folder.root_folders(@course).first
-      f1 = course_folder
-      a1 = folder_file
-      get 'index', params: {:course_id => @course.id}, :format => 'json'
-      expect(response).to be_successful
-      data = json_parse
-      expect(data).not_to be_nil
-      # order expected
-      expect(data["folders"].map{|x| x["folder"]["id"]}).to eql([r1.id, f1.id])
-    end
-
     it "should work for a user context, too" do
       user_session(@student)
       get 'index', params: {:user_id => @student.id}
@@ -196,7 +183,6 @@ describe FilesController do
           :visibility => "admins"
         }
         @tool.save!
-        Account.default.enable_feature!(:lor_for_account)
       end
 
       before :each do
@@ -238,10 +224,6 @@ describe FilesController do
         expect(response).to be_successful
       end
 
-      it "authorizes users on a remote shard for JSON data" do
-        get 'index', params: {:user_id => @user.global_id}, :format => :json
-        expect(response).to be_successful
-      end
     end
   end
 
@@ -293,6 +275,12 @@ describe FilesController do
         verifier = Attachments::Verification.new(@file).verifier_for_user(@teacher)
         get 'show', params: {:course_id => @course.id, :id => @file.id, :verifier => verifier}, :format => 'json'
         expect(response).to be_successful
+      end
+
+      it "should emit an asset_accessed live event" do
+        allow_any_instance_of(Attachment).to receive(:canvadoc_url).and_return "stubby"
+        expect(Canvas::LiveEvents).to receive(:asset_access).with(@file, 'files', nil, nil)
+        get 'show', params: {:course_id => @course.id, :id => @file.id, :verifier => @file.uuid, download: 1}, :format => 'json'
       end
     end
 
@@ -1201,7 +1189,7 @@ describe FilesController do
   describe "POST api_capture" do
     before :each do
       allow(InstFS).to receive(:enabled?).and_return(true)
-      allow(InstFS).to receive(:jwt_secret).and_return("jwt signing key")
+      allow(InstFS).to receive(:jwt_secrets).and_return(["jwt signing key"])
       @token = Canvas::Security.create_jwt({}, nil, InstFS.jwt_secret)
     end
 
@@ -1282,8 +1270,9 @@ describe FilesController do
         assert_status(201)
       end
 
-      context 'with an Assignment' do
+      context 'with Submission, Assignment, and Progress' do
         let(:assignment) { course.assignments.create! }
+        let(:submission) { assignment.submissions.create!(user: @student) }
         let(:assignment_params) do
           params.merge(
             context_type: "Assignment",
@@ -1298,7 +1287,13 @@ describe FilesController do
             uploaded_data: StringIO.new('meow?')
           )
         end
-        let!(:homework_service) { Services::SubmitHomeworkService.new(attachment, assignment) }
+        let(:progress) do
+          ::Progress.
+            new(context: assignment, user: user, tag: :test).
+            tap(&:start).
+            tap(&:save!)
+        end
+        let!(:homework_service) { Services::SubmitHomeworkService.new(attachment, progress) }
 
         before do
           allow(Mailer).to receive(:deliver)
@@ -1310,13 +1305,7 @@ describe FilesController do
           assert_status(201)
         end
 
-        context 'with a Progress' do
-          let(:progress) do
-            ::Progress.
-              new(context: assignment, user: user, tag: :test).
-              tap(&:start).
-              tap(&:save!)
-          end
+        context 'with progress_id param' do
           let(:progress_params) do
             assignment_params.merge(
               progress_id: progress.id
@@ -1355,6 +1344,7 @@ describe FilesController do
               tap(&:start).
               tap(&:save!)
           end
+
           let(:progress_params) do
             assignment_params.merge(
               progress_id: progress.id,
@@ -1368,12 +1358,19 @@ describe FilesController do
             allow(homework_service).to receive(:queue_email)
           end
 
-          it 'should submit the attachment' do
-            expect(homework_service).to receive(:submit).with(
-              progress.created_at,
-              eula_agreement_timestamp
-            )
+          it 'should submit the attachment if the submit_assignment flag is not provided' do
+            expect(homework_service).to receive(:submit).with(eula_agreement_timestamp)
             request
+          end
+
+          it 'should submit the attachment if the submit_assignment param is set to true' do
+            expect(homework_service).to receive(:submit).with(eula_agreement_timestamp)
+            post "api_capture", params: progress_params.merge(submit_assignment: true)
+          end
+
+          it 'should not submit the attachment if the submit_assignment param is set to false' do
+            expect(homework_service).not_to receive(:submit)
+            post "api_capture", params: progress_params.merge(submit_assignment: false)
           end
 
           it 'should save the eula_agreement_timestamp' do
@@ -1387,8 +1384,13 @@ describe FilesController do
             assert_status(201)
           end
 
+          it "marks the progress as completed" do
+            request
+            expect(progress.reload.workflow_state).to eq 'completed'
+          end
+
           it 'should send a failure email' do
-            allow(homework_service).to receive(:submit).and_raise('error')
+            expect(homework_service).to receive(:submit).and_raise('error')
             expect(homework_service).to receive(:failure_email)
             request
 

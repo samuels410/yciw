@@ -17,14 +17,16 @@
  */
 import React from 'react'
 import ReactDOM from 'react-dom'
-import {ApolloProvider, client} from '../canvas-apollo'
-
-import TeacherView from './teacher/components/TeacherView'
+import {ApolloProvider} from 'react-apollo'
+// import TeacherView from './teacher/components/TeacherView'
+import TeacherQuery from './teacher/components/TeacherQuery'
+import {createClient} from '../canvas-apollo'
 
 export default function renderAssignmentsApp(env, elt) {
+  const client = createClient()
   ReactDOM.render(
     <ApolloProvider client={client}>
-      <TeacherView assignmentLid={ENV.ASSIGNMENT_ID.toString()} />
+      <TeacherQuery assignmentLid={ENV.ASSIGNMENT_ID.toString()} />
     </ApolloProvider>,
     elt
   )

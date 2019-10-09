@@ -20,7 +20,7 @@ import React from 'react'
 import ReactDOM from 'react-dom'
 import TestUtils from 'react-dom/test-utils'
 import SubmissionProgressBars from 'jsx/context_cards/SubmissionProgressBars'
-import InstUIProgress from '@instructure/ui-elements/lib/components/Progress'
+import {Progress as InstUIProgress} from '@instructure/ui-elements'
 import { shallow } from 'enzyme'
 
 const user = { _id: 1 }
@@ -83,7 +83,7 @@ QUnit.module('StudentContextTray/Progress', (hooks) => {
 
         SubmissionProgressBars.displayGrade({...submission, grade: 'complete'})
         ok(spy.calledOnce)
-        spy.reset()
+        spy.resetHistory()
 
         SubmissionProgressBars.displayGrade({...submission, grade: 'incomplete'})
         ok(spy.calledOnce)
@@ -300,7 +300,7 @@ QUnit.module('StudentContextTray/Progress', (hooks) => {
       ]
 
       const tray = shallow(<SubmissionProgressBars submissions={submissions} />)
-      ok(tray.find("Tooltip").getElement().props.href.match(/submissions\/99/));
+      ok(tray.find("Link").getElement().props.href.match(/submissions\/99/));
     })
   })
 })

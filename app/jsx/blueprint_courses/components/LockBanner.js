@@ -16,11 +16,11 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-import I18n from 'i18n!blueprint_courses'
+import I18n from 'i18n!blueprint_coursesLockBanner'
 import React, { Component } from 'react'
 import PropTypes from 'prop-types'
-import Alert from '@instructure/ui-alerts/lib/components/Alert'
-import Text from '@instructure/ui-elements/lib/components/Text'
+import {Alert} from '@instructure/ui-alerts'
+import {Text} from '@instructure/ui-elements'
 import $ from 'jquery'
 import 'compiled/jquery.rails_flash_notifications'
 import {formatLockObject} from '../LockItemFormat'

@@ -89,28 +89,6 @@ class Enrollment < ActiveRecord::Base
   scope :concluded, -> { joins(:course).where(QueryBuilder.new(:completed).conditions).readonly(false) }
   scope :current_and_concluded, -> { joins(:course).where(QueryBuilder.new(:current_and_concluded).conditions).readonly(false) }
 
-  def self.not_yet_started(course)
-    collection = self.where(course_id: course).to_a
-    Canvas::Builders::EnrollmentDateBuilder.preload(collection)
-    collection.select do |enrollment|
-      enrollment.effective_start_at > Time.zone.now
-    end
-  end
-
-  def self.section_ended(course_id)
-    collection = self.where(course_id: course_id).to_a
-    Canvas::Builders::EnrollmentDateBuilder.preload(collection)
-    courses = Course.where(id: course_id)
-    unless courses[0].nil?
-      collection.select do |enrollment|
-        (!enrollment.course_section.end_at.nil? &&
-         enrollment.course_section.end_at < courses[0].time_zone.now) ||
-          (!enrollment.course_section.start_at.nil? &&
-           enrollment.course_section.start_at >  courses[0].time_zone.now)
-      end
-    end
-  end
-
   def ensure_role_id
     self.role_id ||= self.role.id
   end
@@ -427,9 +405,10 @@ class Enrollment < ActiveRecord::Base
     end
   end
 
-  def update_linked_enrollments
+  def update_linked_enrollments(restore: false)
     observers.each do |observer|
-      if enrollment = active_linked_enrollment_for(observer)
+      enrollment = restore ? linked_enrollment_for(observer) : active_linked_enrollment_for(observer)
+      if enrollment
         enrollment.update_from(self)
       elsif self.saved_change_to_workflow_state? && self.workflow_state_before_last_save == 'inactive'
         create_linked_enrollment_for(observer)
@@ -475,7 +454,9 @@ class Enrollment < ActiveRecord::Base
 
   def update_cached_due_dates
     if @update_cached_due_dates
-      update_grades = being_restored?(to_state: 'active') || being_restored?(to_state: 'inactive')
+      update_grades = being_restored?(to_state: 'active') ||
+        being_restored?(to_state: 'inactive') ||
+        saved_change_to_id?
       DueDateCacher.recompute_users_for_course(user_id, course, nil, update_grades: update_grades)
     end
   end
@@ -522,26 +503,22 @@ class Enrollment < ActiveRecord::Base
   def conclude
     self.workflow_state = "completed"
     self.completed_at = Time.now
-    self.user.touch
     self.save
   end
 
   def unconclude
     self.workflow_state = 'active'
     self.completed_at = nil
-    self.user.touch
     self.save
   end
 
   def deactivate
     self.workflow_state = "inactive"
-    self.user.touch
     self.save
   end
 
   def reactivate
     self.workflow_state = "active"
-    self.user.touch
     self.save
   end
 
@@ -660,12 +637,15 @@ class Enrollment < ActiveRecord::Base
   end
 
   def accept(force = false)
-    return false unless force || invited?
-    update_attribute(:workflow_state, 'active')
-    if self.type == 'StudentEnrollment'
-      Enrollment.recompute_final_score_in_singleton(self.user_id, self.course_id)
+    Shackles.activate(:master) do
+      return false unless force || invited?
+      if update_attribute(:workflow_state, 'active')
+        if self.type == 'StudentEnrollment'
+          Enrollment.recompute_final_score_in_singleton(self.user_id, self.course_id)
+        end
+        true
+      end
     end
-    touch_user
   end
 
   def reset_notifications_cache
@@ -699,7 +679,7 @@ class Enrollment < ActiveRecord::Base
 
   workflow do
     state :invited do
-      event :reject, :transitions_to => :rejected do self.user.touch; end
+      event :reject, :transitions_to => :rejected
       event :complete, :transitions_to => :completed
     end
 
@@ -708,7 +688,7 @@ class Enrollment < ActiveRecord::Base
     end
 
     state :active do
-      event :reject, :transitions_to => :rejected do self.user.touch; end
+      event :reject, :transitions_to => :rejected
       event :complete, :transitions_to => :completed
     end
 
@@ -845,7 +825,6 @@ class Enrollment < ActiveRecord::Base
     result = self.save
     if result
       self.user.try(:update_account_associations)
-      self.user.touch
       scores.update_all(updated_at: Time.zone.now, workflow_state: :deleted)
 
       Assignment.remove_user_as_final_grader(user_id, course_id) if remove_user_as_final_grader?
@@ -874,7 +853,7 @@ class Enrollment < ActiveRecord::Base
   def has_permission_to?(action)
     @permission_lookup ||= {}
     unless @permission_lookup.has_key? action
-      @permission_lookup[action] = RoleOverride.enabled_for?(course, action, self.role, course)
+      @permission_lookup[action] = RoleOverride.enabled_for?(course, action, self.role_id, nil)
     end
     @permission_lookup[action].include?(:self)
   end
@@ -1066,7 +1045,7 @@ class Enrollment < ActiveRecord::Base
   def effective_current_grade(id_opts=nil)
     score = find_score(id_opts)
 
-    if score&.overridden? && course.feature_enabled?(:final_grades_override)
+    if score&.overridden? && course.allow_final_grade_override?
       score.effective_final_grade
     else
       computed_current_grade(id_opts)
@@ -1076,8 +1055,8 @@ class Enrollment < ActiveRecord::Base
   def effective_current_score(id_opts=nil)
     score = find_score(id_opts)
 
-    if score&.overridden? && course.feature_enabled?(:final_grades_override)
-      score.effective_final_score_lower_bound
+    if score&.overridden? && course.allow_final_grade_override?
+      score.effective_final_score
     else
       computed_current_score(id_opts)
     end
@@ -1086,7 +1065,7 @@ class Enrollment < ActiveRecord::Base
   def effective_final_grade(id_opts=nil)
     score = find_score(id_opts)
 
-    if score&.overridden? && course.feature_enabled?(:final_grades_override)
+    if score&.overridden? && course.allow_final_grade_override?
       score.effective_final_grade
     else
       computed_final_grade(id_opts)
@@ -1096,21 +1075,21 @@ class Enrollment < ActiveRecord::Base
   def effective_final_score(id_opts=nil)
     score = find_score(id_opts)
 
-    if score&.overridden? && course.feature_enabled?(:final_grades_override)
-      score.effective_final_score_lower_bound
+    if score&.overridden? && course.allow_final_grade_override?
+      score.effective_final_score
     else
       computed_final_score(id_opts)
     end
   end
 
   def override_grade(id_opts=nil)
-    return nil unless course.feature_enabled?(:final_grades_override) && course.grading_standard_enabled?
+    return nil unless course.allow_final_grade_override? && course.grading_standard_enabled?
     score = find_score(id_opts)
     score.effective_final_grade if score&.override_score
   end
 
   def override_score(id_opts=nil)
-    return nil unless course.feature_enabled?(:final_grades_override)
+    return nil unless course.allow_final_grade_override?
     score = find_score(id_opts)
     score&.override_score
   end
@@ -1350,7 +1329,7 @@ class Enrollment < ActiveRecord::Base
         enrollment.save!
       end
     end
-    user.touch
+    user.clear_cache_key(:enrollments)
   end
 
   def self.course_user_state(course, uuid)
@@ -1412,7 +1391,7 @@ class Enrollment < ActiveRecord::Base
   def touch_graders_if_needed
     if !active_student? && active_student?(:was) && self.course.submissions.where(:user_id => self.user_id).exists?
       self.class.connection.after_transaction_commit do
-        User.where(id: self.course.admins).touch_all
+        self.course.admins.clear_cache_keys(:todo_list)
       end
     end
   end
@@ -1429,18 +1408,48 @@ class Enrollment < ActiveRecord::Base
         override_scope.where(assignment_id: assignment_ids).find_each(&:destroy)
       end
     end
+
+    if being_accepted?
+      return unless ConditionalRelease::Service.enabled_in_context?(self.course)
+      # Deleted student overrides associated with assignments with a Mastery Path override
+      releases = override_scope.where(workflow_state: 'deleted').
+        where(assignment: assignment_scope).
+        joins(assignment: :assignment_overrides).
+        where(assignment_overrides: {
+          set_type: AssignmentOverride::SET_TYPE_NOOP,
+          set_id: AssignmentOverride::NOOP_MASTERY_PATHS,
+          workflow_state: 'active'
+        }).distinct
+      return unless releases.exists?
+      # Add parent join to reduce duplication, which are used in both cases below
+      releases = releases.
+        joins("INNER JOIN #{AssignmentOverride.quoted_table_name} parent ON assignment_override_students.assignment_override_id = parent.id")
+      # Restore student overrides associated with an active assignment override
+      releases.where('parent.workflow_state = \'active\'').update(workflow_state: 'active')
+      # Restore student overrides and assignment overrides if assignment override is deleted
+      releases.preload(:assignment_override).where('parent.workflow_state = \'deleted\'').find_each do |release|
+        release.update(workflow_state: 'active')
+        release.assignment_override.update(workflow_state: 'active')
+      end
+    end
   end
 
   def section_or_course_date_in_past?
-    if self.course_section && self.course_section.end_at
-      self.course_section.end_at < Time.now
+    if self.course_section&.end_at
+      self.course_section.end_at < Time.zone.now
     elsif self.course.conclude_at
-      self.course.conclude_at < Time.now
+      self.course.conclude_at < Time.zone.now
     end
   end
 
   def student_or_fake_student?
     ['StudentEnrollment', 'StudentViewEnrollment'].include?(type)
+  end
+
+  def self.restore_submissions_and_scores_for_enrollments(enrollments)
+    raise ArgumentError, 'Cannot call with more than 1000 enrollments' if enrollments.count > 1_000
+    restore_deleted_submissions_for_enrollments(enrollments)
+    restore_deleted_scores_for_enrollments(enrollments)
   end
 
   private
@@ -1480,24 +1489,39 @@ class Enrollment < ActiveRecord::Base
   end
 
   def restore_deleted_submissions
-    Submission.
-      joins(:assignment).
-      where(user_id: user_id, workflow_state: "deleted", assignments: { context_id: course_id }).
-      merge(Assignment.active).
-      in_batches.
-      update_all("workflow_state = #{DueDateCacher::INFER_SUBMISSION_WORKFLOW_STATE_SQL}")
+    Enrollment.restore_deleted_submissions_for_enrollments([self])
+  end
+
+  def self.restore_deleted_submissions_for_enrollments(student_enrollments)
+    raise ArgumentError, 'Cannot call with more than 1000 enrollments' if student_enrollments.count > 1_000
+    student_enrollments.group_by(&:course_id).each do |course_id, students|
+      Submission.
+        joins(:assignment).
+        where(user_id: students.map(&:user_id), workflow_state: "deleted", assignments: { context_id: course_id }).
+        merge(Assignment.active).
+        in_batches.
+        update_all("workflow_state = #{DueDateCacher::INFER_SUBMISSION_WORKFLOW_STATE_SQL}")
+    end
   end
 
   def restore_deleted_scores
-    assignment_groups = course.assignment_groups.active.except(:order)
-    grading_periods = GradingPeriod.for(course)
+    Enrollment.restore_deleted_scores_for_enrollments([self])
+  end
 
-    Score.where(course_score: true).or(
-      Score.where(assignment_group: assignment_groups)
-    ).or(
-      Score.where(grading_period: grading_periods)
-    ).where(enrollment_id: id, workflow_state: "deleted").
-      update_all(workflow_state: "active")
+  def self.restore_deleted_scores_for_enrollments(student_enrollments)
+    raise ArgumentError, 'Cannot call with more than 1000 enrollments' if student_enrollments.count > 1_000
+    student_enrollments.group_by(&:course_id).each do |_course_id, students|
+      course = students.first.course
+      assignment_groups = course.assignment_groups.active.except(:order)
+      grading_periods = GradingPeriod.for(course)
+
+      Score.where(course_score: true).or(
+        Score.where(assignment_group: assignment_groups)
+      ).or(
+        Score.where(grading_period: grading_periods)
+      ).where(enrollment_id: students.map(&:id), workflow_state: "deleted").
+        update_all(workflow_state: "active")
+    end
   end
 
   def other_enrollment_of_same_type
@@ -1511,12 +1535,16 @@ class Enrollment < ActiveRecord::Base
       course_id: course,
       user_id: user,
       type: Array.wrap(types)
-    ).where.not(id: id, workflow_state: :deleted)
+    ).where.not(id: id).where.not(workflow_state: :deleted)
   end
 
   def remove_user_as_final_grader?
     instructor? &&
       !other_enrollments_of_type(['TaEnrollment', 'TeacherEnrollment']).exists?
+  end
+
+  def being_accepted?
+    saved_change_to_workflow_state? && workflow_state == 'active' && workflow_state_before_last_save == 'invited'
   end
 
   def being_restored?(to_state: workflow_state)

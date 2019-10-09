@@ -524,53 +524,130 @@ describe User do
     @assignment = @course.assignments.create :title => "Test Assignment", :points_possible => 10
   end
 
-  it "should not include recent feedback for muted assignments" do
-    create_course_with_student_and_assignment
-    @assignment.mute!
-    @assignment.grade_student @student, grade: 9, grader: @teacher
-    expect(@user.recent_feedback).to be_empty
-  end
+  describe "#recent_feedback" do
+    let_once(:post_policies_course) do
+      course = Course.create!(workflow_state: :available)
+      course.enable_feature!(:new_gradebook)
+      PostPolicy.enable_feature!
+      course
+    end
+    let_once(:auto_posted_assignment) { post_policies_course.assignments.create!(points_possible: 10) }
+    let_once(:manual_posted_assignment) do
+      assignment = post_policies_course.assignments.create!(points_possible: 10)
+      assignment.post_policy.update!(post_manually: true)
+      assignment
+    end
 
-  it "should include recent feedback for unmuted assignments" do
-    create_course_with_student_and_assignment
-    @assignment.grade_student @user, grade: 9, grader: @teacher
-    expect(@user.recent_feedback(:contexts => [@course])).not_to be_empty
-  end
+    let_once(:old_course) { Course.create!(workflow_state: :available) }
+    let_once(:unmuted_assignment) { old_course.assignments.create!(points_possible: 10) }
+    let_once(:muted_assignment) do
+      assignment = old_course.assignments.create!(points_possible: 10)
+      assignment.mute!
+      assignment
+    end
 
-  it "should include recent feedback for student view users" do
-    @course = course_model
-    @course.offer!
-    @assignment = @course.assignments.create :title => "Test Assignment", :points_possible => 10
-    test_student = @course.student_view_student
-    @assignment.grade_student test_student, grade: 9, grader: @teacher
-    expect(test_student.recent_feedback).not_to be_empty
-  end
+    let_once(:student) { User.create! }
+    let_once(:teacher) { User.create! }
 
-  it "should not include recent feedback for unpublished assignments" do
-    create_course_with_student_and_assignment
-    @assignment.grade_student @user, grade: 9, grader: @teacher
-    @assignment.unpublish
-    expect(@user.recent_feedback(:contexts => [@course])).to be_empty
-  end
+    before(:once) do
+      [post_policies_course, old_course].each do |course|
+        course.enroll_student(student, enrollment_state: :active)
+        course.enroll_teacher(teacher, enrollment_state: :active)
+      end
+    end
 
-  it "should not include recent feedback for other students in admin feedback" do
-    create_course_with_student_and_assignment
-    other_teacher = @teacher
-    teacher = teacher_in_course(:active_all => true).user
-    student = student_in_course(:active_all => true).user
-    sub = @assignment.grade_student(student, grade: 9, grader: @teacher).first
-    sub.submission_comments.create!(:comment => 'c1', :author => other_teacher)
-    sub.save!
-    expect(teacher.recent_feedback(:contexts => [@course])).to be_empty
-  end
+    context "for a non-Post Policies course" do
+      it "does not include recent feedback for muted assignments" do
+        muted_assignment.grade_student(student, grader: teacher, score: 10)
+        expect(student.recent_feedback).to be_empty
+      end
 
-  it "should not include non-recent feedback via old submission comments" do
-    create_course_with_student_and_assignment
-    sub = @assignment.grade_student(@user, grade: 9, grader: @teacher).first
-    sub.submission_comments.create!(:author => @teacher, :comment => 'good jorb')
-    expect(@user.recent_feedback(:contexts => [@course])).to include sub
-    Timecop.travel(1.year.from_now) do
-      expect(@user.recent_feedback(:contexts => [@course])).not_to include sub
+      it "includes recent feedback for unmuted assignments" do
+        unmuted_assignment.grade_student(student, grader: teacher, score: 10)
+        expect(student.recent_feedback).to contain_exactly(unmuted_assignment.submission_for_student(student))
+      end
+    end
+
+    context "for a course with Post Policies enabled" do
+      it "does not include assignments for which there is no feedback" do
+        expect(student.recent_feedback).to be_empty
+      end
+
+      it "includes recent posted feedback" do
+        auto_posted_assignment.grade_student(student, grader: teacher, score: 10)
+        expect(student.recent_feedback).to contain_exactly(auto_posted_assignment.submission_for_student(student))
+      end
+
+      it "includes feedback that was posted after being initially hidden" do
+        manual_posted_assignment.grade_student(student, grader: teacher, score: 10)
+        manual_posted_assignment.post_submissions
+
+        expect(student.recent_feedback).to contain_exactly(manual_posted_assignment.submission_for_student(student))
+      end
+
+      it "does not include recent unposted feedback" do
+        manual_posted_assignment.grade_student(student, grader: teacher, score: 10)
+        expect(student.recent_feedback).to be_empty
+      end
+
+      it "does not include recent feedback that was posted but subsequently hidden" do
+        auto_posted_assignment.grade_student(student, grader: teacher, score: 10)
+        auto_posted_assignment.hide_submissions
+
+        expect(student.recent_feedback).to be_empty
+      end
+    end
+
+    context "when considering both types of courses simultaneously" do
+      it "only returns feedback for posted submissions and unmuted assignments" do
+        muted_assignment.grade_student(student, grader: teacher, score: 10)
+        unmuted_assignment.grade_student(student, grader: teacher, score: 10)
+        auto_posted_assignment.grade_student(student, grader: teacher, score: 10)
+        manual_posted_assignment.grade_student(student, grader: teacher, score: 10)
+
+        expect(student.recent_feedback).to contain_exactly(
+          unmuted_assignment.submission_for_student(student),
+          auto_posted_assignment.submission_for_student(student)
+        )
+      end
+
+      it "only returns feedback for specific courses if specified" do
+        unmuted_assignment.grade_student(student, grader: teacher, score: 10)
+        auto_posted_assignment.grade_student(student, grader: teacher, score: 10)
+
+        expect(student.recent_feedback(contexts: [post_policies_course])).to contain_exactly(
+          auto_posted_assignment.submission_for_student(student)
+        )
+      end
+    end
+
+    it "includes recent feedback for student view users" do
+      test_student = post_policies_course.student_view_student
+      auto_posted_assignment.grade_student(test_student, grade: 9, grader: teacher)
+      expect(test_student.recent_feedback).not_to be_empty
+    end
+
+    it "does not include recent feedback for unpublished assignments" do
+      auto_posted_assignment.grade_student(student, grade: 9, grader: teacher)
+      auto_posted_assignment.unpublish
+      expect(student.recent_feedback(contexts: [post_policies_course])).to be_empty
+    end
+
+    it "does not include recent feedback for other students in admin feedback" do
+      other_teacher = post_policies_course.enroll_teacher(User.create!, enrollment_state: :active).user
+      submission = auto_posted_assignment.grade_student(student, grade: 9, grader: teacher).first
+      submission.add_comment(author: other_teacher, comment: "hi :)")
+
+      expect(teacher.recent_feedback(contexts: [post_policies_course])).to be_empty
+    end
+
+    it "does not include non-recent feedback via old submission comments" do
+      submission = auto_posted_assignment.grade_student(student, grade: 9, grader: teacher).first
+      submission.add_comment(author: teacher, comment: "hooray")
+
+      Timecop.travel(1.year.from_now) do
+        expect(student.recent_feedback(contexts: [post_policies_course])).not_to include submission
+      end
     end
   end
 
@@ -826,17 +903,17 @@ describe User do
     end
 
     it 'is true if there are no account users for this root account' do
-      account = double(:root_account? => true, :all_account_users_for => [])
+      account = double(:root_account? => true, :cached_all_account_users_for => [])
       expect(user.has_subset_of_account_permissions?(other_user, account)).to be_truthy
     end
 
     it 'is true when all account_users for current user are subsets of target user' do
-      account = double(:root_account? => true, :all_account_users_for => [double(:is_subset_of? => true)])
+      account = double(:root_account? => true, :cached_all_account_users_for => [double(:is_subset_of? => true)])
       expect(user.has_subset_of_account_permissions?(other_user, account)).to be_truthy
     end
 
     it 'is false when any account_user for current user is not a subset of target user' do
-      account = double(:root_account? => true, :all_account_users_for => [double(:is_subset_of? => false)])
+      account = double(:root_account? => true, :cached_all_account_users_for => [double(:is_subset_of? => false)])
       expect(user.has_subset_of_account_permissions?(other_user, account)).to be_falsey
     end
   end
@@ -1552,6 +1629,22 @@ describe User do
         end
         expect(user.cached_current_enrollments).to eq [e1, e2]
       end
+
+      it "should properly update when using new redis cache keys" do
+        skip("requires redis") unless Canvas.redis_enabled?
+        enable_cache(:redis_cache_store) do
+          user = User.create!
+          course1 = Account.default.courses.create!(:workflow_state => "available")
+          e1 = course1.enroll_student(user, :enrollment_state => "active")
+          expect(user.cached_current_enrollments).to eq [e1]
+          e2 = @shard1.activate do
+            account2 = Account.create!
+            course2 = account2.courses.create!(:workflow_state => "available")
+            course2.enroll_student(user, :enrollment_state => "active")
+          end
+          expect(user.cached_current_enrollments).to eq [e1, e2]
+        end
+      end
     end
   end
 
@@ -1699,6 +1792,15 @@ describe User do
       @user = User.create!
       expect(-> {@user.email = ''}).to raise_error("Validation failed: Path can't be blank, Email is invalid")
       expect(@user.communication_channels.any?).to be_falsey
+    end
+
+    it "restores retired channels" do
+      @user = User.create!
+      path = 'john@example.com'
+      @user.communication_channels.create!(:path => path, :workflow_state => "retired")
+      @user.email = path
+      expect(@user.communication_channels.first).to be_unconfirmed
+      expect(@user.email).to eq 'john@example.com'
     end
   end
 
@@ -2705,6 +2807,19 @@ describe User do
 
     it 'should show if user has group_membership' do
       expect(@student.current_active_groups?).to eq true
+    end
+
+    it "excludes groups in concluded courses with current_group_memberships_by_date" do
+      ag = Account.default.groups.create! name: "ag"
+      ag.users << @student
+      ag.save!
+      expect(@student.cached_current_group_memberships_by_date.map(&:group)).to match_array([@group, ag])
+
+      @course.start_at = 1.year.ago
+      @course.conclude_at = 1.hour.ago
+      @course.restrict_enrollments_to_course_dates = true
+      @course.save!
+      expect(User.find(@student.id).cached_current_group_memberships_by_date.map(&:group)).to match_array([ag])
     end
 
   end

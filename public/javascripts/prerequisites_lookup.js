@@ -23,6 +23,7 @@ import Spinner from 'spin.js'
 import './jquery.ajaxJSON'
 import './jquery.instructure_misc_helpers'
 
+
   var lookupStarted = false;
 
   INST.lookupPrerequisites = function() {
@@ -36,7 +37,7 @@ import './jquery.instructure_misc_helpers'
     }
     lookupStarted = true;
 
-    var url = $link.attr('href');
+    var url = $link.attr('x-canvaslms-trusted-url');
 
     var spinner = new Spinner({radius: 5});
     spinner.spin();
@@ -93,7 +94,7 @@ import './jquery.instructure_misc_helpers'
       var sentence = I18n.beforeLabel(I18n.t("labels.requirements_must_be_completed", "The following requirements need to be completed before this page will be unlocked"));
       $link.after("<br/><h3 style='margin-top: 15px;'>" + htmlEscape(header) + "</h3>" + htmlEscape(sentence));
       $link.prev("a").hide();
-    }, function(data) {
+    }, data => {
       spinner.stop();
       $('.module_prerequisites_fallback').show();
     })

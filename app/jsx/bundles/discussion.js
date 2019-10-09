@@ -33,16 +33,19 @@ import DiscussionTopicToolbarView from 'compiled/views/DiscussionTopic/Discussio
 import TopicView from 'compiled/views/DiscussionTopic/TopicView'
 import EntriesView from 'compiled/views/DiscussionTopic/EntriesView'
 import SectionsTooltip from 'jsx/shared/SectionsTooltip'
-import 'rubricEditBinding'
 import 'compiled/jquery/sticky'
-import 'compiled/jquery/ModuleSequenceFooter'
-import CyoeStats from '../conditional_release_stats/index'
-import LockManager from '../blueprint_courses/apps/LockManager'
 import DiscussionTopicKeyboardShortcutModal from '../discussion_topics/DiscussionTopicKeyboardShortcutModal'
-import '../context_cards/StudentContextCardTrigger'
 
-const lockManager = new LockManager()
-lockManager.init({ itemType: 'discussion_topic', page: 'show' })
+
+import('rubricEditBinding')
+if (ENV.STUDENT_CONTEXT_CARDS_ENABLED) import('../context_cards/StudentContextCardTrigger')
+
+if (ENV.MASTER_COURSE_DATA) {
+  import('../blueprint_courses/apps/LockManager').then(({default: LockManager}) => {
+    const lockManager = new LockManager()
+    lockManager.init({ itemType: 'discussion_topic', page: 'show' })
+  })
+}
 
 const descendants = 5
 const children = 10
@@ -197,15 +200,15 @@ filterModel.on('reset', () => EntryView.expandRootEntries())
 const canReadReplies = () => ENV.DISCUSSION.PERMISSIONS.CAN_READ_REPLIES
 
 // routes
-router.route('topic', 'topic', function () {
+router.route('topic', 'topic', () => {
   $container.scrollTop($('#discussion_topic'))
-  setTimeout(function () {
+  setTimeout(() => {
     $('#discussion_topic .author').focus()
     $container.one('scroll', () => router.navigate(''))
   }, 10)
 })
-router.route('entry-:id', 'id', entriesView.goToEntry)
-router.route('page-:page', 'page', function (page) {
+router.route('entry-:id', 'id', entriesView.goToEntry.bind(entriesView))
+router.route('page-:page', 'page', page => {
   entriesView.render(page)
   // TODO: can get a little bouncy when the page isn't as tall as the previous
   scrollToTop()
@@ -246,10 +249,12 @@ toolbarView.render()
 
 // Add module sequence footer
 if (ENV.DISCUSSION.SEQUENCE != null) {
-  $('#module_sequence_footer').moduleSequenceFooter({
-    assetType: ENV.DISCUSSION.SEQUENCE.ASSET_TYPE,
-    assetID: ENV.DISCUSSION.SEQUENCE.ASSET_ID,
-    courseID: ENV.DISCUSSION.SEQUENCE.COURSE_ID
+  import('compiled/jquery/ModuleSequenceFooter').then(() => {
+    $('#module_sequence_footer').moduleSequenceFooter({
+      assetType: ENV.DISCUSSION.SEQUENCE.ASSET_TYPE,
+      assetID: ENV.DISCUSSION.SEQUENCE.ASSET_ID,
+      courseID: ENV.DISCUSSION.SEQUENCE.COURSE_ID
+    })
   })
 }
 
@@ -264,6 +269,10 @@ if (ENV.DISCUSSION.INITIAL_POST_REQUIRED) {
   initEntries()
 }
 
-const graphsRoot = document.getElementById('crs-graphs')
-const detailsParent = document.getElementById('not_right_side')
-CyoeStats.init(graphsRoot, detailsParent)
+if (ENV.CONDITIONAL_RELEASE_SERVICE_ENABLED) {
+  import('../conditional_release_stats/index').then(({default:CyoeStats}) => {
+    const graphsRoot = document.getElementById('crs-graphs')
+    const detailsParent = document.getElementById('not_right_side')
+    CyoeStats.init(graphsRoot, detailsParent)
+  })
+}

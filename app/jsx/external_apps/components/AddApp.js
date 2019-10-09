@@ -27,9 +27,7 @@ import ConfigOptionField from '../../external_apps/components/ConfigOptionField'
 import ExternalTool from 'compiled/models/ExternalTool'
 import 'jquery.disableWhileLoading'
 import 'compiled/jquery.rails_flash_notifications'
-import ModalBody from '@instructure/ui-overlays/lib/components/Modal/ModalBody';
-import ModalFooter from '@instructure/ui-overlays/lib/components/Modal/ModalFooter';
-import Button from '@instructure/ui-buttons/lib/components/Button';
+import {Button} from '@instructure/ui-buttons'
 
 export default createReactClass({
     displayName: 'AddApp',
@@ -74,7 +72,7 @@ export default createReactClass({
         };
       }
 
-      this.props.app.config_options.map(function(opt) {
+      this.props.app.config_options.map(opt => {
         fields[opt.name] = {
           type: opt.param_type,
           value: opt.default_value,
@@ -105,7 +103,7 @@ export default createReactClass({
 
     validateConfig() {
       var invalidFields = _.compact(
-        _.map(this.state.fields, function(v, k) {
+        _.map(this.state.fields, (v, k) => {
           if (v.required && _.isEmpty(v.value)) {
             return k;
           }
@@ -132,7 +130,7 @@ export default createReactClass({
 
     configSettings() {
       var queryParams = {};
-      _.map(this.state.fields, function(v, k) {
+      _.map(this.state.fields, (v, k) => {
         if(v.type == "checkbox") {
           if(!v.value) return;
           queryParams[k] = '1';
@@ -151,9 +149,7 @@ export default createReactClass({
       newTool.on('error', this.onSaveFail, this);
       if (!_.isEmpty(this.state.invalidFields)){
         var fields = this.state.fields
-        var invalidFieldNames = _.map(this.state.invalidFields, function(k){
-          return fields[k].description
-        }).join(', ');
+        var invalidFieldNames = _.map(this.state.invalidFields, k => fields[k].description).join(', ');
         this.setState({
           errorMessage: I18n.t('The following fields are invalid: %{fields}', {fields: invalidFieldNames})
         });
@@ -192,20 +188,16 @@ export default createReactClass({
     },
 
     configOptions() {
-      return _.map(this.state.fields, function(v, k) {
-        return (
-          <ConfigOptionField
-            name={k}
-            type={v.type}
-            ref={'option_' + k}
-            key={'option_' + k}
-            value={v.value}
-            required={v.required}
-            aria-required={v.required}
-            description={v.description}
-            handleChange={this.handleChange} />
-        );
-      }.bind(this));
+      return _.map(this.state.fields, (v, k) => <ConfigOptionField
+        name={k}
+        type={v.type}
+        ref={'option_' + k}
+        key={'option_' + k}
+        value={v.value}
+        required={v.required}
+        aria-required={v.required}
+        description={v.description}
+        handleChange={this.handleChange} />);
     },
 
     errorMessage: function() {
@@ -225,17 +217,17 @@ export default createReactClass({
             onDismiss={this.closeModal}
             label={I18n.t('Add App')}
           >
-            <ModalBody>
+            <Modal.Body>
                 {this.errorMessage()}
                 <form>
                   {this.configOptions()}
                 </form>
-            </ModalBody>
-            <ModalFooter>
+            </Modal.Body>
+            <Modal.Footer>
               <Button onClick={this.closeModal}>{I18n.t('Close')}</Button>
               &nbsp;
               <Button onClick={this.submit} variant="primary">{I18n.t('Add App')}</Button>
-            </ModalFooter>
+            </Modal.Footer>
           </Modal>
         </div>
       );

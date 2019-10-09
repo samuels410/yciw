@@ -15,35 +15,44 @@
  * You should have received a copy of the GNU Affero General Public License along
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-import React from 'react'
-import ReactDOM from 'react-dom'
-import $ from 'jquery'
-
-import {mockAssignment} from '../../test-utils'
 import Attempt from '../Attempt'
+import {mockAssignmentAndSubmission} from '../../mocks'
+import React from 'react'
+import {render} from '@testing-library/react'
 
-beforeAll(() => {
-  const found = document.getElementById('fixtures')
-  if (!found) {
-    const fixtures = document.createElement('div')
-    fixtures.setAttribute('id', 'fixtures')
-    document.body.appendChild(fixtures)
-  }
+describe('unlimited attempts', () => {
+  it('renders correctly', async () => {
+    const props = await mockAssignmentAndSubmission({
+      Submission: () => ({attempt: 1})
+    })
+    const {getByText} = render(<Attempt {...props} />)
+    expect(getByText('Attempt 1')).toBeInTheDocument()
+  })
+
+  it('renders attempt 0 as attempt 1', async () => {
+    const props = await mockAssignmentAndSubmission({
+      Submission: () => ({attempt: 0})
+    })
+    const {getByText} = render(<Attempt {...props} />)
+    expect(getByText('Attempt 1')).toBeInTheDocument()
+  })
+
+  it('renders the current submission attempt', async () => {
+    const props = await mockAssignmentAndSubmission({
+      Submission: () => ({attempt: 3})
+    })
+    const {getByText} = render(<Attempt {...props} />)
+    expect(getByText('Attempt 3')).toBeInTheDocument()
+  })
 })
 
-afterEach(() => {
-  ReactDOM.unmountComponentAtNode(document.getElementById('fixtures'))
-})
-
-it('renders attempt line correctly with unlimited allowed attempts', () => {
-  ReactDOM.render(<Attempt assignment={mockAssignment()} />, document.getElementById('fixtures'))
-  const attempt_line = $('[data-test-id="attempt"]')
-  expect(attempt_line.text()).toEqual('Attempt 1')
-})
-
-it('renders attempt line correctly with 4 allowed attempts', () => {
-  const assignment = mockAssignment({allowedAttempts: 4})
-  ReactDOM.render(<Attempt assignment={assignment} />, document.getElementById('fixtures'))
-  const attempt_line = $('[data-test-id="attempt"]')
-  expect(attempt_line.text()).toEqual('Attempt 1 of 4')
+describe('limited attempts', () => {
+  it('renders attempt', async () => {
+    const props = await mockAssignmentAndSubmission({
+      Submission: () => ({attempt: 2}),
+      Assignment: () => ({allowedAttempts: 4})
+    })
+    const {getByText} = render(<Attempt {...props} />)
+    expect(getByText('Attempt 2 of 4')).toBeInTheDocument()
+  })
 })

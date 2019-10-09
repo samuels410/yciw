@@ -61,7 +61,7 @@ describe 'quizzes question with html answers' do
   end
 
   it 'should preserve HTML image answers for multiple choice', priority: "2", test_id: 3103797 do
-    img_url = "http://invalid.nowhere.com/nothing.jpg"
+    img_url = "http://invalid.nowhere.test/nothing.jpg"
     img_alt = "sample alt text"
     img_cls = "sample_image"
     quiz_with_new_questions(true, {id: 1}, {id: 2},
@@ -108,30 +108,6 @@ describe 'quizzes question with html answers' do
     close_first_html_answer
     input_length = driver.execute_script "return $('.answer:eq(3) input[name=answer_text]:visible').length"
     expect(input_length).to eq 1
-  end
-
-  it 'populates the editor and input elements properly', priority: "1", test_id: 209360 do
-    quiz_with_new_questions
-    click_questions_tab
-
-    # add text to regular input
-    edit_first_question
-    input = fj('input[name=answer_text]:visible')
-    input.click
-    input.send_keys 'ohai'
-    submit_form('.question_form')
-    wait_for_ajax_requests
-
-    # open it up in the editor, make sure the text matches the input
-    edit_first_html_answer
-    content = driver.execute_script "return $('.answer:eq(3) textarea')._justGetCode()"
-    expect(content).to eq '<p>ohai</p>'
-
-    # clear it out, make sure the original input is empty also
-    driver.execute_script "tinyMCE.activeEditor.setContent('')"
-    close_first_html_answer
-    value = driver.execute_script "return $('input[name=answer_text]:visible')[0].value"
-    expect(value).to eq ''
   end
 
   it 'saves open html answers when the question is submitted for multiple choice', priority: "1", test_id: 209361 do

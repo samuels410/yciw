@@ -23,7 +23,6 @@ module Api::V1::Tab
   def tabs_available_json(context, user, session, includes = [], precalculated_permissions: nil)
     json = context_tabs(context, user, precalculated_permissions: precalculated_permissions).map { |tab|
       tab_json(tab.with_indifferent_access, context, user, session) }
-    json.select!{|tab| tab[:type] != 'external'} unless includes.include?('external')
     json.sort!{|x,y| x['position'] <=> y['position']}
   end
 
@@ -73,8 +72,19 @@ module Api::V1::Tab
   def context_tabs(context, user, precalculated_permissions: nil)
     new_collaborations_enabled = context.feature_enabled?(:new_collaborations)
 
-    tabs = context.tabs_available(user, :include_external => true, :api => true,
-      :precalculated_permissions => precalculated_permissions).select do |tab|
+    if context.is_a?(User)
+      root_account = @domain_root_account
+      context = context.profile
+    end
+
+    opts = {
+      include_external: true,
+      api: true,
+      precalculated_permissions: precalculated_permissions,
+      root_account: root_account
+    }
+
+    tabs = context.tabs_available(user, opts).select do |tab|
       if (tab[:id] == context.class::TAB_COLLABORATIONS rescue false)
         tab[:href] && tab[:label] && !new_collaborations_enabled && ::Collaboration.any_collaborations_configured?(context)
       elsif (tab[:id] == context.class::TAB_COLLABORATIONS_NEW rescue false)

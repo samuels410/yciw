@@ -202,8 +202,8 @@ class DiscussionEntry < ActiveRecord::Base
   def update_topic_submission
     if self.discussion_topic.for_assignment?
       entries = self.discussion_topic.discussion_entries.where(:user_id => self.user_id, :workflow_state => 'active')
-      submission = self.discussion_topic.assignment.submissions.where(:user_id => self.user_id).first
-      if entries.any?
+      submission = self.discussion_topic.assignment.submissions.where(:user_id => self.user_id).take
+      if submission && entries.any?
         submission_date = entries.order(:created_at).limit(1).pluck(:created_at).first
         if submission_date > self.created_at
           submission.submitted_at = submission_date
@@ -350,39 +350,41 @@ class DiscussionEntry < ActiveRecord::Base
   end
 
   def context_module_action_later
-    unless self.deleted?
-      self.send_later_if_production(:context_module_action)
-    end
+    self.send_later_if_production(:context_module_action)
   end
   protected :context_module_action_later
 
   def context_module_action
     if self.discussion_topic && self.user
-      self.discussion_topic.context_module_action(user, :contributed)
+      action = self.deleted? ? :deleted : :contributed
+      self.discussion_topic.context_module_action(user, action)
     end
   end
 
-  after_commit :subscribe_author, on: :create
-  def subscribe_author
-    discussion_topic.subscribe(user) unless discussion_topic.subscription_hold(user, nil, nil)
-  end
-
   def create_participants
-    transaction do
+    self.class.connection.after_transaction_commit do
       scope = DiscussionTopicParticipant.where(:discussion_topic_id => self.discussion_topic_id)
       scope = scope.where("user_id<>?", self.user) if self.user
       scope.update_all("unread_entry_count = unread_entry_count + 1")
 
       if self.user
-        my_entry_participant = self.discussion_entry_participants.create(:user => self.user, :workflow_state => "read")
+        self.discussion_entry_participants.create!(:user => self.user, :workflow_state => "read")
 
-        topic_participant = self.discussion_topic.discussion_topic_participants.where(user_id: self.user).first
-        if topic_participant.blank?
-          new_count = self.discussion_topic.default_unread_count - 1
-          topic_participant = self.discussion_topic.discussion_topic_participants.create(:user => self.user,
-                                                                                         :unread_entry_count => new_count,
-                                                                                         :workflow_state => "unread",
-                                                                                         :subscribed => self.discussion_topic.subscribed?(self.user))
+        existing_topic_participant = nil
+        DiscussionTopicParticipant.unique_constraint_retry do
+          existing_topic_participant = self.discussion_topic.discussion_topic_participants.where(user_id: self.user).first
+          unless existing_topic_participant
+            new_count = self.discussion_topic.default_unread_count - 1
+            self.discussion_topic.discussion_topic_participants.create!(
+              :user => self.user,
+              :unread_entry_count => new_count,
+              :workflow_state => "unread",
+              :subscribed => !self.discussion_topic.subscription_hold(user, nil, nil)
+            )
+          end
+        end
+        if existing_topic_participant && !existing_topic_participant.subscribed? && !self.discussion_topic.subscription_hold(user, nil, nil)
+          existing_topic_participant.update_attributes!(:subscribed => true)
         end
       end
     end

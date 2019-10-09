@@ -15,60 +15,112 @@
  * You should have received a copy of the GNU Affero General Public License along
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-import React from 'react'
-import ReactDOM from 'react-dom'
-import $ from 'jquery'
 
-import {mockAssignment} from '../../test-utils'
+import {CREATE_SUBMISSION_COMMENT} from '../../graphqlData/Mutations'
+import {SUBMISSION_COMMENT_QUERY} from '../../graphqlData/Queries'
+import {fireEvent, render, waitForElement} from '@testing-library/react'
+import {legacyMockSubmission, mockAssignment, mockComments} from '../../test-utils'
+import {MockedProvider} from '@apollo/react-testing'
+import React from 'react'
 import StudentContent from '../StudentContent'
 
-beforeAll(() => {
-  const found = document.getElementById('fixtures')
-  if (!found) {
-    const fixtures = document.createElement('div')
-    fixtures.setAttribute('id', 'fixtures')
-    document.body.appendChild(fixtures)
+const mocks = [
+  {
+    request: {
+      query: SUBMISSION_COMMENT_QUERY,
+      variables: {
+        submissionAttempt: legacyMockSubmission().attempt,
+        submissionId: legacyMockSubmission().id
+      }
+    },
+    result: {
+      data: {
+        submissionComments: mockComments()
+      }
+    }
+  },
+  {
+    request: {
+      query: CREATE_SUBMISSION_COMMENT,
+      variables: {
+        submissionAttempt: legacyMockSubmission().attempt,
+        submissionId: legacyMockSubmission().id
+      }
+    },
+    result: {
+      data: null
+    }
   }
-})
+]
 
-afterEach(() => {
-  ReactDOM.unmountComponentAtNode(document.getElementById('fixtures'))
-})
+function makeProps(overrides = {}) {
+  return {
+    assignment: mockAssignment({lockInfo: {isLocked: false}}),
+    submission: legacyMockSubmission(),
+    ...overrides
+  }
+}
 
-it('renders the student header if the assignment is unlocked', () => {
-  const assignment = mockAssignment({lockInfo: {isLocked: false}})
-  ReactDOM.render(<StudentContent assignment={assignment} />, document.getElementById('fixtures'))
-  const element = $('[data-test-id="assignments-2-student-header"]')
-  expect(element).toHaveLength(1)
-})
+describe('Assignment Student Content View', () => {
+  it('renders the student header if the assignment is unlocked', () => {
+    const {getByTestId} = render(
+      <MockedProvider>
+        <StudentContent {...makeProps()} />
+      </MockedProvider>
+    )
+    expect(getByTestId('assignments-2-student-view')).toBeInTheDocument()
+  })
 
-it('renders the student header if the assignment is locked', () => {
-  const assignment = mockAssignment({lockInfo: {isLocked: true}})
-  ReactDOM.render(<StudentContent assignment={assignment} />, document.getElementById('fixtures'))
-  const element = $('[data-test-id="assignments-2-student-header"]')
-  expect(element).toHaveLength(1)
-})
+  it('renders the student header if the assignment is locked', () => {
+    const props = makeProps({
+      assignment: mockAssignment({lockInfo: {isLocked: true}})
+    })
+    const {getByTestId} = render(<StudentContent {...props} />)
+    expect(getByTestId('assignment-student-header-normal')).toBeInTheDocument()
+  })
 
-it('renders the assignment details and student content tab if the assignment is unlocked', () => {
-  const assignment = mockAssignment({lockInfo: {isLocked: false}})
-  ReactDOM.render(<StudentContent assignment={assignment} />, document.getElementById('fixtures'))
+  it('renders the assignment details and student content tab if the assignment is unlocked', () => {
+    const {getByRole, getByText, queryByText} = render(
+      <MockedProvider>
+        <StudentContent {...makeProps()} />
+      </MockedProvider>
+    )
+    expect(getByRole('tablist')).toHaveTextContent('Attempt 1')
+    expect(getByText('Details')).toBeInTheDocument()
+    expect(queryByText('Availability Dates')).not.toBeInTheDocument()
+  })
 
-  const contentTabs = $('[data-test-id="assignment-2-student-content-tabs"]')
-  const toggleDetails = $('.a2-toggle-details-container')
-  const root = $('#fixtures')
-  expect(toggleDetails).toHaveLength(1)
-  expect(contentTabs).toHaveLength(1)
-  expect(root.text()).not.toMatch('Availability Dates')
-})
+  it('renders the availability dates if the assignment is locked', () => {
+    const props = makeProps({
+      assignment: mockAssignment({lockInfo: {isLocked: true}})
+    })
+    const {queryByRole, getByText} = render(
+      <MockedProvider>
+        <StudentContent {...props} />
+      </MockedProvider>
+    )
+    expect(queryByRole('tablist')).not.toBeInTheDocument()
+    expect(getByText('Availability Dates')).toBeInTheDocument()
+  })
 
-it('renders the availability dates if the assignment is locked', () => {
-  const assignment = mockAssignment({lockInfo: {isLocked: true}})
-  ReactDOM.render(<StudentContent assignment={assignment} />, document.getElementById('fixtures'))
+  it.skip('renders Comments', async () => { // TODO: get this to work in react 16.9
+    const {getAllByText, getByText} = render(
+      <MockedProvider mocks={mocks} addTypename>
+        <StudentContent {...makeProps()} />
+      </MockedProvider>
+    )
+    fireEvent.click(getAllByText('Comments')[0])
 
-  const contentTabs = $('[data-test-id="assignment-2-student-content-tabs"]')
-  const toggleDetails = $('.a2-toggle-details-container')
-  const root = $('#fixtures')
-  expect(toggleDetails).toHaveLength(0)
-  expect(contentTabs).toHaveLength(0)
-  expect(root.text()).toMatch('Availability Dates')
+    expect(await waitForElement(() => getByText('Send Comment'))).toBeInTheDocument()
+  })
+
+  it('renders spinner while lazy loading comments', () => {
+    const {getByTitle, getAllByText} = render(
+      <MockedProvider mocks={mocks} addTypename>
+        <StudentContent {...makeProps()} />
+      </MockedProvider>
+    )
+    fireEvent.click(getAllByText('Comments')[0])
+    expect(getByTitle('Loading')).toBeInTheDocument()
+  })
 })

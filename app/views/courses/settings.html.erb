@@ -17,10 +17,10 @@
 %>
 
 <%
-  content_for :page_title, join_title(t(:page_title, "Course Details"), @context.name)
+  provide :page_title, join_title(t(:page_title, "Course Details"), @context.name)
   css_bundle :course_settings
   js_bundle :course_settings
-  @active_tab = "settings"
+  set_active_tab "settings"
 
   can_manage = can_do(@context, @current_user, :manage)
 
@@ -36,7 +36,7 @@
   master_course = blueprint_subscription&.master_template&.course
 %>
 
-<% content_for :right_side do %>
+<% provide :right_side do %>
   <%= render :partial => 'settings_sidebar', :locals => { :blueprint_subscription => blueprint_subscription } %>
 <% end %>
 
@@ -57,7 +57,7 @@
     <% if @context.root_account.settings[:enable_alerts] && can_do(@context, @current_user, :manage_interaction_alerts) %>
       <li id="alerts_tab"><a href="#tab-alerts" id="tab-alerts-link"><%= t('tabs.alerts', %{Alerts}) %></a></li>
     <% end %>
-    <% if can_do @context, @current_user, :manage_feature_flags %>
+    <% if can_do @context, @current_user, :view_feature_flags %>
       <li id="feature_flags_tab"><a href="#tab-features" id="tab-features-link"><%= t('tabs.feature_options', %{Feature Options}) %></a></li>
     <% end %>
   </ul>
@@ -239,11 +239,12 @@
         <td class="nobr tall-row">
           <% if can_manage %>
           <div>
+            <% warning_message = t(:course_conclude_at_warning_message, "The course is currently set to end at midnight, meaning that the previous day will be the last day this course is active.") %>
             <%= f.text_field :conclude_at, :class => "date_entry", :value => datetime_string(@context.conclude_at, :verbose) %>
             <i id="course_conclude_at_warning" style="<%= hidden %>" class="date-warning icon-warning" data-tooltip='{"tooltipClass":"popover", "position":"right"}'
                data-html-tooltip-title="<div class='popover-title'><%= t(:course_conclude_at_warning_title, "Course Ending at Midnight") %></div><div class='popover-content'><p>
-              <%= t(:course_conclude_at_warning_message, "The course is currently set to end at midnight,
-                meaning that the previous day will be the last day this course is active.") %></p></div>">
+              <%= warning_message %></p></div>">
+              <span class="screenreader-only"><%= warning_message %></span>
             </i>
 
             <%= f.check_box :restrict_enrollments_to_course_dates, "aria-describedby" => 'users-can-only-participate-description' %>
@@ -321,6 +322,17 @@
         </td>
       <% end %>
       </tr>
+      <% if @context.feature_enabled?(:new_gradebook) && @context.root_account.feature_enabled?(:filter_speed_grader_by_student_group) %>
+        <tr>
+          <td class="form-label">
+            <label for="course_large_course"><%= t("Large Course:") %></label>
+          </td>
+          <td id="course_large_course">
+            <%= f.check_box :filter_speed_grader_by_student_group, disabled: !can_manage %>
+            <%= f.label :filter_speed_grader_by_student_group, t("Launch SpeedGrader Filtered by Student Group") %>
+          </td>
+        </tr>
+      <% end %>
       <tr>
         <td class="form-label">
           <label for="course_grading_scheme"><%= before_label('grading_scheme', %{Grading Scheme}) %></label>
@@ -479,6 +491,10 @@
               <input type="checkbox" name="update_default_pages" id="update_default_pages"/>
               <label for="update_default_pages"><%= t 'wiki_editing_roles_change_existing', %{Change pages currently editable by "%{current_setting}" to "%{new_setting}".}, :current_setting => content_tag('span', @context.readable_default_wiki_editing_roles), :new_setting => content_tag('span', nbsp, :class => 'default_wiki_editing_roles_change') %></label>
             </div>
+            <% if @context.root_account.feature_enabled?(:javascript_csp) %>
+              <hr />
+              <div id="csp_options"></div>
+            <% end %>
           </div>
         </td>
       </tr>
@@ -614,7 +630,7 @@
       <h3 class="screenreader-only"><%= t('Enabled Links') %></h3>
       <ul id="nav_enabled_list" class="nav_list connectedSortable">
         <% tabs.select {|t| !t[:hidden] }.each do |tab|  %>
-          <li aria-label="<%= tab[:label] %>" class="navitem <%= 'enabled' if tab[:id] != Course::TAB_HOME %> <%= tab[:label].downcase %>"
+          <li aria-label="<%= tab[:label] %>" class="navitem <%= 'enabled' if tab[:id] != Course::TAB_HOME %>"
               id="nav_edit_tab_id_<%= tab[:id] %>"
           >
             <%= tab[:label] %>
@@ -707,7 +723,7 @@
     </div>
   <% end %>
 
-  <% if can_do @context, @current_user, :manage_feature_flags %>
+  <% if can_do @context, @current_user, :view_feature_flags %>
     <div id="tab-features"></div>
   <% end %>
 </div><!-- end course details tab -->

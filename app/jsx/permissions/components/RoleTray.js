@@ -22,21 +22,14 @@ import {connect} from 'react-redux'
 import PropTypes from 'prop-types'
 import React, {Component} from 'react'
 
-import Alert from '@instructure/ui-alerts/lib/components/Alert'
-import Button from '@instructure/ui-buttons/lib/components/Button'
-import Container from '@instructure/ui-layout/lib/components/View'
-import Dialog from '@instructure/ui-a11y/lib/components/Dialog'
-import Flex, {FlexItem} from '@instructure/ui-layout/lib/components/Flex'
-import Heading from '@instructure/ui-elements/lib/components/Heading'
-import IconArrowStart from '@instructure/ui-icons/lib/Solid/IconArrowStart'
-import IconEdit from '@instructure/ui-icons/lib/Line/IconEdit'
-import IconTrash from '@instructure/ui-icons/lib/Line/IconTrash'
-import IconX from '@instructure/ui-icons/lib/Solid/IconX'
-import Select from '@instructure/ui-forms/lib/components/Select'
-import Text from '@instructure/ui-elements/lib/components/Text'
-import TextInput from '@instructure/ui-forms/lib/components/TextInput'
-import Tray from '@instructure/ui-overlays/lib/components/Tray'
-import ScreenReaderContent from '@instructure/ui-a11y/lib/components/ScreenReaderContent'
+import {Alert} from '@instructure/ui-alerts'
+import {Button} from '@instructure/ui-buttons'
+import {View, Flex, FlexItem} from '@instructure/ui-layout'
+import {Dialog, ScreenReaderContent} from '@instructure/ui-a11y'
+import {Heading, Text} from '@instructure/ui-elements'
+import {IconArrowStartSolid, IconEditLine, IconTrashLine, IconXSolid} from '@instructure/ui-icons'
+import {Select, TextInput} from '@instructure/ui-forms'
+import {Tray} from '@instructure/ui-overlays'
 
 import FriendlyDatetime from '../../shared/FriendlyDatetime'
 import actions from '../actions'
@@ -244,9 +237,9 @@ export default class RoleTray extends Component {
     <div style={{zIndex: 10, position: 'absolute'}}>
       <Dialog open shouldContainFocus>
         <Alert variant="warning" margin="small">
-          <Container as="block">
+          <View as="block">
             {children}
-            <Container as="block" margin="small 0 0 0">
+            <View as="block" margin="small 0 0 0">
               <Button onClick={onCancel} margin="none xx-small none none">
                 <ScreenReaderContent>{children}</ScreenReaderContent>
                 {I18n.t('Cancel')}
@@ -254,8 +247,8 @@ export default class RoleTray extends Component {
               <Button onClick={onOk} id="confirm-delete-role" variant="primary">
                 {I18n.t('Ok')}
               </Button>
-            </Container>
-          </Container>
+            </View>
+          </View>
         </Alert>
       </Dialog>
     </div>
@@ -298,9 +291,9 @@ export default class RoleTray extends Component {
       buttonRef={c => (this.closeButton = c)}
     >
       {this.state.editTrayVisable ? (
-        <IconArrowStart title={I18n.t('Back')} />
+        <IconArrowStartSolid title={I18n.t('Back')} />
       ) : (
-        <IconX title={I18n.t('Close')} />
+        <IconXSolid title={I18n.t('Close')} />
       )}
     </Button>
   )
@@ -352,7 +345,7 @@ export default class RoleTray extends Component {
       buttonRef={c => (this.editButton = c)}
     >
       <Text color="brand">
-        <IconEdit title={I18n.t('Edit')} />
+        <IconEditLine title={I18n.t('Edit')} />
       </Text>
     </Button>
   )
@@ -366,7 +359,7 @@ export default class RoleTray extends Component {
       buttonRef={c => (this.deleteButton = c)}
     >
       <Text color="brand">
-        <IconTrash title={I18n.t('Delete')} />
+        <IconTrashLine title={I18n.t('Delete')} />
       </Text>
     </Button>
   )
@@ -375,7 +368,7 @@ export default class RoleTray extends Component {
     <div>
       <Flex alignItems="start" justifyItems="space-between">
         <FlexItem>
-          <Container as="div">
+          <View as="div">
             <div style={{maxWidth: '225px'}}>
               <Heading id="general_tray_header" level="h3" as="h2">
                 {this.props.label}
@@ -386,7 +379,7 @@ export default class RoleTray extends Component {
                 {I18n.t('Based on: %{basedOn}', {basedOn: this.props.basedOn})}
               </Text>
             )}
-          </Container>
+          </View>
         </FlexItem>
         <FlexItem>
           {this.props.editable && this.renderEditButton()}
@@ -394,7 +387,7 @@ export default class RoleTray extends Component {
         </FlexItem>
       </Flex>
 
-      <Container as="div" margin="small 0 medium 0">
+      <View as="div" margin="small 0 medium 0">
         <Flex direction="column">
           <FlexItem>
             <Text className="role-tray-last-changed">
@@ -407,12 +400,12 @@ export default class RoleTray extends Component {
             </Text>
           </FlexItem>
         </Flex>
-      </Container>
+      </View>
     </div>
   )
 
   renderBaseRoleSelector = () => (
-    <Container as="div" margin="medium 0 large 0">
+    <View as="div" margin="medium 0 large 0">
       <Select
         label={I18n.t('Base Type')}
         defaultOption={this.props.basedOn}
@@ -425,7 +418,7 @@ export default class RoleTray extends Component {
           </option>
         ))}
       </Select>
-    </Container>
+    </View>
   )
 
   renderEditHeader = () => (
@@ -434,23 +427,22 @@ export default class RoleTray extends Component {
         {I18n.t('Edit %{label}', {label: this.props.label})}
       </Heading>
 
-      <Container as="div" margin="medium 0 large 0">
+      <View as="div" margin="medium 0 large 0">
         <TextInput
           label={I18n.t('Role Name')}
           name="edit_name_box"
-          defaultValue={this.props.label}
           value={this.state.editRoleLabelInput}
           messages={this.state.editRoleLabelErrorMessages}
           onBlur={this.updateRole}
           onChange={this.onChangeRoleLabel}
         />
-      </Container>
+      </View>
 
       {/*
-        * this is not currently possible due to limitations in the api. once we
-        * update the API we should be able to uncomment this, update our apiClient,
-        * and have everything just work :fingers-crossed:
-        */}
+       * this is not currently possible due to limitations in the api. once we
+       * update the API we should be able to uncomment this, update our apiClient,
+       * and have everything just work :fingers-crossed:
+       */}
       {false && this.renderBaseRoleSelector()}
     </div>
   )
@@ -471,10 +463,10 @@ export default class RoleTray extends Component {
         {this.state.deleteAlertVisable && this.renderDeleteAlert()}
         {this.state.editBaseRoleAlertVisable && this.renderEditBaseRoleAlert()}
         {this.renderCloseButton()}
-        <Container as="div" padding="small small x-large small">
+        <View as="div" padding="small small x-large small">
           {this.state.editTrayVisable ? this.renderEditHeader() : this.renderTrayHeader()}
           {this.renderPermissions()}
-        </Container>
+        </View>
       </Tray>
     )
   }
@@ -517,7 +509,7 @@ function mapStateToProps(state, ownProps) {
   }, [])
 
   const allRoleLabels = state.roles.reduce((obj, r) => {
-    obj[r.label] = true  // eslint-disable-line
+    obj[r.label] = true
     return obj
   }, {})
 

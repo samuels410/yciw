@@ -16,61 +16,68 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-import "@instructure/ui-themes/lib/canvas";
-import { renderIntoDiv, renderSidebarIntoDiv } from "../src/async";
-import locales from "../src/locales";
-
-import CanvasRce from "../src/rce/CanvasRce";
-import * as fakeSource from "../src/sidebar/sources/fake";
 import React, { Component } from "react";
 import ReactDOM from "react-dom";
-import Button from "@instructure/ui-buttons/lib/components/Button";
-import Select from "@instructure/ui-forms/lib/components/Select";
-import TextInput from "@instructure/ui-forms/lib/components/TextInput";
-import RadioInputGroup from "@instructure/ui-forms/lib/components/RadioInputGroup";
-import RadioInput from "@instructure/ui-forms/lib/components/RadioInput";
-import ToggleDetails from "@instructure/ui-toggle-details/lib/components/ToggleDetails";
+import { Button } from '@instructure/ui-buttons'
+import { RadioInput, RadioInputGroup, Select } from '@instructure/ui-forms'
+import {TextInput} from '@instructure/ui-text-input'
+import { ToggleDetails } from '@instructure/ui-toggle-details'
+import '@instructure/canvas-theme';
 
-function getProps(textareaId, language = "en", textDirection = "ltr") {
+import { renderIntoDiv, renderSidebarIntoDiv } from "../src/async";
+import locales from "../src/locales";
+import CanvasRce from "../src/rce/CanvasRce";
+import * as fakeSource from "../src/sidebar/sources/fake";
+
+function getProps(textareaId, state) {
   return {
-    language,
+    language: state.lang,
+
     editorOptions: () => {
       return {
-        directionality: textDirection,
-        height: "250px",
+        directionality: state.dir,
+        height: '250px',
         plugins:
-          "instructure_equation, instructure_image, instructure_equella, link, textcolor, instructure_external_tools, instructure_record, instructure_links, table",
+          'instructure-context-bindings, instructure-embeds, instructure-ui-icons, instructure_equation, ' +
+          'instructure_image, instructure_equella, link, instructure_external_tools, instructure_record, ' +
+          'instructure_links, table, lists, instructure_condensed_buttons, instructure_documents',
         // todo: add "instructure_embed" when the wiki sidebar work is done
         external_plugins: {},
-        menubar: true,
-        // todo: the toolbar building and automatic splitting functions should come into the service
-        toolbar: [
-          // basic buttons
-          "bold,italic,underline,forecolor,backcolor,removeformat,alignleft,aligncenter,alignright,outdent,indent,superscript,subscript,bullist,numlist,fontsizeselect,formatselect",
-
-          // plugin buttons ("instructure_links" will be changed to "link", but this is how
-          //   it's currently sent over from canvas.  Once that's no longer true, the test
-          //  page can just use "link" instead)
-          "table, link, unlink, instructure_equation, instructure_image, instructure_equella, instructure_record"
-        ]
-      };
+        menubar: true
+      }
     },
-    textareaClassName: "exampleClassOne exampleClassTwo",
-    textareaId
+
+    textareaClassName: "exampleClassOne",
+    textareaId,
+    onFocus: () => console.log("rce focused"), // eslint-disable-line no-console
+    onBlur: () => console.log("rce blurred"),  // eslint-disable-line no-console
+
+    trayProps: {
+      canUploadFiles: true,
+      contextId: state.contextId,
+      contextType: state.contextType,
+      host: state.host,
+      jwt: state.jwt,
+      source: state.jwt && state.sourceType === 'real' ? undefined : fakeSource
+    }
   };
 }
 
-function renderDemos({ host, jwt, lang, contextType, contextId, dir }) {
+function renderDemos(state) {
+  const {host, jwt, contextType, contextId, sourceType} = state
+
   renderIntoDiv(
     document.getElementById("editor1"),
-    getProps("textarea1", lang, dir)
+    getProps("textarea1", state)
   );
+
   renderIntoDiv(
     document.getElementById("editor2"),
-    getProps("textarea2", lang, dir)
+    getProps("textarea2", state)
   );
+
   ReactDOM.render(
-    <CanvasRce rceProps={getProps("textarea3", lang, dir)} />,
+    <CanvasRce rceProps={getProps("textarea3", state)} />,
     document.getElementById("editor3")
   );
 
@@ -82,7 +89,7 @@ function renderDemos({ host, jwt, lang, contextType, contextId, dir }) {
   const sidebarEl = document.getElementById("sidebar");
   ReactDOM.render(<div />, sidebarEl);
   renderSidebarIntoDiv(sidebarEl, {
-    source: jwt ? undefined : fakeSource,
+    source: jwt && sourceType === 'real' ? undefined : fakeSource,
     host,
     jwt,
     contextType,
@@ -91,18 +98,30 @@ function renderDemos({ host, jwt, lang, contextType, contextId, dir }) {
   });
 }
 
+function getSetting(settingKey, defaultValue) {
+  return localStorage.getItem(settingKey) || defaultValue
+}
+
+function saveSettings(state) {
+  ['dir', 'sourceType', 'lang', 'host', 'jwt', 'contextType', 'contextId'].forEach(settingKey => {
+    localStorage.setItem(settingKey, state[settingKey])
+  })
+}
+
 class DemoOptions extends Component {
   state = {
-    dir: "ltr",
-    lang: "en",
-    host: "https://rich-content-iad.inscloudgate.net",
-    jwt: "",
-    contextType: "course",
-    contextId: "1"
+    dir: getSetting('dir', 'ltr'),
+    sourceType: getSetting('sourceType', 'fake'),
+    lang: getSetting('lang', 'en'),
+    host: getSetting('host', 'https://rich-content-iad.inscloudgate.net'),
+    jwt: getSetting('jwt', ''),
+    contextType: getSetting('contextType', 'course'),
+    contextId: getSetting('contextId', '1')
   };
 
   handleChange = () => {
     document.documentElement.setAttribute("dir", this.state.dir);
+    saveSettings(this.state)
     renderDemos(this.state);
   };
 
@@ -112,13 +131,25 @@ class DemoOptions extends Component {
 
   render() {
     return (
-      <ToggleDetails summary="Configuration Options">
+      <ToggleDetails expanded summary="Configuration Options">
         <form
           onSubmit={e => {
             e.preventDefault();
             this.handleChange();
           }}
         >
+          <RadioInputGroup
+            description="Source Type"
+            variant="toggle"
+            name="source"
+            onChange={(event, value) => this.setState({ sourceType: value })}
+            value={this.state.sourceType}
+          >
+            <RadioInput label="Fake" value="fake" />
+
+            <RadioInput label="Real" value="real" />
+          </RadioInputGroup>
+
           <RadioInputGroup
             description="Text Direction"
             variant="toggle"
@@ -129,6 +160,7 @@ class DemoOptions extends Component {
             <RadioInput label="LTR" value="ltr" />
             <RadioInput label="RTL" value="rtl" />
           </RadioInputGroup>
+
           <Select
             label="Language"
             value={this.state.lang}
@@ -140,16 +172,19 @@ class DemoOptions extends Component {
               </option>
             ))}
           </Select>
+
           <TextInput
-            label="API Host"
+            renderLabel="API Host"
             value={this.state.host}
             onChange={e => this.setState({ host: e.target.value })}
           />
+
           <TextInput
-            label="Canvas JWT"
+            renderLabel="Canvas JWT"
             value={this.state.jwt}
             onChange={e => this.setState({ jwt: e.target.value })}
           />
+
           <Select
             label="Context Type"
             selectedOption={this.state.contextType}
@@ -161,11 +196,13 @@ class DemoOptions extends Component {
             <option value="group">Group</option>
             <option value="user">User</option>
           </Select>
+
           <TextInput
-            label="Context ID"
+            renderLabel="Context ID"
             value={this.state.contextId}
             onChange={e => this.setState({ contextId: e.target.value })}
           />
+
           <Button type="submit">Update</Button>
         </form>
       </ToggleDetails>

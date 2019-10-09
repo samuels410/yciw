@@ -24,7 +24,7 @@ module Lti::Ims::Concerns
       before_action :verify_line_item_client_id_connection, only: %i[show update destroy]
 
       def line_item
-        @_line_item ||= Lti::LineItem.where(id: params.fetch(:line_item_id, params[:id])).eager_load(:resource_link).take!
+        @_line_item ||= Lti::LineItem.active.where(id: params.fetch(:line_item_id, params[:id])).eager_load(:resource_link).take!
       end
 
       def context
@@ -32,8 +32,7 @@ module Lti::Ims::Concerns
       end
 
       def user
-        @_user ||= User.where(lti_context_id: params[:userId]).where.not(lti_context_id: nil).
-          or(User.where(id: params.fetch(:userId, params[:user_id]))).take
+        @_user ||= User.where(lti_id: params[:userId]).where.not(lti_id: nil).or(User.where(id: user_id)).take
       end
 
       def pagination_args
@@ -54,6 +53,11 @@ module Lti::Ims::Concerns
         raise ActiveRecord::RecordNotFound if line_item_context_id != params[:course_id].to_i || context.blank?
         return if params[:resourceLinkId].blank? || line_item.resource_link.resource_link_id == params[:resourceLinkId]
         render_error("The specified LTI link ID is not associated with the line item.")
+      end
+
+      def user_id
+        id = params.fetch(:userId, params[:user_id])
+        id == id.to_i.to_s ? id : nil
       end
     end
   end

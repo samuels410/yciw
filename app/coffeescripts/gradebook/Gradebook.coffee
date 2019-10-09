@@ -16,78 +16,69 @@
 # with this program. If not, see <http://www.gnu.org/licenses/>.
 #
 
-define [
-  'jquery'
-  'underscore'
-  'Backbone'
-  'timezone'
-  'jsx/gradebook/DataLoader'
-  'react'
-  'react-dom'
-  'slickgrid.long_text_editor'
-  '../views/KeyboardNavDialog'
-  'jst/KeyboardNavDialog'
-  'vendor/slickgrid'
-  '../gradebook/TotalColumnHeaderView'
-  '../util/round'
-  '../views/InputFilterView'
-  'i18nObj'
-  'i18n!gradebook'
-  '../gradebook/GradebookTranslations'
-  'jsx/gradebook/CourseGradeCalculator'
-  'jsx/gradebook/EffectiveDueDates'
-  'jsx/gradebook/GradingSchemeHelper'
-  'jsx/gradebook/shared/helpers/GradeFormatHelper'
-  '../userSettings'
-  'spin.js'
-  '../SubmissionDetailsDialog'
-  '../gradebook/AssignmentGroupWeightsDialog'
-  '../shared/GradeDisplayWarningDialog'
-  '../gradebook/PostGradesFrameDialog'
-  '../gradebook/SubmissionCell'
-  '../gradebook/GradebookHeaderMenu'
-  '../util/NumberCompare'
-  '../util/natcompare'
-  'str/htmlEscape'
-  'jsx/gradebook/SISGradePassback/PostGradesStore'
-  'jsx/gradebook/SISGradePassback/PostGradesApp'
-  'jsx/gradebook/SubmissionStateMap'
-  'jst/gradebook/column_header'
-  'jst/gradebook/group_total_cell'
-  'jst/gradebook/row_student_name'
-  '../views/gradebook/SectionMenuView'
-  '../views/gradebook/GradingPeriodMenuView'
-  '../gradebook/GradebookKeyboardNav'
-  'jsx/gradebook/shared/helpers/assignmentHelper'
-  '../api/gradingPeriodsApi'
-  '../api/gradingPeriodSetsApi'
-  '../../jsx/gradebook/shared/helpers/GradeCalculationHelper'
-  'jst/_avatar' #needed by row_student_name
-  'jquery.ajaxJSON'
-  'jquery.instructure_date_and_time'
-  'jqueryui/dialog'
-  'jqueryui/tooltip'
-  '../behaviors/tooltip'
-  '../behaviors/activate'
-  'jquery.instructure_misc_helpers'
-  'jquery.instructure_misc_plugins'
-  'vendor/jquery.ba-tinypubsub'
-  'jqueryui/position'
-  'jqueryui/sortable'
-  '../jquery.kylemenu'
-  '../jquery/fixDialogButtons'
-  'jsx/context_cards/StudentContextCardTrigger'
-], (
-  $, _, Backbone, tz, DataLoader, React, ReactDOM, LongTextEditor, KeyboardNavDialog, KeyboardNavTemplate, Slick,
-  TotalColumnHeaderView, round, InputFilterView, i18nObj, I18n, GRADEBOOK_TRANSLATIONS, CourseGradeCalculator,
-  EffectiveDueDates, {scoreToGrade}, GradeFormatHelper, UserSettings, Spinner, SubmissionDetailsDialog,
-  AssignmentGroupWeightsDialog, GradeDisplayWarningDialog, PostGradesFrameDialog, SubmissionCell,
-  GradebookHeaderMenu, NumberCompare, natcompare, htmlEscape, PostGradesStore, PostGradesApp, SubmissionStateMap,
-  ColumnHeaderTemplate, GroupTotalCellTemplate, RowStudentNameTemplate, SectionMenuView, GradingPeriodMenuView,
-  GradebookKeyboardNav, assignmentHelper, GradingPeriodsApi, GradingPeriodSetsApi, {scoreToPercentage}
-) ->
-  # This class both creates the slickgrid instance, and acts as the data source for that instance.
-  class Gradebook
+import $ from 'jquery'
+import _ from 'underscore'
+import Backbone from 'Backbone'
+import tz from 'timezone'
+import DataLoader from 'jsx/gradebook/DataLoader'
+import React from 'react'
+import ReactDOM from 'react-dom'
+import LongTextEditor from 'slickgrid.long_text_editor'
+import KeyboardNavDialog from '../views/KeyboardNavDialog'
+import KeyboardNavTemplate from 'jst/KeyboardNavDialog'
+import Slick from 'vendor/slickgrid'
+import TotalColumnHeaderView from './TotalColumnHeaderView'
+import round from '../util/round'
+import InputFilterView from '../views/InputFilterView'
+import i18nObj from 'i18nObj'
+import I18n from 'i18n!gradebookold'
+import GRADEBOOK_TRANSLATIONS from './GradebookTranslations'
+import CourseGradeCalculator from 'jsx/gradebook/CourseGradeCalculator'
+import * as EffectiveDueDates from 'jsx/gradebook/EffectiveDueDates'
+import {scoreToGrade} from 'jsx/gradebook/GradingSchemeHelper'
+import GradeFormatHelper from 'jsx/gradebook/shared/helpers/GradeFormatHelper'
+import UserSettings from '../userSettings'
+import Spinner from 'spin.js'
+import SubmissionDetailsDialog from '../SubmissionDetailsDialog'
+import AssignmentGroupWeightsDialog from './AssignmentGroupWeightsDialog'
+import GradeDisplayWarningDialog from '../shared/GradeDisplayWarningDialog'
+import PostGradesFrameDialog from './PostGradesFrameDialog'
+import SubmissionCell from './SubmissionCell'
+import GradebookHeaderMenu from './GradebookHeaderMenu'
+import NumberCompare from '../util/NumberCompare'
+import natcompare from '../util/natcompare'
+import htmlEscape from 'str/htmlEscape'
+import PostGradesStore from 'jsx/gradebook/SISGradePassback/PostGradesStore'
+import PostGradesApp from 'jsx/gradebook/SISGradePassback/PostGradesApp'
+import SubmissionStateMap from 'jsx/gradebook/SubmissionStateMap'
+import ColumnHeaderTemplate from 'jst/gradebook/column_header'
+import GroupTotalCellTemplate from 'jst/gradebook/group_total_cell'
+import RowStudentNameTemplate from 'jst/gradebook/row_student_name'
+import SectionMenuView from '../views/gradebook/SectionMenuView'
+import GradingPeriodMenuView from '../views/gradebook/GradingPeriodMenuView'
+import GradebookKeyboardNav from './GradebookKeyboardNav'
+import assignmentHelper from 'jsx/gradebook/shared/helpers/assignmentHelper'
+import GradingPeriodsApi from '../api/gradingPeriodsApi'
+import GradingPeriodSetsApi from '../api/gradingPeriodSetsApi'
+import {scoreToPercentage} from '../../jsx/gradebook/shared/helpers/GradeCalculationHelper'
+import 'jst/_avatar' #needed by row_student_name
+import 'jquery.ajaxJSON'
+import 'jquery.instructure_date_and_time'
+import 'jqueryui/dialog'
+import 'jqueryui/tooltip'
+import '../behaviors/tooltip'
+import '../behaviors/activate'
+import 'jquery.instructure_misc_helpers'
+import 'jquery.instructure_misc_plugins'
+import 'vendor/jquery.ba-tinypubsub'
+import 'jqueryui/position'
+import 'jqueryui/sortable'
+import '../jquery.kylemenu'
+import '../jquery/fixDialogButtons'
+import 'jsx/context_cards/StudentContextCardTrigger'
+
+# This class both creates the slickgrid instance, and acts as the data source for that instance.
+export default class Gradebook
     columnWidths =
       assignment:
         min: 10
@@ -138,7 +129,7 @@ define [
       @submissionStateMap = new SubmissionStateMap
         hasGradingPeriods: @gradingPeriodSet?
         selectedGradingPeriodID: @gradingPeriodToShow
-        isAdmin: _.contains(ENV.current_user_roles, "admin")
+        isAdmin: _.includes(ENV.current_user_roles, "admin")
       @gradebookColumnSizeSettings = @options.gradebook_column_size_settings
       @gradebookColumnOrderSettings = @options.gradebook_column_order_settings
       @teacherNotesNotYetLoaded = !@options.teacher_notes? || @options.teacher_notes.hidden
@@ -155,7 +146,7 @@ define [
 
       $('li.external-tools-dialog > a[data-url], button.external-tools-dialog').on 'click keyclick', (event) ->
         postGradesDialog = new PostGradesFrameDialog({
-          returnFocusTo: $('#post_grades'),
+          returnFocusTo: $('#post_grades, #post_grades_action, #download_csv').first(),
           baseUrl: $(event.target).attr('data-url'),
           launchHeight: $(event.target).attr('data-height'),
           launchWidth: $(event.target).attr('data-width'),
@@ -266,7 +257,7 @@ define [
 
     gradingPeriodIsActive: (gradingPeriodId) ->
       activePeriodIds = _.pluck(@gradingPeriods, 'id')
-      _.contains(activePeriodIds, gradingPeriodId)
+      _.includes(activePeriodIds, gradingPeriodId)
 
     getGradingPeriodToShow: () =>
       return null unless @gradingPeriodSet?
@@ -376,7 +367,7 @@ define [
 
     updateAssignmentEffectiveDueDates: (assignment) ->
       assignment.effectiveDueDates = @effectiveDueDates[assignment.id] || {}
-      assignment.inClosedGradingPeriod = _.any(assignment.effectiveDueDates, (date) => date.in_closed_grading_period)
+      assignment.inClosedGradingPeriod = _.some(assignment.effectiveDueDates, (date) => date.in_closed_grading_period)
 
     rowIndex: 0
     addRow: (student) =>
@@ -384,9 +375,9 @@ define [
       student.computed_final_score ||= 0
       student.secondary_identifier = student.sis_login_id || student.login_id
 
-      student.isConcluded = _.all student.enrollments, (e) ->
+      student.isConcluded = _.every student.enrollments, (e) ->
         e.enrollment_state == 'completed'
-      student.isInactive = _.all student.enrollments, (e) ->
+      student.isInactive = _.every student.enrollments, (e) ->
         e.enrollment_state == 'inactive'
 
       if @sections_enabled
@@ -554,7 +545,7 @@ define [
       else
         propertiesToMatch = ['name', 'login_id', 'short_name', 'sortable_name']
         pattern = new RegExp @userFilterTerm, 'i'
-        matched = _.any propertiesToMatch, (prop) ->
+        matched = _.some propertiesToMatch, (prop) ->
           student[prop]?.match pattern
 
       matchingSection and matchingFilter
@@ -851,6 +842,7 @@ define [
       )()
       @initHeaderDropMenus()
       originalStopFn = $headers.sortable 'option', 'stop'
+      gb = this
       (fixupStopCallback = ->
         $headers.sortable 'option', 'stop', (event, ui) ->
           # we need to set the items selector back to the default because slickgrid's 'stop'
@@ -859,7 +851,7 @@ define [
           $headers.sortable 'option', 'items', originalItemsSelector
           returnVal = originalStopFn.apply(this, arguments)
           makeOnlyAssignmentsSortable() # set it back
-          @initHeaderDropMenus()
+          gb.initHeaderDropMenus()
           fixupStopCallback() # originalStopFn re-creates sortable widget so we need to re-fix
           returnVal
       )()
@@ -1601,9 +1593,9 @@ define [
       @totalGradeWarning = null
 
       gradebookVisibleAssignments = _.reject @assignments, (assignment) ->
-        _.contains(assignment.submission_types, 'not_graded')
+        _.includes(assignment.submission_types, 'not_graded')
 
-      if _.any(gradebookVisibleAssignments, (a) -> a.muted)
+      if _.some(gradebookVisibleAssignments, (a) -> a.muted)
         @totalGradeWarning =
           warningText: I18n.t "This grade differs from the student's view of the grade because some assignments are muted"
           icon: "icon-muted"

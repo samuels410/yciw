@@ -16,13 +16,13 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-import I18n from 'i18n!blueprint_settings'
+import I18n from 'i18n!BlueprintModal'
 import React, {Component} from 'react'
 import PropTypes from 'prop-types'
 import cx from 'classnames'
 
-import Modal, {ModalBody, ModalFooter} from '../../shared/components/InstuiModal'
-import Button from '@instructure/ui-buttons/lib/components/Button'
+import Modal from '../../shared/components/InstuiModal'
+import {Button} from '@instructure/ui-buttons'
 
 export default class BlueprintModal extends Component {
   static propTypes = {
@@ -92,10 +92,10 @@ export default class BlueprintModal extends Component {
         size="fullscreen"
         label={this.props.title}
       >
-        <ModalBody>
+        <Modal.Body>
           <div className={classes}>{this.props.children}</div>
-        </ModalBody>
-        <ModalFooter ref={c => (this.footer = c)}>
+        </Modal.Body>
+        <Modal.Footer ref={c => (this.footer = c)}>
           {this.props.hasChanges && !this.props.isSaving ? (
             [
               <Button key="cancel" onClick={this.props.onCancel}>
@@ -115,7 +115,7 @@ export default class BlueprintModal extends Component {
               {I18n.t('Done')}
             </Button>
           )}
-        </ModalFooter>
+        </Modal.Footer>
       </Modal>
     )
   }

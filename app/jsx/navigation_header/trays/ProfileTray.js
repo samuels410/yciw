@@ -18,24 +18,29 @@
 
 import I18n from 'i18n!new_nav'
 import React from 'react'
-import {bool, string} from 'prop-types'
-import Avatar from '@instructure/ui-elements/lib/components/Avatar'
-import Button from '@instructure/ui-buttons/lib/components/Button'
-import View from '@instructure/ui-layout/lib/components/View'
-import Heading from '@instructure/ui-elements/lib/components/Heading'
-import Link from '@instructure/ui-elements/lib/components/Link'
-import List, {ListItem} from '@instructure/ui-elements/lib/components/List'
+import {string, bool, arrayOf, shape} from 'prop-types'
+import {Avatar, Heading, List, ListItem, Spinner} from '@instructure/ui-elements'
+import {Button} from '@instructure/ui-buttons'
+import {View} from '@instructure/ui-layout'
+import LogoutButton from '../LogoutButton'
 
-function readCookie(key) {
-  return (document.cookie.match(`(^|; )${encodeURIComponent(key)}=([^;]*)`) || 0)[2]
+function ProfileTab({id, html_url, label}) {
+  return (
+    <ListItem key={id}>
+      <Button variant="link" margin="none" href={html_url}>
+        {label}
+      </Button>
+    </ListItem>
+  )
 }
 
-export default function ProfileTray({
-  userDisplayName,
-  userAvatarURL,
-  profileEnabled,
-  eportfoliosEnabled
-}) {
+ProfileTab.propTypes = {
+  id: string.isRequired,
+  label: string.isRequired,
+  html_url: string.isRequired
+}
+
+export default function ProfileTray({userDisplayName, userAvatarURL, loaded, tabs}) {
   return (
     <View as="div" padding="medium">
       <View textAlign="center">
@@ -47,37 +52,22 @@ export default function ProfileTray({
           inline={false}
           margin="auto"
         />
-        <Heading level="h3" as="h2">{userDisplayName}</Heading>
-        <form action="/logout" method="post">
-          <input name="utf8" value="✓" type="hidden" />
-          <input name="_method" value="delete" type="hidden" />
-          <input name="authenticity_token" value={readCookie('_csrf_token')} type="hidden" />
-          <Button type="submit" size="small" margin="medium 0">{I18n.t('Logout')}</Button>
-        </form>
+        <Heading level="h3" as="h2">
+          {userDisplayName}
+        </Heading>
+        <LogoutButton size="small" margin="medium 0 x-small 0" />
       </View>
-      <hr role="presentation"/>
-      <List variant="unstyled" margin="small 0" itemSpacing="small">
-        {[
-          profileEnabled && (
-            <ListItem key="profile">
-              <Link href="/profile">{I18n.t('Profile')}</Link>
-            </ListItem>
-          ),
-          <ListItem key="settings">
-            <Link href="/profile/settings">{I18n.t('Settings')}</Link>
-          </ListItem>,
-          <ListItem key="notifications">
-            <Link href="/profile/communication">{I18n.t('Notifications')}</Link>
-          </ListItem>,
-          <ListItem key="files">
-            <Link href="/files">{I18n.t('Files')}</Link>
-          </ListItem>,
-          eportfoliosEnabled && (
-            <ListItem key="eportfolios">
-              <Link href="/dashboard/eportfolios">{I18n.t('ePortfolios')}</Link>
-            </ListItem>
-          )
-        ].filter(Boolean)}
+      <hr role="presentation" />
+      <List variant="unstyled" margin="0" itemSpacing="small">
+        {loaded ? (
+          tabs.map(tab => <ProfileTab key={tab.id} {...tab} />)
+        ) : (
+          <ListItem key="loading">
+            <div style={{textAlign: 'center'}}>
+              <Spinner margin="medium" renderTitle="Loading" />
+            </div>
+          </ListItem>
+        )}
       </List>
     </View>
   )
@@ -86,6 +76,6 @@ export default function ProfileTray({
 ProfileTray.propTypes = {
   userDisplayName: string.isRequired,
   userAvatarURL: string.isRequired,
-  profileEnabled: bool.isRequired,
-  eportfoliosEnabled: bool.isRequired
+  loaded: bool.isRequired,
+  tabs: arrayOf(shape(ProfileTab.propTypes)).isRequired
 }

@@ -66,6 +66,7 @@ class Quizzes::Quiz < ActiveRecord::Base
   before_save :build_assignment
   before_save :set_defaults
   after_save :update_assignment
+  after_save :clear_availability_cache
   after_save :touch_context
   after_save :regrade_if_published
 
@@ -246,7 +247,7 @@ class Quizzes::Quiz < ActiveRecord::Base
       if e[:question_points]
         cnt += e[:pick_count]
       else
-        cnt += 1 unless e[:unsupported]
+        cnt += 1 unless e[:unsupported] || e[:question_type] == Quizzes::QuizQuestion::Q_TEXT_ONLY
       end
     end
 
@@ -384,9 +385,8 @@ class Quizzes::Quiz < ActiveRecord::Base
     return false unless course.root_account.settings[:restrict_quiz_questions]
 
     if user.present?
-      quiz_eligibility = Quizzes::QuizEligibility.new(course: course, user: user)
-      user_in_active_section = quiz_eligibility.section_dates_currently_apply?
-      return false if user_in_active_section
+      user_sections = course.sections_visible_to(user).select(&:restrict_enrollments_to_section_dates)
+      return false if user_sections.present?
     end
 
     !!course.concluded?
@@ -459,6 +459,12 @@ class Quizzes::Quiz < ActiveRecord::Base
   end
 
   protected :update_assignment
+
+  def clear_availability_cache
+    if saved_change_to_due_at? || saved_change_to_lock_at? || saved_change_to_unlock_at? || saved_change_to_workflow_state?
+      self.clear_cache_key(:availability)
+    end
+  end
 
   ##
   # when a quiz is updated, this method should be called to update the end_at
@@ -635,15 +641,9 @@ class Quizzes::Quiz < ActiveRecord::Base
     # Admins can take the full quiz whenever they want
     return end_at if user.is_a?(::User) && self.grants_right?(user, :grade)
 
-    can_take = Quizzes::QuizEligibility.new(course: self.context, quiz: self, user: submission.user)
-
-    fallback_end_at = if can_take.section_dates_currently_apply?
-      can_take.active_sections_max_end_at
-    elsif course.restrict_enrollments_to_course_dates
-      course.end_at || course.enrollment_term.end_at
-    else
-      course.enrollment_term.end_at
-    end
+    # We no longer use enrollment_term but get this info from enrollment_state
+    fallback_end_at = course.enrollments.for_user(user).active_by_date.
+      maximum('enrollment_states.state_valid_until')
 
     # set to lock date
     if lock_at && !submission.manually_unlocked
@@ -756,7 +756,7 @@ class Quizzes::Quiz < ActiveRecord::Base
   alias_method :to_s, :quiz_title
 
   def low_level_locked_for?(user, opts={})
-    ::Rails.cache.fetch(locked_cache_key(user), :expires_in => 1.minute) do
+    RequestCache.cache(locked_request_cache_key(user)) do
       user_submission = user && quiz_submissions.where(user_id: user.id).first
       return false if user_submission && user_submission.manually_unlocked
 
@@ -787,11 +787,6 @@ class Quizzes::Quiz < ActiveRecord::Base
     return false unless for_assignment?
 
     assignment.low_level_locked_for?(user, opts)
-  end
-
-  def clear_locked_cache(user)
-    super
-    Rails.cache.delete(assignment.locked_cache_key(user)) if self.for_assignment?
   end
 
   def context_module_action(user, action, points=nil)
@@ -1438,6 +1433,7 @@ class Quizzes::Quiz < ActiveRecord::Base
 
   def run_if_overrides_changed!
     self.relock_modules!
+    self.clear_cache_key(:availability)
     self.assignment.relock_modules! if self.assignment
   end
 

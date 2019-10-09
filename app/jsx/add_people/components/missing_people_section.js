@@ -16,15 +16,14 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-import I18n from 'i18n!roster'
+import I18n from 'i18n!add_people_missing_people_section'
 import React from 'react'
 import PropTypes from 'prop-types'
 import shapes from './shapes'
-import Table from '@instructure/ui-elements/lib/components/Table'
-import ScreenReaderContent from '@instructure/ui-a11y/lib/components/ScreenReaderContent'
-import TextInput from '@instructure/ui-forms/lib/components/TextInput'
-import Checkbox from '@instructure/ui-forms/lib/components/Checkbox'
-import Button from '@instructure/ui-buttons/lib/components/Button'
+import {Table} from '@instructure/ui-elements'
+import {ScreenReaderContent} from '@instructure/ui-a11y'
+import {TextInput, Checkbox} from '@instructure/ui-forms'
+import {Button} from '@instructure/ui-buttons'
 
   const namePrompt = I18n.t('Click to add a name');
   const nameLabel = I18n.t("New user's name");
@@ -42,6 +41,7 @@ import Button from '@instructure/ui-buttons/lib/components/Button'
       inviteUsersURL: PropTypes.string,
       onChange: PropTypes.func.isRequired
     };
+
     static defaultProps = {
       inviteUsersURL: undefined
     }
@@ -121,6 +121,7 @@ import Button from '@instructure/ui-buttons/lib/components/Button'
       this.onUncheckUserByAddress(event.currentTarget.value);
       this.setState({selectAll: false});
     }
+
     onUncheckUserByAddress = (address) => {
       this.props.onChange(address, false);
     }
@@ -171,16 +172,19 @@ import Button from '@instructure/ui-buttons/lib/components/Button'
                   label={<ScreenReaderContent>{nameLabel}</ScreenReaderContent>}
                   data-address={missing.address}
                   onChange={this.onNewForMissingChange}
+                  value={missing.newUserInfo.name || ''}
                 />
               </td>
               <td>
                 <TextInput
                   required
                   name="email"
-                  type="email"placeholder={emailLabel}
+                  type="email"
+                  placeholder={emailLabel}
                   label={<ScreenReaderContent>{emailLabel}</ScreenReaderContent>}
                   data-address={missing.address}
                   onChange={this.onNewForMissingChange}
+                  value={missing.newUserInfo.email || ''}
                 />
               </td>
               <th scope="row">{missing.address}</th>
@@ -208,6 +212,7 @@ import Button from '@instructure/ui-buttons/lib/components/Button'
         return row;
       });
     }
+
     // render each of the missing email addresses
     // @returns an array of table rows, one for each missing id
     renderMissingEmail () {
@@ -242,7 +247,7 @@ import Button from '@instructure/ui-buttons/lib/components/Button'
                   label={<ScreenReaderContent>{nameLabel}</ScreenReaderContent>}
                   data-address={missing.address}
                   onChange={this.onNewForMissingChange}
-                  value={missing.newUserInfo.name || null}
+                  value={missing.newUserInfo.name || ''}
                 />
               </td>
               <th scope="row">{missing.address}</th>
@@ -259,7 +264,12 @@ import Button from '@instructure/ui-buttons/lib/components/Button'
                 />
               </td>
               <td>
-                <Button variant="link" onClick={this.onSelectNewForMissing} data-address={missing.address}>
+                <Button
+                  variant="link"
+                  onClick={this.onSelectNewForMissing}
+                  data-address={missing.address}
+                  theme={{mediumPadding: '0', mediumHeight: 'normal'}}
+                >
                   {namePrompt}
                 </Button>
               </td>
@@ -307,6 +317,7 @@ import Button from '@instructure/ui-buttons/lib/components/Button'
         </thead>
       );
     }
+
     // render the list of login_ids where we did not find users
     render () {
       return (

@@ -154,7 +154,7 @@
 #         "format": "int64"
 #       },
 #       "asset_type": {
-#         "description": "The type of the learning object that was changed in the blueprint course.  One of 'assignment', 'attachment', 'discussion_topic', 'external_tool', 'quiz', or 'wiki_page'.",
+#         "description": "The type of the learning object that was changed in the blueprint course.  One of 'assignment', 'attachment', 'discussion_topic', 'external_tool', 'quiz', 'wiki_page', 'syllabus', or 'settings'.  For 'syllabus' or 'settings', the asset_id is the course id.",
 #         "example": "assignment",
 #         "type": "string"
 #       },
@@ -292,6 +292,8 @@ class MasterCourses::MasterTemplatesController < ApplicationController
   # Cannot add courses that do not belong to the blueprint course's account. Also cannot add
   # other blueprint courses or courses that already have an association with another blueprint course.
   #
+  # After associating new courses, {api:MasterCourses::MasterTemplatesController#queue_migration start a sync} to populate their contents from the blueprint.
+  #
   # @argument course_ids_to_add [Array]
   #   Courses to add as associated courses
   #
@@ -309,8 +311,8 @@ class MasterCourses::MasterTemplatesController < ApplicationController
     if authorized_action(@course.account, @current_user, :manage_courses)
       # note that I'm additionally requiring course management rights on the account
       # since (for now) we're only allowed to associate courses derived from it
-      ids_to_add = Array(params[:course_ids_to_add]).map(&:to_i)
-      ids_to_remove = Array(params[:course_ids_to_remove]).map(&:to_i)
+      ids_to_add = api_find_all(Course, Array(params[:course_ids_to_add])).pluck(:id)
+      ids_to_remove = api_find_all(Course, Array(params[:course_ids_to_remove])).pluck(:id)
       if (ids_to_add & ids_to_remove).any?
         return render :json => {:message => "cannot add and remove a course at the same time"}, :status => :bad_request
       end
@@ -704,7 +706,7 @@ class MasterCourses::MasterTemplatesController < ApplicationController
       end
     end
     changes << changed_syllabus_json(@course, exceptions) if updated_syllabus
-
+    changes << changed_settings_json(@course) if @mm.migration_settings[:copy_settings]
     render :json => changes
   end
 
@@ -725,7 +727,7 @@ class MasterCourses::MasterTemplatesController < ApplicationController
     # if we skipped it because it's deleted, there's no sense
     # in going on and seeing if they also edited it first
     return ['deleted'] if columns.include?("manually_deleted")
-    
+
     classes = []
     columns.each do |col|
       klass.restricted_column_settings.each do |k, v|

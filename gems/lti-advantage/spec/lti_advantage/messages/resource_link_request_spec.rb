@@ -33,7 +33,8 @@ module LtiAdvantage::Messages
         iss: 'https://platform.example.edu',
         nonce: '5a234202-6f0e-413d-8793-809db7a95930',
         resource_link: LtiAdvantage::Claims::ResourceLink.new(id: 1),
-        roles: ['foo']
+        roles: ['foo'],
+        target_link_uri: 'https://www.example.com'
       )
     end
 
@@ -107,9 +108,7 @@ module LtiAdvantage::Messages
           context: LtiAdvantage::Claims::Context.new
         )
         message.validate
-        expect(message.errors.messages[:context].first.messages).to eq(
-          {:id => ["can't be blank"]}
-        )
+        expect(message.errors.messages.keys).to include(:context)
       end
 
       it 'verifies that "resource_link" is an Platform' do

@@ -17,7 +17,7 @@
  */
 
 import $ from 'jquery'
-import I18n from 'i18n!quizzes'
+import I18n from 'i18nObj'
 import numberHelper from 'jsx/shared/helpers/numberHelper'
 import './jquery.instructure_misc_plugins' /* fragmentChange */
 import './jquery.templateData'
@@ -199,9 +199,7 @@ import 'compiled/behaviors/quiz_selectmenu'
     },
 
     questions: function(){
-      return $('.question_holder').map(function(index, el) {
-        return $(el).position().top - 320;
-      }).toArray();
+      return $('.question_holder').map((index, el) => $(el).position().top - 320).toArray();
     },
 
     onScroll: function(){
@@ -298,7 +296,7 @@ import 'compiled/behaviors/quiz_selectmenu'
 
     updateStatusFor: function($scoreInput){
       try{
-        var questionId = $scoreInput.attr('name').split('_')[2];
+        var questionId = $scoreInput.attr('data-question-id');
         var scoreValue = numberHelper.parse($scoreInput.val());
         $('#quiz_nav_' + questionId).toggleClass('complete', (!isNaN(scoreValue)));
       } catch(err) {
@@ -426,7 +424,9 @@ import 'compiled/behaviors/quiz_selectmenu'
 
     $("#fudge_points_entry").change(function() {
       var points = numberHelper.parse($(this).val());
-      $("#fudge_points_input").val(points || '');
+      const parsed = numberHelper.parse($(this).val())
+      const hiddenVal = Number.isNaN(parsed) ? '' : parsed
+      $("#fudge_points_input").val(hiddenVal);
       gradingForm.addFudgePoints(points);
     });
 
@@ -438,17 +438,17 @@ import 'compiled/behaviors/quiz_selectmenu'
       scoringSnapshot.jumpToQuestion(questionId);
     });
 
-    $('#nav-prev').click(function(e){
+    $('#nav-prev').click(e => {
       e.preventDefault();
       quizNavBar.previousQuestionBlock();
     });
 
-    $('#nav-next').click(function(e){
+    $('#nav-next').click(e => {
       e.preventDefault();
       quizNavBar.nextQuestionBlock();
     });
 
-    $(window).resize(function () {
+    $(window).resize(() => {
       quizNavBar.updateWindowSize();
       quizNavBar.setScrollWindowPosition(quizNavBar.index);
       gradingForm.onWindowResize();
@@ -456,7 +456,7 @@ import 'compiled/behaviors/quiz_selectmenu'
   });
 
   if (ENV.SCORE_UPDATED) {
-    $(document).ready(function() {
+    $(document).ready(() => {
       if(parentWindow.respondsTo('refreshGrades')) {
         window.parent.INST.refreshGrades();
       }

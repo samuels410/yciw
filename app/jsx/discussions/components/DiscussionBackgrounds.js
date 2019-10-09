@@ -20,18 +20,18 @@ import I18n from 'i18n!discussions_v2'
 import React from 'react'
 import {string} from 'prop-types'
 
-import View from '@instructure/ui-layout/lib/components/View'
-import Link from '@instructure/ui-elements/lib/components/Link'
-import Text from '@instructure/ui-elements/lib/components/Text'
+import {View} from '@instructure/ui-layout'
+import {Button} from '@instructure/ui-buttons'
+import {Text} from '@instructure/ui-elements'
 
 import propTypes from '../propTypes'
 
-import pinnedUrl from '../../../../public/images/discussions/pinned.svg' // eslint-disable-line
-import unpinnedUrl from '../../../../public/images/discussions/unpinned.svg' // eslint-disable-line
-import closedForCommentsUrl from '../../../../public/images/discussions/closed-comments.svg' // eslint-disable-line
+import pinnedUrl from '../../../../public/images/discussions/pinned.svg'
+import unpinnedUrl from '../../../../public/images/discussions/unpinned.svg'
+import closedForCommentsUrl from '../../../../public/images/discussions/closed-comments.svg'
 
 const BackgroundSVG = props => (
-  <View margin="small auto" size="x-small" display="block">
+  <View margin="small auto" maxWidth="16rem" display="block">
     <img alt="" src={props.url} />
   </View>
 )
@@ -67,9 +67,12 @@ export const unpinnedDiscussionsBackground = props => (
       {I18n.t('There are no discussions to show in this section')}
     </Text>
     {props.permissions.create && (
-      <Link href={`/${props.contextType}s/${props.contextID}/discussion_topics/new`}>
+      <Button
+        variant="link"
+        href={`/${props.contextType}s/${props.contextID}/discussion_topics/new`}
+      >
         {I18n.t('Click here to add a discussion')}
-      </Link>
+      </Button>
     )}
   </View>
 )

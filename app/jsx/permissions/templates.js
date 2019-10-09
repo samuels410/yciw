@@ -39,8 +39,8 @@ export function deepMerge(a, b) {
 }
 
 export const PERMISSION_DETAIL_SECTIONS = [
-  {title: 'What it Does', key: 'what_it_does'},
-  {title: 'Additional Considerations', key: 'additional_considerations'}
+  {title: I18n.t('What it Does'), key: 'what_it_does'},
+  {title: I18n.t('Additional Considerations'), key: 'additional_considerations'}
 ]
 
 export const generateActionTemplates = (
@@ -94,13 +94,19 @@ const accountLevelPermissions = generateActionTemplates(
       )
     },
     {
+      title: I18n.t('Feature Options (Account Settings)'),
+      description: I18n.t(
+        'To manage the Feature Options tab, Feature Options - enable / disable must also be enabled.'
+      )
+    },
+    {
       title: I18n.t('Reports (Account Settings)'),
       description: I18n.t(
         'To view the Reports tab, Courses - view usage reports must also be enabled.'
       )
     },
     {
-      title: I18n.t('Account Settings (Subaccount Navigation)'),
+      title: I18n.t('Subaccount Navigation (Account Settings)'),
       description: I18n.t(
         'Not all settings options are available at the subaccount level, including the Notifications tab.'
       )
@@ -1227,6 +1233,10 @@ const courseContentViewPermissions = generateActionTemplates(
     {
       title: I18n.t('Courses'),
       description: I18n.t('Allows user to view published and unpublished course content.')
+    },
+    {
+      title: I18n.t('New Gradebook'),
+      description: I18n.t('Allows user to view the New Gradebook.')
     }
   ],
   [
@@ -1880,7 +1890,8 @@ Allows user to access the Learning Mastery Gradebook (if enabled).`)
       title: I18n.t('Quizzes'),
       description: I18n.t(
         `To moderate a quiz, Assignments and Quizzes - add / edit / delete​ must also be enabled.
-        To view the user SIS ID column in the Quiz Item Analysis CSV file, SIS Data - read must also be enabled.`
+        To view the user SIS ID column in the Quiz Item Analysis CSV file, SIS Data - read must also be enabled.
+        To view the submission log, Quizzes - view submission log must also be enabled.`
       )
     },
   ],
@@ -2455,6 +2466,10 @@ const assignmentsAndQuizzes = generateActionTemplates(
   ],
   [
     {
+      title: I18n.t('Grades'),
+      description: I18n.t('Grades - edit must also be enabled.')
+    },
+    {
       title: I18n.t('Quizzes'),
       description: I18n.t('The Quiz Log Auditing feature option must be enabled in Course Settings.')
     }
@@ -2602,56 +2617,6 @@ const studentCollabPermissions = generateActionTemplates(
         `To allow view, edit, and delete functionality of collaborations created by other users, Course Content - add / edit / delete must also be enabled.
 If Course Content - add / edit / delete is enabled and Student Collaborations - create is disabled, user will not be able to create new collaborations but will be able to view, edit, and delete all collaborations.
 To add students to a collaboration, Users - view list must also be enabled. To add a course group to a collaboration, Groups - add / edit / delete must also be enabled.`
-      )
-    }
-  ]
-)
-
-const submissionViewCommentsPermissions = generateActionTemplates(
-  'comment_on_others_submissions',
-  [
-    {
-      title: I18n.t('Assignments'),
-      description: I18n.t(`Allows user to view all student assignment submissions and add comments.`)
-    },
-    {
-      title: I18n.t('SpeedGrader'),
-      description: I18n.t(`Allows user to download all comments in a student’s submission.`)
-    }
-  ],
-  [
-    {
-      title: I18n.t('Assignments, Gradebook'),
-      description: I18n.t(`To access assignment submissions through Assignments and the
-Gradebook, Grades - view all grades​ must also be enabled.`)
-    },
-    {
-      title: I18n.t('Assignments, SpeedGrader'),
-      description: I18n.t(`To access assignment submissions through Assignments and SpeedGrader, Grades - edit​ must also be enabled.
-To edit a grade or add comments in SpeedGrader or the Gradebook, Grades - edit must also be enabled.`)
-    }
-  ],
-  [
-    {
-      title: I18n.t('Assignments'),
-      description: I18n.t(`Allows user to view all student assignment submissions and add comments.`)
-    },
-    {
-      title: I18n.t('SpeedGrader'),
-      description: I18n.t(`Allows user to download all comments in a student’s submission.`)
-    }
-  ],
-  [
-    {
-      title: I18n.t('Assignments, Gradebook'),
-      description: I18n.t(
-        `To access assignment submissions through Assignments or the Gradebook and view in SpeedGrader, Grades - view all grades ​or Grades - edit must also be enabled.`
-      )
-    },
-    {
-      title: I18n.t('Gradebook, SpeedGrader'),
-      description: I18n.t(
-        `To edit a grade or add comments in SpeedGrader or Gradebook, Grades - edit must be enabled.`
       )
     }
   ]
@@ -3098,7 +3063,6 @@ export const PERMISSION_DETAILS_ACCOUNT_TEMPLATES = {
     viewStatisticsPermissions.ACCOUNT,
     storageQuotasPermissions.ACCOUNT,
     studentCollabPermissions.ACCOUNT,
-    submissionViewCommentsPermissions.ACCOUNT,
     usernotesPermissions.ACCOUNT,
     usersActAsPermissions.ACCOUNT,
     usersManageLoginPermissions.ACCOUNT,
@@ -3166,7 +3130,6 @@ export const PERMISSION_DETAILS_COURSE_TEMPLATES = {
     viewStatisticsPermissions.COURSE,
     storageQuotasPermissions.COURSE,
     studentCollabPermissions.COURSE,
-    submissionViewCommentsPermissions.COURSE,
     usernotesPermissions.COURSE,
     usersActAsPermissions.COURSE,
     usersManageLoginPermissions.COURSE,

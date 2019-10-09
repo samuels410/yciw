@@ -17,8 +17,8 @@
 %>
 
 <%
-  content_for :page_title, t('Gradebook - %{context_name}', context_name: @context.name)
-  @body_classes << "gradebook full-width"
+  provide :page_title, t('Gradebook - %{context_name}', context_name: @context.name)
+  add_body_class "gradebook full-width"
   @show_left_side = true
   @collapse_course_menu = true
   @show_embedded_chat = false
@@ -65,6 +65,10 @@
           <div class="gradebook-filter-container" id="sections-filter-container"></div>
         <% end %>
 
+        <% if student_groups? %>
+          <div class="gradebook-filter-container" id="student-group-filter-container"></div>
+        <% end %>
+
         <div class="gradebook-filter-container gradebook_filter" id="search-filter-container">
           <% placeholder = t('Search…') %>
           <input
@@ -105,4 +109,8 @@
   <span data-component="GridColor"></span>
   <span data-component="StatusesModal"></span>
   <span data-component="AnonymousSpeedGraderAlert"></span>
+
+  <div id="assignment-posting-policy-tray"></div>
+  <div id="hide-assignment-grades-tray"></div>
+  <div id="post-assignment-grades-tray"></div>
 </div>

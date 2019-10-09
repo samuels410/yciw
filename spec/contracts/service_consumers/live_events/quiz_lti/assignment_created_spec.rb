@@ -39,7 +39,6 @@ RSpec.describe 'Canvas LMS Live Events', :pact_live_events do
           :privacy_level => 'public',
           :tool_id => 'Quizzes 2'
         }
-        Account.default.enable_feature!(:lor_for_account)
         Account.default.context_external_tools.create!(params)
 
         course = course_model

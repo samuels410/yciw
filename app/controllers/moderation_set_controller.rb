@@ -18,7 +18,6 @@
 
 # @API Moderated Grading
 # @subtopic Moderation Set
-# @beta
 #
 # API for viewing and adding students to the list of people in moderation
 # for an assignment
@@ -88,6 +87,6 @@ class ModerationSetController < ApplicationController
 
   def load_assignment
     @context = api_find(Course, params[:course_id])
-    @assignment = @context.assignments.find(params[:assignment_id])
+    @assignment = api_find(@context.assignments, params[:assignment_id])
   end
 end

@@ -159,6 +159,55 @@ describe GradebookUserIds do
     end
   end
 
+  describe "filtering by student group" do
+    let_once(:category) do
+      category = @course.group_categories.create!(name: "whatever")
+      category.create_groups(2)
+
+      category.groups.first.add_user(@student1)
+      category.groups.second.add_user(@student2)
+      category
+    end
+    let_once(:group) { category.groups.first }
+
+    context "when a group is specified" do
+      before(:once) do
+        @teacher.preferences[:gradebook_settings] = {
+          @course.id => {
+            filter_rows_by: {
+              student_group_id: group.id
+            }
+          }
+        }
+      end
+
+      it "only returns students in the selected group" do
+        expect(gradebook_user_ids.user_ids).to contain_exactly(@student1.id)
+      end
+
+      it "only returns students in the selected group when sorting by total_grade" do
+        @teacher.preferences[:gradebook_settings][@course.id][:sort_rows_by_column_id] = "total_grade"
+        expect(gradebook_user_ids.user_ids).to contain_exactly(@student1.id)
+      end
+
+      it "returns all students if the selected group has been deleted" do
+        group.destroy!
+        expect(gradebook_user_ids.user_ids).to match_array(@course.student_ids)
+      end
+    end
+
+    context "when no group is specified" do
+      it "returns students in all groups" do
+        expect(gradebook_user_ids.user_ids).to match_array(@course.students.pluck(:id))
+      end
+
+      it "returns students in all groups when sorting by total_grade" do
+        @teacher.preferences[:gradebook_settings][@course.id][:sort_rows_by_column_id] = "total_grade"
+        expect(gradebook_user_ids.user_ids).to match_array(@course.students.pluck(:id))
+      end
+    end
+  end
+
   context 'with pg_collkey installed' do
     before do
       skip 'requires pg_collkey installed SD-2747' unless has_pg_collkey

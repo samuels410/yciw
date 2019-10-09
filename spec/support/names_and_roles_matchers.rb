@@ -18,7 +18,7 @@
 module Lti::Ims::NamesAndRolesMatchers
 
   def expected_lti_id(entity)
-    Lti::Asset.opaque_identifier_for(entity)
+    entity.is_a?(User) ? entity.lti_id : Lti::Asset.opaque_identifier_for(entity)
   end
 
   def expected_course_lti_roles(*enrollment)
@@ -112,8 +112,6 @@ module Lti::Ims::NamesAndRolesMatchers
         'https://purl.imsglobal.org/spec/lti/claim/message_type' => 'LtiResourceLinkRequest',
         'locale' => (user.locale || I18n.default_locale.to_s),
         'https://purl.imsglobal.org/spec/lti/claim/custom' => {},
-        'https://www.instructure.com/canvas_user_id' => user.id,
-        'https://www.instructure.com/canvas_user_login_id' => (expected_login_id_extension(user) if privacy(opts) == 'public')
       }.merge!(opts[:message_matcher].presence || {}).compact
     ]
   end
@@ -211,5 +209,3 @@ module Lti::Ims::NamesAndRolesMatchers
     attr_reader :actual, :expected
   end
 end
-
-

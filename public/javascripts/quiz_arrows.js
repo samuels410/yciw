@@ -26,6 +26,7 @@ import {direction} from 'jsx/shared/helpers/rtlHelper'
 // answers on a quiz results page.
 export default class QuizArrowApplicator {
   constructor () {
+    this.idGenerator = 0;
     this.$questions = $('#questions.show_correct_answers:not(.survey_quiz)')
     this.rightAnswers = this.$questions.find('.selected_answer.correct_answer')
     this.wrongAnswers = this.$questions.find('.selected_answer.wrong_answer')
@@ -70,8 +71,10 @@ export default class QuizArrowApplicator {
     this.rightAnswers.prepend(this.rightTpl)
     this.wrongAnswers.prepend(this.wrongTpl)
     this.correctAnswers.prepend(this.correctTpl)
-    this.editableMatches.parent().before(this.correctTpl)
-    this.readOnlyMatches.prepend(this.correctTpl)
+    // without .clone(), last correctTpl instance (in correctAnswers)
+    //   will be moved to editableMatches/readOnlyMatches(if any)
+    this.editableMatches.parent().before(this.correctTpl.clone())
+    this.readOnlyMatches.prepend(this.correctTpl.clone())
     this.shortAnswers.prepend(this.shortTpl)
     this.creditPartial.prepend(this.creditPartialTpl)
     this.creditFull.prepend(this.creditFullTpl)

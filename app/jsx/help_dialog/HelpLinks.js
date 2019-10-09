@@ -19,10 +19,8 @@
 import React from 'react'
 import {bool, arrayOf, shape, string, func} from 'prop-types'
 import I18n from 'i18n!help_dialog'
-import Link from '@instructure/ui-elements/lib/components/Link'
-import List, {ListItem} from '@instructure/ui-elements/lib/components/List'
-import Spinner from '@instructure/ui-elements/lib/components/Spinner'
-import Text from '@instructure/ui-elements/lib/components/Text'
+import {Button} from '@instructure/ui-buttons'
+import {List, ListItem, Spinner, Text} from '@instructure/ui-elements'
 
 export default function HelpLinks({links, hasLoaded, onClick}) {
   return (
@@ -31,7 +29,8 @@ export default function HelpLinks({links, hasLoaded, onClick}) {
         links
           .map((link, index) => (
             <ListItem key={`link-${index}`}>
-              <Link
+              <Button
+                variant="link"
                 href={link.url}
                 target="_blank"
                 rel="noopener"
@@ -41,11 +40,12 @@ export default function HelpLinks({links, hasLoaded, onClick}) {
                     onClick(link.url)
                   }
                 }}
+                theme={{mediumPadding: '0', mediumHeight: '1.5rem'}}
               >
                 {link.text}
-              </Link>
+              </Button>
               {link.subtext && (
-                <Text as="div" size="small" weight="light">
+                <Text as="div" size="small">
                   {link.subtext}
                 </Text>
               )}
@@ -60,9 +60,13 @@ export default function HelpLinks({links, hasLoaded, onClick}) {
                   <hr role="presentation" />
                 </ListItem>,
                 <ListItem key="customize">
-                  <Link href="/accounts/self/settings#custom_help_link_settings">
+                  <Button
+                    variant="link"
+                    theme={{mediumPadding: '0', mediumHeight: '1.5rem'}}
+                    href="/accounts/self/settings#custom_help_link_settings"
+                  >
                     {I18n.t('Customize this menu')}
-                  </Link>
+                  </Button>
                 </ListItem>
               ]
           )

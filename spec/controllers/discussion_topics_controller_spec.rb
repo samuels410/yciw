@@ -214,6 +214,30 @@ describe DiscussionTopicsController do
       expect(parsed_topic["delayed_post_at"].to_json).to eq delayed_post_time.to_json
       expect(parsed_topic["lock_at"].to_json).to eq lock_at_time.to_json
     end
+
+    it "sets DIRECT_SHARE_ENABLED when enabled" do
+      @course.account.enable_feature!(:direct_share)
+      user_session(@teacher)
+      get 'index', params: {course_id: @course.id}
+      expect(response).to be_successful
+      expect(assigns[:js_env][:DIRECT_SHARE_ENABLED]).to be(true)
+    end
+
+    it "does not set DIRECT_SHARE_ENABLED if the user does not have manage_content" do
+      @course.account.enable_feature!(:direct_share)
+      user_session(@student)
+      get 'index', params: {course_id: @course.id}
+      expect(response).to be_successful
+      expect(assigns[:js_env][:DIRECT_SHARE_ENABLED]).to be(false)
+    end
+
+    it "does not set DIRECT_SHARE_ENABLED when disabled" do
+      user_session(@teacher)
+      get 'index', params: {course_id: @course.id}
+      expect(response).to be_successful
+      expect(assigns[:js_env][:DIRECT_SHARE_ENABLED]).to be(false)
+    end
+
   end
 
   describe "GET 'show'" do
@@ -468,8 +492,8 @@ describe DiscussionTopicsController do
       # this is essentially a unit test for app/coffeescripts/models/Entry.coffee,
       # making sure that we get back the expected format for this url template
       template = assigns[:js_env][:DISCUSSION][:SPEEDGRADER_URL_TEMPLATE]
-      url = template.gsub(/%22:student_id%22/, '123')
-      expect(url).to match "%7B%22student_id%22:123%7D"
+      url = template.gsub(/%3Astudent_id/, '123')
+      expect(url).to match "student_id=123"
     end
 
     it "should mark as read when viewed" do
@@ -787,6 +811,22 @@ describe DiscussionTopicsController do
       allow(AssignmentUtil).to receive(:post_to_sis_friendly_name).and_return('Foo Bar')
       get 'new', params: {:course_id => @course.id}
       expect(assigns[:js_env][:SIS_NAME]).to eq('Foo Bar')
+    end
+  end
+
+  describe "GET 'new'" do
+    it "creates a default assignment group if none exist" do
+      user_session(@teacher)
+      get :new, params: {course_id: @course.id}
+      expect(@course.assignment_groups.count).not_to eq 0
+    end
+
+    it "announcement" do
+      user_session(@teacher)
+      @course.group_weighting_scheme = 'percent'
+      @course.save!
+      get :new, params: {course_id: @course.id, is_announcement: true}
+      expect(assigns[:js_env][:CONTEXT_ID]).to eq(@course.id)
     end
   end
 
@@ -1496,7 +1536,7 @@ describe DiscussionTopicsController do
     it "triggers module progression recalculation if undoing section specificness" do
       section1 = @course.course_sections.create!(name: "Section")
       section2 = @course.course_sections.create!(name: "Section2")
-      topic = @course.discussion_topics.create!(title: "foo", message: "bar", user: @teacher, 
+      topic = @course.discussion_topics.create!(title: "foo", message: "bar", user: @teacher,
         is_section_specific: true, course_sections: [section2])
       mod = @course.context_modules.create!
       tag = mod.add_item({:id => topic.id, :type => 'discussion_topic'})

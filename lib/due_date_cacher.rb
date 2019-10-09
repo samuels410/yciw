@@ -53,9 +53,11 @@ class DueDateCacher
     self.executing_users ||= []
     self.executing_users.push(user)
 
-    result = yield
-
-    self.executing_users.pop
+    begin
+      result = yield
+    ensure
+      self.executing_users.pop
+    end
     result
   end
 
@@ -64,7 +66,7 @@ class DueDateCacher
     self.executing_users.last
   end
 
-  INFER_SUBMISSION_WORKFLOW_STATE_SQL = <<~SQL_FRAGMENT
+  INFER_SUBMISSION_WORKFLOW_STATE_SQL = <<~SQL_FRAGMENT.freeze
     CASE
     WHEN grade IS NOT NULL OR excused IS TRUE THEN
       'graded'
@@ -174,6 +176,8 @@ class DueDateCacher
 
         create_moderation_selections_for_assignment(assignment_id, student_due_dates.keys, @user_ids)
 
+        quiz_lti = quiz_lti_assignments.include?(assignment_id)
+
         students_without_priors.each do |student_id|
           submission_info = student_due_dates[student_id]
           due_date = submission_info[:due_at] ? "'#{submission_info[:due_at].iso8601}'::timestamptz" : 'NULL'
@@ -182,7 +186,7 @@ class DueDateCacher
           anonymous_id = Anonymity.generate_id(existing_ids: existing_anonymous_ids)
           existing_anonymous_ids << anonymous_id
           sql_ready_anonymous_id = Submission.connection.quote(anonymous_id)
-          values << [assignment_id, student_id, due_date, grading_period_id, sql_ready_anonymous_id]
+          values << [assignment_id, student_id, due_date, grading_period_id, sql_ready_anonymous_id, quiz_lti]
         end
       end
 
@@ -202,6 +206,7 @@ class DueDateCacher
             submission_scope.where(user_id: deletable_student_ids_chunk).
               update_all(workflow_state: :deleted, updated_at: Time.zone.now)
           end
+          User.clear_cache_keys(deletable_student_ids, :submissions)
         end
       end
 
@@ -213,6 +218,7 @@ class DueDateCacher
             where(assignment_id: assignment_ids_slice, user_id: student_slice).
             update_all(workflow_state: :deleted, updated_at: Time.zone.now)
         end
+        User.clear_cache_keys(student_slice, :submissions)
       end
 
       return if values.empty?
@@ -240,9 +246,10 @@ class DueDateCacher
                 #{INFER_SUBMISSION_WORKFLOW_STATE_SQL}
               )),
               anonymous_id = COALESCE(submissions.anonymous_id, vals.anonymous_id),
+              cached_quiz_lti = vals.cached_quiz_lti,
               updated_at = now() AT TIME ZONE 'UTC'
             FROM (VALUES #{batch_values.join(',')})
-              AS vals(assignment_id, student_id, due_date, grading_period_id, anonymous_id)
+              AS vals(assignment_id, student_id, due_date, grading_period_id, anonymous_id, cached_quiz_lti)
             WHERE submissions.user_id = vals.student_id AND
                   submissions.assignment_id = vals.assignment_id AND
                   (
@@ -251,18 +258,20 @@ class DueDateCacher
                     (submissions.workflow_state <> COALESCE(NULLIF(submissions.workflow_state, 'deleted'),
                       (#{INFER_SUBMISSION_WORKFLOW_STATE_SQL})
                     )) OR
-                    (submissions.anonymous_id IS DISTINCT FROM COALESCE(submissions.anonymous_id, vals.anonymous_id))
+                    (submissions.anonymous_id IS DISTINCT FROM COALESCE(submissions.anonymous_id, vals.anonymous_id)) OR
+                    (submissions.cached_quiz_lti IS DISTINCT FROM vals.cached_quiz_lti)
                   );
           INSERT INTO #{Submission.quoted_table_name}
-            (assignment_id, user_id, workflow_state, created_at, updated_at, context_code, process_attempts,
-            cached_due_date, grading_period_id, anonymous_id)
+            (assignment_id, user_id, workflow_state, created_at, updated_at, context_code,
+            cached_due_date, grading_period_id, anonymous_id, cached_quiz_lti)
             SELECT
               assignments.id, vals.student_id, 'unsubmitted',
               now() AT TIME ZONE 'UTC', now() AT TIME ZONE 'UTC',
-              assignments.context_code, 0, vals.due_date::timestamptz, vals.grading_period_id::integer,
-              vals.anonymous_id
+              assignments.context_code, vals.due_date::timestamptz, vals.grading_period_id::integer,
+              vals.anonymous_id,
+              vals.cached_quiz_lti
             FROM (VALUES #{batch_values.join(',')})
-              AS vals(assignment_id, student_id, due_date, grading_period_id, anonymous_id)
+              AS vals(assignment_id, student_id, due_date, grading_period_id, anonymous_id, cached_quiz_lti)
             INNER JOIN #{Assignment.quoted_table_name} assignments
               ON assignments.id = vals.assignment_id
             LEFT OUTER JOIN #{Submission.quoted_table_name} submissions
@@ -280,6 +289,7 @@ class DueDateCacher
           previous_cached_dates: cached_due_dates_by_submission
         )
       end
+      User.clear_cache_keys(values.map{|v| v[1]}, :submissions)
     end
 
     if @update_grades
@@ -388,5 +398,16 @@ class DueDateCacher
   def record_due_date_changed_events?
     # Only audit if we have a user and at least one auditable assignment
     @record_due_date_changed_events ||= @executing_user_id.present? && @assignments_auditable_by_id.present?
+  end
+
+  def quiz_lti_assignments
+    # We only care about quiz LTIs, so we'll only snag those. In fact,
+    # we only care if the assignment *is* a quiz, LTI, so we'll just
+    # keep a set of those assignment ids.
+    @quiz_lti_assignments ||=
+      ContentTag.joins("INNER JOIN #{ContextExternalTool.quoted_table_name} ON content_tags.content_type='ContextExternalTool' AND context_external_tools.id = content_tags.content_id").
+        merge(ContextExternalTool.quiz_lti).
+        where(context_type: 'Assignment', context_id: @assignment_ids).
+        where.not(workflow_state: 'deleted').distinct.pluck(:context_id).to_set
   end
 end

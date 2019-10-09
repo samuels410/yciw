@@ -32,17 +32,54 @@ describe UserMerge do
       expect(user2).to be_deleted
     end
 
+    it 'fails if a user is a test user' do
+      fake_student = course1.student_view_student
+      expect { UserMerge.from(user2).into(fake_student) }.to raise_error('cannot merge a test student')
+    end
+
+    it 'should require mark as failed on failure users' do
+      mergeme = UserMerge.from(user2)
+      # make any method that gets called raise an error
+      allow(mergeme).to receive(:copy_favorites).and_raise('boom')
+      expect { mergeme.into(user1) }.to raise_error('boom')
+      expect(mergeme.merge_data.workflow_state).to eq 'failed'
+      expect(mergeme.merge_data.items.where(item_type: 'merge_error').take.item.first).to eq 'boom'
+    end
+
     it "should move pseudonyms to the new user" do
       pseudonym = user2.pseudonyms.create!(unique_id: 'sam@yahoo.com')
       pseudonym2 = user2.pseudonyms.create!(unique_id: 'sam2@yahoo.com')
       UserMerge.from(user2).into(user1)
       merge_data = UserMergeData.where(user_id: user1).first
       expect(merge_data.from_user_id).to eq user2.id
-      expect(merge_data.user_merge_data_records.pluck(:context_id).sort).to eq [pseudonym.id, pseudonym2.id].sort
+      expect(merge_data.records.pluck(:context_id).sort).to eq [pseudonym.id, pseudonym2.id].sort
       user2.reload
       expect(user2.pseudonyms).to be_empty
       user1.reload
       expect(user1.pseudonyms.map(&:unique_id)).to be_include('sam@yahoo.com')
+    end
+
+    it "should move lti_id to the new users" do
+      user_1_old_lti = user1.lti_id
+      old_lti = user2.lti_id
+      old_lti_context = user2.lti_context_id
+      course1.enroll_user(user1)
+      course2.enroll_user(user2)
+      UserMerge.from(user2).into(user1)
+      expect(user1.reload.past_lti_ids.take.user_lti_id).to eq old_lti
+      expect(user1.past_lti_ids.take.user_lti_context_id).to eq old_lti_context
+      user3 = user_model
+      UserMerge.from(user1).into(user3)
+      expect(user3.reload.past_lti_ids.where(context_id: course1).take.user_lti_id).to eq user_1_old_lti
+      expect(user3.past_lti_ids.where(context_id: course2).take.user_lti_id).to eq old_lti
+    end
+
+    it "should move past_lti_id to the new user multiple merges with conflict" do
+      course1.enroll_user(user1)
+      course2.enroll_user(user2)
+      UserPastLtiId.create!(user: user2, context: course2, user_uuid: 'fake_uuid', user_lti_id: 'fake_lti_id_from_old_merge')
+      UserMerge.from(user2).into(user1)
+      expect(user1.reload.past_lti_ids.take.user_lti_id).to eq 'fake_lti_id_from_old_merge'
     end
 
     it "should move admins to the new user" do
@@ -51,7 +88,7 @@ describe UserMerge do
       UserMerge.from(user2).into(user1)
       merge_data = UserMergeData.where(user_id: user1).first
       expect(merge_data.from_user_id).to eq user2.id
-      expect(merge_data.user_merge_data_records.where(context_type: 'AccountUser').first.context_id).to eq admin.id
+      expect(merge_data.records.where(context_type: 'AccountUser').first.context_id).to eq admin.id
       user1.reload
       expect(user1.account_users.first.id).to eq admin.id
     end
@@ -228,7 +265,7 @@ describe UserMerge do
       UserMerge.from(user1).into(user2)
       user1.reload
       user2.reload
-      records = UserMergeData.where(user_id: user2).take.user_merge_data_records
+      records = UserMergeData.where(user_id: user2).take.records
       expect(records.count).to eq 8
       record = records.where(context_id: cc1).take
       expect(record.previous_user_id).to eq user1.id
@@ -277,12 +314,12 @@ describe UserMerge do
 
       UserMerge.from(user1).into(user2)
       merge_data = UserMergeData.where(user_id: user2).first
-      expect(merge_data.user_merge_data_records.pluck(:context_id).sort).
+      expect(merge_data.records.pluck(:context_id).sort).
         to eq [enrollment1.id, enrollment3.id, enrollment4.id].sort
       enrollment1.reload
       expect(enrollment1.user).to eq user1
       expect(enrollment1).to be_deleted
-      merge_data_record = merge_data.user_merge_data_records.where(context_id: enrollment1).first
+      merge_data_record = merge_data.records.where(context_id: enrollment1).first
       expect(merge_data_record.previous_workflow_state).to eq 'invited'
       enrollment2.reload
       expect(enrollment2).to be_active
@@ -303,20 +340,20 @@ describe UserMerge do
       UserMerge.from(user2).into(user1)
       merge_data = UserMergeData.where(user_id: user1).first
 
-      expect(merge_data.user_merge_data_records.pluck(:context_id).sort).
+      expect(merge_data.records.pluck(:context_id).sort).
         to eq [enrollment1.id, enrollment2.id].sort
       enrollment1.reload
       expect(enrollment1.user).to eq user1
       expect(enrollment1.workflow_state).to eq 'active'
       expect(enrollment1.enrollment_state.state).to eq 'active'
-      merge_data_record = merge_data.user_merge_data_records.where(context_id: enrollment1).first
+      merge_data_record = merge_data.records.where(context_id: enrollment1).first
       expect(merge_data_record.previous_workflow_state).to eq 'invited'
 
       enrollment2.reload
       expect(enrollment2.user).to eq user2
       expect(enrollment2.workflow_state).to eq 'deleted'
       expect(enrollment2.enrollment_state.state).to eq 'deleted'
-      merge_data_record2 = merge_data.user_merge_data_records.where(context_id: enrollment2).first
+      merge_data_record2 = merge_data.records.where(context_id: enrollment2).first
       expect(merge_data_record2.previous_workflow_state).to eq 'active'
     end
 
@@ -357,7 +394,7 @@ describe UserMerge do
 
       UserMerge.from(user1).into(user2)
       merge_data = UserMergeData.where(user_id: user2).first
-      o = merge_data.user_merge_data_records.where(context_id: enrollment2).first
+      o = merge_data.records.where(context_id: enrollment2).first
       expect(o.previous_workflow_state).to eq 'active'
       expect(enrollment1.reload.user).to eql user2
       expect(enrollment2.reload.workflow_state).to eql 'deleted'
@@ -379,8 +416,9 @@ describe UserMerge do
 
       observer1 = user_with_pseudonym
       observer2 = user_with_pseudonym
-      user1.linked_observers << observer1 << observer2
-      user2.linked_observers << observer2
+      add_linked_observer(user1, observer1)
+      add_linked_observer(user1, observer2)
+      add_linked_observer(user2, observer2)
       expect(ObserverEnrollment.count).to eql 3
       Enrollment.where(user_id: observer2, associated_user_id: user1).update_all(workflow_state: 'completed')
 
@@ -396,12 +434,13 @@ describe UserMerge do
     it "should move and uniquify observers" do
       observer1 = user_model
       observer2 = user_model
-      user1.linked_observers << observer1 << observer2
-      user2.linked_observers << observer2
+      add_linked_observer(user1, observer1)
+      add_linked_observer(user1, observer2)
+      add_linked_observer(user2, observer2)
 
       UserMerge.from(user1).into(user2)
       data = UserMergeData.where(user_id: user2).first
-      expect(data.user_merge_data_records.where(context_type: 'UserObservationLink').count).to eq 2
+      expect(data.records.where(context_type: 'UserObservationLink').count).to eq 2
       user1.reload
       expect(user1.linked_observers).to be_empty
       expect(UserObservationLink.where(:student => user1).first.workflow_state).to eq 'deleted'
@@ -412,8 +451,9 @@ describe UserMerge do
     it "should move and uniquify observed users" do
       student1 = user_model
       student2 = user_model
-      user1.linked_students << student1 << student2
-      user2.linked_students << student2
+      add_linked_observer(student1, user1)
+      add_linked_observer(student2, user1)
+      add_linked_observer(student2, user2)
 
       UserMerge.from(user1).into(user2)
       user1.reload
@@ -649,13 +689,56 @@ describe UserMerge do
   context "sharding" do
     specs_require_sharding
 
-    it 'should merge with user_services acorss shards' do
+    it 'should move prefs over' do
+      @shard1.activate do
+        @user2 = user_model
+        account = Account.create!
+        @shard_course = course_factory(account: account)
+        @user2.preferences[:custom_colors] = {"course_#{@course.id}"=>"#254284"}
+      end
+      course = course_factory
+      user1 = user_model
+      @user2.preferences[:custom_colors]["course_#{course.global_id}"] = "#346543"
+      @user2.save!
+      UserMerge.from(@user2).into(user1)
+      expect(user1.reload.preferences[:custom_colors].keys).to eq ["course_#{@shard_course.global_id}", "course_#{course.id}"]
+    end
+
+    it 'should move nicknames' do
+      @shard1.activate do
+        @user2 = user_model
+        account = Account.create!
+        @shard_course = course_factory(account: account)
+        @user2.preferences[:course_nicknames] = {@shard_course.id=>"Marketing"}
+      end
+      course = course_factory
+      user1 = user_model
+      @user2.preferences[:course_nicknames][course.global_id] = "Math"
+      @user2.save!
+      UserMerge.from(@user2).into(user1)
+      expect(user1.reload.preferences[:course_nicknames].keys).to eq [@shard_course.global_id, course.id]
+    end
+
+    it 'should handle favorites' do
+      @shard1.activate do
+        @user2 = user_model
+        account = Account.create!
+        @shard_course = course_factory(account: account)
+        @shard_course.enroll_user(@user2)
+        @fav = Favorite.create!(user: @user2, context: @shard_course)
+      end
+      user1 = user_model
+      UserMerge.from(@user2).into(user1)
+      expect(user1.favorites.take.context_id).to eq @shard_course.global_id
+    end
+
+    it 'should merge with user_services across shards' do
       user1 = user_model
       @shard1.activate do
         @user2 = user_model
         user_service_model(user: @user2)
       end
-      UserMerge.from(@user2).into(user1)
+      expect { UserMerge.from(@user2).into(user1) }.to_not raise_error
     end
 
     it "should merge a user across shards" do
@@ -844,7 +927,8 @@ describe UserMerge do
       UserMerge.from(user1).into(@user2)
       run_jobs
 
-      expect(@user2.attachments.not_deleted.count).to eq 5
+      # 3 from user1, and 3 from @user2
+      expect(@user2.attachments.not_deleted.count).to eq 6
 
       new_user2_attachment1 = @user2.attachments.not_deleted.detect{|a| a.md5 == user1_attachment2.md5 && a.id != @user2_attachment2.id}
       expect(new_user2_attachment1.root_attachment).to eq @user2_attachment2

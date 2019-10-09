@@ -64,8 +64,9 @@ class Attachment < ActiveRecord::Base
   belongs_to :cloned_item
   belongs_to :folder
   belongs_to :user
-  has_one :account_report
+  has_one :account_report, inverse_of: :attachment
   has_one :media_object
+  has_many :submission_draft_attachments, inverse_of: :attachment
   has_many :submissions, -> { active }
   has_many :attachment_associations
   belongs_to :root_attachment, :class_name => 'Attachment'
@@ -307,13 +308,21 @@ class Attachment < ActiveRecord::Base
     excluded_atts = EXCLUDED_COPY_ATTRIBUTES
     excluded_atts += ["locked", "hidden"] if dup == existing && !options[:migration]&.for_master_course_import?
     dup.assign_attributes(self.attributes.except(*excluded_atts))
-
+    dup.context = context
     # avoid cycles (a -> b -> a) and self-references (a -> a) in root_attachment_id pointers
     if dup.new_record? || ![self.id, self.root_attachment_id].include?(dup.id)
-      dup.root_attachment_id = self.root_attachment_id || self.id
+      if self.shard == dup.shard
+        dup.root_attachment_id = self.root_attachment_id || self.id
+      else
+        if existing_attachment = dup.find_existing_attachment_for_md5
+          dup.root_attachment = existing_attachment
+        else
+          dup.write_attribute(:filename, self.filename)
+          Attachments::Storage.store_for_attachment(dup, self.open)
+        end
+      end
     end
-    dup.write_attribute(:filename, self.filename) unless dup.root_attachment_id?
-    dup.context = context
+    dup.write_attribute(:filename, self.filename) unless dup.read_attribute(:filename) || dup.root_attachment_id?
     dup.migration_id = options[:migration_id] || CC::CCHelper.create_key(self)
     dup.mark_as_importing!(options[:migration]) if options[:migration]
     if context.respond_to?(:log_merge_result)
@@ -1249,7 +1258,7 @@ class Attachment < ActiveRecord::Base
   def locked_for?(user, opts={})
     return false if opts[:check_policies] && self.grants_right?(user, :read_as_admin)
     return {:asset_string => self.asset_string, :manually_locked => true} if self.locked || Folder.is_locked?(self.folder_id)
-    Rails.cache.fetch(locked_cache_key(user), :expires_in => 1.minute) do
+    RequestCache.cache(locked_request_cache_key(user)) do
       locked = false
       if (self.unlock_at && Time.now < self.unlock_at)
         touch_on_unlock if Time.now + 1.hour >= self.unlock_at
@@ -1336,10 +1345,22 @@ class Attachment < ActiveRecord::Base
 
   scope :not_hidden, -> { where("attachments.file_state<>'hidden'") }
   scope :not_locked, -> {
-    where("(attachments.locked IS NULL OR attachments.locked=?) AND ((attachments.lock_at IS NULL) OR
-      (attachments.lock_at>? OR (attachments.unlock_at IS NOT NULL AND attachments.unlock_at<?)))", false, Time.now.utc, Time.now.utc)
+    where("attachments.locked IS NOT TRUE
+      AND (attachments.lock_at IS NULL OR attachments.lock_at>?)
+      AND (attachments.unlock_at IS NULL OR attachments.unlock_at<?)", Time.now.utc, Time.now.utc)
   }
+
   scope :by_content_types, lambda { |types|
+    condition_sql = build_content_types_sql(types)
+    where(condition_sql)
+  }
+
+  scope :by_exclude_content_types, lambda { |types|
+    condition_sql = build_content_types_sql(types)
+    where.not(condition_sql)
+  }
+
+  def self.build_content_types_sql(types)
     clauses = []
     types.each do |type|
       if type.include? '/'
@@ -1349,8 +1370,7 @@ class Attachment < ActiveRecord::Base
       end
     end
     condition_sql = clauses.join(' OR ')
-    where(condition_sql)
-  }
+  end
 
   alias_method :destroy_permanently!, :destroy
   # file_state is like workflow_state, which was already taken
@@ -1377,25 +1397,59 @@ class Attachment < ActiveRecord::Base
       att.send_to_purgatory(deleted_by_user)
       att.destroy_content
       att.thumbnail&.destroy
-      new_name = 'file_removed.pdf'
-      file_removed_file = File.open Rails.root.join('public', 'file_removed', new_name)
-      # TODO set the instfs_uuid of the attachment to a single "file removed" file to avoid
-      # upload the same file over and over. This instfs_uuid should be retrieved from the inst-fs services
-      Attachments::Storage.store_for_attachment(att, file_removed_file)
+
+      file_removed_path = self.class.file_removed_path
+      new_name = File.basename(file_removed_path)
+
+      if att.instfs_hosted? && InstFS.enabled?
+        # dupliciate the base file_removed file to a unique uuid
+        att.instfs_uuid = InstFS.duplicate_file(self.class.file_removed_base_instfs_uuid)
+      else
+        Attachments::Storage.store_for_attachment(att, File.open(file_removed_path))
+      end
       att.filename = new_name
       att.display_name = new_name
       att.content_type = "application/pdf"
       CrocodocDocument.where(attachment_id: att.children_and_self.select(:id)).delete_all
-      Canvadoc.where(attachment_id: att.children_and_self.select(:id)).delete_all
+      canvadoc_scope = Canvadoc.where(attachment_id: att.children_and_self.select(:id))
+      CanvadocsSubmission.where(:canvadoc_id => canvadoc_scope.select(:id)).delete_all
+      canvadoc_scope.delete_all
       att.save!
+    end
+  end
+
+  def self.file_removed_path
+    Rails.root.join('public', 'file_removed', 'file_removed.pdf')
+  end
+
+  # find the file_removed file on instfs (or upload it)
+  def self.file_removed_base_instfs_uuid
+    # i imagine that inevitably someone is going to change the file without knowing about any of this
+    # so make the cache depend on the file contents
+    path = self.file_removed_path
+    @@file_removed_md5 ||= Digest::MD5.hexdigest(File.read(path))
+    key = "file_removed_instfs_uuid_#{@@file_removed_md5}_#{Digest::MD5.hexdigest(InstFS.app_host)}"
+
+    @@base_file_removed_uuids ||= {}
+    @@base_file_removed_uuids[key] ||= Rails.cache.fetch(key) do
+      # re-upload and save the uuid - it's okay if we end up repeating this every now and then
+      # it's at least an improvement over re-uploading the file _every time_ we replace
+      InstFS.direct_upload(
+        file_object: File.open(path),
+        file_name: File.basename(path)
+      )
     end
   end
 
   # this method does not destroy anything. It copies the content to a new s3object
   def send_to_purgatory(deleted_by_user = nil)
     make_rootless
+    new_instfs_uuid = nil
     if Attachment.s3_storage? && self.s3object.exists?
       s3object.copy_to(bucket.object(purgatory_filename))
+    elsif self.instfs_hosted? && InstFS.enabled?
+      # copy to a new instfs file
+      new_instfs_uuid = InstFS.duplicate_file(self.instfs_uuid)
     elsif Attachment.local_storage?
       FileUtils.mkdir(local_purgatory_directory) unless File.exist?(local_purgatory_directory)
       FileUtils.cp full_filename, local_purgatory_file
@@ -1406,10 +1460,12 @@ class Attachment < ActiveRecord::Base
       p.old_filename = filename
       p.old_display_name = display_name
       p.old_content_type = content_type
+      p.new_instfs_uuid = new_instfs_uuid
       p.workflow_state = 'active'
       p.save!
     else
-      Purgatory.create!(attachment: self, old_filename: filename, old_display_name: display_name, old_content_type: content_type, deleted_by_user: deleted_by_user)
+      Purgatory.create!(attachment: self, old_filename: filename, old_display_name: display_name,
+        old_content_type: content_type, new_instfs_uuid: new_instfs_uuid, deleted_by_user: deleted_by_user)
     end
   end
 
@@ -1428,12 +1484,21 @@ class Attachment < ActiveRecord::Base
   def resurrect_from_purgatory
     p = Purgatory.where(attachment_id: id).take
     raise 'must have been sent to purgatory first' unless p
+    raise "purgatory record has expired" if p.workflow_state == "expired"
+
     write_attribute(:filename, p.old_filename)
     write_attribute(:display_name, p.old_display_name)
     write_attribute(:content_type, p.old_content_type)
     write_attribute(:root_attachment_id, nil)
 
-    if Attachment.s3_storage?
+    if InstFS.enabled?
+      if p.new_instfs_uuid
+        # just set it to the copied uuid, shouldn't get deleted when expired since we'll set p to 'restored'
+        write_attribute(:instfs_uuid, p.new_instfs_uuid)
+      else
+        raise "purgatory record was created before being fixed for inst-fs"
+      end
+    elsif Attachment.s3_storage?
       old_s3object = self.bucket.object(purgatory_filename)
       raise Attachment::FileDoesNotExist unless old_s3object.exists?
       old_s3object.copy_to(bucket.object(full_filename))
@@ -1454,9 +1519,8 @@ class Attachment < ActiveRecord::Base
     raise 'must be a root_attachment' if self.root_attachment_id
     return unless self.filename
     if instfs_hosted?
+      InstFS.delete_file(self.instfs_uuid)
       self.instfs_uuid = nil
-      # TODO: once inst-fs has a delete method, call here
-      # for now these objects will be orphaned
     elsif Attachment.s3_storage?
       self.s3object.delete unless ApplicationController.test_cluster?
     else

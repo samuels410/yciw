@@ -16,14 +16,13 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-import React, {Component, Fragment} from 'react'
+import React, {Component} from 'react'
 import {func, instanceOf} from 'prop-types'
-import CloseButton from '@instructure/ui-buttons/lib/components/CloseButton'
-import Flex, {FlexItem} from '@instructure/ui-layout/lib/components/Flex'
-import Heading from '@instructure/ui-elements/lib/components/Heading'
-import Spinner from '@instructure/ui-elements/lib/components/Spinner'
-import Tray from '@instructure/ui-overlays/lib/components/Tray'
-import View from '@instructure/ui-layout/lib/components/View'
+import {CloseButton} from '@instructure/ui-buttons'
+import {Flex, FlexItem, View} from '@instructure/ui-layout'
+import {Heading, Spinner} from '@instructure/ui-elements'
+import {Tray} from '@instructure/ui-overlays'
+
 import I18n from 'i18n!speed_grader'
 
 import AssessmentSummary from './components/AssessmentSummary'
@@ -47,9 +46,6 @@ export default class AssessmentAuditTray extends Component {
   constructor(props) {
     super(props)
 
-    this.dismiss = this.dismiss.bind(this)
-    this.show = this.show.bind(this)
-
     this.state = {
       auditEventsLoaded: false,
       auditTrail: buildAuditTrail({}),
@@ -57,11 +53,11 @@ export default class AssessmentAuditTray extends Component {
     }
   }
 
-  dismiss() {
+  dismiss = () => {
     this.setState({open: false})
   }
 
-  show(context) {
+  show = context => {
     this.setState({
       ...context,
       auditEventsLoaded: false,
@@ -114,7 +110,7 @@ export default class AssessmentAuditTray extends Component {
           </Flex>
 
           {this.state.auditEventsLoaded ? (
-            <Fragment>
+            <>
               <View as="div" margin="small">
                 <AssessmentSummary
                   anonymityDate={this.state.auditTrail.anonymityDate}
@@ -128,7 +124,7 @@ export default class AssessmentAuditTray extends Component {
               <View as="div" margin="small">
                 <AuditTrail auditTrail={this.state.auditTrail} />
               </View>
-            </Fragment>
+            </>
           ) : (
             <Spinner title={I18n.t('Loading assessment audit trail')} />
           )}

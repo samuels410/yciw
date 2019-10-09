@@ -31,13 +31,9 @@ const actions = {
 
 let wrapper = 'empty wrapper'
 
-const menuContentsNode = () => wrapper.find('Portal').instance().DOMNode
+const menuContentsNode = () => wrapper.find('Portal').at(0).instance().DOMNode
 
 beforeEach(() => {
-  window.ENV = {
-    LTI_1_3_ENABLED: true
-  }
-
   wrapper = mount(
     <DeveloperKeyModalTrigger store={store} actions={actions} setAddKeyButtonRef={() => {}} />
   )

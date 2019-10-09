@@ -60,10 +60,18 @@ class ExternalContentController < ApplicationController
       render_unauthorized_action and return unless json_data[:oauth_consumer_key] == params[:oauth_consumer_key]
     end
     @headers = false
-    js_env(retrieved_data: (@retrieved_data || {}), lti_response_messages: lti_response_messages,
-           service: params[:service], service_id: params[:id])
-  end
 
+    js_env({
+      retrieved_data: (@retrieved_data || {}),
+      lti_response_messages: lti_response_messages,
+      service: params[:service],
+      service_id: params[:id],
+      message: params[:lti_msg],
+      log: params[:lti_log],
+      error_message: params[:lti_errormsg],
+      error_log: params[:lti_errorlog]
+    })
+  end
 
   def normalize_deprecated_data!
     params[:return_type] = params[:embed_type] if !params.key?(:return_type) && params.key?(:embed_type)

@@ -23,14 +23,12 @@ import I18n from 'i18n!react_developer_keys'
 import React from 'react'
 import PropTypes from 'prop-types'
 
-import Button from '@instructure/ui-buttons/lib/components/Button'
-import CloseButton from '@instructure/ui-buttons/lib/components/CloseButton'
-import Flex, { FlexItem } from '@instructure/ui-layout/lib/components/Flex'
-import Popover, { PopoverTrigger, PopoverContent } from '@instructure/ui-overlays/lib/components/Popover'
-import Image from '@instructure/ui-elements/lib/components/Img'
-import Link from '@instructure/ui-elements/lib/components/Link'
-import ScreenReaderContent from '@instructure/ui-a11y/lib/components/ScreenReaderContent'
-import View from '@instructure/ui-layout/lib/components/View'
+import {Button, CloseButton} from '@instructure/ui-buttons'
+import {Flex, FlexItem, View} from '@instructure/ui-layout'
+import {IconLtiLine} from '@instructure/ui-icons'
+import {Popover, Tooltip} from '@instructure/ui-overlays'
+import {Img, Link} from '@instructure/ui-elements'
+import {ScreenReaderContent} from '@instructure/ui-a11y'
 
 import DeveloperKeyActionButtons from './ActionButtons'
 import DeveloperKeyStateControl from './InheritanceStateControl'
@@ -95,7 +93,7 @@ class DeveloperKey extends React.Component {
               textAlign="center"
               margin="0 small 0 0"
         >
-          <Image
+          <Img
             src={developerKey.icon_url}
             constrain="contain"
             alt={I18n.t('%{toolName} Logo', {toolName: this.getToolName()})}
@@ -143,7 +141,7 @@ class DeveloperKey extends React.Component {
         <td>
           <Flex>
             {this.makeImage(developerKey)}
-            <FlexItem shrink="true">
+            <FlexItem shrink>
             {this.getToolName(developerKey)}
             </FlexItem>
           </Flex>
@@ -176,7 +174,7 @@ class DeveloperKey extends React.Component {
                   onDismiss={this.handleShowKey}
                   label={I18n.t("Key")}
                 >
-                  <PopoverTrigger>
+                  <Popover.Trigger>
                     <Button onClick={this.handleShowKey} size="small">
                       {
                         this.state.showKey ?
@@ -187,8 +185,8 @@ class DeveloperKey extends React.Component {
                         {this.getToolName()}
                       </ScreenReaderContent>
                     </Button>
-                  </PopoverTrigger>
-                  <PopoverContent>
+                  </Popover.Trigger>
+                  <Popover.Content>
                     <CloseButton
                       placement="end"
                       offset="x-small"
@@ -200,7 +198,7 @@ class DeveloperKey extends React.Component {
                     <View padding="large small small small" display="block">
                       { developerKey.api_key }
                     </View>
-                  </PopoverContent>
+                  </Popover.Content>
                 </Popover>
               </div>
             }
@@ -225,7 +223,18 @@ class DeveloperKey extends React.Component {
             </div>
           </td>
         }
-
+        <td>
+          {developerKey.is_lti_key
+            ?  <Tooltip
+                tip={I18n.t("Developer key is an external tool.")}
+                on={['click', 'hover', 'focus']}
+              >
+                <Button variant="icon" icon={IconLtiLine}>
+                  <ScreenReaderContent>{I18n.t("Toggle ToolTip")}</ScreenReaderContent>
+                </Button>
+              </Tooltip>
+            : null}
+        </td>
         <td>
           <DeveloperKeyStateControl
             ref={this.refToggleGroup}
@@ -274,7 +283,8 @@ DeveloperKey.propTypes = {
     visible: PropTypes.bool,
     name: PropTypes.string,
     user_id: PropTypes.string,
-    workflow_state: PropTypes.string
+    workflow_state: PropTypes.string,
+    is_lti_key: PropTypes.bool
   }).isRequired,
   ctx: PropTypes.shape({
     params: PropTypes.shape({

@@ -44,14 +44,14 @@ class GradebookSettingsController < ApplicationController
           :assignment_group_id
         ],
         filter_rows_by: [
-          :section_id
+          :section_id,
+          :student_group_id
         ],
         selected_view_options_filters: []
       },
       :enter_grades_as,
       :show_concluded_enrollments,
       :show_inactive_enrollments,
-      :show_final_grade_overrides,
       :show_unpublished_assignments,
       :student_column_display_as,
       :student_column_secondary_info,

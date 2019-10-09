@@ -16,15 +16,20 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
+const {defaults} = require('jest-config')
+
 module.exports = {
   moduleNameMapper: {
     '^i18n!(.*$)': '<rootDir>/jest/i18nTransformer.js',
+    "\\.svg$": "<rootDir>/jest/imageMock.js",
     '^compiled/(.*)$': '<rootDir>/app/coffeescripts/$1',
+    '^coffeescripts/(.*)$': '<rootDir>/app/coffeescripts/$1',
     '^jsx/(.*)$': '<rootDir>/app/jsx/$1',
+    '^jst/(.*)$': '<rootDir>/app/views/jst/$1',
     "^timezone$": "<rootDir>/public/javascripts/timezone_core.js",
-    "\\.svg$": "<rootDir>/jest/imageMock.js"
+    'node_modules-version-of-backbone': require.resolve('backbone')
   },
-  roots: ['app/jsx'],
+  roots: ['app/jsx', 'app/coffeescripts', 'public/javascripts'],
   moduleDirectories: [
     'node_modules',
     'public/javascripts',
@@ -39,15 +44,26 @@ module.exports = {
     'jest-canvas-mock',
     '<rootDir>/jest/jest-setup.js'
   ],
-  setupTestFrameworkScriptFile: '<rootDir>/jest/jest-setup-framework.js',
+  setupFilesAfterEnv: [
+    '@testing-library/jest-dom/extend-expect',
+    './app/jsx/__tests__/ValidatedApolloCleanup'
+  ],
   testMatch: [
     '**/__tests__/**/?(*.)(spec|test).js'
   ],
 
   coverageDirectory: '<rootDir>/coverage-jest/',
 
+  moduleFileExtensions: [...defaults.moduleFileExtensions, 'coffee', 'handlebars'],
+  restoreMocks: true,
+
+  testEnvironment: 'jest-environment-jsdom-fourteen',
+
   transform: {
     '^i18n': '<rootDir>/jest/i18nTransformer.js',
-    '^.+\\.jsx?$': 'babel-jest'
+    '^.+\\.coffee': '<rootDir>/jest/coffeeTransformer.js',
+    '^.+\\.handlebars': '<rootDir>/jest/handlebarsTransformer.js',
+    '^.+\\.jsx?$': 'babel-jest',
+    '\\.graphql$': 'jest-raw-loader'
   },
 }

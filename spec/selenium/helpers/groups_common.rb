@@ -348,13 +348,8 @@ module GroupsCommon
   end
 
   def expand_files_on_content_pane
-    expect(f('#editor_tabs')).to be_displayed
-    Selenium::WebDriver::Wait.new(timeout: 5).until do
-      fj('.ui-state-default.ui-corner-top:contains("Files")').present?
-    end
-    fj('.ui-state-default.ui-corner-top:contains("Files")').click
     wait_for_ajaximations
-    f('.sign.plus').click
+    fj('[role="tablist"] [role="presentation"]:not([aria-disabled]):contains("Files")').click
     wait_for_ajaximations
   end
 
@@ -391,7 +386,7 @@ module GroupsCommon
     # User.create! creates a course user, who won't be able to access the page
     user_session(User.create!(name: 'course student'))
     get path
-    expect(f('.ui-state-error')).to be_displayed
+    expect(f('#unauthorized_message')).to be_displayed
   end
 
   def edit_group_announcement

@@ -19,11 +19,12 @@
 class GradingStandard < ActiveRecord::Base
   include Workflow
 
-  belongs_to :context, polymorphic: [:account, :course]
+  belongs_to :context, polymorphic: [:account, :course], required: true
   belongs_to :user
   has_many :assignments
 
-  validates :context_id, :context_type, :workflow_state, :data, presence: true
+  validates :workflow_state, presence: true
+  validates :data, presence: true
   validate :valid_grading_scheme_data
   validate :full_range_scheme
 
@@ -124,23 +125,14 @@ class GradingStandard < ActiveRecord::Base
     ordered_scheme.max_by {|_, lower_bound| score >= lower_bound * 100 ? lower_bound : -lower_bound }[0]
   end
 
-  def lower_bound(score)
-    best_index = 0
-    grading_standard_data = data.reverse
-
-    grading_standard_data.each_with_index do |grade_bracket, index|
-      best_index = index if score >= grade_bracket[1] * 100
-    end
-
-    grading_standard_data[best_index][1] * 100
-  end
-
   def data=(new_val)
     self.version = VERSION
     # round values to the nearest 0.01 (0.0001 since e.g. 78 is stored as .78)
     # and dup the data while we're at it. (new_val.dup only dups one level, the
     # elements of new_val.dup are the same objects as the elements of new_val)
-    new_val = new_val.map{ |grade_name, lower_bound| [ grade_name, lower_bound.round(4) ] } unless new_val.nil?
+    if new_val.respond_to?(:map)
+      new_val = new_val.map{ |grade_name, lower_bound| [ grade_name, lower_bound.round(4) ] }
+    end
     write_attribute(:data, new_val)
     @ordered_scheme = nil
   end

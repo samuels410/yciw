@@ -22,7 +22,6 @@ describe "external tool buttons" do
 
   before (:each) do
     course_with_teacher_logged_in
-    enable_all_rcs @course.account
     stub_rcs_config
   end
 
@@ -57,12 +56,12 @@ describe "external tool buttons" do
     editor_html
     expect(editor_text).to eq ""
 
-    expect(f("#external_tool_button_dialog")).to be_displayed
+    expect(f("#external_tool_button_frame")).to be_displayed
 
     in_frame('external_tool_button_frame', element) do
       f(element).click
     end
-    expect(f("body")).not_to contain_jqcss("#external_tool_button_dialog:visible")
+    expect(f("body")).not_to contain_jqcss("#external_tool_button_frame:visible")
   end
 
   it "should allow inserting basic lti links from external tool buttons", priority: "1", test_id: 2624914 do

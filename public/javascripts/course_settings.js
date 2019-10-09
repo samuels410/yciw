@@ -42,7 +42,7 @@ import 'jqueryui/tabs'
   var GradePublishing = {
     status: null,
     checkup: function () {
-      $.ajaxJSON($("#publish_to_sis_form").attr('action'), 'GET', {}, function(data) {
+      $.ajaxJSON($("#publish_to_sis_form").attr('action'), 'GET', {}, data => {
         if (!data.hasOwnProperty("sis_publish_overall_status")) return;
         GradePublishing.status = data.sis_publish_overall_status;
         GradePublishing.update(data.hasOwnProperty("sis_publish_statuses") ? data.sis_publish_statuses : {});
@@ -73,7 +73,7 @@ import 'jqueryui/tabs'
       }
       var $messages = $("#publish_grades_messages");
       $messages.empty();
-      $.each(messages, function(message, users) {
+      $.each(messages, (message, users) => {
         var $message = $("<span/>");
         $message.text(message);
         var $item = $("<li/>");
@@ -105,7 +105,7 @@ import 'jqueryui/tabs'
         $.flashError(I18n.t('Something went wrong when trying to sync grades to the student information system. Please try again later.'));
         GradePublishing.update({});
       };
-      $.ajaxJSON($publish_to_sis_form.attr('action'), 'POST', $publish_to_sis_form.getFormData(), function(data) {
+      $.ajaxJSON($publish_to_sis_form.attr('action'), 'POST', $publish_to_sis_form.getFormData(), data => {
         if (!data.hasOwnProperty("sis_publish_overall_status") || !successful_statuses.hasOwnProperty(data["sis_publish_overall_status"])) {
           error(null, null, I18n.t('Invalid SIS sync status'), null);
           return;
@@ -143,7 +143,7 @@ import 'jqueryui/tabs'
           data: section,
           hrefValues: ['id']
         });
-        $section.find('.screenreader-only').each(function(_index, el) {
+        $section.find('.screenreader-only').each((_index, el) => {
           var $el = $(el);
           $el.text($el.text().replace('%%name%%', section.name));
         });
@@ -185,7 +185,7 @@ import 'jqueryui/tabs'
       }
     })
     .find(":text")
-      .bind('blur', function() {
+      .bind('blur', () => {
         $edit_section_form.submit();
       })
       .keycodes('return esc', function(event) {
@@ -240,7 +240,7 @@ import 'jqueryui/tabs'
       return true;
     });
 
-    $(".edit_nav_link").click(function(event) {
+    $(".edit_nav_link").click(event => {
       event.preventDefault();
       $("#nav_form").dialog({
         modal: true,
@@ -255,7 +255,7 @@ import 'jqueryui/tabs'
       axis: 'y'
     }).disableSelection();
 
-    $(document).fragmentChange(function(event, hash) {
+    $(document).fragmentChange((event, hash) => {
       function handleFragmentType(val){
         $("#tab-users-link").click();
         $(".add_users_link:visible").click();
@@ -275,14 +275,14 @@ import 'jqueryui/tabs'
         $("#course_account_id").val(ui.item.id);
       }
     });
-    $(".move_course_link").click(function(event) {
+    $(".move_course_link").click(event => {
       event.preventDefault();
       $("#move_course_dialog").dialog({
         title: I18n.t('titles.move_course', "Move Course"),
         width: 500
       }).fixDialogButtons();
     });
-    $("#move_course_dialog").delegate('.cancel_button', 'click', function() {
+    $("#move_course_dialog").delegate('.cancel_button', 'click', () => {
       $("#move_course_dialog").dialog('close');
     });
     $course_form.find(".grading_standard_checkbox").change(function() {
@@ -294,6 +294,7 @@ import 'jqueryui/tabs'
       var date = $(this).data('unfudged-date');
       var isMidnight = tz.isMidnight(date);
       $warning.detach().appendTo($parent).showIf(isMidnight);
+      $(this).attr('aria-describedby', isMidnight ? 'course_conclude_at_warning' : null)
     });
     $course_form.formSubmit({
       beforeSubmit: function(data) {
@@ -316,7 +317,7 @@ import 'jqueryui/tabs'
       var $enrollment = $(this).parents(".enrollment_link");
       var user_data = $user.getTemplateData({textValues: ['name']});
       var enrollment_data = $enrollment.getTemplateData({textValues: ['enrollment_id', 'associated_user_id']});
-      link_enrollment.choose(user_data.name, enrollment_data.enrollment_id, enrollment_data.associated_user_id, function(enrollment) {
+      link_enrollment.choose(user_data.name, enrollment_data.enrollment_id, enrollment_data.associated_user_id, enrollment => {
         if(enrollment) {
           var $user = $(".observer_enrollments .user_" + enrollment.user_id)
           var $enrollment_link = $user.find(".enrollment_link.enrollment_" + enrollment.id)
@@ -340,9 +341,31 @@ import 'jqueryui/tabs'
       var $moreOptions = $(".course_form_more_options");
       var optionText = $moreOptions.is(':visible') ? I18n.t('links.more_options', 'more options') : I18n.t('links.fewer_options', 'fewer options');
       $(this).text(optionText);
+      const csp = document.getElementById('csp_options')
+      if (csp)  {
+        Promise.all([
+          import('axios'),
+          import('react-dom'),
+          import('react'),
+          import('jsx/course_settings/components/CSPSelectionBox')
+        ])
+        .then(([{default: axios}, ReactDOM, React, {default: CSPSelectionBox}]) => {
+          ReactDOM.render(
+            <CSPSelectionBox
+              courseId={ENV.COURSE_ID}
+              canManage={ENV.PERMISSIONS.manage_account_settings}
+              apiLibrary={axios}
+            />, csp
+          )
+        }).catch(()=> {
+          // We shouldn't get here, but if we do... do something.
+          const $message = $('<div />').text(I18n.t('Setting failed to load, try refreshing.'))
+          $(csp).append($message)
+        })
+      }
       $moreOptions.slideToggle();
     });
-   $enrollment_dialog.find(".cancel_button").click(function() {
+   $enrollment_dialog.find(".cancel_button").click(() => {
       $enrollment_dialog.dialog('close');
     });
 
@@ -351,14 +374,14 @@ import 'jqueryui/tabs'
       var $link = $(this);
       $link.text(I18n.t('links.re_sending_invitation', "Re-Sending Invitation..."));
       var url = $link.attr('href');
-      $.ajaxJSON(url, 'POST', {}, function(data) {
+      $.ajaxJSON(url, 'POST', {}, data => {
         $enrollment_dialog.fillTemplateData({data: {invitation_sent_at: I18n.t('invitation_sent_now', "Just Now")}});
         $link.text(I18n.t('invitation_sent', "Invitation Sent!"));
         var $user = $enrollment_dialog.data('user');
         if($user) {
           $user.fillTemplateData({data: {invitation_sent_at: I18n.t('invitation_sent_now', "Just Now")}});
         }
-      }, function(data) {
+      }, data => {
         $link.text(I18n.t('errors.invitation', "Invitation Failed.  Please try again."));
       });
     });
@@ -383,10 +406,10 @@ import 'jqueryui/tabs'
           var $user = $(this);
           $user.fillTemplateData({data: {invitation_sent_at: I18n.t('invitation_sent_now', "Just Now")}});
         });
-        setTimeout(function() {
+        setTimeout(() => {
           $button.text(oldText);
         }, 2500);
-      }, function() {
+      }, () => {
         $button.text(I18n.t('errors.re_send_all', "Send Failed, Please Try Again")).attr('disabled', false);
       });
     });
@@ -398,7 +421,7 @@ import 'jqueryui/tabs'
       $(".open_enrollment_holder").showIf($(this).attr('checked'));
     }).change();
 
-    $("#publish_grades_link").click(function(event) {
+    $("#publish_grades_link").click(event => {
       event.preventDefault();
       GradePublishing.publish();
     });
@@ -406,7 +429,7 @@ import 'jqueryui/tabs'
       GradePublishing.checkup();
     }
 
-    $(".reset_course_content_button").click(function(event) {
+    $(".reset_course_content_button").click(event => {
       event.preventDefault();
       $("#reset_course_content_dialog").dialog({
         title: I18n.t('titles.reset_course_content_dialog_help', "Reset Course Content"),
@@ -415,7 +438,7 @@ import 'jqueryui/tabs'
 
       $(".ui-dialog").focus();
     }).fixDialogButtons();
-    $("#reset_course_content_dialog .cancel_button").click(function() {
+    $("#reset_course_content_dialog .cancel_button").click(() => {
       $("#reset_course_content_dialog").dialog('close');
     });
 
@@ -423,7 +446,7 @@ import 'jqueryui/tabs'
       $("#customize_course_visibility").toggle(this.checked);
     });
 
-    $("#course_custom_course_visibility").ready(function(event) {
+    $("#course_custom_course_visibility").ready(event => {
       if($("#course_custom_course_visibility").prop('checked')) {
         $("#customize_course_visibility").toggle(true);
       } else {
@@ -434,7 +457,7 @@ import 'jqueryui/tabs'
     $("#course_course_visibility").change(function(event) {
       var order = $(this).children();
       var selected = $(this).find(":selected");
-      $.each($('#customize_course_visibility select'), function(i, sel){
+      $.each($('#customize_course_visibility select'), (i, sel) => {
         $(sel).children('option').remove();
         for(var i=$.inArray(selected[0], order), len=order.length; i < len; i++) {
           $(order[i]).clone().appendTo($(sel));
@@ -443,11 +466,11 @@ import 'jqueryui/tabs'
       $('#customize_course_visibility select').val($("#course_course_visibility").val())
     });
 
-    $("#course_custom_course_visibility").ready(function(event) {
+    $("#course_custom_course_visibility").ready(event => {
       var order = $("#course_course_visibility").children();
       var selected = $("#course_course_visibility").find(":selected");
       var current = $('#customize_course_visibility select').find(":selected");
-      $.each($('#customize_course_visibility select'), function(i, sel){
+      $.each($('#customize_course_visibility select'), (i, sel) => {
         $(sel).children('option').remove();
         for(var i=$.inArray(selected[0], order), len=order.length; i < len; i++) {
           $(order[i]).clone().appendTo($(sel));

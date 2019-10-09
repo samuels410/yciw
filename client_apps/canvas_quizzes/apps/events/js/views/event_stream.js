@@ -21,7 +21,7 @@ define(function(require) {
   var React = require('old_version_of_react_used_by_canvas_quizzes_client_apps');
   var _ = require('lodash');
   var Actions = require('../actions');
-  var I18n = require('i18n!quiz_log_auditing.event_stream');
+  var I18n = require('i18n!quiz_log_auditing.event_stream').default;
   var ScreenReaderContent = require('jsx!canvas_quizzes/components/screen_reader_content');
   var Event = require('jsx!./event_stream/event');
   var K = require('../constants');
@@ -80,7 +80,7 @@ define(function(require) {
         if(e.type != K.EVT_QUESTION_ANSWERED) {
           return true;
         }
-        return _.any(e.data, function(i) {
+        return _.some(e.data, function(i) {
           return (i.answer != null);
         });
       });

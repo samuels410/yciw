@@ -16,12 +16,11 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-import Flex, {FlexItem} from '@instructure/ui-layout/lib/components/Flex'
-import Menu, {MenuItem} from '@instructure/ui-menu/lib/components/Menu'
-import Button from '@instructure/ui-buttons/lib/components/Button'
-import ScreenReaderContent from '@instructure/ui-a11y/lib/components/ScreenReaderContent'
-import View from '@instructure/ui-layout/lib/components/View'
-import IconPlusLine from '@instructure/ui-icons/lib/Line/IconPlus'
+import {Flex, FlexItem, View} from '@instructure/ui-layout'
+import {Menu, MenuItem} from '@instructure/ui-menu'
+import {Button} from '@instructure/ui-buttons'
+import {ScreenReaderContent} from '@instructure/ui-a11y'
+import {IconPlusLine} from '@instructure/ui-icons'
 
 import I18n from 'i18n!react_developer_keys'
 import React from 'react'
@@ -36,8 +35,6 @@ export default class DeveloperKeyModalTrigger extends React.Component {
     this.props.store.dispatch(this.props.actions.ltiKeysSetLtiKey(true))
     this.props.store.dispatch(this.props.actions.developerKeysModalOpen('lti'))
   }
-
-  isLti13Enabled = ENV.LTI_1_3_ENABLED
 
   developerKeyMenuItem(title, onClick) {
     return (
@@ -59,7 +56,6 @@ export default class DeveloperKeyModalTrigger extends React.Component {
     return (
       <Button
         variant="primary"
-        onClick={this.isLti13Enabled ? () => {} : this.showCreateDeveloperKey}
         buttonRef={this.props.setAddKeyButtonRef}
         icon={IconPlusLine}
       >
@@ -70,15 +66,12 @@ export default class DeveloperKeyModalTrigger extends React.Component {
   }
 
   developerKeyTrigger() {
-    if (this.isLti13Enabled) {
-      return (
-        <Menu placement="bottom" trigger={this.triggerButton()} shouldHideOnSelect>
-          {this.developerKeyMenuItem(I18n.t('API Key'), this.showCreateDeveloperKey)}
-          {this.developerKeyMenuItem(I18n.t('LTI Key'), this.showCreateLtiKey)}
-        </Menu>
-      )
-    }
-    return this.triggerButton()
+    return (
+      <Menu placement="bottom" trigger={this.triggerButton()} shouldHideOnSelect>
+        {this.developerKeyMenuItem(I18n.t('API Key'), this.showCreateDeveloperKey)}
+        {this.developerKeyMenuItem(I18n.t('LTI Key'), this.showCreateLtiKey)}
+      </Menu>
+    )
   }
 
   render() {

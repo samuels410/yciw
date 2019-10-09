@@ -106,7 +106,7 @@ $(document).ready(function() {
     formatTabs(this);
   });
 
-  $("#register_sms_number,#register_email_address").formSubmit({
+  $("#register_sms_number,#register_email_address,#register_slack_handle").formSubmit({
     object_name: 'communication_channel',
     processData: function(data) {
       var address;
@@ -115,9 +115,13 @@ $(document).ready(function() {
         // Email channel
         type = 'email';
         address = data.communication_channel_email;
+      } else if (data['communication_channel[type]'] === 'slack') {
+        // Slack channel
+        type = 'slack'
+        address = data.communication_channel_slack
       } else if (ENV.INTERNATIONAL_SMS_ENABLED && $('#communication_channel_sms_country').val() === 'undecided') {
         // Haven't selected a country yet
-        $(this).formErrors({communication_channel_sms_country: I18n.t("Country is required")});
+        $(this).formErrors({communication_channel_sms_country: I18n.t("Country or Region is required")});
         return false;
       } else if (!ENV.INTERNATIONAL_SMS_ENABLED || $('#communication_channel_sms_country option:selected').data('useEmail')) {
         // SMS channel using an email address
@@ -131,7 +135,7 @@ $(document).ready(function() {
 
       delete data.communication_channel_sms_country;
 
-      if (type == 'email' || type == 'sms_email') {
+      if (type === 'email' || type === 'sms_email' || type === 'slack') {
         // Make sure it's a valid email address
         var match = address.match(/^[a-zA-Z0-9.!#$%&'*+\/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/);
         if (!match) {
@@ -160,12 +164,13 @@ $(document).ready(function() {
       // Don't need these anymore
       delete data.communication_channel_sms_number;
       delete data.communication_channel_sms_email;
+      delete data.communication_channel_slack;
 
       data['communication_channel[address]'] = address;
     },
     beforeSubmit: function(data) {
-      var $list = $(".email_channels");
-      if($(this).attr('id') == "register_sms_number") {
+      let $list = $(".email_channels");
+      if($(this).attr('id') === "register_sms_number" || $(this).attr('id') === "register_slack_handle") {
         $list = $(".other_channels");
       }
       var path = data['communication_channel[address]'];
@@ -174,12 +179,15 @@ $(document).ready(function() {
         if($(this).text() == path) { path = ""; }
       });
       $list.removeClass('single');
-      var $channel = null;
+      let $channel = null;
       if(path) {
         $channel = $list.find(".channel.blank").clone(true).removeClass('blank');
+        if(data['communication_channel[type]'] === "slack") {
+          $channel.find("#communication_text_type").text("slack")
+        }
         $channel.find(".path").attr('title',  I18n.t('titles.unconfirmed_click_to_confirm', "Unconfirmed.  Click to confirm") );
         $channel.fillTemplateData({
-          data: {path: path}
+          data: {path}
         });
         $list.find(".channel.blank").before($channel.show());
       }
@@ -222,7 +230,7 @@ $(document).ready(function() {
       $channel.remove();
     }
   });
-  $("a.email_address_taken_learn_more").live('click', function(event) {
+  $("a.email_address_taken_learn_more").live('click', event => {
     event.preventDefault();
 
   });
@@ -256,33 +264,44 @@ $(document).ready(function() {
   });
   $(".channel_list .channel .reset_bounce_count_link").click(function(event) {
     event.preventDefault();
-    $.ajaxJSON($(this).attr('href'), 'POST', {}, function(data) {
+    $.ajaxJSON($(this).attr('href'), 'POST', {}, data => {
       $(this).parents('.channel').find('.bouncing-channel').remove();
       $(this).remove();
       $.flashMessage(I18n.t('Bounce count reset!'))
-    }.bind(this));
+    });
   });
-  $("#confirm_communication_channel .cancel_button").click(function(event) {
+  $("#confirm_communication_channel .cancel_button").click(event => {
     $("#confirm_communication_channel").dialog('close');
   });
   $(".email_channels .channel .path,.other_channels .channel .path").click(function(event) {
     event.preventDefault();
     var $channel = $(this).parents(".channel");
     if($channel.hasClass('unconfirmed')) {
-      var type = "email address", confirm_title =  I18n.t('titles.confirm_email_address', "Confirm Email Address") ;
+      var type = "email address", confirm_title = I18n.t('titles.confirm_email_address', "Confirm Email Address") ;
       if($(this).parents(".channel_list").hasClass('other_channels')) {
-        type = "sms number", confirm_title =  I18n.t('titles.confirm_sms_number', "Confirm SMS Number") ;
+        type = "sms number", confirm_title = I18n.t("Confirm Communication Channel") ;
       }
       var $box = $("#confirm_communication_channel");
+
       if($channel.parents(".email_channels").length > 0) {
         $box = $("#confirm_email_channel");
       }
       var data = $channel.getTemplateData({textValues: ['user_id', 'pseudonym_id', 'channel_id']});
       var path = $(this).text();
+
+      $.ajaxJSON(`/confirmations/${data.user_id}/limit_reached/${data.channel_id}`, 'GET', {}, data => {
+        if(data.confirmation_limit_reached) {
+          $box.find(".re_send_confirmation_link").css('visibility', 'hidden');
+        } else {
+          $box.find(".re_send_confirmation_link").css('visibility', 'visible');
+        }
+      }, _ => {});
+
       if(type == "sms number") {
         path = path.split("@")[0];
       }
       data.code = "";
+
       $box.fillTemplateData({data: {
         path: path,
         path_type: type,
@@ -294,6 +313,7 @@ $(document).ready(function() {
       url = $.replaceTags(url, "id", data.channel_id);
       url = $.replaceTags(url, "pseudonym_id", data.pseudonym_id);
       url = $.replaceTags(url, "user_id", data.user_id);
+
       $box.find(".re_send_confirmation_link").attr('href', url)
         .text( I18n.t('links.resend_confirmation', "Re-Send Confirmation") );
       $box.fillFormData(data);
@@ -336,7 +356,7 @@ $(document).ready(function() {
     var formData = {
       'default_email_id': channel_id
     }
-    $.ajaxJSON($(this).attr('href'), 'PUT', formData, function(data) {
+    $.ajaxJSON($(this).attr('href'), 'PUT', formData, data => {
       var channel_id = data.user.communication_channel.id;
       $(".channel.default").removeClass('default').find('a.default_link span.screenreader-only.default_label').remove();
       $(".channel#channel_" + channel_id).addClass('default').find('a.default_link').append( $('<span class="screenreader-only" />').text(I18n.t("This is the default email address")) );
@@ -347,16 +367,16 @@ $(document).ready(function() {
     event.preventDefault();
     var $link = $(this);
     $link.text( I18n.t('links.resending_confirmation', "Re-Sending...") );
-    $.ajaxJSON($link.attr('href'), 'POST', {}, function(data) {
+    $.ajaxJSON($link.attr('href'), 'POST', {}, data => {
       $link.text( I18n.t('links.resent_confirmation', "Done! Message may take a few minutes.") );
-    }, function(data) {
+    }, data => {
       $link.text( I18n.t('links.resend_confirmation_failed', "Request failed. Try again.") );
     });
   });
-  $("#communication_channels .cancel_button").click(function(event) {
+  $("#communication_channels .cancel_button").click(event => {
     $("#communication_channels").dialog('close');
   });
-  $("#confirm_email_channel .cancel_button").click(function() {
+  $("#confirm_email_channel .cancel_button").click(() => {
     $("#confirm_email_channel").dialog('close');
   });
 });

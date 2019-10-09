@@ -974,7 +974,6 @@ describe LearningOutcome do
         [c1, c2].each { |c| outcome.align(nil, c, :mastery_type => "points") }
         assess_with.call(outcome, c1)
 
-        expect(outcome.alignments.length).to eq(3)
         expect(outcome).to be_assessed
         expect(outcome).to be_assessed(c1)
         expect(outcome).not_to be_assessed(c2)
@@ -997,6 +996,19 @@ describe LearningOutcome do
         LearningOutcome.ensure_presence_in_context(outcome_ids, @course)
         expect(@course.linked_learning_outcomes.count).to eq(2)
       end
+    end
+
+    it 'should de-dup outcomes linked multiple times' do
+      account = Account.default
+      course_factory
+      lo = LearningOutcome.create!(context: @course, title: "outcome",
+        calculation_method: 'highest', workflow_state: 'active')
+      3.times do |i|
+        group = @course.learning_outcome_groups.create!(:title => "groupage_#{i}")
+        group.add_outcome(lo)
+      end
+      expect(@course.learning_outcome_links.count).to eq(3)
+      expect(@course.linked_learning_outcomes.count).to eq(1) # not 3
     end
 
     describe '#align' do

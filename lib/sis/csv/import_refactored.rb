@@ -35,7 +35,7 @@ module SIS
       #  * Course and Section must be imported before Xlist
       #  * Course, Section, and User must be imported before Enrollment
       IMPORTERS = %i{change_sis_id account term abstract_course course section
-                     xlist user enrollment admin group_category group group_membership
+                     xlist user login enrollment admin group_category group group_membership
                      grade_publishing_results user_observer}.freeze
 
       HEADERS_TO_EXCLUDE_FOR_DOWNLOAD = %w{password ssha_password}.freeze
@@ -57,6 +57,8 @@ module SIS
         @override_sis_stickiness = opts[:override_sis_stickiness]
         @add_sis_stickiness = opts[:add_sis_stickiness]
         @clear_sis_stickiness = opts[:clear_sis_stickiness]
+        @previous_diff_import = opts[:previous_diff_import]
+        @read_only = opts[:read_only]
 
         @total_rows = 1
         @current_row = 0
@@ -142,9 +144,11 @@ module SIS
         rows = 0
         ::CSV.open(csv[:fullpath], "rb", CSVBaseImporter::PARSE_ARGS) do |faster_csv|
           while faster_csv.shift
-            if create_importers && rows % @rows_for_parallel == 0
-              @parallel_importers[importer] ||= []
-              @parallel_importers[importer] << create_parallel_importer(csv, importer, rows)
+            unless @read_only
+              if create_importers && rows % @rows_for_parallel == 0
+                @parallel_importers[importer] ||= []
+                @parallel_importers[importer] << create_parallel_importer(csv, importer, rows)
+              end
             end
             rows += 1
           end
@@ -201,12 +205,12 @@ module SIS
       end
 
       def calculate_progress
-        (((@current_row.to_f/@total_rows) * @progress_multiplier) + @progress_offset) * 100
+        [(((@current_row.to_f/@total_rows) * @progress_multiplier) + @progress_offset) * 100, 99].min
       end
 
       def update_progress
         completed_count = @batch.parallel_importers.where(workflow_state: "completed").count
-        current_progress = (completed_count.to_f * 100 / @parallel_importers.values.map(&:count).sum).round
+        current_progress = [(completed_count.to_f * 100 / @parallel_importers.values.map(&:count).sum).round, 99].min
         SisBatch.where(:id => @batch).where("progress IS NULL or progress < ?", current_progress).update_all(progress: current_progress)
       end
 
@@ -263,7 +267,7 @@ module SIS
       end
 
       def should_stop_import?
-        %w{aborted failed failed_with_messages}.include?(@batch.workflow_state)
+        !@batch.workflow_state == 'importing'
       end
 
       def run_all_importers
@@ -342,14 +346,17 @@ module SIS
           end
           begin
             ::CSV.foreach(csv[:fullpath], CSVBaseImporter::PARSE_ARGS.merge(:headers => false)) do |row|
-              row.each(&:downcase!)
+              row.each {|header| header&.downcase!}
               importer = IMPORTERS.index do |type|
                 if SIS::CSV.const_get(type.to_s.camelcase + 'Importer').send(type.to_s + '_csv?', row)
-                  if type == :user && (row & HEADERS_TO_EXCLUDE_FOR_DOWNLOAD).any?
-                    filtered_att = create_filtered_csv(csv, row)
-                    @batch.data[:downloadable_attachment_ids] << filtered_att.id if filtered_att
-                  else
-                    @batch.data[:downloadable_attachment_ids] << att.id
+                  unless @previous_diff_import
+                    downloadable_att = (type == :user && (row & HEADERS_TO_EXCLUDE_FOR_DOWNLOAD).any?) ? create_filtered_csv(csv, row) : att
+                    if downloadable_att
+                      @batch.data[:downloadable_attachment_ids] << downloadable_att.id
+                      if @batch.data[:diffed_against_sis_batch_id]
+                        (@batch.data[:diffed_attachment_ids] ||= []) << downloadable_att.id
+                      end
+                    end
                   end
                   @csvs[type] << csv
                   @headers[type].merge(row)

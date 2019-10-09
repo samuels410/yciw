@@ -20,11 +20,11 @@ import React from 'react'
 import PropTypes from 'prop-types'
 import $ from 'jquery'
 import _ from 'underscore'
-import Button from '@instructure/ui-buttons/lib/components/Button'
+import {Button} from '@instructure/ui-buttons'
 import axios from 'axios'
-import I18n from 'i18n!grading_periods'
-import GradingPeriod from '../grading/AccountGradingPeriod'
-import GradingPeriodForm from '../grading/GradingPeriodForm'
+import I18n from 'i18n!GradingPeriodSet'
+import GradingPeriod from './AccountGradingPeriod'
+import GradingPeriodForm from './GradingPeriodForm'
 import gradingPeriodsApi from 'compiled/api/gradingPeriodsApi'
 import 'jquery.instructure_misc_helpers'
 
@@ -36,8 +36,8 @@ const anyPeriodsOverlap = function(periods) {
   if (_.isEmpty(periods)) {
     return false
   }
-  const firstPeriod = _.first(periods)
-  const otherPeriods = _.rest(periods)
+  const firstPeriod = _.head(periods)
+  const otherPeriods = _.tail(periods)
   const overlapping = _.some(
     otherPeriods,
     otherPeriod =>
@@ -51,15 +51,15 @@ const isValidDate = function(date) {
 }
 
 const validatePeriods = function(periods, weighted) {
-  if (_.any(periods, period => !(period.title || '').trim())) {
+  if (_.some(periods, period => !(period.title || '').trim())) {
     return [I18n.t('All grading periods must have a title')]
   }
 
-  if (weighted && _.any(periods, period => isNaN(period.weight) || period.weight < 0)) {
+  if (weighted && _.some(periods, period => isNaN(period.weight) || period.weight < 0)) {
     return [I18n.t('All weights must be greater than or equal to 0')]
   }
 
-  const validDates = _.all(
+  const validDates = _.every(
     periods,
     period =>
       isValidDate(period.startDate) && isValidDate(period.endDate) && isValidDate(period.closeDate)
@@ -69,13 +69,13 @@ const validatePeriods = function(periods, weighted) {
     return [I18n.t('All dates fields must be present and formatted correctly')]
   }
 
-  const orderedStartAndEndDates = _.all(periods, period => period.startDate < period.endDate)
+  const orderedStartAndEndDates = _.every(periods, period => period.startDate < period.endDate)
 
   if (!orderedStartAndEndDates) {
     return [I18n.t('All start dates must be before the end date')]
   }
 
-  const orderedEndAndCloseDates = _.all(periods, period => period.endDate <= period.closeDate)
+  const orderedEndAndCloseDates = _.every(periods, period => period.endDate <= period.closeDate)
 
   if (!orderedEndAndCloseDates) {
     return [I18n.t('All close dates must be on or after the end date')]

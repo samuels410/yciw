@@ -17,66 +17,294 @@
  */
 
 import React from 'react'
-import {bool, string} from 'prop-types'
+import {bool, oneOf} from 'prop-types'
 import I18n from 'i18n!assignments_2'
-import {OverrideShape} from '../../assignmentData'
+import {OverrideShape, requiredIfDetail} from '../../assignmentData'
 import TeacherViewContext from '../TeacherViewContext'
+import ExternalToolType from './SubmissionTypes/ExternalToolType'
+import FileType from './SubmissionTypes/FileType'
+import NonCanvasType from './SubmissionTypes/NonCanvasType'
+import OperatorType from './SubmissionTypes/OperatorType'
+import SimpleType from './SubmissionTypes/SimpleType'
+import {Heading, Pill} from '@instructure/ui-elements'
+import {FormFieldGroup} from '@instructure/ui-form-field'
+import {Menu, MenuItem, MenuItemGroup, MenuItemSeparator} from '@instructure/ui-menu'
+import {View} from '@instructure/ui-layout'
+import AddHorizontalRuleButton from '../AddHorizontalRuleButton'
 
-// TODO: this is a placeholder until the real deal is built
+import {
+  IconAttachMediaLine,
+  IconDocumentLine,
+  IconIntegrationsLine,
+  IconImageLine,
+  IconLinkLine,
+  IconUnpublishedLine
+} from '@instructure/ui-icons'
+
 export default class OverrideSubmissionTypes extends React.Component {
   static contextType = TeacherViewContext
 
   static propTypes = {
     override: OverrideShape,
+    onChangeOverride: requiredIfDetail,
     readOnly: bool,
-    variant: string
+    variant: oneOf(['summary', 'detail'])
   }
 
   static defaultProps = {
-    readOnly: true,
-    variant: 'simple'
+    readOnly: false,
+    variant: 'summary'
   }
 
-  static submissionTypesUnsorted = [
-    {name: 'Arc', value: 'arc'},
-    {name: I18n.t('No Submission'), value: 'none'},
-    {name: I18n.t('External Tool'), value: 'external_tool'},
-    {name: I18n.t('O365 Template'), value: 'o365'},
-    {name: I18n.t('File'), value: 'online_upload'},
-    {name: I18n.t('On Paper'), value: 'on_paper'},
-    {name: I18n.t('Google Template'), value: 'google'},
-    {name: I18n.t('Text Entry'), value: 'online_text_entry'},
-    {name: I18n.t('Image'), value: 'image'},
-    {name: I18n.t('Url'), value: 'online_url'},
-    {name: I18n.t('Media'), value: 'media_recording'},
-    {name: I18n.t('Student Choice'), value: 'any'}
+  static docTypeOptions = [
+    {key: 'all', display: I18n.t('All Types Allowed')},
+    {key: 'doc', display: I18n.t('DOC')},
+    {key: 'csv', display: I18n.t('CSV')},
+    {key: 'pdf', display: I18n.t('PDF')},
+    {key: 'ppt', display: I18n.t('PPT')},
+    {key: 'txt', display: I18n.t('TXT')},
+    {key: 'xls', display: I18n.t('XLS')},
+    {key: 'rtf', display: I18n.t('RTF')}
   ]
 
-  static unknownSubmissionType = {name: I18n.t('Other'), value: '*'}
+  static imageTypeOptions = [
+    {key: 'all', display: I18n.t('All Image Types Allowed')},
+    {key: 'jpg', display: I18n.t('JPG')},
+    {key: 'png', display: I18n.t('PNG')},
+    {key: 'tiff', display: I18n.t('TIFF')},
+    {key: 'bmp', display: I18n.t('BMP')},
+    {key: 'gif', display: I18n.t('GIF')},
+    {key: 'psd', display: I18n.t('PSD')},
+    {key: 'svg', display: I18n.t('SVG')},
+    {key: 'eps', display: I18n.t('EPS')}
+  ]
 
-  static submissionTypes = null
+  static mediaTypeOptions = [
+    {key: 'all', display: I18n.t('All Media Types Allowed')},
+    {key: 'avi', display: I18n.t('AVI')},
+    {key: 'flv', display: I18n.t('FLV')},
+    {key: 'wmv', display: I18n.t('WMV')},
+    {key: 'mp4', display: I18n.t('MP4')},
+    {key: 'mp3', display: I18n.t('MP3')},
+    {key: 'mov', display: I18n.t('MOV')},
+    {key: 'arc', display: I18n.t('ARC')}
+  ]
 
-  componentWillMount() {
-    if (OverrideSubmissionTypes.submissionTypes === null) {
-      OverrideSubmissionTypes.submissionTypes = OverrideSubmissionTypes.submissionTypesUnsorted.sort(
-        (a, b) => a.name.localeCompare(b.name, this.context.locale)
-      )
+  static nonCanvasOptions = [
+    {key: 'in_class', display: I18n.t('In Class')},
+    {key: 'on_paper', display: I18n.t('On Paper')},
+    {key: 'none', display: I18n.t('No Submission')}
+  ]
+
+  static appType = {
+    name: I18n.t('App'),
+    icon: IconIntegrationsLine,
+    value: 'external_tool',
+    slotType: ExternalToolType
+  }
+
+  static fileType = {
+    name: I18n.t('File'),
+    icon: IconDocumentLine,
+    value: 'online_upload',
+    options: OverrideSubmissionTypes.docTypeOptions,
+    slotType: FileType
+  }
+
+  static imageType = {
+    name: I18n.t('Image'),
+    icon: IconImageLine,
+    value: 'image',
+    options: OverrideSubmissionTypes.imageTypeOptions,
+    slotType: FileType
+  }
+
+  static mediaType = {
+    name: I18n.t('Media'),
+    icon: IconAttachMediaLine,
+    value: 'media_recording',
+    options: OverrideSubmissionTypes.mediaTypeOptions,
+    slotType: FileType
+  }
+
+  static nonCanvasType = {
+    name: I18n.t('Non Canvas'),
+    icon: IconUnpublishedLine,
+    value: 'non_canvas',
+    options: OverrideSubmissionTypes.nonCanvasOptions,
+    slotType: NonCanvasType
+  }
+
+  static textType = {
+    name: I18n.t('Text Entry'),
+    icon: IconDocumentLine,
+    value: 'online_text_entry',
+    slotType: SimpleType
+  }
+
+  static urlType = {name: I18n.t('URL'), icon: IconLinkLine, value: 'online_url', slotType: SimpleType}
+
+  static submissionTypes = [
+    OverrideSubmissionTypes.appType,
+    OverrideSubmissionTypes.fileType,
+    OverrideSubmissionTypes.imageType,
+    OverrideSubmissionTypes.mediaType,
+    OverrideSubmissionTypes.nonCanvasType,
+    OverrideSubmissionTypes.textType,
+    OverrideSubmissionTypes.urlType
+  ]
+
+  onSelectSubmissionType = (_event, value) => {
+    const currentSubmissionTypes = [...this.props.override.submissionTypes]
+    currentSubmissionTypes.push(value[0])
+    this.props.onChangeOverride('submissionTypes', currentSubmissionTypes)
+  }
+
+  onDeleteSubmissionType = type => {
+    const index = this.props.override.submissionTypes.findIndex(t => t === type)
+    if (index >= 0) {
+      const currentSubmissionTypes = [...this.props.override.submissionTypes]
+      currentSubmissionTypes.splice(index, 1)
+      this.props.onChangeOverride('submissionTypes', currentSubmissionTypes)
     }
   }
 
-  renderSimple() {
-    if (this.props.override.submissionTypes) {
-      return this.props.override.submissionTypes
-        .map(typeSelection => {
-          const type = OverrideSubmissionTypes.submissionTypes.find(t => typeSelection === t.value)
-          return type ? type.name : OverrideSubmissionTypes.unknownSubmissionType.name
-        })
-        .join(' & ')
+  getCurrentTypes() {
+    return this.props.override.submissionTypes.map(typeSelection => {
+      if (OverrideSubmissionTypes.nonCanvasType.options.find(opt => opt.key === typeSelection)) {
+        return OverrideSubmissionTypes.nonCanvasType
+      } else {
+        return OverrideSubmissionTypes.submissionTypes.find(t => typeSelection === t.value)
+      }
+    })
+  }
+
+  getMenuItems() {
+    return OverrideSubmissionTypes.submissionTypes.map(t => {
+      const Icon = t.icon
+      return (
+        <MenuItem key={t.value} value={t.value}>
+          <div>
+            <Icon />
+            <View margin="0 0 0 x-small">{t.name}</View>
+          </div>
+        </MenuItem>
+      )
+    })
+  }
+
+  renderSummary() {
+    return (
+      <span data-testid="OverrideSubmissionTypes">
+        {this.props.override.submissionTypes
+          .map(typeSelection => {
+            const nonCanvasType = OverrideSubmissionTypes.nonCanvasType.options.find(
+              opt => opt.key === typeSelection
+            )
+            if (nonCanvasType) {
+              return nonCanvasType.display
+            } else {
+              return OverrideSubmissionTypes.submissionTypes.find(t => typeSelection === t.value)
+                .name
+            }
+          })
+          .join(' & ')}
+      </span>
+    )
+  }
+
+  renderAddSubmissionTypeButton() {
+    if (this.props.readOnly) return null
+    return (
+      <Menu
+        onSelect={this.onSelectSubmissionType}
+        trigger={
+          <AddHorizontalRuleButton label={I18n.t('Add submission type')} onClick={() => {}} />
+        }
+      >
+        <MenuItemGroup label={I18n.t('Submission Type')} onSelect={this.onSelectSubmissionType}>
+          {this.getMenuItems()}
+        </MenuItemGroup>
+        <MenuItemSeparator />
+        <MenuItemGroup label={I18n.t('Default')} onSelect={() => {}} selected={['or']}>
+          <MenuItem key="or" value="or">
+            <div>{I18n.t('Or')}</div>
+          </MenuItem>
+          <MenuItem key="and" value="and" disabled>
+            <div>
+              {I18n.t('And')}
+              <View margin="0 0 0 small">
+                <Pill variant="primary" text={I18n.t('COMING SOON')} />
+              </View>
+            </div>
+          </MenuItem>
+        </MenuItemGroup>
+      </Menu>
+    )
+  }
+
+  renderCurrentSubmissionTypes() {
+    const slots = []
+
+    for (const [index, value] of this.getCurrentTypes().entries()) {
+      const type = value
+
+      if (index > 0) {
+        slots.push(<OperatorType key={`or_${index}`} value="or" />)
+      }
+
+      let selectedOptions = []
+      if (
+        type.value === 'online_upload' ||
+        type.value === 'media_recording' ||
+        type.value === 'image'
+      ) {
+        if (
+          this.props.override.allowedExtensions &&
+          this.props.override.allowedExtensions.length > 0
+        ) {
+          selectedOptions = this.props.override.allowedExtensions
+        } else {
+          selectedOptions = ['all']
+        }
+      } else if (type === OverrideSubmissionTypes.nonCanvasType) {
+        selectedOptions = OverrideSubmissionTypes.nonCanvasType.options.find(
+          opt => opt.key === this.props.override.submissionTypes[0]
+        )
+        selectedOptions = selectedOptions ? selectedOptions.key : null
+      }
+
+      slots.push(
+        <View key={type.value} as="div" margin="0 x-small x-small 0">
+          <Heading level="h4">{I18n.t('Item %{count}', {count: index + 1})}</Heading>
+          <type.slotType
+            icon={<type.icon />}
+            name={type.name}
+            value={type.value}
+            onDelete={this.onDeleteSubmissionType}
+            ref={comp => (this._submitComponent = comp)}
+            readOnly={this.props.readOnly}
+            options={type.options}
+            initialSelection={selectedOptions}
+          />
+        </View>
+      )
     }
-    return null
+    return slots
+  }
+
+  renderDetail() {
+    return (
+      <View as="div" margin="0 0 small 0" data-testid="OverrideSubmissionTypes">
+        <FormFieldGroup description={I18n.t('Submission Items')} layout="columns">
+          <div>{this.renderCurrentSubmissionTypes()}</div>
+        </FormFieldGroup>
+        {this.renderAddSubmissionTypeButton()}
+      </View>
+    )
   }
 
   render() {
-    return this.props.variant === 'simple' ? this.renderSimple() : null
+    return this.props.variant === 'summary' ? this.renderSummary() : this.renderDetail()
   }
 }

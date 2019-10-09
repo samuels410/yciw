@@ -18,8 +18,8 @@
 
 import {bool, func} from 'prop-types'
 import React from 'react'
-import Tooltip from '@instructure/ui-overlays/lib/components/Tooltip'
-import I18n from 'i18n!assignments'
+import {Tooltip} from '@instructure/ui-overlays'
+import I18n from 'i18n!ModeratedGradingCheckbox'
 
 export default function ModeratedGradingCheckbox(props) {
   function handleChange() {

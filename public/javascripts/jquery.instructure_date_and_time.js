@@ -16,7 +16,7 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-import I18n from 'i18n!instructure'
+import I18n from 'i18n!instructure_date_and_time'
 import $ from 'jquery'
 import tz from 'timezone'
 import htmlEscape from './str/htmlEscape'
@@ -25,8 +25,6 @@ import renderDatepickerTime from 'jsx/shared/render-datepicker-time'
 import './jquery.keycodes'
 import './vendor/date' /* Date.parse, Date.UTC, Date.today */
 import 'jqueryui/datepicker'
-import 'jqueryui/sortable'
-import 'jqueryui/widget'
 
   // fudgeDateForProfileTimezone is used to apply an offset to the date which represents the
   // difference between the user's configured timezone in their profile, and the timezone
@@ -35,12 +33,24 @@ import 'jqueryui/widget'
   $.fudgeDateForProfileTimezone = function(date) {
     date = tz.parse(date);
     if (!date) return null;
-    // format true date into profile timezone without tz-info, then parse in
-    // browser timezone. then, as desired:
-    // output.toString('yyyy-MM-dd hh:mm:ss') == tz.format(input, '%Y-%m-%d %H:%M:%S')
-    var year = tz.format(date, '%Y');
+    let year = tz.format(date, '%Y');
     while (year.length < 4) year = "0" + year;
-    return Date.parse(tz.format(date, year + '-%m-%d %T'));
+
+    const formatted = tz.format(date, year + '-%m-%d %T')
+    let fudgedDate = new Date(formatted)
+
+    // In Safari, the return value from new Date(<string>) might be `Invalid Date`.
+    // this is because, according to this note on:
+    // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Date#Timestamp_string
+    // "Support for RFC 2822 format strings is by convention only."
+    // So for those cases, we fall back on date.js's monkeypatched version of Date.parse,
+    // which is what this method has always historically used before the speed optimization of using new Date()
+    // eslint-disable-next-line no-restricted-globals
+    if (isNaN(fudgedDate)) { // checking for isNaN(<date>) is how you check for `Invalid Date`
+      fudgedDate = Date.parse(formatted)
+    }
+
+    return fudgedDate
   }
 
   $.unfudgeDateForProfileTimezone = function(date) {
@@ -194,7 +204,7 @@ import 'jqueryui/widget'
       picker.input.val(text).change();
     };
     if(!$.fn.datepicker.timepicker_initialized) {
-      $(document).delegate('.ui-datepicker-ok', 'click', function(event) {
+      $(document).delegate('.ui-datepicker-ok', 'click', event => {
         var cur = $.datepicker._curInst;
         var inst = cur;
         var sel = $('td.' + $.datepicker._dayOverClass +
@@ -243,7 +253,7 @@ import 'jqueryui/widget'
       $(document).delegate(".ui-datepicker-time-hour,.ui-datepicker-time-minute,.ui-datepicker-time-ampm", 'mousedown', function(event) {
         $(this).focus();
       });
-      $(document).delegate(".ui-datepicker-time-hour,.ui-datepicker-time-minute,.ui-datepicker-time-ampm", 'change keypress focus blur', function(event) {
+      $(document).delegate(".ui-datepicker-time-hour,.ui-datepicker-time-minute,.ui-datepicker-time-ampm", 'change keypress focus blur', event => {
         if(event.keyCode && event.keyCode == 13) {
           var cur = $.datepicker._curInst;
           var inst = cur;

@@ -54,6 +54,96 @@ describe "calendar2" do
         expect(f('#appointment-group-list')).to include_text(ag.title)
       end
 
+      context "the event modal" do
+        it "should allow other users to see attendees after reservation" do
+          create_appointment_group(
+            :contexts => [@course],
+            :title => "eh",
+            :max_appointments_per_participant => 1,
+            :min_appointments_per_participant => 1,
+            :participants_per_appointment => 2,
+            :participant_visibility => "protected"
+          )
+          ag1 = AppointmentGroup.first
+          # create and reserver two participants into appointmentgroup
+          ag1.appointments.first.reserve_for @student, @student
+          student2 = student_in_course(course: @course, active_all: true).user
+          ag1.appointments.first.reserve_for student2, student2
+          get "/calendar2"
+          # navigate to the next month for end of month
+          f('.navigate_next').click unless Time.now.utc.month == (Time.now.utc + 1.day).month
+          fj('.fc-event:visible').click
+          wait_for_ajaximations
+          expect(f("#reservations li")).to include_text "nobody@example.com"
+        end
+
+        it "should allow users to see all attendees on events up to 25 reservations" do
+          create_appointment_group(
+            :contexts => [@course],
+            :title => "eh",
+            :max_appointments_per_participant => 1,
+            :min_appointments_per_participant => 1,
+            :participants_per_appointment => 15,
+            :participant_visibility => "protected"
+          )
+          ag1 = AppointmentGroup.first
+          ag1.appointments.first.reserve_for @student, @student
+          students = create_users_in_course(@course, 12, return_type: :record)
+          students.each do |student_temp|
+            ag1.appointments.first.reserve_for student_temp, student_temp
+          end
+          get "/calendar2"
+          f('.navigate_next').click unless Time.now.utc.month == (Time.now.utc + 1.day).month
+          fj('.fc-event:visible').click
+          wait_for_ajaximations
+          expected_string = "Attendees\nnobody@example.com\n#{students.map(&:name).join("\n")}"
+          expect(f("#reservations")).to include_text expected_string
+        end
+
+        it "should show dots indicating more users available if more than 25 reservations" do
+          create_appointment_group(
+            :contexts => [@course],
+            :title => "eh",
+            :max_appointments_per_participant => 1,
+            :min_appointments_per_participant => 1,
+            :participants_per_appointment => 27,
+            :participant_visibility => "protected"
+          )
+          ag1 = AppointmentGroup.first
+          ag1.appointments.first.reserve_for @student, @student
+          students = create_users_in_course(@course, 25, return_type: :record)
+          students.each do |student_temp|
+            ag1.appointments.first.reserve_for student_temp, student_temp
+          end
+          get "/calendar2"
+          f('.navigate_next').click unless Time.now.utc.month == (Time.now.utc + 1.day).month
+          fj('.fc-event:visible').click
+          wait_for_ajaximations
+          expected_string = "Attendees\nnobody@example.com\n#{students[0, 24].map(&:name).join("\n")}\n(...)"
+          expect(f("#reservations")).to include_text expected_string
+        end
+
+        it "should not display attendees for reservation with no participants" do
+          create_appointment_group(
+            :contexts => [@course],
+            :title => "eh",
+            :max_appointments_per_participant => 1,
+            :min_appointments_per_participant => 1,
+            :participants_per_appointment => 2,
+            :participant_visibility => "protected"
+          )
+          ag1 = AppointmentGroup.first
+          # create an appointment and cancel appointment to make no participants
+          ag1.appointments.first.reserve_for @student, @student
+          ag1.appointments.first.reserve_for @student, @student, cancel_existing: true
+          get "/calendar2"
+          # navigate to the next month for end of month
+          f('.navigate_next').click unless Time.now.utc.month == (Time.now.utc + 1.day).month
+          fj('.fc-event:visible').click
+          expect(f("#reservations")).not_to contain_css("#attendees_header_text")
+        end
+      end
+
       it "should show section-level events for the student's section" do
         @course.default_section.update_attribute(:name, "default section!")
         s2 = @course.course_sections.create!(:name => "other section!")

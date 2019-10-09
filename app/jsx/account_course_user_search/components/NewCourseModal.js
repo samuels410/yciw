@@ -18,11 +18,11 @@
 
 import React from 'react'
 import {node} from 'prop-types'
-import Button from '@instructure/ui-buttons/lib/components/Button'
-import FormFieldGroup from '@instructure/ui-forms/lib/components/FormFieldGroup'
-import TextInput from '@instructure/ui-forms/lib/components/TextInput'
-import Select from '@instructure/ui-core/lib/components/Select'
-import InstuiModal, {ModalBody, ModalFooter} from '../../shared/components/InstuiModal'
+import {Button} from '@instructure/ui-buttons'
+import {FormFieldGroup} from '@instructure/ui-form-field'
+import {TextInput} from '@instructure/ui-text-input'
+import Modal from '../../shared/components/InstuiModal'
+import CanvasSelect from '../../shared/components/CanvasSelect'
 
 import I18n from 'i18n!account_course_user_search'
 import preventDefault from 'compiled/fn/preventDefault'
@@ -36,9 +36,9 @@ const nonBreakingSpace = '\u00a0'
 const renderAccountOptions = (accounts = [], depth = 0) =>
   accounts.map(account =>
     [
-      <option key={account.id} value={account.id}>
+      <CanvasSelect.Option key={account.id} value={account.id} id={account.id}>
         {Array(2 * depth + 1).join(nonBreakingSpace) + account.name}
-      </option>
+      </CanvasSelect.Option>
     ].concat(renderAccountOptions(account.subAccounts || [], depth + 1))
   )
 
@@ -55,12 +55,14 @@ export default class NewCourseModal extends React.Component {
   }
 
   onChange(field, value) {
-    this.setState({
-      data: {
-        ...this.state.data,
-        [field]: value
-      },
-      errors: {}
+    this.setState(state => {
+      return {
+        data: {
+          ...state.data,
+          [field]: value
+        },
+        errors: {}
+      }
     })
   }
 
@@ -74,13 +76,19 @@ export default class NewCourseModal extends React.Component {
       return
     }
 
-    CoursesStore.create({course: data}).then(createdCourse => {
-      this.closeModal()
-      showFlashAlert({
-        type: 'success',
-        message: I18n.t('%{course_name} successfully added!', {course_name: createdCourse.name})
+    // CoursesStore.create doesn't return a Promise
+    // eslint-disable-next-line promise/catch-or-return
+    CoursesStore.create({course: data})
+      .then(createdCourse => {
+        this.closeModal()
+        showFlashAlert({
+          type: 'success',
+          message: I18n.t('%{course_name} successfully added!', {course_name: createdCourse.name})
+        })
       })
-    }, showFlashError(I18n.t('Something went wrong creating course. Please try again.')))
+      .error(() =>
+        showFlashError(I18n.t('Something went wrong creating the course. Please try again.'))
+      )
   }
 
   closeModal = () => {
@@ -90,12 +98,12 @@ export default class NewCourseModal extends React.Component {
   render() {
     const {data, isOpen, errors} = this.state
     const {terms, children} = this.props
-    const onChange = field => e => this.onChange(field, e.target.value)
+    const onChange = field => (e, value) => this.onChange(field, value)
     const accountTree = AccountsTreeStore.getTree()
 
     return (
       <span>
-        <InstuiModal
+        <Modal
           as="form"
           onSubmit={preventDefault(this.onSubmit)}
           open={isOpen}
@@ -103,8 +111,9 @@ export default class NewCourseModal extends React.Component {
           onOpen={() => AccountsTreeStore.loadTree()}
           size="small"
           label={I18n.t('Add a New Course')}
+          shouldCloseOnDocumentClick={false}
         >
-          <ModalBody>
+          <Modal.Body>
             <FormFieldGroup layout="stacked" rowSpacing="small" description="">
               <TextInput
                 label={I18n.t('Course Name')}
@@ -122,38 +131,44 @@ export default class NewCourseModal extends React.Component {
                 messages={errors.course_code && [{type: 'error', text: errors.course_code}]}
               />
 
-              <Select
+              <CanvasSelect
                 label={I18n.t('Subaccount')}
                 value={data.account_id}
                 onChange={onChange('account_id')}
               >
                 {renderAccountOptions(accountTree.accounts)}
                 {accountTree.loading && (
-                  <option disabled>{I18n.t('Loading more sub accounts...')}</option>
+                  <CanvasSelect.Option id="_more" value="" isDisabled>
+                    {I18n.t('Loading more sub accounts...')}
+                  </CanvasSelect.Option>
                 )}
-              </Select>
+              </CanvasSelect>
 
-              <Select
+              <CanvasSelect
                 label={I18n.t('Enrollment Term')}
                 value={data.enrollment_term_id}
                 onChange={onChange('enrollment_term_id')}
               >
                 {(terms.data || []).map(term => (
-                  <option key={term.id} value={term.id}>
+                  <CanvasSelect.Option key={term.id} value={term.id} id={term.id}>
                     {term.name}
-                  </option>
+                  </CanvasSelect.Option>
                 ))}
-                {terms.loading && <option disabled>{I18n.t('Loading more terms...')}</option>}
-              </Select>
+                {terms.loading && (
+                  <CanvasSelect.Option key="loading" id="loading" value="loading" isDisabled>
+                    {I18n.t('Loading more terms...')}
+                  </CanvasSelect.Option>
+                )}
+              </CanvasSelect>
             </FormFieldGroup>
-          </ModalBody>
-          <ModalFooter>
+          </Modal.Body>
+          <Modal.Footer>
             <Button onClick={this.closeModal}>{I18n.t('Cancel')}</Button> &nbsp;
             <Button type="submit" variant="primary">
               {I18n.t('Add Course')}
             </Button>
-          </ModalFooter>
-        </InstuiModal>
+          </Modal.Footer>
+        </Modal>
         {React.Children.map(children, child =>
           // when you click whatever is the child element to this, open the modal
           React.cloneElement(child, {

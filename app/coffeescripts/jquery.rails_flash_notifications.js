@@ -17,11 +17,7 @@
 
 // does Rails-style flash message/error boxes that drop down from the top of the screen
 import $ from 'jquery'
-import _ from 'underscore'
-import preventDefault from './fn/preventDefault'
-import htmlEscape from 'str/htmlEscape'
 import NotificationsHelper from 'jsx/railsFlashNotificationsHelper'
-import 'jqueryui/effects/drop'
 import 'jquery.cookie'
 
 const helper = new NotificationsHelper()
@@ -64,7 +60,7 @@ $.initFlashContainer = () => initFlashContainer()
 function renderServerNotifications () {
   if ((typeof ENV !== 'undefined') && ENV && ENV.notices) {
     ENV.notices.forEach(notice => {
-      helper.createNode(notice.type, notice.content)
+      helper.createNode(notice.type, notice.content, undefined, undefined, notice.classes)
       createScreenreaderNodeWithDelay(notice.content, false)
     })
   }
@@ -74,6 +70,6 @@ function createScreenreaderNodeWithDelay (content, closable = true) {
   setTimeout(() => helper.createScreenreaderNode(content, closable), 100)
 }
 
-$(() => setTimeout(renderServerNotifications, 500))
+$(() => setTimeout(renderServerNotifications, 100))
 
 export default $

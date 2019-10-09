@@ -12,6 +12,7 @@ exports[`ActAsModal renders with panda svgs, user avatar, table, and proceed but
     <ModalBody
       as="div"
       padding="medium"
+      variant="default"
     >
       <div
         className="ActAs__body"
@@ -35,13 +36,31 @@ exports[`ActAsModal renders with panda svgs, user avatar, table, and proceed but
         >
           <View
             as="div"
+            borderColor="default"
+            debug={false}
             display="auto"
+            focusColor="info"
+            focusPosition="offset"
+            focused={false}
+            overflowX="visible"
+            overflowY="visible"
+            position="static"
+            shouldAnimateFocus={true}
             size="small"
           >
             <View
               as="div"
+              borderColor="default"
+              debug={false}
               display="auto"
+              focusColor="info"
+              focusPosition="offset"
+              focused={false}
+              overflowX="visible"
+              overflowY="visible"
               padding="0 0 x-small 0"
+              position="static"
+              shouldAnimateFocus={true}
               textAlign="center"
             >
               <Text
@@ -49,13 +68,23 @@ exports[`ActAsModal renders with panda svgs, user avatar, table, and proceed but
                 letterSpacing="normal"
                 size="x-large"
                 weight="light"
+                wrap="normal"
               >
                 Act as foo
               </Text>
             </View>
             <View
               as="div"
+              borderColor="default"
+              debug={false}
               display="auto"
+              focusColor="info"
+              focusPosition="offset"
+              focused={false}
+              overflowX="visible"
+              overflowY="visible"
+              position="static"
+              shouldAnimateFocus={true}
               textAlign="center"
             >
               <Text
@@ -63,13 +92,23 @@ exports[`ActAsModal renders with panda svgs, user avatar, table, and proceed but
                 letterSpacing="normal"
                 lineHeight="condensed"
                 size="small"
+                wrap="normal"
               >
                 "Act as" is essentially logging in as this user without a password. You will be able to take any action as if you were this user, and from other users' points of views, it will be as if this user performed them. However, audit logs record that you were the one who performed the actions on behalf of this user.
               </Text>
             </View>
             <View
               as="div"
+              borderColor="default"
+              debug={false}
               display="auto"
+              focusColor="info"
+              focusPosition="offset"
+              focused={false}
+              overflowX="visible"
+              overflowY="visible"
+              position="static"
+              shouldAnimateFocus={true}
               textAlign="center"
             >
               <Avatar
@@ -84,7 +123,16 @@ exports[`ActAsModal renders with panda svgs, user avatar, table, and proceed but
             </View>
             <View
               as="div"
+              borderColor="default"
+              debug={false}
               display="auto"
+              focusColor="info"
+              focusPosition="offset"
+              focused={false}
+              overflowX="visible"
+              overflowY="visible"
+              position="static"
+              shouldAnimateFocus={true}
               textAlign="center"
             >
               <Table
@@ -96,6 +144,7 @@ exports[`ActAsModal renders with panda svgs, user avatar, table, and proceed but
                   </ScreenReaderContent>
                 }
                 hover={false}
+                layout="auto"
                 size="medium"
               >
                 <thead>
@@ -123,6 +172,7 @@ exports[`ActAsModal renders with panda svgs, user avatar, table, and proceed but
                         as="span"
                         letterSpacing="normal"
                         size="small"
+                        wrap="normal"
                       >
                         Full Name:
                       </Text>
@@ -130,7 +180,16 @@ exports[`ActAsModal renders with panda svgs, user avatar, table, and proceed but
                     <td>
                       <View
                         as="div"
+                        borderColor="default"
+                        debug={false}
                         display="auto"
+                        focusColor="info"
+                        focusPosition="offset"
+                        focused={false}
+                        overflowX="visible"
+                        overflowY="visible"
+                        position="static"
+                        shouldAnimateFocus={true}
                         textAlign="end"
                       >
                         <Text
@@ -138,6 +197,7 @@ exports[`ActAsModal renders with panda svgs, user avatar, table, and proceed but
                           letterSpacing="normal"
                           size="small"
                           weight="bold"
+                          wrap="normal"
                         >
                           test user
                         </Text>
@@ -150,6 +210,7 @@ exports[`ActAsModal renders with panda svgs, user avatar, table, and proceed but
                         as="span"
                         letterSpacing="normal"
                         size="small"
+                        wrap="normal"
                       >
                         Display Name:
                       </Text>
@@ -157,7 +218,16 @@ exports[`ActAsModal renders with panda svgs, user avatar, table, and proceed but
                     <td>
                       <View
                         as="div"
+                        borderColor="default"
+                        debug={false}
                         display="auto"
+                        focusColor="info"
+                        focusPosition="offset"
+                        focused={false}
+                        overflowX="visible"
+                        overflowY="visible"
+                        position="static"
+                        shouldAnimateFocus={true}
                         textAlign="end"
                       >
                         <Text
@@ -165,6 +235,7 @@ exports[`ActAsModal renders with panda svgs, user avatar, table, and proceed but
                           letterSpacing="normal"
                           size="small"
                           weight="bold"
+                          wrap="normal"
                         >
                           foo
                         </Text>
@@ -177,6 +248,7 @@ exports[`ActAsModal renders with panda svgs, user avatar, table, and proceed but
                         as="span"
                         letterSpacing="normal"
                         size="small"
+                        wrap="normal"
                       >
                         Sortable Name:
                       </Text>
@@ -184,7 +256,16 @@ exports[`ActAsModal renders with panda svgs, user avatar, table, and proceed but
                     <td>
                       <View
                         as="div"
+                        borderColor="default"
+                        debug={false}
                         display="auto"
+                        focusColor="info"
+                        focusPosition="offset"
+                        focused={false}
+                        overflowX="visible"
+                        overflowY="visible"
+                        position="static"
+                        shouldAnimateFocus={true}
                         textAlign="end"
                       >
                         <Text
@@ -192,6 +273,7 @@ exports[`ActAsModal renders with panda svgs, user avatar, table, and proceed but
                           letterSpacing="normal"
                           size="small"
                           weight="bold"
+                          wrap="normal"
                         >
                           bar, baz
                         </Text>
@@ -204,6 +286,7 @@ exports[`ActAsModal renders with panda svgs, user avatar, table, and proceed but
                         as="span"
                         letterSpacing="normal"
                         size="small"
+                        wrap="normal"
                       >
                         Default Email:
                       </Text>
@@ -211,7 +294,16 @@ exports[`ActAsModal renders with panda svgs, user avatar, table, and proceed but
                     <td>
                       <View
                         as="div"
+                        borderColor="default"
+                        debug={false}
                         display="auto"
+                        focusColor="info"
+                        focusPosition="offset"
+                        focused={false}
+                        overflowX="visible"
+                        overflowY="visible"
+                        position="static"
+                        shouldAnimateFocus={true}
                         textAlign="end"
                       >
                         <Text
@@ -219,6 +311,7 @@ exports[`ActAsModal renders with panda svgs, user avatar, table, and proceed but
                           letterSpacing="normal"
                           size="small"
                           weight="bold"
+                          wrap="normal"
                         >
                           testUser@test.com
                         </Text>
@@ -230,9 +323,18 @@ exports[`ActAsModal renders with panda svgs, user avatar, table, and proceed but
             </View>
             <View
               as="div"
+              borderColor="default"
+              debug={false}
               display="auto"
+              focusColor="info"
+              focusPosition="offset"
+              focused={false}
               key="qux"
               margin="large 0 0 0"
+              overflowX="visible"
+              overflowY="visible"
+              position="static"
+              shouldAnimateFocus={true}
               textAlign="center"
             >
               <Table
@@ -244,6 +346,7 @@ exports[`ActAsModal renders with panda svgs, user avatar, table, and proceed but
                   </ScreenReaderContent>
                 }
                 hover={false}
+                layout="auto"
                 size="medium"
               >
                 <thead>
@@ -271,6 +374,7 @@ exports[`ActAsModal renders with panda svgs, user avatar, table, and proceed but
                         as="span"
                         letterSpacing="normal"
                         size="small"
+                        wrap="normal"
                       >
                         Login ID:
                       </Text>
@@ -278,7 +382,16 @@ exports[`ActAsModal renders with panda svgs, user avatar, table, and proceed but
                     <td>
                       <View
                         as="div"
+                        borderColor="default"
+                        debug={false}
                         display="auto"
+                        focusColor="info"
+                        focusPosition="offset"
+                        focused={false}
+                        overflowX="visible"
+                        overflowY="visible"
+                        position="static"
+                        shouldAnimateFocus={true}
                         textAlign="end"
                       >
                         <Text
@@ -286,6 +399,7 @@ exports[`ActAsModal renders with panda svgs, user avatar, table, and proceed but
                           letterSpacing="normal"
                           size="small"
                           weight="bold"
+                          wrap="normal"
                         >
                           qux
                         </Text>
@@ -298,6 +412,7 @@ exports[`ActAsModal renders with panda svgs, user avatar, table, and proceed but
                         as="span"
                         letterSpacing="normal"
                         size="small"
+                        wrap="normal"
                       >
                         SIS ID:
                       </Text>
@@ -305,7 +420,16 @@ exports[`ActAsModal renders with panda svgs, user avatar, table, and proceed but
                     <td>
                       <View
                         as="div"
+                        borderColor="default"
+                        debug={false}
                         display="auto"
+                        focusColor="info"
+                        focusPosition="offset"
+                        focused={false}
+                        overflowX="visible"
+                        overflowY="visible"
+                        position="static"
+                        shouldAnimateFocus={true}
                         textAlign="end"
                       >
                         <Text
@@ -313,6 +437,7 @@ exports[`ActAsModal renders with panda svgs, user avatar, table, and proceed but
                           letterSpacing="normal"
                           size="small"
                           weight="bold"
+                          wrap="normal"
                         >
                           555
                         </Text>
@@ -325,6 +450,7 @@ exports[`ActAsModal renders with panda svgs, user avatar, table, and proceed but
                         as="span"
                         letterSpacing="normal"
                         size="small"
+                        wrap="normal"
                       >
                         Integration ID:
                       </Text>
@@ -332,7 +458,16 @@ exports[`ActAsModal renders with panda svgs, user avatar, table, and proceed but
                     <td>
                       <View
                         as="div"
+                        borderColor="default"
+                        debug={false}
                         display="auto"
+                        focusColor="info"
+                        focusPosition="offset"
+                        focused={false}
+                        overflowX="visible"
+                        overflowY="visible"
+                        position="static"
+                        shouldAnimateFocus={true}
                         textAlign="end"
                       >
                         <Text
@@ -340,6 +475,7 @@ exports[`ActAsModal renders with panda svgs, user avatar, table, and proceed but
                           letterSpacing="normal"
                           size="small"
                           weight="bold"
+                          wrap="normal"
                         >
                           222
                         </Text>
@@ -351,9 +487,18 @@ exports[`ActAsModal renders with panda svgs, user avatar, table, and proceed but
             </View>
             <View
               as="div"
+              borderColor="default"
+              debug={false}
               display="auto"
+              focusColor="info"
+              focusPosition="offset"
+              focused={false}
               key="tic"
               margin="large 0 0 0"
+              overflowX="visible"
+              overflowY="visible"
+              position="static"
+              shouldAnimateFocus={true}
               textAlign="center"
             >
               <Table
@@ -365,6 +510,7 @@ exports[`ActAsModal renders with panda svgs, user avatar, table, and proceed but
                   </ScreenReaderContent>
                 }
                 hover={false}
+                layout="auto"
                 size="medium"
               >
                 <thead>
@@ -392,6 +538,7 @@ exports[`ActAsModal renders with panda svgs, user avatar, table, and proceed but
                         as="span"
                         letterSpacing="normal"
                         size="small"
+                        wrap="normal"
                       >
                         Login ID:
                       </Text>
@@ -399,7 +546,16 @@ exports[`ActAsModal renders with panda svgs, user avatar, table, and proceed but
                     <td>
                       <View
                         as="div"
+                        borderColor="default"
+                        debug={false}
                         display="auto"
+                        focusColor="info"
+                        focusPosition="offset"
+                        focused={false}
+                        overflowX="visible"
+                        overflowY="visible"
+                        position="static"
+                        shouldAnimateFocus={true}
                         textAlign="end"
                       >
                         <Text
@@ -407,6 +563,7 @@ exports[`ActAsModal renders with panda svgs, user avatar, table, and proceed but
                           letterSpacing="normal"
                           size="small"
                           weight="bold"
+                          wrap="normal"
                         >
                           tic
                         </Text>
@@ -419,6 +576,7 @@ exports[`ActAsModal renders with panda svgs, user avatar, table, and proceed but
                         as="span"
                         letterSpacing="normal"
                         size="small"
+                        wrap="normal"
                       >
                         SIS ID:
                       </Text>
@@ -426,7 +584,16 @@ exports[`ActAsModal renders with panda svgs, user avatar, table, and proceed but
                     <td>
                       <View
                         as="div"
+                        borderColor="default"
+                        debug={false}
                         display="auto"
+                        focusColor="info"
+                        focusPosition="offset"
+                        focused={false}
+                        overflowX="visible"
+                        overflowY="visible"
+                        position="static"
+                        shouldAnimateFocus={true}
                         textAlign="end"
                       >
                         <Text
@@ -434,6 +601,7 @@ exports[`ActAsModal renders with panda svgs, user avatar, table, and proceed but
                           letterSpacing="normal"
                           size="small"
                           weight="bold"
+                          wrap="normal"
                         >
                           777
                         </Text>
@@ -446,6 +614,7 @@ exports[`ActAsModal renders with panda svgs, user avatar, table, and proceed but
                         as="span"
                         letterSpacing="normal"
                         size="small"
+                        wrap="normal"
                       >
                         Integration ID:
                       </Text>
@@ -453,7 +622,16 @@ exports[`ActAsModal renders with panda svgs, user avatar, table, and proceed but
                     <td>
                       <View
                         as="div"
+                        borderColor="default"
+                        debug={false}
                         display="auto"
+                        focusColor="info"
+                        focusPosition="offset"
+                        focused={false}
+                        overflowX="visible"
+                        overflowY="visible"
+                        position="static"
+                        shouldAnimateFocus={true}
                         textAlign="end"
                       >
                         <Text
@@ -461,6 +639,7 @@ exports[`ActAsModal renders with panda svgs, user avatar, table, and proceed but
                           letterSpacing="normal"
                           size="small"
                           weight="bold"
+                          wrap="normal"
                         >
                           888
                         </Text>
@@ -472,7 +651,16 @@ exports[`ActAsModal renders with panda svgs, user avatar, table, and proceed but
             </View>
             <View
               as="div"
+              borderColor="default"
+              debug={false}
               display="auto"
+              focusColor="info"
+              focusPosition="offset"
+              focused={false}
+              overflowX="visible"
+              overflowY="visible"
+              position="static"
+              shouldAnimateFocus={true}
               textAlign="center"
             >
               <Button

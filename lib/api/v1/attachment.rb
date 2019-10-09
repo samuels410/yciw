@@ -43,7 +43,8 @@ module Api::V1::Attachment
       'folder_id' => attachment.folder_id,
       'display_name' => attachment.display_name,
       'filename' => attachment.filename,
-      'workflow_state' => attachment.workflow_state
+      'workflow_state' => attachment.workflow_state,
+      'upload_status' => AttachmentUploadStatus.upload_status(attachment)
     }
     return hash if options[:only] && options[:only].include?('names')
 
@@ -162,8 +163,9 @@ module Api::V1::Attachment
     params[:name] || params[:filename]
   end
 
-  def infer_upload_content_type(params)
-    params[:content_type].presence || Attachment.mimetype(infer_upload_filename(params))
+  def infer_upload_content_type(params, default_mimetype = nil)
+    mime_type = params[:content_type].presence || Attachment.mimetype(infer_upload_filename(params))
+    mime_type && mime_type != 'unknown/unknown' ? mime_type : default_mimetype
   end
 
   def infer_upload_folder(context, params)
@@ -231,20 +233,27 @@ module Api::V1::Attachment
     # no permission check required to use the preferred folder
 
     folder ||= opts[:folder]
-    progress_context =
-      opts[:assignment] ||
-      (opts[:assignment_id] && Assignment.where(:id => params[:assignment_id]).first) ||
+    progress_context = if opts[:assignment].present?
+      opts[:assignment]
+    elsif params[:assignment_id].present?
+      Assignment.find_by(id: params[:assignment_id])
+    else
       @current_user
+    end
+
     if InstFS.enabled?
       additional_capture_params = {}
       progress_json_result = if params[:url]
-        progress = ::Progress.new(context: progress_context, user_id: @current_user, tag: :upload_via_url)
+        progress = ::Progress.new(context: progress_context, user: @current_user, tag: :upload_via_url)
         progress.start
         progress.save!
 
-        additional_capture_params = {
-          eula_agreement_timestamp: params[:eula_agreement_timestamp]
-        }
+        if progress_context.is_a? Assignment
+          additional_capture_params = {
+            eula_agreement_timestamp: params[:eula_agreement_timestamp],
+            submit_assignment: opts[:submit_assignment]
+          }
+        end
 
         progress_json(progress, @current_user, session)
       end
@@ -272,7 +281,7 @@ module Api::V1::Attachment
       @attachment.context = context
       @attachment.user = @current_user
       @attachment.filename = infer_upload_filename(params)
-      @attachment.content_type = infer_upload_content_type(params)
+      @attachment.content_type = infer_upload_content_type(params, 'unknown/unknown')
       @attachment.folder = folder
       @attachment.set_publish_state_for_usage_rights
       @attachment.file_state = 'deleted'
@@ -282,14 +291,16 @@ module Api::V1::Attachment
 
       on_duplicate = infer_on_duplicate(params)
       if params[:url]
-
         progress = ::Progress.new(context: progress_context, user: @current_user, tag: :upload_via_url)
         progress.reset!
 
         executor = Services::SubmitHomeworkService.create_clone_url_executor(
           params[:url], on_duplicate, opts[:check_quota], progress: progress
         )
-        Services::SubmitHomeworkService.submit_job(progress, @attachment, params[:eula_agreement_timestamp], executor)
+
+        Services::SubmitHomeworkService.submit_job(
+          @attachment, progress, params[:eula_agreement_timestamp], executor, opts[:submit_assignment]
+        )
 
         json = { progress: progress_json(progress, @current_user, session) }
       else

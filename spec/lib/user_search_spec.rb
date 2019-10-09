@@ -121,7 +121,7 @@ describe UserSearch do
               ObserverEnrollment.create!(:user => ta, :course => course, :workflow_state => 'active')
               ta2 = User.create!(:name => 'Tyler Observer 2')
               ObserverEnrollment.create!(:user => ta2, :course => course, :workflow_state => 'active')
-              student.linked_observers << ta2
+              add_linked_observer(student, ta2)
             end
 
             it { is_expected.not_to include('Tyler Observer 2') }
@@ -206,6 +206,22 @@ describe UserSearch do
             expect(results).to include(other_user)
           end
 
+          it 'sorts by sis id' do
+            User.find_by(name: 'Rose Tyler').pseudonyms.create!(unique_id: 'rose.tyler@example.com',
+              sis_user_id: '25rose', account_id: course.root_account_id)
+            User.find_by(name: 'Tyler Pickett').pseudonyms.create!(unique_id: 'tyler.pickett@example.com',
+              sis_user_id: '1tyler', account_id: course.root_account_id)
+            users = UserSearch.for_user_in_context('Tyler', course, user, nil, sort: 'sis_id')
+            expect(users.map(&:name)).to eq ['Tyler Pickett', 'Rose Tyler', 'Tyler Teacher']
+          end
+
+          it 'does not return users twice if it matches their name and an old login' do
+            tyler = User.find_by(name: 'Tyler Pickett')
+            tyler.pseudonyms.create!(unique_id: 'Yo', account_id: course.root_account_id, current_login_at: Time.zone.now)
+            tyler.pseudonyms.create!(unique_id: 'Pickett', account_id: course.root_account_id, current_login_at: 1.week.ago)
+            users = UserSearch.for_user_in_context('Pickett', course, user, nil, sort: 'username')
+            expect(users.map(&:name)).to eq ['Tyler Pickett']
+          end
         end
 
         describe 'searching on emails' do
@@ -246,6 +262,13 @@ describe UserSearch do
             user.communication_channels.create!(path: 'unconfirmed@example.com')
             expect(UserSearch.for_user_in_context("unconfirmed", course, user)).to eq [user]
           end
+
+          it 'sorts by email' do
+            User.find_by(name: 'Tyler Pickett').communication_channels.create!(path: '1tyler@example.com')
+            User.find_by(name: 'Tyler Teacher').communication_channels.create!(path: '25teacher@example.com')
+            users = UserSearch.for_user_in_context('Tyler', course, user, nil, sort: 'email')
+            expect(users.map(&:name)).to eq ['Tyler Pickett', 'Tyler Teacher', 'Rose Tyler']
+          end
         end
 
         describe 'searching by a DB ID' do
@@ -277,6 +300,62 @@ describe UserSearch do
         it 'returns a list of matching users using a prefix search' do
           expect(names).to eq ['Stewart Little']
         end
+      end
+    end
+
+    describe 'account user search with search term' do
+      subject { names }
+
+      before { Setting.set('user_search_with_full_complexity', 'true') }
+
+      let(:course1) { Course.create!(workflow_state: "available") }
+
+      let(:user_names_not_enrolled) { ['not enrolled Tyler 01', 'not enrolled 02'] }
+
+      let(:user_names_enrolled_in_course1) { ['enrolled 01', 'enrolled Tyler 02'] }
+
+      let(:teacher_names_enrolled_in_course1) { ['enrolled teacher Tyler 01', 'enrolled teacher 02'] }
+
+      before do
+        user_names_not_enrolled.each do |name|
+          User.create!(:name => name)
+        end
+
+        user_names_enrolled_in_course1.each do |name|
+          student = User.create!(:name => name)
+          StudentEnrollment.create!(:user => student, :course => course1, :workflow_state => 'active')
+        end
+
+        teacher_names_enrolled_in_course1.each do |name|
+          teacher = User.create!(:name => name)
+          TeacherEnrollment.create!(:user => teacher, :course => course1, :workflow_state => 'active')
+        end
+      end
+
+      describe 'to a single role' do
+        let(:users) { UserSearch.for_user_in_context('Tyler', course.account, user, nil, enrollment_type: 'student').to_a }
+
+        it { is_expected.to include('Rose Tyler') }
+        it { is_expected.to include('Tyler Pickett') }
+        # include students from different courses
+        it { is_expected.to include('enrolled Tyler 02') }
+        # don't include teachers
+        it { is_expected.not_to include('enrolled teacher Tyler 01') }
+        # don't include users not enrolled
+        it { is_expected.not_to include('not enrolled Tyler 01') }
+      end
+
+      describe 'to multiple roles' do
+        let(:users) { UserSearch.for_user_in_context('Tyler', course.account, user, nil, enrollment_type: ['student', 'teacher']).to_a }
+
+        it { is_expected.to include('Rose Tyler') }
+        it { is_expected.to include('Tyler Pickett') }
+        # include students from different courses
+        it { is_expected.to include('enrolled Tyler 02') }
+        # include teachers
+        it { is_expected.to include('enrolled teacher Tyler 01') }
+        # don't include users not enrolled
+        it { is_expected.not_to include('not enrolled Tyler 01') }
       end
     end
 
@@ -318,7 +397,6 @@ describe UserSearch do
   end
 
   describe '.scope_for' do
-
     let(:search_names) do
       ['Rose Tyler',
        'Martha Jones',
@@ -369,6 +447,66 @@ describe UserSearch do
       account_admin_user
       expect(UserSearch.scope_for(group, @admin, :enrollment_type => ['student']).to_a).to eq [@student]
       expect(UserSearch.scope_for(group, @admin, :enrollment_type => ['teacher']).to_a).to be_empty
+    end
+
+    describe 'account user list filtering by role' do
+      subject { names }
+
+      let(:course1) { Course.create!(workflow_state: "available") }
+
+      let(:user_names_not_enrolled) { ['not enrolled 01', 'not enrolled 02'] }
+
+      let(:user_names_enrolled_in_course1) { ['enrolled 01', 'enrolled 02'] }
+
+      let(:teacher_names_enrolled_in_course1) { ['enrolled teacher 01', 'enrolled teacher 02'] }
+
+      before do
+        user_names_not_enrolled.each do |name|
+          User.create!(:name => name)
+        end
+
+        user_names_enrolled_in_course1.each do |name|
+          student = User.create!(:name => name)
+          StudentEnrollment.create!(:user => student, :course => course1, :workflow_state => 'active')
+        end
+
+        teacher_names_enrolled_in_course1.each do |name|
+          teacher = User.create!(:name => name)
+          TeacherEnrollment.create!(:user => teacher, :course => course1, :workflow_state => 'active')
+        end
+      end
+
+      describe 'to a single role' do
+        let(:users) { UserSearch.scope_for(course.account, nil, enrollment_type: 'student').to_a }
+
+        it { is_expected.to include('Rose Tyler') }
+        it { is_expected.to include('Tyler Pickett') }
+        # include students from different courses
+        it { is_expected.to include('enrolled 01') }
+        it { is_expected.to include('enrolled 02') }
+        # don't include teachers
+        it { is_expected.not_to include('enrolled teacher 01') }
+        it { is_expected.not_to include('enrolled teacher 02') }
+        # don't include users not enrolled
+        it { is_expected.not_to include('not enrolled 01') }
+        it { is_expected.not_to include('not enrolled 02') }
+      end
+
+      describe 'to multiple roles' do
+        let(:users) { UserSearch.scope_for(course.account, nil, enrollment_type: ['student', 'teacher']).to_a }
+
+        it { is_expected.to include('Rose Tyler') }
+        it { is_expected.to include('Tyler Pickett') }
+        # include students from different courses
+        it { is_expected.to include('enrolled 01') }
+        it { is_expected.to include('enrolled 02') }
+        # include teachers
+        it { is_expected.to include('enrolled teacher 01') }
+        it { is_expected.to include('enrolled teacher 02') }
+        # don't include users not enrolled
+        it { is_expected.not_to include('not enrolled 01') }
+        it { is_expected.not_to include('not enrolled 02') }
+      end
     end
   end
 end

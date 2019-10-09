@@ -162,6 +162,7 @@ class LearningOutcomeGroup < ActiveRecord::Base
   end
 
   scope :active, -> { where("learning_outcome_groups.workflow_state<>'deleted'") }
+  scope :active_first, -> { order(Arel.sql("CASE WHEN workflow_state = 'active' THEN 0 ELSE 1 END")) }
 
   scope :global, -> { where(:context_id => nil) }
 
@@ -176,11 +177,13 @@ class LearningOutcomeGroup < ActiveRecord::Base
     # do this in a transaction, so parallel calls don't create multiple roots
     # TODO: clean up contexts that already have multiple root outcome groups
     transaction do
-      group = scope.active.root.first
+      group = scope.active.root.take
       if !group && force
         group = scope.build :title => context.try(:name) || 'ROOT'
         group.building_default = true
-        group.save!
+        Shackles.activate(:master) do
+          group.save!
+        end
       end
       group
     end

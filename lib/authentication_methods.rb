@@ -84,15 +84,25 @@ module AuthenticationMethods
     end
   end
 
+  ALLOWED_SCOPE_INCLUDES = %w{uuid}
+
+  def filter_includes(key)
+    # no funny business
+    params.delete(key) unless params[key].class == Array
+    return unless params.key?(key)
+    params[key] &= ALLOWED_SCOPE_INCLUDES
+  end
+
   def validate_scopes
     if @access_token
       developer_key = @access_token.developer_key
       request_method = request.method.casecmp('HEAD') == 0 ? 'GET' : request.method.upcase
 
       if developer_key.try(:require_scopes)
-        if @access_token.url_scopes_for_method(request_method).any? { |scope| scope =~ request.path }
-          params.delete :include
-          params.delete :includes
+        scope_patterns = @access_token.url_scopes_for_method(request_method).concat(AccessToken.always_allowed_scopes)
+        if scope_patterns.any? { |scope| scope =~ request.path }
+          filter_includes(:include)
+          filter_includes(:includes)
         else
           raise AccessTokenScopeError
         end
@@ -281,7 +291,8 @@ module AuthenticationMethods
     rescue URI::Error
       return nil
     end
-    return nil unless uri.path[0] == '/'
+    return nil unless uri.path && uri.path[0] == '/'
+    return "#{request.protocol}#{request.host_with_port}#{uri.path.sub(%r{/download$}, '')}" if uri.path =~ %r{/files/(\d+~)?\d+/download$}
     return "#{request.protocol}#{request.host_with_port}#{uri.path}#{uri.query && "?#{uri.query}"}#{uri.fragment && "##{uri.fragment}"}"
   end
 
@@ -305,9 +316,7 @@ module AuthenticationMethods
   protected :redirect_back_or_default
 
   def redirect_to_referrer_or_default(default)
-    redirect_to(:back)
-  rescue ActionController::RedirectBackError
-    redirect_to(default)
+    redirect_back(fallback_location: default)
   end
 
   def redirect_to_login

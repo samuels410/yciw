@@ -5,7 +5,7 @@ GraphQL Batch Loaders
 
 In a Canvas REST API end-point.  N+1 Queries are commonly found, but easy to
 avoid.  When a controller action runs, we know what data is being requested and
-can preload appriopriately.
+can preload appropriately.
 
 As a GraphQL type resolver executes, it is too late to preload data.  Consider
 the following query:
@@ -42,9 +42,7 @@ end
 
 # good example
 def group_set
-  Loaders::AssociationLoader.for(Assignment, :group_category).
-    load(assignment).
-    then(&:group_category)
+  Loaders::AssociationLoader.for(Assignment, :group_category).load(assignment)
 end
 
 # short (but still good) example

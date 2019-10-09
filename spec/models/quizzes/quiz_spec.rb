@@ -541,6 +541,7 @@ describe Quizzes::Quiz do
     q.quiz_questions.create!(:quiz_group => g)
     q.quiz_questions.create!()
     q.quiz_questions.create!()
+    q.quiz_questions.create!(:question_data => {:question_type => "text_only_question"})
     # this is necessary because of some caching that happens on the quiz object, that is not a factor in production
     q.root_entries(true)
     q.save
@@ -784,22 +785,22 @@ describe Quizzes::Quiz do
       @course.restrict_enrollments_to_course_dates = true
       @course.conclude_at = deadline
       @course.save!
-      u = User.create!(:name => "Fred Colon")
+      student_in_course(course: @course, active_all: true)
       q = @course.quizzes.create!(:title => "locked tomorrow")
-      sub2 = q.generate_submission(u)
+      sub2 = q.generate_submission(@user)
       expect(sub2.end_at).to eq deadline
     end
-    it "should set end_at for enrollment end dates" do
+    it "should set end_at to nil" do
       # when course.end_at doesn't exist
       deadline = 1.day.from_now
       @course.restrict_enrollments_to_course_dates = true
       @course.save!
       @course.enrollment_term.end_at = deadline
       @course.enrollment_term.save!
-      u = User.create!(:name => "Fred Colon")
+      student_in_course(course: @course, active_all: true)
       q = @course.quizzes.create!(:title => "locked tomorrow")
-      sub2 = q.generate_submission(u)
-      expect(sub2.end_at).to eq deadline
+      sub2 = q.generate_submission(@user)
+      expect(sub2.end_at).to be_nil
     end
 
     describe 'term.end_at when no enrollment_restrictions are present' do
@@ -811,12 +812,8 @@ describe Quizzes::Quiz do
         @course.enrollment_term.save!
 
         # Create a special time extension section
-        section = @course.course_sections.create!(end_at: 1.days.from_now)
-
-        # Create user and enroll them in our section
-        @user = User.create!(:name => "Fred Colon")
-        @enrollment = section.enroll_user(@user, "StudentEnrollment")
-        @enrollment.accept(:force)
+        section = @course.course_sections.create!(end_at: 1.day.from_now)
+        student_in_course(course: @course, active_all: true, section: section)
 
         @q = @course.quizzes.create!(:title => "locked tomorrow")
       end
@@ -837,6 +834,8 @@ describe Quizzes::Quiz do
         @course.enrollment_term.end_at = @term_deadline
         @course.enrollment_term.save!
 
+        student_in_course(course: @course, active_all: true)
+
         @q = @course.quizzes.create!(:title => "locked tomorrow")
       end
 
@@ -845,12 +844,12 @@ describe Quizzes::Quiz do
         expect(sub.end_at).to eq @deadline
       end
 
-      it "should fall back onto the term end_dates if no course.end_at" do
+      it "should allow nil course.end_at" do
         @course.conclude_at = nil
         @course.save!
 
         sub = @q.generate_submission(@user)
-        expect(sub.end_at).to eq @term_deadline
+        expect(sub.end_at).to be_nil
       end
     end
 
@@ -867,11 +866,7 @@ describe Quizzes::Quiz do
 
         # Create a special time extension section
         section = @course.course_sections.create!(restrict_enrollments_to_section_dates: true, end_at: @deadline, start_at: @start_at)
-
-        # Create user and enroll them in our section
-        @user = User.create!(:name => "Fred Colon")
-        @enrollment = section.enroll_user(@user, "StudentEnrollment")
-        @enrollment.accept(:force)
+        student_in_course(course: @course, active_all: true, section: section)
 
         @q = @course.quizzes.create!(:title => "locked tomorrow")
       end
@@ -1827,7 +1822,7 @@ describe Quizzes::Quiz do
     end
 
     context "show_correct_answers_last_attempt is true" do
-      let(:student) { student_in_course(course: @course, active_all: true) }
+      let(:student) { student_in_course(course: @course, active_all: true).user }
 
       it "shows the correct answers on last attempt completed" do
         quiz = @course.quizzes.create!({

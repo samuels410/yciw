@@ -27,17 +27,6 @@ import Group from '../../../models/Group'
 import template from 'jst/groups/manage/groupCategoryDetail'
 
 export default class GroupCategoryDetailView extends View {
-  constructor(...args) {
-    {
-      // Hack: trick Babel/TypeScript into allowing this before super.
-      if (false) { super(); }
-      let thisFn = (() => { return this; }).toString();
-      let thisName = thisFn.slice(thisFn.indexOf('return') + 6 + 1, thisFn.lastIndexOf(';')).trim();
-      eval(`${thisName} = this;`);
-    }
-    this.deleteCategory = this.deleteCategory.bind(this)
-    super(...args)
-  }
 
   static initClass() {
     this.prototype.template = template
@@ -69,8 +58,8 @@ export default class GroupCategoryDetailView extends View {
   }
 
   attach() {
-    this.collection.on('add remove reset', this.render)
-    return this.model.on('change', this.render)
+    this.collection.on('add remove reset', this.render, this)
+    return this.model.on('change', this.render, this)
   }
 
   afterRender() {

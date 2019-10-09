@@ -180,6 +180,7 @@ module Api::V1::Assignment
 
     hash['is_quiz_assignment'] = assignment.quiz? && assignment.quiz.assignment?
     hash['can_duplicate'] = assignment.can_duplicate?
+    hash['original_course_id'] = assignment.duplicate_of&.course&.id
     hash['original_assignment_id'] = assignment.duplicate_of&.id
     hash['original_assignment_name'] = assignment.duplicate_of&.name
     hash['workflow_state'] = assignment.workflow_state
@@ -243,6 +244,7 @@ module Api::V1::Assignment
     end
 
     if assignment.context.grants_any_right?(user, :read_sis, :manage_sis)
+      hash['sis_assignment_id'] = assignment.sis_source_id
       hash['integration_id'] = assignment.integration_id
       hash['integration_data'] = assignment.integration_data
     end
@@ -284,7 +286,9 @@ module Api::V1::Assignment
           'id' => rubric.id,
           'title' => rubric.title,
           'points_possible' => rubric.points_possible,
-          'free_form_criterion_comments' => !!rubric.free_form_criterion_comments
+          'free_form_criterion_comments' => !!rubric.free_form_criterion_comments,
+          'hide_score_total' => !!assignment.rubric_association.hide_score_total,
+          'hide_points' => !!assignment.rubric_association.hide_points
         }
       end
     end
@@ -361,6 +365,10 @@ module Api::V1::Assignment
       hash['planner_override'] = planner_override_json(override, user, session)
     end
 
+    if assignment.course.post_policies_enabled?
+      hash['post_manually'] = assignment.post_manually?
+    end
+
     hash['anonymous_grading'] = value_to_boolean(assignment.anonymous_grading)
     hash['anonymize_students'] = assignment.anonymize_students?
     hash
@@ -422,6 +430,7 @@ module Api::V1::Assignment
     grading_standard_id
     freeze_on_copy
     notify_of_update
+    sis_assignment_id
     integration_id
     omit_from_final_grade
     anonymous_instructor_annotations
@@ -501,11 +510,13 @@ module Api::V1::Assignment
     end
 
     if @overrides_affected.to_i > 0 || cached_due_dates_changed
+      assignment.clear_cache_key(:availability)
       DueDateCacher.recompute(prepared_update[:assignment], update_grades: true, executing_user: user)
     end
 
     response
-  rescue ActiveRecord::RecordInvalid
+  rescue ActiveRecord::RecordInvalid => e
+    assignment.errors.add('invalid_record', e)
     false
   rescue Lti::AssignmentSubscriptionsHelper::AssignmentSubscriptionError => e
     assignment.errors.add('plagiarism_tool_subscription', e)
@@ -534,7 +545,7 @@ module Api::V1::Assignment
     if assignment_params['submission_types'].present? &&
       !assignment_params['submission_types'].all? do |s|
         return false if s == 'wiki_page' && !self.context.try(:feature_enabled?, :conditional_release)
-        API_ALLOWED_SUBMISSION_TYPES.include?(s)
+        API_ALLOWED_SUBMISSION_TYPES.include?(s) || (s == 'default_external_tool' && assignment.unpublished?)
       end
         assignment.errors.add('assignment[submission_types]',
           I18n.t('assignments_api.invalid_submission_types',
@@ -658,6 +669,7 @@ module Api::V1::Assignment
       data = update_params['integration_data']
       update_params['integration_data'] = JSON.parse(data) if data.is_a?(String)
     else
+      update_params.delete('sis_assignment_id')
       update_params.delete('integration_id')
       update_params.delete('integration_data')
     end
@@ -914,7 +926,7 @@ module Api::V1::Assignment
     if plagiarism_capable?(assignment_params)
       tool = assignment_configuration_tool(assignment_params)
       assignment.tool_settings_tool = tool
-    elsif assignment.persisted? && assignment.assignment_configuration_tool_lookups.present?
+    elsif assignment.persisted? && clear_tool_settings_tools?(assignment, assignment_params)
       # Destroy subscriptions and tool associations
       assignment.send_later_if_production(:clear_tool_settings_tools)
     end
@@ -931,6 +943,15 @@ module Api::V1::Assignment
       tool = mh if mh_context == @context || @context.account_chain.include?(mh_context)
     end
     tool
+  end
+
+  def clear_tool_settings_tools?(assignment, assignment_params)
+    assignment.assignment_configuration_tool_lookups.present? &&
+      assignment_params['submission_types']&.present? &&
+      (
+        !assignment.submission_types.split(',').any? { |t| assignment_params['submission_types'].include?(t) } ||
+        assignment_params['submission_types'].blank?
+      )
   end
 
   def plagiarism_capable?(assignment_params)

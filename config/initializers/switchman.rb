@@ -83,12 +83,12 @@ Rails.application.config.after_initialize do
 
   Switchman::Shard.class_eval do
     self.primary_key = "id"
-    reset_column_information # make sure that the id column object knows it is the primary key
+    reset_column_information if connected? # make sure that the id column object knows it is the primary key
 
     serialize :settings, Hash
 
     # the default shard was already loaded, but didn't deserialize it
-    if default.is_a?(self) && default.instance_variable_get(:@attributes)['settings'].is_a?(String)
+    if connected? && default.is_a?(self) && default.instance_variable_get(:@attributes)['settings'].is_a?(String)
       settings = serialized_attributes['settings'].load(default.read_attribute('settings'))
       default.settings = settings
     end
@@ -98,6 +98,8 @@ Rails.application.config.after_initialize do
     delegate :in_current_region?, to: :database_server
 
     scope :in_region, ->(region) do
+      next in_current_region if region.nil?
+
       servers = DatabaseServer.all.select { |db| db.in_region?(region) }.map(&:id)
       if servers.include?(Shard.default.database_server.id)
         where("database_server_id IN (?) OR database_server_id IS NULL", servers)
@@ -107,16 +109,15 @@ Rails.application.config.after_initialize do
     end
 
     scope :in_current_region, -> do
-      @current_region_scope ||=
-        if !default.is_a?(Switchman::Shard)
-          # sharding isn't set up? maybe we're in tests, or a somehow degraded environment
-          # either way there's only one shard, and we always want to see it
-          [default]
-        elsif !ApplicationController.region || DatabaseServer.all.all? { |db| !db.config[:region] }
-          all
-        else
-          in_region(ApplicationController.region)
-        end
+      if !default.is_a?(Switchman::Shard)
+        # sharding isn't set up? maybe we're in tests, or a somehow degraded environment
+        # either way there's only one shard, and we always want to see it
+        [default]
+      elsif !ApplicationController.region || DatabaseServer.all.all? { |db| !db.config[:region] }
+        all
+      else
+        in_region(ApplicationController.region)
+      end
     end
   end
 
@@ -154,6 +155,24 @@ Rails.application.config.after_initialize do
         db.shards.first.activate do
           klass.send_later_enqueue_args(method, enqueue_args, *args)
         end
+      end
+    end
+
+    def self.send_in_region(region, klass, method, enqueue_args = {}, *args)
+      return klass.send_later_enqueue_args(method, enqueue_args, *args) if region.nil?
+
+      shard = nil
+      all.find { |db| db.config[:region] == region && (shard = db.shards.first) }
+
+      # the app server knows what region it's in, but the database servers don't?
+      # just send locally
+      if shard.nil? && all.all? { |db| db.config[:region].nil? }
+        return klass.send_later_enqueue_args(method, enqueue_args, *args)
+      end
+
+      raise "Could not find a shard in region #{region}" unless shard
+      shard.activate do
+        klass.send_later_enqueue_args(method, enqueue_args, *args)
       end
     end
   end

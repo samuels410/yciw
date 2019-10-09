@@ -16,10 +16,11 @@ module LtiAdvantage::Messages
       nonce
       sub
       version
+      target_link_uri
     ].freeze
 
     TYPED_ATTRIBUTES = {
-      aud: Array,
+      aud: [Array, String],
       context: LtiAdvantage::Claims::Context,
       custom: Hash,
       extensions: Hash,
@@ -60,8 +61,7 @@ module LtiAdvantage::Messages
                   :updated_at,
                   :website,
                   :zoneinfo,
-                  :id,
-                  :lti11_legacy_user_id
+                  :id
 
     def self.create_jws(body, private_key, alg = :RS256)
       JSON::JWT.new(body).sign(private_key, alg).to_s

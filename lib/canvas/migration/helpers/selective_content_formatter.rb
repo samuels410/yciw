@@ -25,7 +25,7 @@ module Canvas::Migration::Helpers
             ['quizzes', -> { I18n.t('lib.canvas.migration.quizzes', 'Quizzes') }],
             ['assessment_question_banks', -> { I18n.t('lib.canvas.migration.assessment_question_banks', 'Question Banks') }],
             ['discussion_topics', -> { I18n.t('lib.canvas.migration.discussion_topics', 'Discussion Topics') }],
-            ['wiki_pages', -> { I18n.t('lib.canvas.migration.wikis', 'Wiki Pages') }],
+            ['wiki_pages', -> { I18n.t('lib.canvas.migration.wikis', 'Pages') }],
             ['context_external_tools', -> { I18n.t('lib.canvas.migration.external_tools', 'External Tools') }],
             ['tool_profiles', -> { I18n.t('lib.canvas.migration.tool_profiles', 'Tool Profiles') }],
             ['announcements', -> { I18n.t('lib.canvas.migration.announcements', 'Announcements') }],
@@ -36,9 +36,10 @@ module Canvas::Migration::Helpers
             ['attachments', -> { I18n.t('lib.canvas.migration.attachments', 'Files') }],
     ]
 
-    def initialize(migration=nil, base_url=nil)
+    def initialize(migration=nil, base_url=nil, global_identifiers: )
       @migration = migration
       @base_url = base_url
+      @global_identifiers = global_identifiers
     end
 
     def valid_type?(type=nil)
@@ -184,7 +185,7 @@ module Canvas::Migration::Helpers
             hash[:title] = default_bank.title
           end
           hash[:title] ||= @migration.question_bank_name || AssessmentQuestionBank.default_imported_title
-          hash[:migration_id] ||= CC::CCHelper.create_key(hash[:title], 'assessment_question_bank')
+          hash[:migration_id] ||= CC::CCHelper.create_key(hash[:title], 'assessment_question_bank', global: @global_identifiers)
         end
       when 'context_modules'
         hash[:item_count] = item['item_count']
@@ -214,9 +215,11 @@ module Canvas::Migration::Helpers
 
     # returns lists of available content from a source course
     def get_content_from_course(type=nil, source=nil)
-      content_list = []
       source ||= @migration.source_course || Course.find(@migration.migration_settings[:source_course_id]) if @migration
-      if source
+      return [] unless source
+
+      content_list = []
+      source.shard.activate do
         if type
           case type
             when 'assignments'
@@ -316,7 +319,7 @@ module Canvas::Migration::Helpers
 
       hash = {type: type, title: title}
       if @migration
-        mig_id = CC::CCHelper.create_key(item)
+        mig_id = CC::CCHelper.create_key(item, global: @global_identifiers)
         hash[:migration_id] = mig_id
         hash[:property] = "#{property_prefix}[#{type}][id_#{mig_id}]"
       else

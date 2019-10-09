@@ -19,30 +19,66 @@
 import htmlEscape from "escape-html";
 import clickCallback from "./clickCallback";
 import formatMessage from "../../../format-message";
+import TrayController from './VideoOptionsTray/TrayController'
+import {isVideoElement} from '../shared/ContentSelection'
+
+const trayController = new TrayController()
 
 tinymce.create("tinymce.plugins.InstructureRecord", {
-  init: function(ed) {
+  init(ed) {
     ed.addCommand("instructureRecord", clickCallback.bind(this, ed, document));
-    ed.addButton("instructure_record", {
-      title: htmlEscape(
+    ed.ui.registry.addMenuButton("instructure_record", {
+      tooltip: htmlEscape(
         formatMessage({
           default: "Record/Upload Media",
           description: "Title for RCE button to insert or record media"
         })
       ),
-      cmd: "instructureRecord",
-      icon: "video icon-video"
-    });
-  },
+      icon: "video",
+      fetch(callback) {
+        const items = [
+          {
+            type: 'menuitem',
+            text: formatMessage('Upload/Record Media'),
+            onAction: () => ed.execCommand("instructureRecord"),
+          },
 
-  getInfo: function() {
-    return {
-      longname: "InstructureRecord",
-      author: "Brian Whitmer",
-      authorurl: "http://www.instructure.com",
-      infourl: "http://www.instructure.com",
-      version: tinymce.majorVersion + "." + tinymce.minorVersion
-    };
+          // {
+          //   type: 'menuitem',
+          //   text: formatMessage('Course Media'), // This item needs to be adjusted to be user/context aware, i.e. Use Media
+          //   onAction() {
+          //     ed.focus(true) // activate the editor without changing focus
+          //   }
+          // }
+        ]
+        callback(items);
+      }
+    });
+
+    /*
+     * Register the Video "Options" button that will open the Video Options
+     * tray.
+     */
+    const buttonAriaLabel = formatMessage('Show video options')
+    ed.ui.registry.addButton('instructure-video-options', {
+      onAction() {
+        // show the tray
+        trayController.showTrayForEditor(ed)
+      },
+
+      text: formatMessage('Options'),
+      tooltip: buttonAriaLabel
+    });
+
+    ed.ui.registry.addContextToolbar('instructure-video-toolbar', {
+      items: 'instructure-video-options',
+      position: 'node',
+      predicate: false,
+      scope: 'node'
+    })
+  },
+  remove(editor) {
+    trayController.hideTrayForEditor(editor)
   }
 });
 

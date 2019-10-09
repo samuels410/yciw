@@ -101,6 +101,11 @@ class ContentMigration < ActiveRecord::Base
     read_or_initialize_attribute(:migration_settings, {}.with_indifferent_access)
   end
 
+  # this is needed by Attachment#clone_for, which is used to allow a ContentExport to be directly imported
+  def attachments
+    Attachment.where(id: self.attachment_id)
+  end
+
   def update_migration_settings(new_settings)
     new_settings.each do |key, val|
       migration_settings[key] = val
@@ -109,6 +114,13 @@ class ContentMigration < ActiveRecord::Base
 
   def import_immediately?
     !!migration_settings[:import_immediately]
+  end
+
+  def content_export
+    if !association(:content_export).loaded? && source_course_id && Shard.shard_for(source_course_id) != self.shard
+      association(:content_export).target = Shard.shard_for(source_course_id).activate { ContentExport.where(:content_migration_id => self).first }
+    end
+    super
   end
 
   def converter_class=(c_class)
@@ -136,7 +148,9 @@ class ContentMigration < ActiveRecord::Base
   end
 
   def n_strand
-    ["migrations:import_content", self.root_account.try(:global_id) || "global"]
+    account_identifier = self.root_account.try(:global_id) || "global"
+    type = self.for_master_course_import? ? "master_course" : self.initiated_source
+    ["migrations:import_content", "#{type}_#{account_identifier}"]
   end
 
   def migration_ids_to_import=(val)
@@ -843,14 +857,24 @@ class ContentMigration < ActiveRecord::Base
     end
   end
 
+  def use_global_identifiers?
+    if self.content_export
+      self.content_export.global_identifiers?
+    elsif self.source_course
+      self.source_course.content_exports.temp_record.can_use_global_identifiers?
+    else
+      false
+    end
+  end
+
   # strips out the "id_" prepending the migration ids in the form
   # also converts arrays of migration ids (or real ids for course exports) into the old hash format
-  def self.process_copy_params(hash, for_content_export=false, return_asset_strings=false)
+  def self.process_copy_params(hash, for_content_export: false, return_asset_strings: false, global_identifiers: false)
     return {} if hash.blank?
     process_key = if return_asset_strings
       ->(asset_string) { asset_string }
     else
-      ->(asset_string) { CC::CCHelper.create_key(asset_string) }
+      ->(asset_string) { CC::CCHelper.create_key(asset_string, global: global_identifiers) }
     end
     new_hash = {}
 

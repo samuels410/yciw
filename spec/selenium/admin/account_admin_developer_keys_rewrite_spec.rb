@@ -49,6 +49,7 @@ describe 'Developer Keys' do
       get "/accounts/#{Account.default.id}/developer_keys"
 
       find_button("Developer Key").click
+      find_button("API Key").click
       f("input[name='developer_key[name]']").send_keys("Cool Tool")
       f("input[name='developer_key[email]']").send_keys("admin@example.com")
       f("textarea[name='developer_key[redirect_uris]']").send_keys("http://example.com")
@@ -87,7 +88,7 @@ describe 'Developer Keys' do
       expect(key.icon_url).to eq "/images/add.png"
     end
 
-    it 'allows editing of legacy redirect URI', test_id: 3469351 do
+    it 'allows editing of developer key', test_id: 3469351 do
       dk = root_developer_key
       dk.update_attribute(:redirect_uri, "http://a/")
       get "/accounts/#{Account.default.id}/developer_keys"
@@ -108,22 +109,6 @@ describe 'Developer Keys' do
       expect(key.email).to eq "admins@example.com"
       expect(key.redirect_uri).to eq "https://b/"
       expect(key.icon_url).to eq "/images/add.png"
-    end
-
-    it "allows editing a developer key", test_id: 3469349 do
-      skip_if_safari(:alert)
-      root_developer_key
-      get "/accounts/#{Account.default.id}/developer_keys"
-      click_edit_icon
-      f("input[name='developer_key[icon_url]']").clear
-      click_enforce_scopes
-      click_scope_group_checkbox
-      find_button("Save Key").click
-
-      expect(ff("#reactContent tbody tr").length).to eq 1
-      expect(Account.default.developer_keys.count).to eq 1
-      key = Account.default.developer_keys.last
-      expect(key.icon_url).to eq nil
     end
 
     it "allows deletion through 'delete this key button'", test_id: 344079 do
@@ -251,7 +236,7 @@ describe 'Developer Keys' do
         fj("span:contains('On'):last").click
         click_inherited_tab
         click_account_tab
-        expect(fxpath("//*[@data-automation='devKeyAdminTable']/tbody/tr/td[5]/fieldset/span/span/span/span[2]/span/span/span[1]/div/label/span[1]").css_value('background-color')).to be_truthy
+        expect(f("table[data-automation='devKeyAdminTable'] input[value='on']").attribute('tabindex')).to eq "0"
       end
 
       it "persists state when switching between inheritance and account tabs", test_id: 3488600 do
@@ -263,8 +248,7 @@ describe 'Developer Keys' do
         fj("span:contains('Off'):last").click
         click_account_tab
         click_inherited_tab
-        expect(fj("fieldset:last")).not_to have_attribute('aria-disabled')
-        expect(fxpath("//*[@data-automation='devKeyAdminTable']/tbody/tr[1]/td[3]/fieldset/span/span/span/span[2]/span/span/span[2]/div/label/span[2]").css_value('background-color')).to be_truthy
+        expect(f("table[data-automation='devKeyAdminTable'] input[value='off']").attribute('tabindex')).to eq "0"
       end
 
       it "only show create developer key button for account tab panel" do
@@ -298,6 +282,7 @@ describe 'Developer Keys' do
       it "does not have enforce scopes toggle activated on initial dev key creation" do
         get "/accounts/#{Account.default.id}/developer_keys"
         find_button("Developer Key").click
+        find_button("API Key").click
         expect(f("span[data-automation='enforce_scopes']")).to contain_css("svg[name='IconX']")
         expect(f("form")).to contain_jqcss("h2:contains('When scope enforcement is disabled, tokens have access to all endpoints available to the authorizing user.')")
       end
@@ -361,7 +346,7 @@ describe 'Developer Keys' do
 
       it "adds scopes to backend developer key via UI in site admin" do
         site_admin_logged_in
-        expand_scope_group_by_filter('Assignment Groups', Account.site_admin.id)
+        expand_scope_group_by_filter('Assignment Groups', Account.default.id)
         click_scope_group_checkbox
         find_button("Save Key").click
         wait_for_ajaximations
@@ -382,6 +367,7 @@ describe 'Developer Keys' do
       it "keeps all endpoints read only checkbox checked after save" do
         get "/accounts/#{Account.default.id}/developer_keys"
         find_button("Developer Key").click
+        find_button("API Key").click
         click_enforce_scopes
         click_select_all_readonly_checkbox
         find_button("Save Key").click
@@ -407,6 +393,7 @@ describe 'Developer Keys' do
       it "displays flash alert if scopes aren't selected when enforce scopes toggled" do
         get "/accounts/#{Account.default.id}/developer_keys"
         find_button("Developer Key").click
+        find_button("API Key").click
         wait_for_ajaximations
         click_enforce_scopes
         wait_for_ajaximations
@@ -425,6 +412,7 @@ describe 'Developer Keys' do
         driver.navigate.back
         wait_for_dev_key_modal_to_close
         find_button("Developer Key").click
+        find_button("API Key").click
         expect(f("input[name='developer_key[name]']").attribute('value')).not_to be_present
       end
 

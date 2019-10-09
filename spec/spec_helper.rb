@@ -61,6 +61,7 @@ BlankSlateProtection.install!
 GreatExpectations.install!
 
 ActionView::TestCase::TestController.view_paths = ApplicationController.view_paths
+ActionView::Base.streaming_completion_on_exception = "</html>"
 
 # this makes sure that a broken transaction becomes functional again
 # by the time we hit rescue_action_in_public, so that the error report
@@ -84,6 +85,9 @@ module SpecTransactionWrapper
 end
 ActionController::Base.set_callback(:process_action, :around,
   ->(_r, block) { SpecTransactionWrapper.wrap_block_in_transaction(block) })
+
+ActionController::Base.set_callback(:process_action, :before,
+  ->(_r) { @streaming_template = false })
 
 module RSpec::Core::Hooks
 class AfterContextHook < Hook
@@ -147,6 +151,12 @@ module RSpec::Rails
 end
 
 module RenderWithHelpers
+  def assign(key, value)
+    @assigned_variables ||= {}
+    @assigned_variables[key] = value
+    super
+  end
+
   def render(*args)
     controller_class = ("#{@controller.controller_path.camelize}Controller".constantize rescue nil) || ApplicationController
 
@@ -174,6 +184,12 @@ module RenderWithHelpers
     real_controller = controller_class.new
     real_controller.instance_variable_set(:@_request, @controller.request)
     real_controller.instance_variable_set(:@context, @controller.instance_variable_get(:@context))
+    @assigned_variables&.each do |key, value|
+      real_controller.instance_variable_set(:"@#{key}", value)
+    end
+    if real_controller.instance_variable_get(:@domain_root_account).nil?
+      real_controller.instance_variable_set(:@domain_root_account, Account.default)
+    end
     @controller.real_controller = real_controller
 
     # just calling "render 'path/to/view'" by default looks for a partial
@@ -253,14 +269,25 @@ end
 RSpec::Matchers.define :and_query do |expected|
   match do |actual|
     query = Rack::Utils.parse_query(URI(actual).query)
-    values_match?(expected, query)
+
+    expected_as_strings = RSpec::Matchers::Helpers.cast_to_strings(expected: expected)
+    values_match?(expected_as_strings, query)
   end
 end
 
 RSpec::Matchers.define :and_fragment do |expected|
   match do |actual|
     fragment = JSON.parse(URI.decode_www_form_component(URI(actual).fragment))
-    values_match?(expected, fragment)
+    expected_as_strings = RSpec::Matchers::Helpers.cast_to_strings(expected: expected)
+    values_match?(expected_as_strings, fragment)
+  end
+end
+
+module RSpec::Matchers::Helpers
+  # allows for matchers to use symbols and literals even though URIs are always strings.
+  # i.e. `and_query({assignment_id: @assignment.id})`
+  def self.cast_to_strings(expected:)
+    expected.map {|k,v| [k.to_s, v.to_s]}.to_h
   end
 end
 
@@ -340,7 +367,6 @@ RSpec.configure do |config|
     Notification.reset_cache!
     ActiveRecord::Base.reset_any_instantiation!
     Folder.reset_path_lookups!
-    RoleOverride.clear_cached_contexts
     Delayed::Job.redis.flushdb if Delayed::Job == Delayed::Backend::Redis::Job
     Rails::logger.try(:info, "Running #{self.class.description} #{@method_name}")
     Attachment.current_root_account = nil
@@ -463,7 +489,7 @@ RSpec.configure do |config|
     Canvas.redis_used = false
   end
 
-  if Bullet.enable?
+  if CANVAS_RAILS5_2 && Bullet.enable?
     config.before(:each) do |example|
       Bullet.start_request
       # we walk the example group chain until we reach one that actually recorded something
@@ -604,17 +630,35 @@ RSpec.configure do |config|
     importer
   end
 
-  def enable_cache(new_cache=:memory_store)
+  def set_cache(new_cache)
+    cache_opts = {}
+    if new_cache == :redis_cache_store
+      if Canvas.redis_enabled?
+        cache_opts[:redis] = Canvas.redis
+      else
+        skip "redis required"
+      end
+    end
     new_cache ||= :null_store
-    new_cache = ActiveSupport::Cache.lookup_store(new_cache)
-    previous_cache = Rails.cache
+    new_cache = ActiveSupport::Cache.lookup_store(new_cache, cache_opts)
     allow(Rails).to receive(:cache).and_return(new_cache)
     allow(ActionController::Base).to receive(:cache_store).and_return(new_cache)
     allow_any_instance_of(ActionController::Base).to receive(:cache_store).and_return(new_cache)
-    previous_perform_caching = ActionController::Base.perform_caching
     allow(ActionController::Base).to receive(:perform_caching).and_return(true)
     allow_any_instance_of(ActionController::Base).to receive(:perform_caching).and_return(true)
     MultiCache.reset
+  end
+
+  def specs_require_cache(new_cache=:memory_store)
+    before :each do
+      set_cache(new_cache)
+    end
+  end
+
+  def enable_cache(new_cache=:memory_store)
+    previous_cache = Rails.cache
+    previous_perform_caching = ActionController::Base.perform_caching
+    set_cache(new_cache)
     if block_given?
       begin
         yield
@@ -879,7 +923,7 @@ RSpec.configure do |config|
       scope = klass.order("id DESC").limit(records.size)
       if return_type == :record
         records = scope.to_a.reverse
-        if Bullet.enable?
+        if CANVAS_RAILS5_2 && Bullet.enable?
           records.each { |record| Bullet::Detector::NPlusOneQuery.add_impossible_object(record) }
         end
         records
@@ -887,6 +931,10 @@ RSpec.configure do |config|
         scope.pluck(:id).reverse
       end
     end
+  end
+
+  def skip_if_prepended_class_method_stubs_broken
+    skip("stubbing prepended class methods is broken in this version of ruby") if %w{2.4.6 2.5.1 2.5.3 2.6.0 2.6.2}.include?(RUBY_VERSION)
   end
 end
 

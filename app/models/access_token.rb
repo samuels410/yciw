@@ -87,7 +87,7 @@ class AccessToken < ActiveRecord::Base
   end
 
   def self.visible_tokens(tokens)
-    tokens.reject { |token| token.developer_key.internal_service }
+    tokens.reject { |token| token.developer_key&.internal_service }
   end
 
   def usable?(token_key = :crypted_token)
@@ -205,6 +205,12 @@ class AccessToken < ActiveRecord::Base
     end
   end
 
+  def self.always_allowed_scopes
+    [
+      "/login/oauth2/token"
+    ].map{ |path| Regexp.new("^#{path}$")}
+  end
+
   def url_scopes_for_method(method)
     re = /^url:#{method}\|/
     scopes.select { |scope| re =~ scope }.map do |scope|
@@ -233,11 +239,8 @@ class AccessToken < ActiveRecord::Base
   end
 
   def must_only_include_valid_scopes
-    return true if scopes.nil?
-    errors.add(:scopes, "must match accepted scopes") unless scopes.all? {|scope| TokenScopes.all_scopes.include?(scope)}
-    if developer_key.require_scopes?
-      errors.add(:scopes, 'requested scopes must match scopes on developer key') unless scopes.all? { |scope| developer_key.scopes.include?(scope) }
-    end
+    return true if scopes.nil? || !developer_key.require_scopes?
+    errors.add(:scopes, 'requested scopes must match scopes on developer key') unless scopes.all? { |scope| developer_key.scopes.include?(scope) }
   end
 
   # It's encrypted, but end users still shouldn't see this.

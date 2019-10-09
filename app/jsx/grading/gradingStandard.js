@@ -18,14 +18,19 @@
 
 import React from 'react'
 import ReactDOM from 'react-dom'
+import {shape, string} from 'prop-types'
 import update from 'immutability-helper'
-import DataRow from '../grading/dataRow'
+import DataRow from './dataRow'
 import $ from 'jquery'
-import I18n from 'i18n!external_tools'
+import I18n from 'i18n!gradinggradingStandard'
 import _ from 'underscore'
 import splitAssetString from 'compiled/str/splitAssetString'
 
 class GradingStandard extends React.Component {
+  static propTypes = {
+    standard: shape({title: string.isRequired}).isRequired
+  }
+
   state = {
     editingStandard: $.extend(true, {}, this.props.standard),
     saving: false,
@@ -130,16 +135,12 @@ class GradingStandard extends React.Component {
       .uniq()
       .value()
     const inputsAreUniqueAndNonEmpty = sanitizedRowValues.length === rowValues.length
-    const valuesDoNotOverlap = !_.any(
-      this.state.editingStandard.data,
-      function(element, index, list) {
-        if (index < 1) return false
-        const thisMinScore = this.props.round(element[1])
-        const aboveMinScore = this.props.round(list[index - 1][1])
-        return thisMinScore >= aboveMinScore
-      },
-      this
-    )
+    const valuesDoNotOverlap = !_.some(this.state.editingStandard.data, (element, index, list) => {
+      if (index < 1) return false
+      const thisMinScore = this.props.round(element[1])
+      const aboveMinScore = this.props.round(list[index - 1][1])
+      return thisMinScore >= aboveMinScore
+    })
 
     return inputsAreUniqueAndNonEmpty && valuesDoNotOverlap
   }
@@ -231,7 +232,7 @@ class GradingStandard extends React.Component {
           type="button"
           ref="saveButton"
           className="btn btn-primary save_button"
-          disabled="true"
+          disabled
         >
           {I18n.t('Saving...')}
         </button>
@@ -270,6 +271,8 @@ class GradingStandard extends React.Component {
 
   renderEditAndDeleteIcons = () => {
     if (!this.props.editing) {
+      const {title} = this.props.standard
+
       return (
         <div>
           <button
@@ -280,7 +283,9 @@ class GradingStandard extends React.Component {
             onClick={this.triggerEditGradingStandard}
             type="button"
           >
-            <span className="screenreader-only">{I18n.t('Edit Grading Scheme')}</span>
+            <span className="screenreader-only">
+              {I18n.t('Edit Grading Scheme %{title}', {title})}
+            </span>
             <i className="icon-edit" />
           </button>
           <button
@@ -289,7 +294,9 @@ class GradingStandard extends React.Component {
             onClick={this.triggerDeleteGradingStandard}
             type="button"
           >
-            <span className="screenreader-only">{I18n.t('Delete Grading Scheme')}</span>
+            <span className="screenreader-only">
+              {I18n.t('Delete Grading Scheme %{title}', {title})}
+            </span>
             <i className="icon-trash" />
           </button>
         </div>
@@ -439,7 +446,7 @@ class GradingStandard extends React.Component {
                   'A table that contains the grading scheme data. Each row contains a name, a maximum percentage, and a minimum percentage. In addition, each row contains a button to add a new row below, and a button to delete the current row.'
                 )}
               </caption>
-              <thead ariaHidden="true">
+              <thead aria-hidden="true">
                 <tr>
                   <td />
                   <td />

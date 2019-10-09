@@ -29,8 +29,8 @@ module Lti
           :verify_access_token,
           :verify_developer_key,
           :verify_tool,
-          :verify_tool_permissions,
-          :verify_tool_features
+          :verify_active_in_account,
+          :verify_access_scope
         )
 
         def index
@@ -101,6 +101,17 @@ module Lti
           it 'fails to process the request' do
             get :index, params: valid_params
             expect(response.code).to eq '422'
+          end
+        end
+
+        context 'with uuid that first digit matches user_id' do
+          before { user.enrollments.first.update!(workflow_state: 'active') }
+          let(:valid_params) { {course_id: context.id, user_id: "#{user.id}apzx", line_item_id: line_item.id} }
+
+          it 'fails to find user' do
+            get :index, params: valid_params
+            expect(response.code).to eq '422'
+            expect(JSON.parse(response.body)['errors']['message']).to eq('User not found in course or is not a student')
           end
         end
 

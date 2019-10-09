@@ -76,7 +76,7 @@ describe ContentMigration do
       @cm.save!
       run_course_copy
 
-      new_topic = @copy_to.discussion_topics.where(migration_id: CC::CCHelper.create_key(topic)).first
+      new_topic = @copy_to.discussion_topics.where(migration_id: mig_id(topic)).first
       expect(new_topic).not_to be_nil
       expect(new_topic.message).to eq topic.message
       expect(@copy_to.syllabus_body).to match(/\/courses\/#{@copy_to.id}\/discussion_topics\/#{new_topic.id}/)
@@ -124,10 +124,10 @@ describe ContentMigration do
 
       run_course_copy
 
-      new_att = @copy_to.attachments.where(migration_id: CC::CCHelper.create_key(att)).first
+      new_att = @copy_to.attachments.where(migration_id: mig_id(att)).first
       expect(new_att).not_to be_nil
 
-      new_topic = @copy_to.discussion_topics.where(migration_id: CC::CCHelper.create_key(topic)).first
+      new_topic = @copy_to.discussion_topics.where(migration_id: mig_id(topic)).first
       expect(new_topic).not_to be_nil
       expect(new_topic.message).to match(Regexp.new("/courses/#{@copy_to.id}/files/#{new_att.id}/preview"))
     end
@@ -140,10 +140,10 @@ describe ContentMigration do
 
       run_course_copy
 
-      new_att = @copy_to.attachments.where(migration_id: CC::CCHelper.create_key(att)).first
+      new_att = @copy_to.attachments.where(migration_id: mig_id(att)).first
       expect(new_att).not_to be_nil
 
-      new_topic = @copy_to.discussion_topics.where(migration_id: CC::CCHelper.create_key(topic)).first
+      new_topic = @copy_to.discussion_topics.where(migration_id: mig_id(topic)).first
       expect(new_topic).not_to be_nil
 
       expect(new_topic.message).to match(Regexp.new("/courses/#{@copy_to.id}/files/#{new_att.id}/preview"))
@@ -158,7 +158,7 @@ describe ContentMigration do
       run_course_copy
 
       @copy_to.enroll_student(student)
-      new_att = @copy_to.attachments.where(migration_id: CC::CCHelper.create_key(att)).first
+      new_att = @copy_to.attachments.where(migration_id: mig_id(att)).first
       expect(new_att).to be_present
 
       expect(new_att.grants_right?(student, :download)).to be_falsey
@@ -480,6 +480,21 @@ describe ContentMigration do
       expect(@copy_to.tab_configuration).to eq @copy_from.tab_configuration
     end
 
+    it "should copy the overridable course visibility setting" do
+      visibility_type = "superfunvisibility"
+      allow_any_instantiation_of(@copy_from.root_account).to receive(:available_course_visibility_override_options).
+        and_return({visibility_type=> {:setting => "Some label"}})
+      @copy_from.apply_visibility_configuration(visibility_type, nil)
+      @copy_from.save!
+      run_course_copy
+      expect(@copy_to.reload.overridden_course_visibility).to eq visibility_type
+
+      @copy_from.apply_visibility_configuration('public', nil)
+      @copy_from.save!
+      run_course_copy
+      expect(@copy_to.reload.overridden_course_visibility).to be_blank
+    end
+
     it "should copy dashboard images" do
       att = attachment_model(:context => @copy_from, :uploaded_data => stub_png_data, :filename => "homework.png")
       @copy_from.image_id = att.id
@@ -656,7 +671,7 @@ describe ContentMigration do
       run_course_copy
 
       expect(@copy_to.calendar_events.count).to eq 2
-      cal_2 = @copy_to.calendar_events.where(migration_id: CC::CCHelper.create_key(cal)).first
+      cal_2 = @copy_to.calendar_events.where(migration_id: mig_id(cal)).first
       expect(cal_2.title).to eq cal.title
       expect(cal_2.start_at.to_i).to eq cal.start_at.to_i
       expect(cal_2.end_at.to_i).to eq cal.end_at.to_i
@@ -664,7 +679,7 @@ describe ContentMigration do
       expect(cal_2.all_day_date).to eq cal.all_day_date
       cal_2.description = body_with_link % @copy_to.id
 
-      cal2_2 = @copy_to.calendar_events.where(migration_id: CC::CCHelper.create_key(cal2)).first
+      cal2_2 = @copy_to.calendar_events.where(migration_id: mig_id(cal2)).first
       expect(cal2_2.title).to eq cal2.title
       expect(cal2_2.start_at.to_i).to eq cal2.start_at.to_i
       expect(cal2_2.end_at.to_i).to eq cal2.end_at.to_i
@@ -682,10 +697,10 @@ describe ContentMigration do
         run_course_copy
       }.to raise_error(ArgumentError)
 
-      new_att = @copy_to.attachments.where(migration_id: CC::CCHelper.create_key(att)).first
+      new_att = @copy_to.attachments.where(migration_id: mig_id(att)).first
       expect(new_att).not_to be_nil
 
-      new_topic = @copy_to.discussion_topics.where(migration_id: CC::CCHelper.create_key(topic)).first
+      new_topic = @copy_to.discussion_topics.where(migration_id: mig_id(topic)).first
       expect(new_topic).not_to be_nil
       expect(new_topic.message).to match(Regexp.new("/courses/#{@copy_to.id}/files/#{new_att.id}/preview"))
     end

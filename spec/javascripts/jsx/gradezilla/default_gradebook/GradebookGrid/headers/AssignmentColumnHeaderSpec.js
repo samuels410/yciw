@@ -49,6 +49,7 @@ QUnit.module('GradebookGrid AssignmentColumnHeader', suiteHooks => {
         name: 'Math 1.1',
         omitFromFinalGrade: false,
         pointsPossible: 10,
+        postManually: false,
         published: true,
         submissionTypes: ['online_text_entry']
       },
@@ -75,8 +76,22 @@ QUnit.module('GradebookGrid AssignmentColumnHeader', suiteHooks => {
         showGradingSchemeOption: true
       },
 
+      hideGradesAction: {
+        hasGrades: true,
+        hasGradesToHide: true,
+        onSelect() {}
+      },
+
       muteAssignmentAction: {
         disabled: false,
+        onSelect() {}
+      },
+
+      postGradesAction: {
+        enabled: false,
+        featureEnabled: false,
+        hasGrades: true,
+        hasGradesToPost: true,
         onSelect() {}
       },
 
@@ -93,6 +108,10 @@ QUnit.module('GradebookGrid AssignmentColumnHeader', suiteHooks => {
 
       setDefaultGradeAction: {
         disabled: false,
+        onSelect() {}
+      },
+
+      showGradePostingPolicyAction: {
         onSelect() {}
       },
 
@@ -115,10 +134,13 @@ QUnit.module('GradebookGrid AssignmentColumnHeader', suiteHooks => {
           id: '1001',
           isInactive: false,
           name: 'Adam Jones',
+          sortableName: 'Jones, Adam',
           submission: {
             excused: false,
+            postedAt: null,
             score: 7,
-            submittedAt: null
+            submittedAt: null,
+            workflowState: 'graded'
           }
         },
 
@@ -126,10 +148,13 @@ QUnit.module('GradebookGrid AssignmentColumnHeader', suiteHooks => {
           id: '1002',
           isInactive: false,
           name: 'Betty Ford',
+          sortableName: 'Ford, Betty',
           submission: {
             excused: false,
+            postedAt: null,
             score: 8,
-            submittedAt: new Date('Thu Feb 02 2017 16:33:19 GMT-0500 (EST)')
+            submittedAt: new Date('Thu Feb 02 2017 16:33:19 GMT-0500 (EST)'),
+            workflowState: 'graded'
           }
         },
 
@@ -137,10 +162,13 @@ QUnit.module('GradebookGrid AssignmentColumnHeader', suiteHooks => {
           id: '1003',
           isInactive: false,
           name: 'Charlie Xi',
+          sortableName: 'Xi, Charlie',
           submission: {
             excused: false,
+            postedAt: null,
             score: null,
-            submittedAt: null
+            submittedAt: null,
+            workflowState: 'unsubmitted'
           }
         }
       ],
@@ -199,6 +227,72 @@ QUnit.module('GradebookGrid AssignmentColumnHeader', suiteHooks => {
     })
   })
 
+  QUnit.module('header indicators', () => {
+    function getColumnHeaderIcon(name = null) {
+      const iconSpecifier = name != null ? `svg[name="${name}"]` : 'svg'
+      return $container.querySelector(`.Gradebook__ColumnHeaderIndicators ${iconSpecifier}`)
+    }
+
+    QUnit.module('when post policies are enabled', postPoliciesEnabledHooks => {
+      postPoliciesEnabledHooks.beforeEach(() => {
+        props.postGradesAction.featureEnabled = true
+      })
+
+      QUnit.module('when the assignment is auto-posted', () => {
+        test('displays no icon when no submissions are graded but unposted', () => {
+          props.students.forEach(student => {
+            if (student.submission.score != null) {
+              student.submission.postedAt = new Date()
+            }
+          })
+
+          mountComponent()
+          notOk(getColumnHeaderIcon())
+        })
+
+        test('displays an "off" icon when submissions are graded but unposted', () => {
+          mountComponent()
+          ok(getColumnHeaderIcon('IconOff'))
+        })
+      })
+
+      QUnit.module('when the assignment is manually-posted', manualPostingHooks => {
+        manualPostingHooks.beforeEach(() => {
+          props.assignment.postManually = true
+        })
+
+        test('displays an "off" icon when no submissions are graded but unposted', () => {
+          props.students.forEach(student => {
+            if (student.submission.workflowState === 'graded') {
+              student.submission.postedAt = new Date()
+            }
+          })
+
+          mountComponent()
+          ok(getColumnHeaderIcon('IconOff'))
+        })
+
+        test('displays an "off" icon when at least one submission is graded but unposted', () => {
+          mountComponent()
+          ok(getColumnHeaderIcon('IconOff'))
+        })
+      })
+
+      test('displays no icon when submissions have not been loaded', () => {
+        props.submissionsLoaded = false
+        mountComponent()
+        notOk(getColumnHeaderIcon())
+      })
+    })
+
+    QUnit.module('when post policies are not enabled', () => {
+      test('does not display an icon', () => {
+        mountComponent()
+        notOk(getColumnHeaderIcon())
+      })
+    })
+  })
+
   QUnit.module('secondary details', () => {
     function getSecondaryDetailText() {
       return $container.querySelector('.Gradebook__ColumnHeaderDetail--secondary').textContent
@@ -216,10 +310,17 @@ QUnit.module('GradebookGrid AssignmentColumnHeader', suiteHooks => {
     })
 
     QUnit.module('when the assignment is muted', () => {
-      test('displays a muted status', () => {
+      test('displays a muted status when post policies are not enabled', () => {
         props.assignment.muted = true
         mountComponent()
         ok(getSecondaryDetailText().includes('Muted'))
+      })
+
+      test('does not display a muted status when post policies are enabled', () => {
+        props.assignment.muted = true
+        props.postGradesAction.featureEnabled = true
+        mountComponent()
+        notOk(getSecondaryDetailText().includes('Muted'))
       })
 
       test('displays points possible', () => {
@@ -807,6 +908,12 @@ QUnit.module('GradebookGrid AssignmentColumnHeader', suiteHooks => {
       notOk(getMenuItem($menuContent, 'Mute Assignment'))
     })
 
+    test('is not present when post policies is enabled', () => {
+      props.postGradesAction.featureEnabled = true
+      mountAndOpenOptionsMenu()
+      notOk(getMenuItem($menuContent, 'Mute Assignment'))
+    })
+
     test('is disabled when .muteAssignmentAction.disabled is true', () => {
       props.muteAssignmentAction.disabled = true
       mountAndOpenOptionsMenu()
@@ -863,6 +970,12 @@ QUnit.module('GradebookGrid AssignmentColumnHeader', suiteHooks => {
       notOk(getMenuItem($menuContent, 'Unmute Assignment'))
     })
 
+    test('is not present when post policies is enabled', () => {
+      props.postGradesAction.featureEnabled = true
+      mountAndOpenOptionsMenu()
+      notOk(getMenuItem($menuContent, 'Unmute Assignment'))
+    })
+
     test('is disabled when .muteAssignmentAction.disabled is true', () => {
       props.muteAssignmentAction.disabled = true
       mountAndOpenOptionsMenu()
@@ -897,6 +1010,216 @@ QUnit.module('GradebookGrid AssignmentColumnHeader', suiteHooks => {
         mountAndOpenOptionsMenu()
         getMenuItem($menuContent, 'Unmute Assignment').click()
         const [callback] = props.muteAssignmentAction.onSelect.lastCall.args
+        callback()
+        strictEqual(document.activeElement, getOptionsMenuTrigger())
+      })
+    })
+  })
+
+  QUnit.module('"Options" > "Post grades" action', hooks => {
+    hooks.beforeEach(() => {
+      props.postGradesAction.featureEnabled = true
+      props.postGradesAction.hasGradesToPost = true
+    })
+
+    QUnit.module('when post policies is enabled', () => {
+      test('has the default text when submissions can be posted', () => {
+        mountAndOpenOptionsMenu()
+        ok(getMenuItem($menuContent, 'Post grades'))
+      })
+
+      test('is enabled when submissions can be posted', () => {
+        mountAndOpenOptionsMenu()
+        strictEqual(getMenuItem($menuContent, 'Post grades').getAttribute('aria-disabled'), null)
+      })
+
+      test('has the text "All grades posted" when no submissions can be posted', () => {
+        props.postGradesAction.hasGradesToPost = false
+        mountAndOpenOptionsMenu()
+        ok(getMenuItem($menuContent, 'All grades posted'))
+      })
+
+      test('has the text "No grades to post" when no submissions are graded', () => {
+        props.postGradesAction.hasGrades = false
+        mountAndOpenOptionsMenu()
+        ok(getMenuItem($menuContent, 'No grades to post'))
+      })
+
+      test('is disabled when no submissions can be posted', () => {
+        props.postGradesAction.hasGradesToPost = false
+        mountAndOpenOptionsMenu()
+        strictEqual(
+          getMenuItem($menuContent, 'All grades posted').getAttribute('aria-disabled'),
+          'true'
+        )
+      })
+
+      test('is disabled when no submissions are graded', () => {
+        props.postGradesAction.hasGrades = false
+        mountAndOpenOptionsMenu()
+        strictEqual(
+          getMenuItem($menuContent, 'No grades to post').getAttribute('aria-disabled'),
+          'true'
+        )
+      })
+    })
+
+    test('is not present when post policies is not enabled', () => {
+      props.postGradesAction.featureEnabled = false
+      mountAndOpenOptionsMenu()
+      notOk(getMenuItem($menuContent, 'Post grades'))
+    })
+
+    QUnit.module('when clicked', contextHooks => {
+      contextHooks.beforeEach(() => {
+        props.postGradesAction.onSelect = sinon.stub()
+      })
+
+      test('does not restore focus to the "Options" menu trigger', () => {
+        mountAndOpenOptionsMenu()
+        getMenuItem($menuContent, 'Post grades').click()
+        notEqual(document.activeElement, getOptionsMenuTrigger())
+      })
+
+      test('calls the .postGradesAction.onSelect callback', () => {
+        mountAndOpenOptionsMenu()
+        getMenuItem($menuContent, 'Post grades').click()
+        strictEqual(props.postGradesAction.onSelect.callCount, 1)
+      })
+
+      test('includes a callback for restoring focus upon dialog close', () => {
+        mountAndOpenOptionsMenu()
+        getMenuItem($menuContent, 'Post grades').click()
+        const [callback] = props.postGradesAction.onSelect.lastCall.args
+        callback()
+        strictEqual(document.activeElement, getOptionsMenuTrigger())
+      })
+    })
+  })
+
+  QUnit.module('"Options" > "Hide grades" action', hooks => {
+    hooks.beforeEach(() => {
+      props.postGradesAction.featureEnabled = true
+      props.hideGradesAction.hasGradesToHide = true
+    })
+
+    QUnit.module('when post policies is enabled', () => {
+      test('has the default text when submissions can be hidden', () => {
+        mountAndOpenOptionsMenu()
+        ok(getMenuItem($menuContent, 'Hide grades'))
+      })
+
+      test('is enabled when submissions can be hidden', () => {
+        mountAndOpenOptionsMenu()
+        strictEqual(getMenuItem($menuContent, 'Hide grades').getAttribute('aria-disabled'), null)
+      })
+
+      test('has the text "All grades hidden" when no submissions can be hidden', () => {
+        props.hideGradesAction.hasGradesToHide = false
+        mountAndOpenOptionsMenu()
+        ok(getMenuItem($menuContent, 'All grades hidden'))
+      })
+
+      test('has the text "No grades to hide" when no submissions are graded', () => {
+        props.hideGradesAction.hasGrades = false
+        mountAndOpenOptionsMenu()
+        ok(getMenuItem($menuContent, 'No grades to hide'))
+      })
+
+      test('is disabled when no submissions can be hidden', () => {
+        props.hideGradesAction.hasGradesToHide = false
+        mountAndOpenOptionsMenu()
+        strictEqual(
+          getMenuItem($menuContent, 'All grades hidden').getAttribute('aria-disabled'),
+          'true'
+        )
+      })
+
+      test('is disabled when no submissions are graded', () => {
+        props.hideGradesAction.hasGrades = false
+        mountAndOpenOptionsMenu()
+        strictEqual(
+          getMenuItem($menuContent, 'No grades to hide').getAttribute('aria-disabled'),
+          'true'
+        )
+      })
+    })
+
+    test('is present when post policies is enabled', () => {
+      mountAndOpenOptionsMenu()
+      ok(getMenuItem($menuContent, 'Hide grades'))
+    })
+
+    test('is not present when post policies is not enabled', () => {
+      props.postGradesAction.featureEnabled = false
+      mountAndOpenOptionsMenu()
+      notOk(getMenuItem($menuContent, 'Hide grades'))
+    })
+
+    QUnit.module('when clicked', contextHooks => {
+      contextHooks.beforeEach(() => {
+        props.hideGradesAction.onSelect = sinon.stub()
+      })
+
+      test('does not restore focus to the "Options" menu trigger', () => {
+        mountAndOpenOptionsMenu()
+        getMenuItem($menuContent, 'Hide grades').click()
+        notEqual(document.activeElement, getOptionsMenuTrigger())
+      })
+
+      test('calls the .hideGradesAction.onSelect callback', () => {
+        mountAndOpenOptionsMenu()
+        getMenuItem($menuContent, 'Hide grades').click()
+        strictEqual(props.hideGradesAction.onSelect.callCount, 1)
+      })
+
+      test('includes a callback for restoring focus upon dialog close', () => {
+        mountAndOpenOptionsMenu()
+        getMenuItem($menuContent, 'Hide grades').click()
+        const [callback] = props.hideGradesAction.onSelect.lastCall.args
+        callback()
+        strictEqual(document.activeElement, getOptionsMenuTrigger())
+      })
+    })
+  })
+
+  QUnit.module('"Options" > "Grade Posting Policy" action', hooks => {
+    hooks.beforeEach(() => {
+      props.postGradesAction.featureEnabled = true
+    })
+
+    test('is present when post policies is enabled', () => {
+      mountAndOpenOptionsMenu()
+      ok(getMenuItem($menuContent, 'Grade Posting Policy'))
+    })
+
+    test('is not present when post policies is not enabled', () => {
+      props.postGradesAction.featureEnabled = false
+      mountAndOpenOptionsMenu()
+      notOk(getMenuItem($menuContent, 'Grade Posting Policy'))
+    })
+
+    QUnit.module('when clicked', contextHooks => {
+      contextHooks.beforeEach(() => {
+        props.showGradePostingPolicyAction.onSelect = sinon.stub()
+      })
+
+      test('does not restore focus to the "Options" menu trigger', () => {
+        mountAndOpenOptionsMenu()
+        getMenuItem($menuContent, 'Grade Posting Policy').click()
+        notEqual(document.activeElement, getOptionsMenuTrigger())
+      })
+
+      test('calls the .showGradePostingPolicyAction.onSelect callback', () => {
+        mountAndOpenOptionsMenu()
+        getMenuItem($menuContent, 'Grade Posting Policy').click()
+        strictEqual(props.showGradePostingPolicyAction.onSelect.callCount, 1)
+      })
+
+      test('includes a callback for restoring focus upon dialog close', () => {
+        mountAndOpenOptionsMenu()
+        getMenuItem($menuContent, 'Grade Posting Policy').click()
+        const [callback] = props.showGradePostingPolicyAction.onSelect.lastCall.args
         callback()
         strictEqual(document.activeElement, getOptionsMenuTrigger())
       })
@@ -1246,6 +1569,12 @@ QUnit.module('GradebookGrid AssignmentColumnHeader', suiteHooks => {
       mountComponent()
     })
 
+    function focusElement($element) {
+      const event = document.createEvent('Event')
+      event.initEvent('focus', true, true)
+      $element.dispatchEvent(event)
+    }
+
     test('#focusAtStart() sets focus on the assignment link', () => {
       component.focusAtStart()
       strictEqual(document.activeElement, getAssignmentLink())
@@ -1257,17 +1586,17 @@ QUnit.module('GradebookGrid AssignmentColumnHeader', suiteHooks => {
     })
 
     test('adds the "focused" class to the header when the assignment link receives focus', () => {
-      getAssignmentLink().focus()
+      focusElement(getAssignmentLink())
       ok($container.firstChild.classList.contains('focused'))
     })
 
     test('adds the "focused" class to the header when the "Options" menu trigger receives focus', () => {
-      getOptionsMenuTrigger().focus()
+      focusElement(getOptionsMenuTrigger())
       ok($container.firstChild.classList.contains('focused'))
     })
 
     test('removes the "focused" class from the header when focus leaves', () => {
-      getOptionsMenuTrigger().focus()
+      focusElement(getOptionsMenuTrigger())
       blurElement(getOptionsMenuTrigger())
       notOk($container.firstChild.classList.contains('focused'))
     })

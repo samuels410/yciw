@@ -200,6 +200,21 @@ describe Api do
       lti_course.save!
       expect(@api.api_find(Course, "uuid:#{lti_course.uuid}")).to eq lti_course
     end
+
+    it "should find assignment by id" do
+      assignment = assignment_model()
+      expect(@api.api_find(Assignment, "#{assignment.id}")).to eq assignment
+    end
+
+    it "should find assignment by sis_assignment_id" do
+      assignment = assignment_model(sis_assignment_id: 'LTI_CTX_ID1')
+      expect(@api.api_find(Assignment, "sis_assignment_id:#{assignment.sis_assignment_id}")).to eq assignment
+    end
+
+    it "should find assignment by lti_context_id" do
+      assignment = assignment_model(lti_context_id: 'LTI_CTX_ID1')
+      expect(@api.api_find(Assignment, "lti_context_id:#{assignment.lti_context_id}")).to eq assignment
+    end
   end
 
   context 'api_find_all' do
@@ -822,6 +837,11 @@ describe Api do
     it 'passes host and port to Content.process_incoming' do
       expect(Api::Html::Content).to receive(:process_incoming).with(anything, host: 'some-host.com', port: 80)
       T.process_incoming_html_content('<div/>')
+    end
+
+    it "doesn't explode with invalid mailtos" do
+      html = %{<a href="mailto:spamme%20example.com">beep</a>http://some-host.com/linktotricktheparserintoparsinglinks}
+      expect(T.process_incoming_html_content(html)).to eq html
     end
   end
 

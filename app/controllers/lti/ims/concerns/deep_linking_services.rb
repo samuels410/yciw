@@ -56,7 +56,11 @@ module Lti::Ims::Concerns
 
       def verified_jwt
         @verified_jwt ||= begin
-          jwt_hash = JSON::JWT.decode(@raw_jwt_str, public_key)
+          if developer_key&.public_jwk_url.present?
+            jwt_hash = get_jwk_from_url
+          else
+            jwt_hash = JSON::JWT.decode(@raw_jwt_str, public_key)
+          end
           standard_claim_errors(jwt_hash)
           developer_key_errors
           return if @errors.present?
@@ -74,6 +78,14 @@ module Lti::Ims::Concerns
         end
       end
 
+      def get_jwk_from_url
+        pub_jwk_from_url = HTTParty.get(developer_key&.public_jwk_url)
+        JSON::JWT.decode(@raw_jwt_str, JSON::JWK::Set.new(pub_jwk_from_url.parsed_response))
+      rescue JSON::JWT::Exception => e
+        errors.add(:jwt, e.message)
+        raise JSON::JWS::VerificationFailed
+      end
+
       def standard_claim_errors(jwt_hash)
         hash = jwt_hash.dup
 
@@ -86,7 +98,8 @@ module Lti::Ims::Concerns
         validator = Canvas::Security::JwtValidator.new(
           jwt: hash,
           expected_aud: Canvas::Security.config['lti_iss'],
-          require_iss: true
+          require_iss: true,
+          skip_jti_check: true
         )
         validator.validate
         validator.errors.to_h.each do |k, v|
@@ -110,7 +123,7 @@ module Lti::Ims::Concerns
 
       def public_key
         @public_key ||= begin
-          public_jwk = developer_key&.public_jwk
+            public_jwk = developer_key&.public_jwk
           JSON::JWK.new(public_jwk) if public_jwk.present?
         end
       end

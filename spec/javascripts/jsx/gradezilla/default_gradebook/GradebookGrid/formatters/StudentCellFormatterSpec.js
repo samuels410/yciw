@@ -16,7 +16,10 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-import {createGradebook, setFixtureHtml} from 'jsx/gradezilla/default_gradebook/__tests__/GradebookSpecHelper'
+import {
+  createGradebook,
+  setFixtureHtml
+} from 'jsx/gradezilla/default_gradebook/__tests__/GradebookSpecHelper'
 import StudentCellFormatter from 'jsx/gradezilla/default_gradebook/GradebookGrid/formatters/StudentCellFormatter'
 
 QUnit.module('GradebookGrid StudentCellFormatter', hooks => {
@@ -40,8 +43,22 @@ QUnit.module('GradebookGrid StudentCellFormatter', hooks => {
       {id: '2004', name: 'Seniors'}
     ])
 
+    gradebook.setStudentGroups([
+      {
+        groups: [{id: '1', name: 'First Category 1'}, {id: '2', name: 'First Category 2'}],
+        id: '1',
+        name: 'First Category'
+      },
+      {
+        groups: [{id: '3', name: 'Second Category 1'}, {id: '4', name: 'Second Category 2'}],
+        id: '2',
+        name: 'Second Category'
+      }
+    ])
+
     student = {
       enrollments: [{grades: {html_url: 'http://example.com/grades/1101'}}],
+      group_ids: ['1', '4'],
       id: '1101',
       isConcluded: false,
       isInactive: false,
@@ -136,6 +153,13 @@ QUnit.module('GradebookGrid StudentCellFormatter', hooks => {
       strictEqual(renderCell().querySelector('.secondary-info'), null)
     })
 
+    test('ignores section IDs referencing sections not loaded in the gradebook', () => {
+      student.sections.push('9005')
+      gradebook.setSelectedSecondaryInfo('section', true) // skipRedraw
+      renderCell()
+      ok('nonexistent section should not cause error')
+    })
+
     test('renders the student login id when secondary info is "login_in"', () => {
       gradebook.setSelectedSecondaryInfo('login_id', true) // skipRedraw
       equal(renderCell().querySelector('.secondary-info').innerText, student.login_id)
@@ -149,6 +173,41 @@ QUnit.module('GradebookGrid StudentCellFormatter', hooks => {
     test('renders the Integration ID when secondary info is "integration_id"', () => {
       gradebook.setSelectedSecondaryInfo('integration_id', true) // skipRedraw
       equal(renderCell().querySelector('.secondary-info').innerText, student.integration_id)
+    })
+
+    test('renders student group names when secondary info is "group"', () => {
+      gradebook.setSelectedSecondaryInfo('group')
+      equal(
+        renderCell().querySelector('.secondary-info').innerText,
+        'First Category 1 and Second Category 2'
+      )
+    })
+
+    test('does not escape html in the student group names', () => {
+      gradebook.setStudentGroups([
+        {
+          groups: [{id: '1', name: '&lt;span&gt;First Category 1&lt;/span&gt;'}],
+          id: '1',
+          name: 'First Category'
+        },
+        {
+          groups: [{id: '4', name: 'Second Category 2'}],
+          id: '1',
+          name: 'Second Category'
+        }
+      ])
+
+      gradebook.setSelectedSecondaryInfo('group')
+      equal(
+        renderCell().querySelector('.secondary-info').innerText,
+        '&lt;span&gt;First Category 1&lt;/span&gt; and Second Category 2'
+      )
+    })
+
+    test('does not render student group names when groups should not be visible', () => {
+      gradebook.setStudentGroups([])
+      gradebook.setSelectedSecondaryInfo('group')
+      strictEqual(renderCell().querySelector('.secondary-info'), null)
     })
 
     test('does not render secondary info when any secondary info is null and secondary info is not "none"', () => {

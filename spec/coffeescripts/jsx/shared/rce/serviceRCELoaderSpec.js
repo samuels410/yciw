@@ -29,6 +29,7 @@ QUnit.module('loadRCE', {
     this.originalTinyMCE = window.tinyMCE
     fakeENV.setup()
     ENV.RICH_CONTENT_APP_HOST = 'app-host'
+    ENV.context_asset_string = 'courses_1'
   },
   teardown() {
     // until canvas and canvas-rce are on the same version, restore globals to
@@ -50,37 +51,22 @@ test('caches the response of get_module when called', assert => {
   })
 })
 
-test('loads event listeners on first load', function(assert) {
-  const done = assert.async()
-  sandbox.stub(RCELoader, 'loadEventListeners')
-  RCELoader.RCE = null
-  return RCELoader.loadRCE(() => {
-    ok(RCELoader.loadEventListeners.called)
-    done()
-  })
-})
-
-test('does not load event listeners once loaded', function(assert) {
-  const done = assert.async()
-  sandbox.stub(RCELoader, 'loadEventListeners')
-  RCELoader.RCE = {}
-  return RCELoader.loadRCE(() => {
-    ok(!RCELoader.loadEventListeners.called)
-    done()
-  })
-})
-
 test('handles callbacks once module is loaded', assert => {
   const done = assert.async()
-  RCELoader.loadRCE(() => {})
-  return RCELoader.loadRCE(module => {
-    ok(module.renderIntoDiv)
+
+  const spy = sinon.spy()
+  RCELoader.loadRCE(spy)
+  return RCELoader.loadRCE(RCE => {
+    equal(RCE, RCELoader.RCE)
+    ok(spy.calledOnceWith(RCELoader.RCE))
     done()
   })
 })
 
 QUnit.module('loadOnTarget', {
   setup() {
+    fakeENV.setup()
+    ENV.context_asset_string = 'courses_1'
     fixtures.setup()
     this.$div = fixtures.create('<div><textarea id="theTarget" name="elementName" /></div>')
     this.$textarea = fixtures.find('#theTarget')
@@ -95,10 +81,14 @@ QUnit.module('loadOnTarget', {
     }
     this.rce = {renderIntoDiv: sinon.stub().callsArgWith(2, this.editor)}
     sinon.stub(RCELoader, 'loadRCE').callsArgWith(0, this.rce)
+    fakeENV.setup()
+    ENV.RICH_CONTENT_APP_HOST = 'app-host'
+    ENV.context_asset_string = 'courses_1'
   },
   teardown() {
     fixtures.teardown()
     RCELoader.loadRCE.restore()
+    fakeENV.teardown()
   }
 })
 

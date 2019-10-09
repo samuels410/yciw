@@ -20,9 +20,8 @@ import React from 'react'
 import page from 'page'
 import $ from 'jquery'
 import classnames from 'classnames'
-import Mask from '@instructure/ui-overlays/lib/components/Mask'
-import Overlay from '@instructure/ui-overlays/lib/components/Overlay'
-import FilePreviewInfoPanel from '../files/FilePreviewInfoPanel'
+import {Mask, Overlay} from '@instructure/ui-overlays'
+import FilePreviewInfoPanel from './FilePreviewInfoPanel'
 import CollectionHandler from 'compiled/react_files/utils/collectionHandler'
 import preventDefault from 'compiled/fn/preventDefault'
 
@@ -219,9 +218,11 @@ export default class FilePreview extends React.PureComponent {
 
   renderPreview = () => {
     if (this.state.displayedItem && this.state.displayedItem.get('preview_url')) {
+      const html = this.state.displayedItem.get('content-type') === 'text/html'
       const iFrameClasses = classnames({
         'ef-file-preview-frame': true,
-        'ef-file-preview-frame-html': this.state.displayedItem.get('content-type') === 'text/html'
+        'ef-file-preview-frame-html': html,
+        'attachment-html-iframe': html
       })
 
       return (
@@ -276,10 +277,11 @@ export default class FilePreview extends React.PureComponent {
                       className="ef-file-preview-header-download ef-file-preview-button"
                     >
                       <i className="icon-download" />
-                      {` ${I18n.t('Download')}`}
+                      <span className="hidden-phone">{` ${I18n.t('Download')}`}</span>
                     </a>
                   )}
                 <button
+                  type="button"
                   className={showInfoPanelClasses}
                   ref={e => this.infoButton = e}
                   onClick={this.toggle('showInfoPanel')}
@@ -287,16 +289,17 @@ export default class FilePreview extends React.PureComponent {
                   {/* Wrap content in a div because firefox doesn't support display: flex on buttons */}
                   <div>
                     <i className="icon-info" />
-                    {` ${I18n.t('Info')}`}
+                    <span className="hidden-phone">{` ${I18n.t('Info')}`}</span>
                   </div>
                 </button>
                 <button
+                  type="button"
                   onClick={preventDefault(this.closeModal)}
                   ref={e => this.closeButton = e}
                   className="ef-file-preview-header-close ef-file-preview-button"
                 >
                   <i className="icon-end" />
-                  {` ${I18n.t('Close')}`}
+                  <span className="hidden-phone">{` ${I18n.t('Close')}`}</span>
                 </button>
               </div>
             </div>

@@ -19,16 +19,16 @@
 import React, {Component} from 'react'
 import {connect} from 'react-redux'
 import {arrayOf, func, oneOf, shape, string} from 'prop-types'
-import Alert from '@instructure/ui-alerts/lib/components/Alert'
-import Flex, {FlexItem} from '@instructure/ui-layout/lib/components/Flex'
-import Heading from '@instructure/ui-elements/lib/components/Heading'
-import Text from '@instructure/ui-elements/lib/components/Text'
+import {Alert} from '@instructure/ui-alerts'
+import {Flex, FlexItem} from '@instructure/ui-layout'
+import {Heading, Text} from '@instructure/ui-elements'
+
 import I18n from 'i18n!assignment_grade_summary'
 
 import * as AssignmentActions from '../assignment/AssignmentActions'
-import DisplayToStudentsButton from './DisplayToStudentsButton'
 import GradersTable from './GradersTable'
-import PostButton from './PostButton'
+import PostToStudentsButton from './PostToStudentsButton'
+import ReleaseButton from './ReleaseButton'
 
 /* eslint-disable no-alert */
 
@@ -47,41 +47,32 @@ class Header extends Component {
         graderId: string.isRequired
       })
     ).isRequired,
-    publishGrades: func.isRequired,
-    publishGradesStatus: oneOf(enumeratedStatuses(AssignmentActions)),
+    releaseGrades: func.isRequired,
+    releaseGradesStatus: oneOf(enumeratedStatuses(AssignmentActions)),
     unmuteAssignment: func.isRequired,
     unmuteAssignmentStatus: oneOf(enumeratedStatuses(AssignmentActions))
   }
 
   static defaultProps = {
-    publishGradesStatus: null,
+    releaseGradesStatus: null,
     unmuteAssignmentStatus: null
   }
 
-  constructor(props) {
-    super(props)
-
-    this.handlePublishClick = this.handlePublishClick.bind(this)
-    this.handleUnmuteClick = this.handleUnmuteClick.bind(this)
-  }
-
-  handlePublishClick() {
+  handleReleaseClick = () => {
     const message = I18n.t(
       'Are you sure you want to do this? It cannot be undone and will override existing grades in the gradebook.'
     )
     if (window.confirm(message)) {
-      this.props.publishGrades()
+      this.props.releaseGrades()
     }
-  }
+  };
 
-  handleUnmuteClick() {
-    const message = I18n.t(
-      'Are you sure you want to display grades for this assignment to students?'
-    )
+  handleUnmuteClick = () => {
+    const message = I18n.t('Are you sure you want to post grades for this assignment to students?')
     if (window.confirm(message)) {
       this.props.unmuteAssignment()
     }
-  }
+  };
 
   render() {
     return (
@@ -89,7 +80,7 @@ class Header extends Component {
         {this.props.assignment.gradesPublished && (
           <Alert margin="0 0 medium 0" variant="info">
             <Text weight="bold">{I18n.t('Attention!')}</Text>{' '}
-            {I18n.t('Grades cannot be modified from this page as they have already been posted.')}
+            {I18n.t('Grades cannot be modified from this page as they have already been released.')}
           </Alert>
         )}
 
@@ -109,16 +100,16 @@ class Header extends Component {
           <FlexItem align="end" as="div" flex="2" grow>
             <Flex as="div" justifyItems="end">
               <FlexItem>
-                <PostButton
-                  gradesPublished={this.props.assignment.gradesPublished}
+                <ReleaseButton
+                  gradesReleased={this.props.assignment.gradesPublished}
                   margin="0 x-small 0 0"
-                  onClick={this.handlePublishClick}
-                  publishGradesStatus={this.props.publishGradesStatus}
+                  onClick={this.handleReleaseClick}
+                  releaseGradesStatus={this.props.releaseGradesStatus}
                 />
               </FlexItem>
 
               <FlexItem>
-                <DisplayToStudentsButton
+                <PostToStudentsButton
                   assignment={this.props.assignment}
                   onClick={this.handleUnmuteClick}
                   unmuteAssignmentStatus={this.props.unmuteAssignmentStatus}
@@ -133,20 +124,20 @@ class Header extends Component {
 }
 
 function mapStateToProps(state) {
-  const {assignment, publishGradesStatus, unmuteAssignmentStatus} = state.assignment
+  const {assignment, releaseGradesStatus, unmuteAssignmentStatus} = state.assignment
 
   return {
     assignment,
     graders: state.context.graders,
-    publishGradesStatus,
+    releaseGradesStatus,
     unmuteAssignmentStatus
   }
 }
 
 function mapDispatchToProps(dispatch) {
   return {
-    publishGrades() {
-      dispatch(AssignmentActions.publishGrades())
+    releaseGrades() {
+      dispatch(AssignmentActions.releaseGrades())
     },
 
     unmuteAssignment() {
@@ -159,3 +150,4 @@ export default connect(
   mapStateToProps,
   mapDispatchToProps
 )(Header)
+/* eslint-enable no-alert */

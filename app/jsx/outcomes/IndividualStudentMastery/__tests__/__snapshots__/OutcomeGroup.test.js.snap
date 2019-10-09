@@ -3,8 +3,17 @@
 exports[`renders correctly expanded 1`] = `
 <View
   as="div"
+  borderColor="default"
   className="outcomeGroup"
+  debug={false}
   display="auto"
+  focusColor="info"
+  focusPosition="offset"
+  focused={false}
+  overflowX="visible"
+  overflowY="visible"
+  position="static"
+  shouldAnimateFocus={true}
 >
   <ToggleGroup
     as="span"
@@ -20,6 +29,7 @@ exports[`renders correctly expanded 1`] = `
       <Flex
         as="span"
         direction="row"
+        elementRef={[Function]}
         inline={false}
         justifyItems="space-between"
         visualDebug={false}
@@ -27,6 +37,7 @@ exports[`renders correctly expanded 1`] = `
       >
         <FlexItem
           as="span"
+          elementRef={[Function]}
           grow={false}
           padding="0 x-small 0 0"
           shrink={false}
@@ -36,12 +47,14 @@ exports[`renders correctly expanded 1`] = `
             letterSpacing="normal"
             size="large"
             weight="bold"
+            wrap="normal"
           >
             My group
           </Text>
         </FlexItem>
         <FlexItem
           as="span"
+          elementRef={[Function]}
           grow={false}
           shrink={false}
         >
@@ -112,8 +125,17 @@ exports[`renders correctly expanded 1`] = `
 exports[`renders the OutcomeGroup component 1`] = `
 <View
   as="div"
+  borderColor="default"
   className="outcomeGroup"
+  debug={false}
   display="auto"
+  focusColor="info"
+  focusPosition="offset"
+  focused={false}
+  overflowX="visible"
+  overflowY="visible"
+  position="static"
+  shouldAnimateFocus={true}
 >
   <ToggleGroup
     as="span"
@@ -129,6 +151,7 @@ exports[`renders the OutcomeGroup component 1`] = `
       <Flex
         as="span"
         direction="row"
+        elementRef={[Function]}
         inline={false}
         justifyItems="space-between"
         visualDebug={false}
@@ -136,6 +159,7 @@ exports[`renders the OutcomeGroup component 1`] = `
       >
         <FlexItem
           as="span"
+          elementRef={[Function]}
           grow={false}
           padding="0 x-small 0 0"
           shrink={false}
@@ -145,12 +169,14 @@ exports[`renders the OutcomeGroup component 1`] = `
             letterSpacing="normal"
             size="large"
             weight="bold"
+            wrap="normal"
           >
             My group
           </Text>
         </FlexItem>
         <FlexItem
           as="span"
+          elementRef={[Function]}
           grow={false}
           shrink={false}
         >

@@ -19,12 +19,10 @@
 import I18n from 'i18n!permissions_role_tray_table_row'
 import PropTypes from 'prop-types'
 import React from 'react'
-
-import Button from '@instructure/ui-buttons/lib/components/Button'
-import Container from '@instructure/ui-layout/lib/components/View'
-import Flex, {FlexItem} from '@instructure/ui-layout/lib/components/Flex'
-import IconArrowOpenStart from '@instructure/ui-icons/lib/Solid/IconArrowOpenStart'
-import Text from '@instructure/ui-elements/lib/components/Text'
+import {Button} from '@instructure/ui-buttons'
+import {View, Flex, FlexItem} from '@instructure/ui-layout'
+import {IconArrowOpenStartSolid} from '@instructure/ui-icons'
+import {Text} from '@instructure/ui-elements'
 import {ConnectedPermissionButton} from './PermissionButton'
 import permissionPropTypes from '../propTypes'
 
@@ -41,13 +39,13 @@ export default function RoleTrayTableRow({
   role
 }) {
   return (
-    <Container as="div">
+    <View as="div">
       <Flex justifyItems="space-between">
         <FlexItem>
           {expandable && (
             <span className="ic-permissions_role_tray_table_role_expandable">
               <Button variant="icon" size="small">
-                <IconArrowOpenStart title={I18n.t('Expand permission')} />
+                <IconArrowOpenStartSolid title={I18n.t('Expand permission')} />
               </Button>
             </span>
           )}
@@ -81,7 +79,7 @@ export default function RoleTrayTableRow({
           </div>
         </FlexItem>
       </Flex>
-    </Container>
+    </View>
   )
 }
 

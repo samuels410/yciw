@@ -44,15 +44,18 @@ class RequestThrottle
     starting_cpu = Process.times()
 
     request = ActionDispatch::Request.new(env)
-    # workaround a rails bug where some ActionDispatch::Request methods blow
+
+    # NOTE: calling fullpath was a workaround for a rails bug where some ActionDispatch::Request methods blow
     # up when using certain servers until fullpath is called once to set env['REQUEST_URI']
-    request.fullpath
+    # so don't remove
+    path = request.fullpath
 
     status, headers, response = nil
     throttled = false
     bucket = LeakyBucket.new(client_identifier(request))
 
-    cost = bucket.reserve_capacity do
+    up_front_cost = bucket.get_up_front_cost_for_path(path)
+    cost = bucket.reserve_capacity(up_front_cost) do
       status, headers, response = if !allowed?(request, bucket)
         throttled = true
         rate_limit_exceeded
@@ -101,12 +104,12 @@ class RequestThrottle
     if whitelisted?(request)
       return true
     elsif blacklisted?(request)
-      Rails.logger.info("blocking request due to blacklist, client id: #{client_identifier(request)} ip: #{request.remote_ip}")
-      CanvasStatsd::Statsd.increment("request_throttling.blacklisted")
+      Rails.logger.info("blocking request due to blacklist, client id: #{client_identifiers(request).inspect} ip: #{request.remote_ip}")
+      InstStatsd::Statsd.increment("request_throttling.blacklisted")
       return false
     else
       if bucket.full?
-        CanvasStatsd::Statsd.increment("request_throttling.throttled")
+        InstStatsd::Statsd.increment("request_throttling.throttled")
         if Setting.get("request_throttle.enabled", "true") == "true"
           Rails.logger.info("blocking request due to throttling, client id: #{client_identifier(request)} bucket: #{bucket.to_json}")
           return false
@@ -119,33 +122,31 @@ class RequestThrottle
   end
 
   def blacklisted?(request)
-    client_id = client_identifier(request)
-    (client_id && self.class.blacklist.include?(client_id)) ||
-      self.class.blacklist.include?("ip:#{request.remote_ip}")
+    client_identifiers(request).any? { |id| self.class.blacklist.include?(id) }
   end
 
   def whitelisted?(request)
-    client_id = client_identifier(request)
-    return false unless client_id
-    self.class.whitelist.include?(client_id)
-    # we don't check the whitelist for remote_ip, whitelist is primarily
-    # intended for grandfathering in some API users by access token
+    client_identifiers(request).any? { |id| self.class.whitelist.include?(id) }
+  end
+
+  def client_identifier(request)
+    client_identifiers(request).first
+  end
+
+  def tag_identifier(tag, identifier)
+    return unless identifier
+    "#{tag}:#{identifier}"
   end
 
   # This is cached on the request, so a theoretical change to the request
   # object won't be caught.
-  def client_identifier(request)
-    request.env['canvas.request_throttle.user_id'] ||= begin
-      if token_string = AuthenticationMethods.access_token(request, :GET).presence
-        identifier = AccessToken.hashed_token(token_string)
-        identifier = "token:#{identifier}"
-      elsif identifier = AuthenticationMethods.user_id(request).presence
-        identifier = "user:#{identifier}"
-      elsif identifier = session_id(request).presence
-        identifier = "session:#{identifier}"
-      end
-      identifier
-    end
+  def client_identifiers(request)
+    request.env['canvas.request_throttle.user_id'] ||= [
+        (token_string = AuthenticationMethods.access_token(request, :GET).presence) && "token:#{AccessToken.hashed_token(token_string)}",
+        tag_identifier("user", AuthenticationMethods.user_id(request).presence),
+        tag_identifier("session", session_id(request).presence),
+        tag_identifier("ip", request.ip)
+      ].compact
   end
 
   def session_id(request)
@@ -161,7 +162,7 @@ class RequestThrottle
   end
 
   def self.reload!
-    @whitelist = @blacklist = nil
+    @whitelist = @blacklist = @dynamic_settings = nil
     LeakyBucket.reload!
   end
 
@@ -171,6 +172,10 @@ class RequestThrottle
 
   def self.list_from_setting(key)
     Set.new(Setting.get(key, '').split(',').map(&:strip).reject(&:blank?))
+  end
+
+  def self.dynamic_settings
+    @dynamic_settings ||= YAML.safe_load(Canvas::DynamicSettings.find(tree: :private)['request_throttle.yml'] || '') || {}
   end
 
   def rate_limit_exceeded
@@ -187,9 +192,13 @@ class RequestThrottle
     RequestContextGenerator.add_meta_header("y", "%.2f" % [system_cpu])
     RequestContextGenerator.add_meta_header("d", "%.2f" % [db_runtime])
 
-    if account && account.shard.respond_to?(:database_server)
-      CanvasStatsd::Statsd.timing("requests_system_cpu.cluster_#{account.shard.database_server.id}", system_cpu)
-      CanvasStatsd::Statsd.timing("requests_user_cpu.cluster_#{account.shard.database_server.id}", user_cpu)
+    if account&.shard&.database_server
+      InstStatsd::Statsd.timing("requests_system_cpu.cluster_#{account.shard.database_server.id}", system_cpu,
+                                short_stat: 'requests_system_cpu',
+                                tags: {cluster: account.shard.database_server.id})
+      InstStatsd::Statsd.timing("requests_user_cpu.cluster_#{account.shard.database_server.id}", user_cpu,
+                                short_stat: 'requests_user_cpu',
+                                tags: {cluster: account.shard.database_server.id})
     end
 
     mem_stat = if starting_mem == 0 || ending_mem == 0
@@ -253,14 +262,38 @@ class RequestThrottle
       end
     end
 
+    def self.up_front_cost_by_path_regex
+      @up_front_cost_regex_map ||=
+        begin
+          hash = RequestThrottle.dynamic_settings['up_front_cost_by_path_regex'] || {}
+          hash.keys.select{|k| k.is_a?(String)}.map{|k| hash[Regexp.new(k)] = hash.delete(k)} #regexify strings
+          hash.each do |k, v|
+            unless k.is_a?(Regexp) && v.is_a?(Numeric)
+              ::Rails.logger.error("ERROR in request_throttle.yml: up_front_cost_by_path_regex must use Regex => Numeric key-value pairs")
+              hash.clear
+              break
+            end
+          end
+          hash
+        end
+    end
+
     def self.reload!
       @custom_settings_hash = nil
+      @up_front_cost_regex_map = nil
     end
 
     # up_front_cost is a placeholder cost. Essentially it adds some cost to
     # doing multiple requests in parallel, but that cost is transient -- it
     # disappears again when the request finishes.
-    #
+    def get_up_front_cost_for_path(path)
+      # if it matches any of the regexes in the setting, return the specified cost
+      self.class.up_front_cost_by_path_regex.each do |regex, cost|
+        return cost if regex =~ path
+      end
+      self.up_front_cost # otherwise use the default
+    end
+
     # This method does an initial increment by the up_front_cost, loading the
     # data out of redis at the same time. It then yields to the block,
     # expecting the block to return the final cost. It then increments again,

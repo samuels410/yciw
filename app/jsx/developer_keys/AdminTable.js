@@ -17,8 +17,8 @@
  */
 
 import $ from 'jquery'
-import Table from '@instructure/ui-elements/lib/components/Table'
-import ScreenReaderContent from '@instructure/ui-a11y/lib/components/ScreenReaderContent'
+import {Table} from '@instructure/ui-elements'
+import {ScreenReaderContent} from '@instructure/ui-a11y'
 import React from 'react'
 import PropTypes from 'prop-types'
 import I18n from 'i18n!react_developer_keys'
@@ -97,6 +97,7 @@ class DeveloperKeysTable extends React.Component {
             {!inherited && <th scope="col">{I18n.t('Owner Email')}</th> }
             <th scope="col">{I18n.t('Details')}</th>
             {!inherited && <th scope="col">{I18n.t('Stats')}</th>}
+            <th scope="col">{I18n.t('Type')}</th>
             <th scope="col">{I18n.t('State')}</th>
             {!inherited &&  <th scope="col">{I18n.t('Actions')}</th>}
           </tr>

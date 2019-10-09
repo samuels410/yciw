@@ -16,7 +16,6 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-import _ from 'underscore'
 import React from 'react'
 import PropTypes from 'prop-types'
 import I18n from 'i18n!assignment_index_menu'
@@ -71,12 +70,10 @@ export default class IndexMenu extends React.Component {
     this.props.store.dispatch(Actions.setWeighted(value))
   }
 
-  onLaunchTool = tool => {
-    return e => {
+  onLaunchTool = tool => e => {
       e.preventDefault()
       this.props.store.dispatch(Actions.launchTool(tool))
     }
-  }
 
   closeModal = () => {
     this.props.store.dispatch(Actions.setModalOpen(false))
@@ -115,8 +112,7 @@ export default class IndexMenu extends React.Component {
     }
   }
 
-  renderTools = () => {
-    return this.state.externalTools.map(tool => (
+  renderTools = () => this.state.externalTools.map(tool => (
       <li key={tool.definition_id} role="menuitem">
         <a aria-label={tool.name} href="#" onClick={this.onLaunchTool(tool)}>
           <i className="icon-import" />
@@ -124,7 +120,6 @@ export default class IndexMenu extends React.Component {
         </a>
       </li>
     ))
-  }
 
   render() {
     return (

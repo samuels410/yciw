@@ -202,7 +202,6 @@ class GradebookImporter
     end
 
     translate_pass_fail(@assignments, @students, @gradebook_importer_assignments)
-
     unless @missing_student
       # weed out assignments with no changes
       indexes_to_delete = []
@@ -285,13 +284,16 @@ class GradebookImporter
       next unless assignment.grading_type == "pass_fail"
       students.each do |student|
         submission = gradebook_importer_assignments.fetch(student.id)[idx]
-        if submission['grade'].present?
+        if submission['grade'].present? && (submission['grade'].to_s.casecmp('EX') != 0)
           gradebook_importer_assignments.fetch(student.id)[idx]['grade'] = assignment.score_to_grade(submission['grade'], \
             submission['grade'])
         end
-        if submission['original_grade'].present?
-          gradebook_importer_assignments.fetch(student.id)[idx]['original_grade'] = assignment.score_to_grade(submission['original_grade'],
+        if submission['original_grade'].present? && (submission['original_grade'] != 'EX')
+          gradebook_importer_assignments.fetch(student.id)[idx]['original_grade'] = assignment.score_to_grade(submission['original_grade'],\
             submission['original_grade'])
+        end
+        if submission['grade'].to_s.casecmp('EX') == 0
+          submission['grade'] = 'EX'
         end
       end
     end
@@ -354,12 +356,14 @@ class GradebookImporter
       @sis_login_id_column = 2
       @student_columns += 1
     elsif row[2] =~ /SIS\s+User\s+ID/ && row[3] =~ /SIS\s+Login\s+ID/
+      # Integration id might be after sis id and login id, ignore it.
+      i = row[4] =~ /Integration\s+ID/ ? 1 : 0
       @sis_user_id_column = 2
       @sis_login_id_column = 3
-      @student_columns += 2
-      if row[4] =~ /Root\s+Account/
-        @student_columns +=1
-        @root_account_column = 4
+      @student_columns += 2 + i
+      if row[4 + i] =~ /Root\s+Account/
+        @student_columns += 1
+        @root_account_column = 4 + i
       end
     end
 
@@ -367,12 +371,23 @@ class GradebookImporter
     @student_columns += @parsed_custom_column_data.length
   end
 
+  NON_ASSIGNMENT_COLUMN_HEADERS = [
+    "Current Score",
+    "Current Points",
+    "Current Grade",
+    "Final Score",
+    "Final Points",
+    "Final Grade",
+    "Override Score",
+    "Override Grade"
+  ].freeze
+
   def strip_non_assignment_columns(stripped_row)
     drop_student_information_columns(stripped_row)
 
-    # This regex will also include columns for unposted scores, which
+    # This regexp will also include columns for unposted scores, which
     # will be one of these values with "Unposted" prepended.
-    while stripped_row.last =~ /Current Score|Current Points|Current Grade|Final Score|Final Points|Final Grade/
+    while stripped_row.last =~ Regexp.new(NON_ASSIGNMENT_COLUMN_HEADERS.join('|'))
       stripped_row.pop
     end
     stripped_row
@@ -555,8 +570,9 @@ class GradebookImporter
       return true
     end
 
-    if row.compact.all? { |c| c.strip =~ /^(Muted|)$/i }
-      # this row is muted or empty and should not be processed at all
+    if row.compact.all? { |column| column =~ /^\s*(Muted|Manual Posting)?\s*$/i }
+      # This row indicates muted assignments (or manually posted assignments if
+      # post policies is enabled) and should not be processed at all
       return true
     end
 
@@ -664,6 +680,10 @@ class GradebookImporter
     return true if submission['original_grade'].blank? && submission['grade'].blank?
 
     return false unless submission['original_grade'].present? && submission['grade'].present?
+
+    if (submission['grade'].to_s.casecmp('EX') == 0) || (submission['original_grade'].casecmp('EX') == 0)
+      return false
+    end
 
     # The exporter exports scores rounded to two decimal places (which is also
     # the maximum level of precision shown in the gradebook), so 123.456 will

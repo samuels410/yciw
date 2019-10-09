@@ -18,11 +18,12 @@
 
 import {arrayOf, shape, string} from 'prop-types'
 import React from 'react'
-import I18n from 'i18n!assignments'
+import I18n from 'i18n!FinalGraderSelectMenu'
 
 export default class FinalGraderSelectMenu extends React.Component {
   static propTypes = {
-    availableModerators: arrayOf(shape({name: string.isRequired, id: string.isRequired})).isRequired,
+    availableModerators: arrayOf(shape({name: string.isRequired, id: string.isRequired}))
+      .isRequired,
     finalGraderID: string
   }
 
@@ -32,13 +33,12 @@ export default class FinalGraderSelectMenu extends React.Component {
 
   constructor(props) {
     super(props)
-    this.handleSelectFinalGrader = this.handleSelectFinalGrader.bind(this)
     this.state = {selectedValue: this.props.finalGraderID || ''}
   }
 
-  handleSelectFinalGrader({target: {value: selectedValue}}) {
+  handleSelectFinalGrader = ({target: {value: selectedValue}}) => {
     this.setState({selectedValue})
-  }
+  };
 
   render() {
     return (
@@ -54,9 +54,11 @@ export default class FinalGraderSelectMenu extends React.Component {
           onChange={this.handleSelectFinalGrader}
           value={this.state.selectedValue}
         >
-          {this.state.selectedValue === '' &&
-            <option key="select-grader" value="">{I18n.t('Select Grader')}</option>
-          }
+          {this.state.selectedValue === '' && (
+            <option key="select-grader" value="">
+              {I18n.t('Select Grader')}
+            </option>
+          )}
 
           {this.props.availableModerators.map(user => (
             <option key={user.id} value={user.id}>

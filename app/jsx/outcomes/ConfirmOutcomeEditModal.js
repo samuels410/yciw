@@ -16,13 +16,13 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-import I18n from 'i18n!outcomes'
+import I18n from 'i18n!confirmOutcomeEditModal'
 import React, {Component} from 'react'
 import ReactDOM from 'react-dom'
 import {func, shape, bool} from 'prop-types'
-import Button from '@instructure/ui-buttons/lib/components/Button'
+import {Button} from '@instructure/ui-buttons'
 
-import Modal, { ModalBody, ModalFooter } from '../shared/components/InstuiModal'
+import Modal from '../shared/components/InstuiModal'
 
 const willUpdateRubrics = ({ changed, hasUpdateableRubrics }) => changed && hasUpdateableRubrics
 
@@ -96,7 +96,7 @@ export default class ConfirmOutcomeEditModal extends Component {
         onDismiss={this.onCancel}
         size="small"
       >
-        <ModalBody>
+        <Modal.Body>
           <div>
             <ul>
               {
@@ -120,8 +120,8 @@ export default class ConfirmOutcomeEditModal extends Component {
               }
             </ul>
           </div>
-        </ModalBody>
-        <ModalFooter>
+        </Modal.Body>
+        <Modal.Footer>
           <Button
             onClick={this.onCancel}
             id='cancel-outcome-edit-modal'
@@ -130,7 +130,7 @@ export default class ConfirmOutcomeEditModal extends Component {
             onClick={this.onConfirm}
             id='confirm-outcome-edit-modal'
             variant="primary">{I18n.t('Save')}</Button>
-        </ModalFooter>
+        </Modal.Footer>
       </Modal>
     )
   }

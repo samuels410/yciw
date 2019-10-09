@@ -18,16 +18,15 @@
 import I18n from 'i18n!react_developer_keys'
 import PropTypes from 'prop-types'
 import React from 'react'
-import Checkbox from '@instructure/ui-forms/lib/components/Checkbox'
-import Flex, {FlexItem} from '@instructure/ui-layout/lib/components/Flex'
-import ScreenReaderContent from '@instructure/ui-a11y/lib/components/ScreenReaderContent'
-import Text from '@instructure/ui-elements/lib/components/Text'
-import ToggleDetails from '@instructure/ui-toggle-details/lib/components/ToggleDetails'
-import View from '@instructure/ui-layout/lib/components/View'
-import DeveloperKeyScopesMethod from './ScopesMethod'
+import {Checkbox} from '@instructure/ui-forms'
+import {Flex, FlexItem, View} from '@instructure/ui-layout'
+import {ScreenReaderContent} from '@instructure/ui-a11y'
+import {Text} from '@instructure/ui-elements'
+import {ToggleDetails} from '@instructure/ui-toggle-details'
+import ScopesMethod from './ScopesMethod'
 import DeveloperKeyScope from './Scope'
 
-export default class DeveloperKeyScopesGroup extends React.Component {
+export default class ScopesGroup extends React.Component {
   state = { groupChecked: this.allScopesAreSelected(this.props) }
 
   componentWillReceiveProps(nextProps) {
@@ -67,7 +66,7 @@ export default class DeveloperKeyScopesGroup extends React.Component {
     return (
       <span>
         {[...methodSet].sort().map(method => (
-          <DeveloperKeyScopesMethod
+          <ScopesMethod
             method={method}
             margin="none none none x-small"
             key={`${this.props.name}-${method}`}
@@ -166,7 +165,7 @@ export default class DeveloperKeyScopesGroup extends React.Component {
   }
 }
 
-DeveloperKeyScopesGroup.propTypes = {
+ScopesGroup.propTypes = {
   setSelectedScopes: PropTypes.func.isRequired,
   scopes: PropTypes.arrayOf(
     PropTypes.shape({

@@ -22,10 +22,10 @@
    js_bundle :user_notes
    css_bundle :user_notes
 %>
-<% content_for :page_title do %><%= t :page_title, "Faculty Journal" %><% end %>
+<% provide :page_title do %><%= t :page_title, "Faculty Journal" %><% end %>
 
 <% if can_do(@user, @current_user, :create_user_notes) %>
-  <% content_for :right_side do %>
+  <% provide :right_side do %>
     <a id="new_user_note_button" class="new btn button-sidebar-wide icon-add" href="#"><%= t 'links.create_new_entry', "Create a New Entry" %></a>
   <% end %>
 <% end %>
@@ -78,7 +78,7 @@
 
 <div id="#no_user_notes_message" style="display: none;"><%= t 'messages.no_entries', "There are no journal entries for this student." %></div>
 
-<div id="user_note_list" class="user_note_list">
+<div id="user_note_list" class="user_note_list" role="list">
   <%= render :partial => 'user_note', :collection => @user_notes %>
   <%= will_paginate(@user_notes, :style=>"margin-bottom: 1em;") %>
   <% pageless(@user_notes.total_pages, user_user_notes_path) %>

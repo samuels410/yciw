@@ -16,13 +16,13 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-import I18n from 'i18n!blueprint_settings'
+import I18n from 'i18n!blueprint_settingsCourseFilter'
 import React from 'react'
 import PropTypes from 'prop-types'
-import TextInput from '@instructure/ui-forms/lib/components/TextInput'
+import {TextInput} from '@instructure/ui-forms'
 import Select from '@instructure/ui-core/lib/components/Select'
-import ScreenReaderContent from '@instructure/ui-a11y/lib/components/ScreenReaderContent'
-import Grid, {GridCol, GridRow} from '@instructure/ui-layout/lib/components/Grid'
+import {ScreenReaderContent} from '@instructure/ui-a11y'
+import {Grid, GridCol, GridRow} from '@instructure/ui-layout'
 import propTypes from '../propTypes'
 
 const { func } = PropTypes

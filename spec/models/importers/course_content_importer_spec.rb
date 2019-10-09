@@ -307,6 +307,35 @@ describe Course do
         expect(migration.workflow_state).not_to eq('imported')
       end
     end
+
+    describe "default_post_policy" do
+      let(:migration) do
+        build_migration(@course, {}, all_course_settings: true)
+      end
+
+      it "sets the course to manually-posted when default_post_policy['post_manually'] is true" do
+        import_data = {"course": {"default_post_policy": {"post_manually": true}}}.with_indifferent_access
+        Importers::CourseContentImporter.import_content(@course, import_data, nil, migration)
+
+        expect(@course.default_post_policy).to be_post_manually
+      end
+
+      it "sets the course to auto-posted when default_post_policy['post_manually'] is false" do
+        @course.default_post_policy.update!(post_manually: true)
+        import_data = {"course": {"default_post_policy": {"post_manually": false}}}.with_indifferent_access
+        Importers::CourseContentImporter.import_content(@course, import_data, nil, migration)
+
+        expect(@course.default_post_policy).not_to be_post_manually
+      end
+
+      it "does not update the course's post policy when default_post_policy['post_manually'] is missing" do
+        @course.default_post_policy.update!(post_manually: true)
+        import_data = {"course": {}}.with_indifferent_access
+        Importers::CourseContentImporter.import_content(@course, import_data, nil, migration)
+
+        expect(@course.default_post_policy).to be_post_manually
+      end
+    end
   end
 
   describe "shift_date_options" do
@@ -340,6 +369,37 @@ describe Course do
       expect(new_unlock_at).to eq DateTime.new(2014, 6,  1,  0,  0)
       expect(new_due_at).to    eq DateTime.new(2014, 6,  7, 23, 59)
       expect(new_lock_at).to   eq DateTime.new(2014, 6, 10, 23, 59)
+    end
+
+    it "should return error when removing dates and new_sis_integrations is enabled" do
+      course_factory
+      @course.root_account.enable_feature!(:new_sis_integrations)
+      @course.root_account.settings[:sis_syncing] = true
+      @course.root_account.settings[:sis_require_assignment_due_date] = true
+      @course.root_account.save!
+      @course.account.enable_feature!(:new_sis_integrations)
+      @course.account.settings[:sis_syncing] = true
+      @course.account.settings[:sis_require_assignment_due_date] = true
+      @course.account.save!
+
+      assignment = @course.assignments.create!(due_at: Time.now + 1.day)
+      assignment.post_to_sis = true
+      assignment.due_at = Time.now + 1.day
+      assignment.name = "lalala"
+      assignment.save!
+
+      migration = ContentMigration.create!(:context => @course)
+      migration.migration_ids_to_import = {:copy => { :copy_options => { :all_assignments => "1" } }}.with_indifferent_access
+      migration.migration_settings[:date_shift_options] = Importers::CourseContentImporter.shift_date_options(@course, { remove_dates: true })
+      migration.add_imported_item(assignment)
+      migration.source_course = @course
+      migration.initiated_source = :manual
+      migration.user = @user
+      migration.save!
+
+      Importers::CourseContentImporter.adjust_dates(@course, migration)
+      expect(migration.warnings.length).to eq 1
+      expect(migration.warnings[0]).to eq "Couldn't adjust dates on assignment lalala (ID #{assignment.id})"
     end
   end
 

@@ -77,10 +77,10 @@ import 'jqueryui/sortable'
       $table.find("tfoot tr:last td:first").append($input.hide());
       $entryBox.data('supercalc_options', options);
       $entryBox.data('supercalc_answer', $input);
-      $table.delegate('.save_formula_button', 'click', function() {
+      $table.delegate('.save_formula_button', 'click', () => {
         $displayBox.triggerHandler('keypress', true);
       });
-      $table.delegate('.delete_formula_row_link', 'click', function(event) {
+      $table.delegate('.delete_formula_row_link', 'click', event => {
         event.preventDefault();
         $(event.target).parents("tr").remove();
         $entryBox.triggerHandler('calculate');
@@ -91,7 +91,7 @@ import 'jqueryui/sortable'
           $entryBox.triggerHandler('calculate');
         }
       });
-      $table.delegate('.round', 'change', function() {
+      $table.delegate('.round', 'change', () => {
         $entryBox.triggerHandler('calculate');
       });
       $entryBox.bind('calculate', function(event, no_dom) {
@@ -114,14 +114,12 @@ import 'jqueryui/sortable'
           $entryBox.val(formula_text);
           var res = null;
           try {
-            // precision 15 to strip floating point error
-            var precision = 15;
-            // regex strips extra 0s from toPrecision output
-            var stripZeros = function(str){return str.replace(/(?:(\.[0-9]*[^0e])|\.)0*(e.*)?$/,"$1$2")};
-
-            var val = +calcCmd.computeValue(formula_text).toPrecision(precision);
+            var val = calcCmd.computeValue(formula_text);
             var rounder = Math.pow(10, parseInt(finds.round.val(), 10) || 0) || 1;
-            res = "= " + stripZeros((Math.round(val * rounder) / rounder).toPrecision(precision));
+            res = "= " + I18n.n(
+              (Math.round(val * rounder) / rounder),
+              {precision: 5, strip_insignificant_zeros: true}
+            );
           } catch(e) {
             res = e.toString();
           }
@@ -139,7 +137,7 @@ import 'jqueryui/sortable'
           $entryBox.val("");
         }
       });
-      $displayBox.bind('keypress', function(event, enter) {
+      $displayBox.bind('keypress', (event, enter) => {
         $entryBox.val($displayBox.val());
         if(event.keyCode == 13 || enter && $displayBox.val()) {
           event.preventDefault();

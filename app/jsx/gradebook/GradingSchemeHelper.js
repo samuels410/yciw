@@ -18,7 +18,7 @@
 
 import round from 'compiled/util/round'
 
-function indexOfGrade(grade, gradingScheme) {
+export function indexOfGrade(grade, gradingScheme) {
   const cleanGrade = `${grade}`.trim().toLowerCase()
   return gradingScheme.findIndex(entry => entry[0].toLowerCase() === cleanGrade)
 }
@@ -63,6 +63,10 @@ export function gradeToScoreLowerBound(grade, gradingScheme) {
 }
 
 export function scoreToGrade(score, gradingScheme) {
+  if (gradingScheme == null) {
+    return null
+  }
+
   const roundedScore = round(score, 4)
   const scoreWithLowerBound = Math.max(roundedScore, 0)
   const letter = gradingScheme.find((row, i) => {

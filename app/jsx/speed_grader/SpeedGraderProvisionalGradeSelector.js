@@ -18,32 +18,36 @@
 
 import React from 'react'
 import {arrayOf, bool, func, number, objectOf, shape, string} from 'prop-types'
-import Button from '@instructure/ui-buttons/lib/components/Button'
+import {Button} from '@instructure/ui-buttons'
 import GradeFormatHelper from 'jsx/gradebook/shared/helpers/GradeFormatHelper'
-import Heading from '@instructure/ui-elements/lib/components/Heading'
-import RadioInput from '@instructure/ui-forms/lib/components/RadioInput'
-import RadioInputGroup from '@instructure/ui-forms/lib/components/RadioInputGroup'
-import ScreenReaderContent from '@instructure/ui-a11y/lib/components/ScreenReaderContent'
-import Text from '@instructure/ui-elements/lib/components/Text'
-import View from '@instructure/ui-layout/lib/components/View'
-import I18n from 'i18n!gradebook'
+import {Heading, Text} from '@instructure/ui-elements'
+import {RadioInput, RadioInputGroup} from '@instructure/ui-forms'
+import {ScreenReaderContent} from '@instructure/ui-a11y'
+import {View} from '@instructure/ui-layout'
+
+import natcompare from 'compiled/util/natcompare'
+
+import I18n from 'i18n!SpeedGraderProvisionalGradeSelector'
 
 const NEW_CUSTOM_GRADE = 'custom'
 
 export default class SpeedGraderProvisionalGradeSelector extends React.Component {
   static propTypes = {
+    finalGraderId: string.isRequired,
     gradingType: string.isRequired,
     onGradeSelected: func.isRequired,
     pointsPossible: number,
     provisionalGraderDisplayNames: objectOf(string).isRequired,
-    provisionalGrades: arrayOf(shape({
-      anonymous_grader_id: string,
-      grade: string.isRequired,
-      provisional_grade_id: string.isRequired,
-      readonly: bool,
-      scorer_id: string,
-      selected: bool
-    })).isRequired
+    provisionalGrades: arrayOf(
+      shape({
+        anonymous_grader_id: string,
+        grade: string.isRequired,
+        provisional_grade_id: string.isRequired,
+        readonly: bool,
+        scorer_id: string,
+        selected: bool
+      })
+    ).isRequired
   }
 
   static defaultProps = {
@@ -53,16 +57,13 @@ export default class SpeedGraderProvisionalGradeSelector extends React.Component
   constructor(props) {
     super(props)
     this.state = {detailsVisible: false}
-
-    this.onDetailsToggled = this.onDetailsToggled.bind(this)
-    this.handleGradeSelected = this.handleGradeSelected.bind(this)
   }
 
-  onDetailsToggled() {
+  onDetailsToggled = () => {
     this.setState(prevState => ({detailsVisible: !prevState.detailsVisible}))
   }
 
-  handleGradeSelected(_event, value) {
+  handleGradeSelected = (_event, value) => {
     // If this is the current user's grade, we'll need to submit the changes
     // to the server
     if (value === NEW_CUSTOM_GRADE) {
@@ -81,14 +82,21 @@ export default class SpeedGraderProvisionalGradeSelector extends React.Component
 
     // A provisional grade isn't *really* a submission object, but it has the
     // two fields ("score" and "grade") relevant to formatting.
-    const formattedScore = GradeFormatHelper.formatSubmissionGrade(grade, {formatType: this.props.gradingType})
+    const formattedScore = GradeFormatHelper.formatSubmissionGrade(grade, {
+      formatType: this.props.gradingType
+    })
 
     return (
       <View>
-        <Text size="small" weight="bold">{formattedScore}</Text>
-        {this.props.gradingType === 'points' &&
-          <Text size="small"> {I18n.t('out of %{pointsPossible}', {pointsPossible: I18n.n(pointsPossible)})}</Text>
-        }
+        <Text size="small" weight="bold">
+          {formattedScore}
+        </Text>
+        {this.props.gradingType === 'points' && (
+          <Text size="small">
+            {' '}
+            {I18n.t('out of %{pointsPossible}', {pointsPossible: I18n.n(pointsPossible)})}
+          </Text>
+        )}
 
         <View padding="none small">
           <Text weight="light" size="small" fontStyle="italic">
@@ -108,18 +116,23 @@ export default class SpeedGraderProvisionalGradeSelector extends React.Component
     // The "Custom" button (representing the moderator's own grade) is always
     // rendered at the top. It needs some slightly special handling since the
     // moderator might not have actually issued a provisional grade yet.
-    const gradeIssuedByMe = provisionalGrades.find(grade => !grade.readonly)
-    this.moderatorGradeId = gradeIssuedByMe
-      ? gradeIssuedByMe.provisional_grade_id
+    const gradeIssuedByModerator = provisionalGrades.find(
+      grade => grade.scorer_id === this.props.finalGraderId
+    )
+
+    const moderatorGradeId = gradeIssuedByModerator
+      ? gradeIssuedByModerator.provisional_grade_id
       : NEW_CUSTOM_GRADE
 
-    const gradesIssuedByOthers = provisionalGrades.filter(grade => grade.readonly)
+    const gradesIssuedByOthers = provisionalGrades.filter(
+      grade => grade.provisional_grade_id !== moderatorGradeId
+    )
 
+    let sortKey = 'scorer_id'
     if (gradesIssuedByOthers.length > 0 && gradesIssuedByOthers[0].anonymous_grader_id) {
-      gradesIssuedByOthers.sort((a, b) => a.anonymous_grader_id > b.anonymous_grader_id)
-    } else {
-      gradesIssuedByOthers.sort((a, b) => a.scorer_id > b.scorer_id)
+      sortKey = 'anonymous_grader_id'
     }
+    gradesIssuedByOthers.sort(natcompare.byKey(sortKey))
 
     return (
       <View as="div" id="grading_details" margin="small">
@@ -131,12 +144,17 @@ export default class SpeedGraderProvisionalGradeSelector extends React.Component
 
         <RadioInputGroup
           value={selectedValue}
-          description={<ScreenReaderContent>{I18n.t('Select a provisional grade')}</ScreenReaderContent>}
+          description={
+            <ScreenReaderContent>{I18n.t('Select a provisional grade')}</ScreenReaderContent>
+          }
           name="selected_provisional_grade"
           onChange={this.handleGradeSelected}
           size="small"
         >
-          <RadioInput value={this.moderatorGradeId} label={<Text size="small">{I18n.t('Custom')}</Text>} />
+          <RadioInput
+            value={moderatorGradeId}
+            label={<Text size="small">{I18n.t('Custom')}</Text>}
+          />
 
           {gradesIssuedByOthers.map(grade => (
             <RadioInput

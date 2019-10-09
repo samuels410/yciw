@@ -21,7 +21,7 @@ import PropTypes from "prop-types";
 import React, { Component } from "react";
 import Loading from "./Loading";
 import formatMessage from "../../format-message";
-import Button from "@instructure/ui-buttons/lib/components/Button";
+import { Button } from '@instructure/ui-buttons'
 import { StyleSheet, css } from "aphrodite";
 
 class LoadMore extends Component {
@@ -65,7 +65,7 @@ class LoadMore extends Component {
         {this.props.hasMore &&
           !this.props.isLoading && (
             <div className={css(styles.button)}>
-              <Button variant="link" onClick={this.loadMore} fluidWidth={true}>
+              <Button variant="link" onClick={this.loadMore} fluidWidth>
                 {formatMessage("Load more results")}
               </Button>
             </div>

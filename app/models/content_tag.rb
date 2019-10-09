@@ -54,6 +54,8 @@ class ContentTag < ActiveRecord::Base
   after_save :update_could_be_locked
   after_save :touch_context_module_after_transaction
   after_save :touch_context_if_learning_outcome
+  after_save :run_due_date_cacher_for_quizzes_next
+
   include CustomValidations
   validates_as_url :url
 
@@ -83,7 +85,7 @@ class ContentTag < ActiveRecord::Base
 
   attr_accessor :skip_touch
   def touch_context_module
-    return true if skip_touch.present?
+    return true if skip_touch.present? || self.context_module_id.nil?
     ContentTag.touch_context_modules([self.context_module_id])
   end
 
@@ -151,7 +153,9 @@ class ContentTag < ActiveRecord::Base
       next unless klass < ActiveRecord::Base
       next if klass < Tableless
       if klass.new.respond_to?(:could_be_locked=)
-        klass.where(:id => ids).update_all(:could_be_locked => true)
+        klass.transaction do
+          klass.where(id: klass.where(id: ids).lock_in_order).update_all(could_be_locked: true)
+        end
       end
     end
   end
@@ -345,6 +349,8 @@ class ContentTag < ActiveRecord::Base
     self.workflow_state = 'deleted'
     self.save!
 
+    run_due_date_cacher_for_quizzes_next(force: true)
+
     # after deleting the last native link to an unaligned outcome, delete the
     # outcome. we do this here instead of in LearningOutcome#destroy because
     # (a) LearningOutcome#destroy *should* only ever be called from here, and
@@ -409,7 +415,9 @@ class ContentTag < ActiveRecord::Base
   end
 
   def context_module_action(user, action, points=nil)
-    self.context_module.update_for(user, action, self, points) if self.context_module
+    Shackles.activate(:master) do
+      self.context_module.update_for(user, action, self, points) if self.context_module
+    end
   end
 
   def progression_for_user(user)
@@ -580,5 +588,12 @@ class ContentTag < ActiveRecord::Base
       self.content.is_child_content? && self.content.editing_restricted?(:content)
         self.errors.add(:title, "cannot change title - associated content locked by Master Course")
     end
+  end
+
+  def run_due_date_cacher_for_quizzes_next(force: false)
+    # Quizzes next should ideally only ever be attached to an
+    # assignment.  Let's ignore any other contexts.
+    return unless context_type == "Assignment"
+    DueDateCacher.recompute(context) if content.try(:quiz_lti?) && (force || workflow_state != 'deleted')
   end
 end

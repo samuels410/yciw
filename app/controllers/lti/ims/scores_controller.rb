@@ -17,9 +17,6 @@
 
 module Lti::Ims
   # @API Score
-  # @internal
-  #
-  # TODO: remove internal flags
   #
   # Score API for IMS Assignment and Grade Services
   #
@@ -31,11 +28,10 @@ module Lti::Ims
   #          "userId": {
   #            "description": "The lti_user_id or the Canvas user_id",
   #            "example": "50 | 'abcasdf'",
-  #            "type": "number|string"
+  #            "type": "string"
   #          },
   #          "scoreGiven": {
-  #            "description": "The Current score received in the tool for this line item and user,
-  #                            scaled to the scoreMaximum",
+  #            "description": "The Current score received in the tool for this line item and user, scaled to the scoreMaximum",
   #            "example": "50",
   #            "type": "number"
   #          },
@@ -52,19 +48,14 @@ module Lti::Ims
   #            "description": "Date and time when the score was modified in the tool. Should use subsecond precision.",
   #            "example": "2017-04-16T18:54:36.736+00:00",
   #            "type": "string"
-  #          }
+  #          },
   #          "activityProgress": {
-  #            "description": "Indicate to Canvas the status of the user towards the activity's completion.
-  #                            Must be one of Initialized, Started, InProgress, Submitted, Completed",
+  #            "description": "Indicate to Canvas the status of the user towards the activity's completion. Must be one of Initialized, Started, InProgress, Submitted, Completed",
   #            "example": "Completed",
   #            "type": "string"
-  #          }
+  #          },
   #          "gradingProgress": {
-  #            "description": "Indicate to Canvas the status of the grading process.
-  #                            A value of PendingManual will require intervention by a grader.
-  #                            Values of NotReady, Failed, and Pending will cause the scoreGiven to be ignored.
-  #                            FullyGraded values will require no action.
-  #                            Possible values are NotReady, Failed, Pending, PendingManual, FullyGraded",
+  #            "description": "Indicate to Canvas the status of the grading process. A value of PendingManual will require intervention by a grader. Values of NotReady, Failed, and Pending will cause the scoreGiven to be ignored. FullyGraded values will require no action. Possible values are NotReady, Failed, Pending, PendingManual, FullyGraded",
   #            "example": "FullyGraded",
   #            "type": "string"
   #          }
@@ -84,7 +75,6 @@ module Lti::Ims
     MIME_TYPE = 'application/vnd.ims.lis.v1.score+json'.freeze
 
     # @API Create a Score
-    # @internal
     #
     # Create a new Result from the score params. If this is for the first created line_item for a
     # resourceLinkId, or it is a line item that is not attached to a resourceLinkId, then a submission
@@ -129,8 +119,30 @@ module Lti::Ims
     # @argument comment [String]
     #   Comment visible to the student about this score.
     #
+    # @argument https://canvas.instructure.com/lti/submission [Optional, Object]
+    #   (EXTENSION) Optional submission type and data.
+    #   new_submission [Boolean] flag to indicate that this is a new submission.  Defaults to true if submission_type is given.
+    #   submission_type [String] permissible values are: none, basic_lti_launch, online_text_entry, or online_url
+    #   submission_data [String] submission data (URL or body text)
+    #
     # @returns resultUrl [String]
     #   The url to the result that was created.
+    #
+    # @example_request
+    #   {
+    #     "timestamp": "2017-04-16T18:54:36.736+00:00",
+    #     "scoreGiven": 83,
+    #     "scoreMaximum": 100,
+    #     "comment": "This is exceptional work.",
+    #     "activityProgress": "Completed",
+    #     "gradingProgress": "FullyGraded",
+    #     "userId": "5323497",
+    #     "https://canvas.instructure.com/lti/submission": {
+    #       "new_submission": true,
+    #       "submission_type": "online_url",
+    #       "submission_data": "https://instructure.com"
+    #     }
+    #   }
     def create
       update_or_create_result
       render json: { resultUrl: result_url }, content_type: MIME_TYPE
@@ -140,6 +152,7 @@ module Lti::Ims
 
     REQUIRED_PARAMS = %i[userId activityProgress gradingProgress timestamp].freeze
     OPTIONAL_PARAMS = %i[scoreGiven scoreMaximum comment].freeze
+    SCORE_SUBMISSION_TYPES = %w[none basic_lti_launch online_text_entry online_url].freeze
 
     def scopes_matcher
       self.class.all_of(TokenScopes::LTI_AGS_SCORE_SCOPE)
@@ -147,13 +160,19 @@ module Lti::Ims
 
     def scores_params
       @_scores_params ||= begin
-        update_params = params.permit(REQUIRED_PARAMS + OPTIONAL_PARAMS).transform_keys do |k|
-          k.to_s.underscore
-        end.except(:timestamp, :user_id, :score_given, :score_maximum)
-
-        return update_params if ignore_score?
+        update_params = params.permit(REQUIRED_PARAMS + OPTIONAL_PARAMS,
+          Lti::Result::AGS_EXT_SUBMISSION => [:new_submission, :submission_type, :submission_data]).transform_keys do |k|
+            k.to_s.underscore
+        end.except(:timestamp, :user_id, :score_given, :score_maximum).to_unsafe_h
+        update_params[:extensions] = extract_extensions(update_params)
         update_params.merge(result_score: params[:scoreGiven], result_maximum: params[:scoreMaximum])
       end
+    end
+
+    def extract_extensions(update_params)
+      {
+        Lti::Result::AGS_EXT_SUBMISSION => update_params.delete(Lti::Result::AGS_EXT_SUBMISSION)
+      }.compact
     end
 
     def verify_required_params
@@ -178,11 +197,38 @@ module Lti::Ims
     end
 
     def score_submission
-      return unless !ignore_score? && line_item.assignment_line_item?
-      submission = line_item.assignment.grade_student(
-        user,
-        { score: submission_score, grader_id: -tool.id }
-      ).first
+      return unless line_item.assignment_line_item?
+
+      submission = if new_submission?
+        line_item.assignment.submit_homework(user)
+      else
+        line_item.assignment.find_or_create_submission(user)
+      end
+
+      if ignore_score?
+        submission.score = nil
+      else
+        submission = line_item.assignment.grade_student(
+          user,
+          {score: submission_score, grader_id: -tool.id}
+        ).first
+      end
+
+      if !submission_type.nil? && SCORE_SUBMISSION_TYPES.include?(submission_type)
+        submission.submission_type = submission_type
+        case submission_type
+        when 'none'
+          submission.body = nil
+          submission.url = nil
+        when 'basic_lti_launch', 'online_url'
+          submission.body = nil
+          submission.url = submission_data
+        when 'online_text_entry'
+          submission.url = nil
+          submission.body = submission_data
+        end
+      end
+
       submission.save!
       submission.add_comment(comment: scores_params[:comment], skip_author: true) if scores_params[:comment].present?
       submission
@@ -212,7 +258,7 @@ module Lti::Ims
     end
 
     def result
-      @_result ||= Lti::Result.where(line_item: line_item, user: user).first
+      @_result ||= Lti::Result.active.where(line_item: line_item, user: user).first
     end
 
     def timestamp
@@ -221,6 +267,19 @@ module Lti::Ims
 
     def result_url
       lti_result_show_url(course_id: context.id, line_item_id: line_item.id, id: result.id)
+    end
+
+    def submission_type
+      scores_params.dig(:extensions, Lti::Result::AGS_EXT_SUBMISSION, :submission_type)
+    end
+
+    def submission_data
+      scores_params.dig(:extensions, Lti::Result::AGS_EXT_SUBMISSION, :submission_data)
+    end
+
+    def new_submission?
+      new_flag = ActiveRecord::Type::Boolean.new.cast(scores_params.dig(:extensions, Lti::Result::AGS_EXT_SUBMISSION, :new_submission))
+      new_flag || (new_flag.nil? && !submission_type.nil? && submission_type != 'none')
     end
   end
 end

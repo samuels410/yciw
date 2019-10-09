@@ -27,7 +27,7 @@ function AvailabilityDates(props) {
 
   if (assignment.lockAt && assignment.unlockAt) {
     return (
-      <React.Fragment>
+      <>
         <FriendlyDatetime
           prefix={longFmt ? I18n.t('Available') : ''}
           dateTime={assignment.unlockAt}
@@ -36,16 +36,16 @@ function AvailabilityDates(props) {
         <FriendlyDatetime
           prefix={longFmt ? I18n.t(' until') : I18n.t(' to')}
           dateTime={assignment.lockAt}
-          format={I18n.t('#date.formats.full')}
+          format={longFmt ? I18n.t('#date.formats.full') : I18n.t('#date.formats.short')}
         />
-      </React.Fragment>
+      </>
     )
   } else if (assignment.lockAt) {
     return (
       <FriendlyDatetime
         prefix={I18n.t('Available until')}
         dateTime={assignment.lockAt}
-        format={I18n.t('#date.formats.full')}
+        format={longFmt ? I18n.t('#date.formats.full') : I18n.t('#date.formats.short')}
       />
     )
   } else if (assignment.unlockAt) {
@@ -53,7 +53,7 @@ function AvailabilityDates(props) {
       <FriendlyDatetime
         prefix={I18n.t('Available after')}
         dateTime={assignment.unlockAt}
-        format={I18n.t('#date.formats.full')}
+        format={longFmt ? I18n.t('#date.formats.full') : I18n.t('#date.formats.short')}
       />
     )
   } else {

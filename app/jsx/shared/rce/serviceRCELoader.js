@@ -24,9 +24,42 @@ import loadEventListeners from '../rce/loadEventListeners'
 import polyfill from '../rce/polyfill'
 import splitAssetString from 'compiled/str/splitAssetString'
 
+function getTrayProps() {
+  if (!ENV.context_asset_string) {
+    return null
+  }
+  let contextType, contextId
+  const userId = ENV.current_user_id
+
+  // set in rich_content.rb if user has :manage_files right
+  // though comment says it may (eventually) be in the jwt
+  // TODO: look into that.
+  if (ENV.use_rce_enhancements && !ENV.RICH_CONTENT_CAN_UPLOAD_FILES) {
+    contextId = userId
+    contextType = 'user'
+  } else {
+    [contextType, contextId] = splitAssetString(ENV.context_asset_string, false)
+  }
+
+  return {
+    canUploadFiles: ENV.RICH_CONTENT_CAN_UPLOAD_FILES,
+    containingContext: {contextType, contextId, userId}, // this will remain constant
+    contextType, // these will change via the UI
+    contextId,
+    filesTabDisabled: ENV.RICH_CONTENT_FILES_TAB_DISABLED,
+    host: ENV.RICH_CONTENT_APP_HOST,
+    jwt: ENV.JWT,
+    refreshToken: refreshToken(ENV.JWT),
+    themeUrl: ENV.active_brand_config_json_url,
+    liveRegion: () => document.getElementById('flash_screenreader_holder')
+  }
+}
+
+let loadingPromise
+
   const RCELoader = {
-    preload() {
-      this.loadRCE(function(){})
+    preload(cb) {
+      this.loadRCE(cb)
     },
 
     loadOnTarget(target, tinyMCEInitOptions, callback) {
@@ -34,8 +67,8 @@ import splitAssetString from 'compiled/str/splitAssetString'
       const renderingTarget = this.getRenderingTarget(textarea, tinyMCEInitOptions.getRenderingTarget)
       const propsForRCE = this.createRCEProps(textarea, tinyMCEInitOptions)
 
-      this.loadRCE(function(RCE) {
-        RCE.renderIntoDiv(renderingTarget, propsForRCE, function(remoteEditor) {
+      this.loadRCE(RCE => {
+        RCE.renderIntoDiv(renderingTarget, propsForRCE, remoteEditor => {
           remoteEditor.mceInstance().on('init', () => callback(textarea, polyfill.wrapEditor(remoteEditor)))
         })
       })
@@ -45,19 +78,11 @@ import splitAssetString from 'compiled/str/splitAssetString'
       if (ENV.RICH_CONTENT_SKIP_SIDEBAR) {
         return
       }
-      let context = splitAssetString(ENV.context_asset_string)
-      let props = {
-        jwt: ENV.JWT,
-        refreshToken: refreshToken(ENV.JWT),
-        host: ENV.RICH_CONTENT_APP_HOST,
-        canUploadFiles: ENV.RICH_CONTENT_CAN_UPLOAD_FILES,
-        filesTabDisabled: ENV.RICH_CONTENT_FILES_TAB_DISABLED,
-        contextType: context[0],
-        contextId: context[1],
-        themeUrl: ENV.active_brand_config_json_url
-      }
-      this.loadRCE(function (RCE) {
-        RCE.renderSidebarIntoDiv(target, props, function(remoteSidebar) {
+
+      const props = getTrayProps()
+
+      this.loadRCE(RCE => {
+        RCE.renderSidebarIntoDiv(target, props, remoteSidebar => {
           callback(polyfill.wrapSidebar(remoteSidebar))
         })
       })
@@ -69,32 +94,32 @@ import splitAssetString from 'compiled/str/splitAssetString'
     *
     * @private
     */
-    loadingFlag: false,
     loadingCallbacks: [],
     RCE: null,
-    loadEventListeners,
 
     /**
     * handle accepting new load requests depending on the current state
-    * of the load/cache cycle
+    * of the load/cache cycle.
     *
+    * @return {Promise}
     * @private
     */
-    loadRCE(cb) {
-      require.ensure([], (require) => {
-        const first = !this.RCE
-        this.RCE = require('canvas-rce/lib/async')
-        require('./initA11yChecker')
-        if (first) {
-          this.loadEventListeners()
-          this.loadingFlag = false
-        }
-        this.loadingCallbacks.forEach((loadingCallback) => {
-          loadingCallback(this.RCE)
+    loadRCE(cb = () => {}) {
+      if (!loadingPromise) {
+        loadingPromise = (window.ENV.use_rce_enhancements
+          ? import(/* webpackChunkName: "canvas-rce-async-chunk" */ './canvas-rce-and-a11y-checker')
+          : import(/* webpackChunkName: "canvas-rce-old-async-chunk" */ './canvas-rce-old-and-a11y-checker')
+        ).then(RCE => {
+          this.RCE = RCE
+          loadEventListeners()
+          return RCE
         })
+      }
+      return loadingPromise.then(() => {
+        this.loadingCallbacks.forEach(loadingCallback => loadingCallback(this.RCE))
         this.loadingCallbacks = []
         cb(this.RCE)
-      }, 'CanvasRCEAsyncChunk')
+      })
     },
 
     /**
@@ -164,42 +189,23 @@ import splitAssetString from 'compiled/str/splitAssetString'
       let height = textarea.offsetHeight
 
       if (height){
-        tinyMCEInitOptions.tinyOptions = _.extend({},
-          {height: height},
-          (tinyMCEInitOptions.tinyOptions || {})
-        )
+        tinyMCEInitOptions.tinyOptions = {
+          height,
+          ...(tinyMCEInitOptions.tinyOptions || {})
+        }
       }
 
       return {
-        editorOptions: editorOptions.bind(null, width, textarea.id, tinyMCEInitOptions, null),
         defaultContent: textarea.value || tinyMCEInitOptions.defaultContent,
-        textareaId: textarea.id,
-        textareaClassName: textarea.className,
+        editorOptions: editorOptions.bind(null, width, textarea.id, tinyMCEInitOptions, null),
         language: ENV.LOCALE,
         mirroredAttrs: this._attrsToMirror(textarea),
-        onFocus: tinyMCEInitOptions.onFocus
+        onFocus: tinyMCEInitOptions.onFocus,
+        onBlur: tinyMCEInitOptions.onBlur,
+        textareaClassName: textarea.className,
+        textareaId: textarea.id,
+        trayProps: getTrayProps()
       }
-    },
-
-    /**
-     * helps with url construction which is different when using a CDN
-     * than when loading directly from an RCE server
-     *
-     * @private
-     * @return {String} ready-to-use URL for loading RCE remotely
-     */
-    buildModuleUrl() {
-      let host, path
-      if (window.ENV.RICH_CONTENT_CDN_HOST) {
-        host = window.ENV.RICH_CONTENT_CDN_HOST
-        path = '/latest'
-      } else {
-        host = window.ENV.RICH_CONTENT_APP_HOST
-        path = '/get_module'
-      }
-      // trim trailing slash if there is one, as we're going to add one below
-      host = host.replace(/\/$/, "")
-      return '//' + host + path
     }
   }
 

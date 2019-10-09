@@ -16,9 +16,9 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 import React, { Children, Component } from 'react';
-import themeable from '@instructure/ui-themeable/lib';
-import CustomPropTypes from '@instructure/ui-utils/lib/react/CustomPropTypes';
-import Pill from '@instructure/ui-elements/lib/components/Pill';
+import {themeable} from '@instructure/ui-themeable'
+import { Children as ChildrenPropType } from '@instructure/ui-prop-types';
+import {Pill} from '@instructure/ui-elements'
 
 import styles from './styles.css';
 import theme from './theme.js';
@@ -26,7 +26,7 @@ import theme from './theme.js';
 class BadgeList extends Component {
 
   static propTypes = {
-    children: CustomPropTypes.Children.oneOf([Pill])
+    children: ChildrenPropType.oneOf([Pill])
   }
 
   renderChildren () {

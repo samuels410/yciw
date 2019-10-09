@@ -20,7 +20,7 @@ module Types
   class QueryType < ApplicationObjectType
     graphql_name "Query"
 
-    field :node, field: GraphQL::Relay::Node.field
+    add_field GraphQL::Types::Relay::NodeField
 
     field :legacy_node, GraphQL::Types::Relay::Node, null: true do
       description "Fetches an object given its type and legacy ID"
@@ -29,6 +29,14 @@ module Types
     end
     def legacy_node(type:, _id:)
       GraphQLNodeLoader.load(type, _id, context)
+    end
+
+    field :account, Types::AccountType, null: true do
+      argument :id, ID, "a graphql or legacy id", required: true,
+        prepare: GraphQLHelpers.relay_or_legacy_id_prepare_func("Account")
+    end
+    def account
+      GraphQLNodeLoader.load("Account", id, context)
     end
 
     field :course, Types::CourseType, null: true do
@@ -55,6 +63,14 @@ module Types
       GraphQLNodeLoader.load("AssignmentGroup", id, context)
     end
 
+    field :term, Types::TermType, null: true do
+      argument :id, ID, "a graphql or legacy id", required: true,
+        prepare: GraphQLHelpers.relay_or_legacy_id_prepare_func("Term")
+    end
+    def term(id:)
+      GraphQLNodeLoader.load("Term", id, context)
+    end
+
     field :all_courses, [CourseType],
       "All courses viewable by the current user",
       null: true
@@ -66,6 +82,20 @@ module Types
           sort_by! { |enrollment|
             Canvas::ICU.collation_key(enrollment.course.nickname_for(current_user))
           }.map(&:course)
+    end
+
+    field :module_item, Types::ModuleItemType, null: true do
+      description "ModuleItem"
+      argument :id, ID, "a graphql or legacy id", required: true,
+        prepare: GraphQLHelpers.relay_or_legacy_id_prepare_func("ModuleItem")
+    end
+    def module_item(id:)
+      GraphQLNodeLoader.load("ModuleItem", id, context)
+    end
+
+    field :audit_logs, Types::AuditLogsType, null: true
+    def audit_logs
+      Canvas::DynamoDB::DatabaseBuilder.from_config(:auditors)
     end
   end
 end

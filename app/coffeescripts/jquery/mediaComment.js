@@ -16,14 +16,14 @@
 // with this program. If not, see <http://www.gnu.org/licenses/>.
 
 // mediaComment.coffee
-import I18n from 'i18n!media_comments'
+import I18n from 'i18n!jquery_media_comments'
 import _ from 'underscore'
 import pubsub from 'vendor/jquery.ba-tinypubsub'
 import mejs from 'vendor/mediaelement-and-player'
 import MediaElementKeyActionHandler from 'jsx/mediaelement/MediaElementKeyActionHandler'
 import $ from 'jquery'
-import kalturaAnalytics from '../util/kalturaAnalytics'
 import htmlEscape from 'str/htmlEscape'
+import sanitizeUrl from 'jsx/shared/helpers/sanitizeUrl';
 
 // #
 // a module for some of the transformation functions pulled out of the middle
@@ -74,7 +74,9 @@ $.extend(mejs.MediaElementDefaults, {
 })
 
 mejs.MepDefaults.success = function (mediaElement, domObject) {
-  kalturaAnalytics(this.mediaCommentId, mediaElement, INST.kalturaSettings)
+  import('../util/kalturaAnalytics').then(({default: kalturaAnalytics}) => {
+    kalturaAnalytics(this.mediaCommentId, mediaElement, INST.kalturaSettings)
+  })
   return mediaElement.play()
 }
 
@@ -94,12 +96,19 @@ function getSourcesAndTracks (id) {
   $.getJSON(`/media_objects/${id}/info`, (data) => {
     // this 'when ...' is because right now in canvas, none of the mp3 urls actually work.
     // see: CNVS-12998
-    const sources = data.media_sources.filter(source => source.content_type !== 'audio/mp3').map(source =>
-      `<source
-        type='${htmlEscape(source.content_type)}'
-        src='${htmlEscape(source.url)}'
-        title='${htmlEscape(source.width)}x${htmlEscape(source.height)} ${htmlEscape(Math.floor(source.bitrate / 1024))} kbps'
-      />`
+    const sources = data.media_sources
+      .filter(source => source.content_type !== 'audio/mp3')
+      // mediaplayer plays the first source by default, which tends to be the highest
+      // resolution. sort so we play the lowest res. by default
+      .sort((a, b) => parseInt(a.bitrate, 10) - parseInt(b.bitrate, 10))
+      .map((source) => (
+        // xsslint safeString.function sanitizeUrl
+        `<source
+            type='${htmlEscape(source.content_type)}'
+            src='${sanitizeUrl(htmlEscape(source.url))}'
+            title='${htmlEscape(source.width)}x${htmlEscape(source.height)} ${htmlEscape(Math.floor(source.bitrate / 1024))} kbps'
+          />`
+      )
     )
 
     const tracks = _.map(data.media_tracks, (track) => {

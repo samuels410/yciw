@@ -31,10 +31,8 @@
 //     button with tooltip
 //   </button>
 
-import _ from 'underscore'
 import $ from 'jquery'
 import htmlEscape from 'str/htmlEscape'
-import sanitizeHtml from 'jsx/shared/sanitizeHtml'
 import 'jqueryui/tooltip'
 
 const tooltipsToShortCirtuit = {}
@@ -164,7 +162,7 @@ $('body').on('mouseenter focusin', '[data-tooltip]', function (event) {
 
   if ($this.data('html-tooltip-title')) {
     opts.content = function () {
-      return $.raw(sanitizeHtml($(this).data('html-tooltip-title')))
+      return $.raw($(this).data('html-tooltip-title'))
     }
     opts.items = '[data-html-tooltip-title]'
   }

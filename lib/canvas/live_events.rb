@@ -17,6 +17,7 @@
 
 module Canvas::LiveEvents
   def self.post_event_stringified(event_name, payload, context = nil)
+    payload.compact! if LiveEvents.get_context&.dig(:compact_live_events)&.present?
     StringifyIds.recursively_stringify_ids(payload)
     StringifyIds.recursively_stringify_ids(context)
     LiveEvents.post_event(
@@ -73,19 +74,27 @@ module Canvas::LiveEvents
   end
 
   def self.discussion_entry_created(entry)
+    post_event_stringified('discussion_entry_created', get_discussion_entry_data(entry))
+  end
+
+  def self.discussion_entry_submitted(entry, assignment_id, submission_id)
+    payload = get_discussion_entry_data(entry)
+    payload[:assignment_id] = assignment_id unless assignment_id.nil?
+    payload[:submission_id] = submission_id unless submission_id.nil?
+    post_event_stringified('discussion_entry_submitted', payload)
+  end
+
+  def self.get_discussion_entry_data(entry)
     payload = {
-      discussion_entry_id: entry.global_id,
-      discussion_topic_id: entry.global_discussion_topic_id,
+      user_id:  entry.user_id,
+      created_at: entry.created_at,
+      discussion_entry_id: entry.id,
+      discussion_topic_id: entry.discussion_topic_id,
       text: LiveEvents.truncate(entry.message)
     }
 
-    if entry.parent_id
-      payload.merge!({
-        parent_discussion_entry_id: entry.global_parent_id
-      })
-    end
-
-    post_event_stringified('discussion_entry_created', payload)
+    payload[:parent_discussion_entry_id] = entry.parent_id if entry.parent_id
+    payload
   end
 
   def self.discussion_topic_created(topic)
@@ -187,6 +196,7 @@ module Canvas::LiveEvents
     {
       assignment_id: assignment.global_id,
       context_id: assignment.global_context_id,
+      context_uuid: assignment.context.uuid,
       context_type: assignment.context_type,
       assignment_group_id: assignment.global_assignment_group_id,
       workflow_state: assignment.workflow_state,
@@ -199,7 +209,8 @@ module Canvas::LiveEvents
       points_possible: assignment.points_possible,
       lti_assignment_id: assignment.lti_context_id,
       lti_resource_link_id: assignment.lti_resource_link_id,
-      lti_resource_link_id_duplicated_from: assignment.duplicate_of&.lti_resource_link_id
+      lti_resource_link_id_duplicated_from: assignment.duplicate_of&.lti_resource_link_id,
+      submission_types: assignment.submission_types
     }
   end
 
@@ -229,7 +240,8 @@ module Canvas::LiveEvents
       group_weight: assignment_group.group_weight,
       sis_source_id: assignment_group.sis_source_id,
       integration_data: assignment_group.integration_data,
-      rules: assignment_group.rules
+      rules: assignment_group.rules,
+      workflow_state: assignment_group.workflow_state
     }
   end
 
@@ -279,6 +291,18 @@ module Canvas::LiveEvents
 
   def self.submission_updated(submission)
     post_event_stringified('submission_updated', get_submission_data(submission))
+  end
+
+  def self.submission_comment_created(comment)
+    payload = {
+      submission_comment_id: comment.id,
+      submission_id: comment.submission_id,
+      user_id: comment.author_id,
+      created_at: comment.created_at,
+      attachment_ids: comment.attachment_ids.blank? ? [] : comment.attachment_ids.split(','),
+      body: LiveEvents.truncate(comment.comment)
+    }
+    post_event_stringified('submission_comment_created', payload)
   end
 
   def self.plagiarism_resubmit(submission)
@@ -358,7 +382,7 @@ module Canvas::LiveEvents
       account_uuid: assoc.account.uuid,
       created_at: assoc.created_at,
       updated_at: assoc.updated_at,
-      is_admin: !(assoc.account.root_account.all_account_users_for(assoc.user).empty?),
+      is_admin: !(assoc.account.root_account.cached_all_account_users_for(assoc.user).empty?),
     })
   end
 
@@ -368,6 +392,7 @@ module Canvas::LiveEvents
     ctx[:user_login] = pseudonym.unique_id
     ctx[:user_account_id] = pseudonym.account.global_id
     ctx[:user_sis_id] = pseudonym.sis_user_id
+    ctx[:session_id] = session[:session_id] if session[:session_id]
     post_event_stringified('logged_in', {
       redirect_url: session[:return_to]
     }, ctx)
@@ -441,7 +466,7 @@ module Canvas::LiveEvents
       grader_id = submission.global_grader_id
     end
 
-    sis_pseudonym = SisPseudonym.for(submission.user, submission.assignment.root_account, type: :trusted, require_sis: false)
+    sis_pseudonym = SisPseudonym.for(submission.user, submission.assignment.context, type: :trusted, require_sis: false)
 
     post_event_stringified('grade_change', {
       submission_id: submission.global_id,
@@ -457,7 +482,7 @@ module Canvas::LiveEvents
       student_sis_id: sis_pseudonym&.sis_user_id,
       user_id: submission.global_user_id,
       grading_complete: submission.graded?,
-      muted: submission.muted_assignment?
+      muted: !submission.posted?
     }, amended_context(submission.assignment.context))
   end
 
@@ -471,13 +496,14 @@ module Canvas::LiveEvents
     end
 
     post_event_stringified('asset_accessed', {
+      asset_name: asset_obj.try(:name) || asset_obj.try(:title),
       asset_type: asset_obj.class.reflection_type_name,
       asset_id: asset_obj.global_id,
       asset_subtype: asset_subtype,
       category: category,
       role: role,
       level: level
-    })
+    }.merge(LiveEvents::EventSerializerProvider.serialize(asset_obj)))
   end
 
   def self.quiz_export_complete(content_export)
@@ -583,11 +609,40 @@ module Canvas::LiveEvents
     post_event_stringified('course_completed', get_course_completed_data(context_module_progression.context_module.course, context_module_progression.user))
   end
 
+  def self.course_progress(context_module_progression)
+    post_event_stringified('course_progress', get_course_completed_data(context_module_progression.context_module.course, context_module_progression.user))
+  end
+
   def self.get_course_completed_data(course, user)
     {
       progress: CourseProgress.new(course, user, read_only: true).to_json,
       user: { id: user.id, name: user.name, email: user.email },
       course: { id: course.id, name: course.name }
     }
+  end
+
+  def self.get_learning_outcome_data(result)
+    {
+      learning_outcome_id: result.learning_outcome_id,
+      mastery: result.learning_outcome_id,
+      score: result.score,
+      created_at: result.created_at,
+      attempt: result.attempt,
+      possible: result.possible,
+      original_score: result.original_score,
+      original_possible: result.original_possible,
+      original_mastery: result.original_mastery,
+      assessed_at: result.assessed_at,
+      title: result.title,
+      percent: result.percent
+    }
+  end
+
+  def self.learning_outcome_result_updated(result)
+    post_event_stringified('learning_outcome_result_updated', get_learning_outcome_data(result).merge(updated_at: result.updated_at))
+  end
+
+  def self.learning_outcome_result_created(result)
+    post_event_stringified('learning_outcome_result_created', get_learning_outcome_data(result))
   end
 end

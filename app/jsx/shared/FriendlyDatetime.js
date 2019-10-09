@@ -22,7 +22,7 @@ import tz from 'timezone'
 import _ from 'underscore'
 import $ from 'jquery'
 import 'jquery.instructure_date_and_time'
-import ScreenReaderContent from '@instructure/ui-a11y/lib/components/ScreenReaderContent'
+import {ScreenReaderContent} from '@instructure/ui-a11y'
 
 class FriendlyDatetime extends Component {
   static propTypes = {
@@ -77,7 +77,7 @@ class FriendlyDatetime extends Component {
     }
 
     return (
-      <span>
+      <span data-testid="friendly-date-time">
         <ScreenReaderContent>
           {fixedPrefix + friendly}
         </ScreenReaderContent>

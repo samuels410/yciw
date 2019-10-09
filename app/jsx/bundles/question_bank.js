@@ -16,7 +16,7 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-import I18n from 'i18n!outcomes'
+import I18n from 'i18n!bundles_quesiton_bank'
 import $ from 'jquery'
 import {map} from 'underscore'
 import OutcomeGroup from 'compiled/models/OutcomeGroup'
@@ -33,7 +33,6 @@ class QuestionBankPage {
   }
 
   constructor () {
-    this.onAddOutcome = this.onAddOutcome.bind(this)
     this.rootOutcomeGroup = new OutcomeGroup(ENV.ROOT_OUTCOME_GROUP)
     this.attachEvents()
   }
@@ -54,13 +53,13 @@ class QuestionBankPage {
     $('.add_outcome_link').on('click', this.onAddOutcome)
   }
 
-  onAddOutcome (e) {
+  onAddOutcome = e => {
     e.preventDefault()
     if (!this.$els.dialog) {
       this.createDialog()
     }
     this.$els.dialog.show()
-  }
+  };
 
   onOutcomeImport (outcome) {
     const mastery = (outcome.quizMasteryLevel / 100.0) || 1.0

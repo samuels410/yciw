@@ -16,16 +16,18 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
+@import url('https://fonts.googleapis.com/css?family=Lato:300,400,400i,700&subset=latin-ext&display=swap');//  This needs to be the same as what's in the <link> in _head.html.erb
+
 @import 'base/environment';
 @import 'components/ic-reset';
 @import 'components/ic-typography';
 
 // the first line of public/javascripts/tinymce/jscripts/tiny_mce/themes/advanced/skins/default/content.css
-// sets these to undesireable values, rather than modify that vendor file, we just override them here
+// sets these to undesirable values, rather than modify that vendor file, we just override them here
 // to match the rest of the content in canvas
 body {
   margin: 0;
-  font-family: inherit;
+  font-family: inherit !important;
 }
 
 td {
@@ -33,7 +35,8 @@ td {
 }
 
 .mce-content-body {
-  margin: 11px;
+  box-sizing: border-box;
+  padding: 11px;
   td {
     padding: 2px;
     min-width: 20px;
@@ -70,6 +73,10 @@ table td[data-mce-selected] {
 body#tinymce,
 body#tinyrce {
   height: 100vh;
+}
+
+.Underline-All-Links__enabled a:not(.Button):not(.ui-button):not(.btn):not(.ui-button):not(.ui-tabs-anchor) {
+  text-decoration: underline;
 }
 
 @import 'our_custom_tiny_mce_stuff/_tinymce.editor_box.scss';

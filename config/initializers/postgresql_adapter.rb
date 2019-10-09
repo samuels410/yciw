@@ -43,6 +43,8 @@ module PostgreSQLAdapterExtensions
   def quote_text(value)
     if value.nil?
       "\\N"
+    elsif value.is_a?(ActiveRecord::ConnectionAdapters::PostgreSQL::OID::Array::Data)
+      quote_text(encode_array(value))
     else
       hash = {"\n" => "\\n", "\r" => "\\r", "\t" => "\\t", "\\" => "\\\\"}
       value.to_s.gsub(/[\n\r\t\\]/){ |c| hash[c] }
@@ -152,11 +154,7 @@ module PostgreSQLAdapterExtensions
       desc_order_columns = inddef.scan(/(\w+) DESC/).flatten
       orders = desc_order_columns.any? ? Hash[desc_order_columns.map {|order_column| [order_column, :desc]}] : {}
 
-      if CANVAS_RAILS5_1
-        ActiveRecord::ConnectionAdapters::IndexDefinition.new(table_name, index_name, unique, column_names, [], orders)
-      else
-        ActiveRecord::ConnectionAdapters::IndexDefinition.new(table_name, index_name, unique, column_names, orders: orders)
-      end
+      ActiveRecord::ConnectionAdapters::IndexDefinition.new(table_name, index_name, unique, column_names, orders: orders)
     end
   end
 

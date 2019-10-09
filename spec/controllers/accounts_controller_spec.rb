@@ -591,15 +591,57 @@ describe AccountsController do
         expect(@account.reload.terms_of_service.passive).to eq true
       end
     end
+
+    it "should be set and unset outgoing email name" do
+      account_with_admin_logged_in
+      post 'update', params: {:id => @account.id, :account => {
+        :settings => {:outgoing_email_default_name_option => "custom", :outgoing_email_default_name => "beep"}}}
+      expect(@account.reload.settings[:outgoing_email_default_name]).to eq "beep"
+      post 'update', params: {:id => @account.id, :account => {
+        :settings => {:outgoing_email_default_name_option => "default"}}}
+      expect(@account.reload.settings[:outgoing_email_default_name]).to eq nil
+    end
   end
 
   describe "#settings" do
+    describe "js_env" do
+      let(:account) do
+        account_with_admin_logged_in
+        @account
+      end
+
+      it 'sets the external tools create url' do
+        get 'settings', params: {account_id: account.id}
+        expect(assigns.dig(:js_env, :EXTERNAL_TOOLS_CREATE_URL)).to eq(
+          "http://test.host/accounts/#{account.id}/external_tools"
+        )
+      end
+
+      it 'sets the tool configuration show url' do
+        get 'settings', params: {account_id: account.id}
+        expect(assigns.dig(:js_env, :TOOL_CONFIGURATION_SHOW_URL)).to eq(
+          "http://test.host/api/lti/accounts/#{account.id}/developer_keys/:developer_key_id/tool_configuration"
+        )
+      end
+
+      it 'defaults new feature flags to false' do
+        get 'settings', params: {account_id: account.id}
+        expect(assigns.dig(:js_env, :NEW_FEATURES_UI)).to eq(false)
+      end
+
+      it 'passes on correct value for new feature flags ui' do
+        account.root_account.enable_feature!(:new_features_ui)
+        get 'settings', params: {account_id: account.id}
+        expect(assigns.dig(:js_env, :NEW_FEATURES_UI)).to eq(true)
+      end
+    end
+
     it "should load account report details" do
       account_with_admin_logged_in
       report_type = AccountReport.available_reports.keys.first
       report = @account.account_reports.create!(report_type: report_type, user: @admin)
 
-      get 'settings', params: {account_id: @account}
+      get 'reports_tab', params: {account_id: @account}
       expect(response).to be_successful
 
       expect(assigns[:last_reports].first.last).to eq report

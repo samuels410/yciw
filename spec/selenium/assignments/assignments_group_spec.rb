@@ -328,6 +328,7 @@ describe "assignment groups" do
     fj('input[name="group_weight"]:visible').send_keys('50')
 
     fj('.create_group:visible').click
+    f('.ic-flash-success') # wait for element
     wait_for_ajaximations
 
     # setting weight for group 2
@@ -378,7 +379,7 @@ describe "assignment groups" do
         click_option('#assignment_group_id', "other")
       end
 
-      expect(f('h1.title')).to include_text(orig_title + 'edit')
+      expect(f('h1.title')).to include_text('edit' + orig_title)
       expect(@frozen_assign.reload.assignment_group.name).to eq "other"
     end
   end

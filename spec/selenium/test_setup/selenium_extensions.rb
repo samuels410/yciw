@@ -50,7 +50,7 @@ module SeleniumExtensions
     rescue Selenium::WebDriver::Error::StaleElementReferenceError
       raise unless finder_proc
       location = CallStackUtils.best_line_for($ERROR_INFO.backtrace)
-      $stderr.puts "WARNING: StaleElementReferenceError at #{location}, attempting to recover..."
+      $stderr.puts "WARNING: StaleElementReferenceError at #{location.first}, attempting to recover..."
       @id = finder_proc.call.ref
       retry
     end
@@ -112,7 +112,7 @@ module SeleniumExtensions
             yield
           end
         end
-      rescue Selenium::WebDriver::Error::TimeOutError
+      rescue Selenium::WebDriver::Error::TimeoutError
         false
       end
 

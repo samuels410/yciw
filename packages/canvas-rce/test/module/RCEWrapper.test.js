@@ -20,14 +20,13 @@ import assert from "assert";
 import jsdomify from "jsdomify";
 import sinon from "sinon";
 import Bridge from "../../src/bridge";
-import ReactDOM from "react-dom";
 import * as indicateModule from "../../src/common/indicate";
 import * as contentInsertion from "../../src/rce/contentInsertion";
 import RCEWrapper from "../../src/rce/RCEWrapper";
 
 const textareaId = "myUniqId";
 
-let React, fakeTinyMCE, execCommandSpy, editorCommandSpy, sd, editor;
+let React, fakeTinyMCE, editorCommandSpy, sd, editor;
 
 // ====================
 //        HELPERS
@@ -39,20 +38,35 @@ function requireReactDeps() {
 }
 
 function createBasicElement(opts) {
-  let props = Object.assign({ textareaId, tinymce: fakeTinyMCE }, opts);
+  if (opts && opts.textareaId) {
+    // so RCEWrapper.mceInstance() works
+    fakeTinyMCE.editors[0].id = opts.textareaId
+  }
+  const props = {textareaId, tinymce: fakeTinyMCE, ...trayProps(), ...opts};
   return new RCEWrapper(props);
 }
 
 function createdMountedElement(additionalProps = {}) {
-  let tree = sd.shallowRender(
+  const tree = sd.shallowRender(
     React.createElement(RCEWrapper, {
       defaultContent: "an example string",
-      textareaId: textareaId,
+      textareaId,
       tinymce: fakeTinyMCE,
+      editorOptions: {},
+      ...trayProps(),
       ...additionalProps
     })
   );
   return tree;
+}
+
+function trayProps() {
+  return {
+    trayProps: {
+      contextType: 'course',
+      contextId: '17'
+    }
+  }
 }
 
 describe("RCEWrapper", () => {
@@ -80,7 +94,8 @@ describe("RCEWrapper", () => {
         },
         decode: input => {
           return input;
-        }
+        },
+        doc: document.createElement('div')
       },
       selection: {
         getEnd: () => {
@@ -94,7 +109,7 @@ describe("RCEWrapper", () => {
         }
       },
       insertContent: contentToInsert => {
-        editor.content = editor.content + contentToInsert;
+        editor.content += contentToInsert;
       },
       getContainer: () => {
         return {};
@@ -106,7 +121,8 @@ describe("RCEWrapper", () => {
         return editor.hidden;
       },
       execCommand: editorCommandSpy,
-      serializer: { serialize: sinon.stub() }
+      serializer: { serialize: sinon.stub() },
+      ui: { registry: { addIcon: () => {} } }
     };
 
     fakeTinyMCE = {
@@ -115,13 +131,11 @@ describe("RCEWrapper", () => {
       editors: [editor]
     };
 
-    execCommandSpy = sinon.spy(fakeTinyMCE, "execCommand");
     sinon.spy(editor, "insertContent");
   });
 
   afterEach(() => {
     jsdomify.destroy();
-    execCommandSpy.restore();
   });
 
   // ====================
@@ -131,8 +145,10 @@ describe("RCEWrapper", () => {
   describe("static methods", () => {
     describe("getByEditor", () => {
       it("gets instances by rendered tinymce object reference", () => {
-        const editor = {};
-        const wrapper = new RCEWrapper({});
+        const editor = {
+          ui: { registry: { addIcon: () => {} } }
+        };
+        const wrapper = new RCEWrapper({tinymce: fakeTinyMCE, ...trayProps()});
         const options = wrapper.wrapOptions({});
         options.setup(editor);
         assert.equal(RCEWrapper.getByEditor(editor), wrapper);
@@ -147,13 +163,6 @@ describe("RCEWrapper", () => {
       element = createBasicElement();
     });
 
-    it("calls toggle on its tinyMCE instance", () => {
-      element.toggle();
-      assert(
-        execCommandSpy.withArgs("mceToggleEditor", false, textareaId).called
-      );
-    });
-
     it("syncs content during toggle if coming back from hidden instance", () => {
       element = createdMountedElement().getMountedInstance();
       editor.hidden = true;
@@ -166,7 +175,7 @@ describe("RCEWrapper", () => {
       element = createBasicElement({ textareaId: "myOtherUniqId" });
       element.focus();
       assert(
-        execCommandSpy.withArgs("mceFocus", false, "myOtherUniqId").called
+        editorCommandSpy.withArgs("mceFocus", false, "myOtherUniqId", undefined).called
       );
     });
 
@@ -231,7 +240,6 @@ describe("RCEWrapper", () => {
     it("gets code properly", () => {
       assert.equal(editor.getContent(), instance.getCode());
     });
-
     it("inserts code properly", () => {
       const code = {};
       sinon.stub(contentInsertion, "insertContent");
@@ -241,12 +249,184 @@ describe("RCEWrapper", () => {
     });
 
     it("inserts links", () => {
-      let link = {};
+      const link = {};
       sinon.stub(contentInsertion, "insertLink");
       instance.insertLink(link);
       assert.ok(contentInsertion.insertLink.calledWith(editor, link));
       contentInsertion.insertLink.restore();
     });
+
+    describe('checkReadyToGetCode', () => {
+
+      afterEach(() => {
+        editor.dom.doc = document.createElement('div') // reset
+      })
+      it('returns true if there are no elements with data-placeholder-for attributes', () => {
+        assert.ok(instance.checkReadyToGetCode(() => {}))
+      })
+
+      it('calls promptFunc if there is an element with data-placeholder-for attribute', () => {
+        const placeholder = document.createElement('img')
+        placeholder.setAttribute('data-placeholder-for', 'image1')
+        editor.dom.doc.appendChild(placeholder)
+        const spy = sinon.spy()
+        instance.checkReadyToGetCode(spy)
+        sinon.assert.calledWith(spy, 'An image is still being uploaded, if you continue the image will not be embedded properly.')
+      })
+
+      it('returns true if promptFunc returns true', () => {
+        const placeholder = document.createElement('img')
+        placeholder.setAttribute('data-placeholder-for', 'image1')
+        editor.dom.doc.appendChild(placeholder)
+        const stub = sinon.stub().returns(true)
+        assert.ok(instance.checkReadyToGetCode(stub))
+      })
+
+      it('returns false if promptFunc returns false', () => {
+        const placeholder = document.createElement('img')
+        placeholder.setAttribute('data-placeholder-for', 'image1')
+        editor.dom.doc.appendChild(placeholder)
+        const stub = sinon.stub().returns(false)
+        assert.ok(!instance.checkReadyToGetCode(stub))
+      })
+    })
+
+    describe('insertImagePlaceholder', () => {
+      let globalImage
+      let contentInsertionStub
+      function mockImage(props) {
+        // jsdom doesn't support Image
+        // mock enough for RCEWrapper.insertImagePlaceholder
+        globalImage = global.Image
+        global.Image = function() {
+          return {
+            src: null,
+            width: '10',
+            height: '10',
+            ...props
+          }
+        }
+      }
+      function restoreImage() {
+        global.Image = globalImage
+      }
+      beforeEach(() => {
+        contentInsertionStub = sinon.stub(contentInsertion, 'insertContent')
+      })
+      afterEach(() => {
+        contentInsertion.insertContent.restore()
+      })
+
+      it('inserts a placeholder image with the proper metadata', () => {
+        mockImage()
+        const greenSquare = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAoAAAAKCAYAAACNMs+9AAAAFElEQVR42mNk+A+ERADGUYX0VQgAXAYT9xTSUocAAAAASUVORK5CYII='
+        const props = {
+          name: 'green_square',
+          domObject: {
+            preview: greenSquare
+          },
+          contentType: 'image/png'
+        }
+
+        const imageMarkup = `
+    <img
+      alt="Loading..."
+      src="data:image/gif;base64,R0lGODlhAQABAIAAAMLCwgAAACH5BAAAAAAALAAAAAABAAEAAAICRAEAOw=="
+      data-placeholder-for="green_square"
+      style="width: 10px; height: 10px; border: solid 1px #8B969E;"
+    />`;
+        instance.insertImagePlaceholder(props)
+        sinon.assert.calledWith(contentInsertionStub, editor, imageMarkup)
+        restoreImage()
+      })
+
+      it('resizes the placeholder image for a large, landscape image', () => {
+        mockImage({width: 640, height: 200})
+        const greenSquare = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAoAAAAKCAYAAACNMs+9AAAAFElEQVR42mNk+A+ERADGUYX0VQgAXAYT9xTSUocAAAAASUVORK5CYII='
+        const props = {
+          name: 'green_square',
+          domObject: {
+            preview: greenSquare
+          },
+          contentType: 'image/png'
+        }
+
+        const imageMarkup = `
+    <img
+      alt="Loading..."
+      src="data:image/gif;base64,R0lGODlhAQABAIAAAMLCwgAAACH5BAAAAAAALAAAAAABAAEAAAICRAEAOw=="
+      data-placeholder-for="green_square"
+      style="width: 320px; height: 100px; border: solid 1px #8B969E;"
+    />`;
+        instance.insertImagePlaceholder(props)
+        sinon.assert.calledWith(contentInsertionStub, editor, imageMarkup)
+        restoreImage()
+      })
+
+      it('resizes the placeholder image for a large, portrait image', () => {
+        mockImage({width: 200, height: 640})
+        const greenSquare = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAoAAAAKCAYAAACNMs+9AAAAFElEQVR42mNk+A+ERADGUYX0VQgAXAYT9xTSUocAAAAASUVORK5CYII='
+        const props = {
+          name: 'green_square',
+          domObject: {
+            preview: greenSquare
+          },
+          contentType: 'image/png'
+        }
+
+        const imageMarkup = `
+    <img
+      alt="Loading..."
+      src="data:image/gif;base64,R0lGODlhAQABAIAAAMLCwgAAACH5BAAAAAAALAAAAAABAAEAAAICRAEAOw=="
+      data-placeholder-for="green_square"
+      style="width: 100px; height: 320px; border: solid 1px #8B969E;"
+    />`;
+        instance.insertImagePlaceholder(props)
+        sinon.assert.calledWith(contentInsertionStub, editor, imageMarkup)
+        restoreImage()
+      })
+
+      it('inserts a text file placeholder image with the proper metadata', () => {
+        const props = {
+          name: 'file.txt',
+          domObject: {
+          },
+          contentType: 'text/plain'
+        }
+
+        const imageMarkup = `
+    <img
+      alt="Loading..."
+      src="data:image/gif;base64,R0lGODlhAQABAIAAAMLCwgAAACH5BAAAAAAALAAAAAABAAEAAAICRAEAOw=="
+      data-placeholder-for="file.txt"
+      style="width: 8rem; height: 1rem; border: solid 1px #8B969E;"
+    />`;
+        instance.insertImagePlaceholder(props)
+        sinon.assert.calledWith(contentInsertionStub, editor, imageMarkup)
+      })
+    })
+
+
+    describe('removePlaceholders', () => {
+      it('removes placeholders that match the given name', () => {
+        const placeholder = document.createElement('img')
+        placeholder.setAttribute('data-placeholder-for', 'image1')
+        editor.dom.doc.appendChild(placeholder)
+        instance.removePlaceholders('image1')
+        assert.ok(!editor.dom.doc.querySelector(`[data-placeholder-for="image1"]`))
+      })
+
+      it('does not remove placeholders that do not match the given name', () => {
+        const placeholder = document.createElement('img')
+        placeholder.setAttribute('data-placeholder-for', 'image1')
+        const placeholder2 = document.createElement('img')
+        placeholder2.setAttribute('data-placeholder-for', 'image2')
+        editor.dom.doc.appendChild(placeholder2)
+        instance.removePlaceholders('image1')
+        assert.ok(!editor.dom.doc.querySelector(`[data-placeholder-for="image1"]`))
+        assert.ok(editor.dom.doc.querySelector(`[data-placeholder-for="image2"]`))
+      })
+    })
 
     describe("insert image", () => {
       it("works when no element is returned from content insertion", () => {
@@ -258,7 +438,7 @@ describe("RCEWrapper", () => {
 
     describe("indicator", () => {
       it("does not indicate() if editor is hidden", () => {
-        let indicateDefaultStub = sinon.stub(indicateModule, "default");
+        const indicateDefaultStub = sinon.stub(indicateModule, "default");
         editor.hidden = true;
         sinon.stub(instance, "mceInstance");
         instance.mceInstance.returns(editor);
@@ -268,7 +448,7 @@ describe("RCEWrapper", () => {
       });
 
       it("waits until images are loaded to indicate", () => {
-        let image = { complete: false };
+        const image = { complete: false };
         sinon.spy(instance, "indicateEditor");
         sinon.stub(contentInsertion, "insertImage").returns(image);
         instance.insertImage(image);
@@ -281,7 +461,7 @@ describe("RCEWrapper", () => {
 
     describe("broken images", () => {
       it("calls checkImageLoadError when complete", () => {
-        let image = { complete: true };
+        const image = { complete: true };
         sinon.spy(instance, "checkImageLoadError");
         sinon.stub(contentInsertion, "insertImage").returns(image);
         instance.insertImage(image);
@@ -291,7 +471,7 @@ describe("RCEWrapper", () => {
       });
 
       it("sets an onerror handler when not complete", () => {
-        let image = { complete: false };
+        const image = { complete: false };
         sinon.spy(instance, "checkImageLoadError");
         sinon.stub(contentInsertion, "insertImage").returns(image);
         instance.insertImage(image);
@@ -429,30 +609,23 @@ describe("RCEWrapper", () => {
 
     it("calls Bridge.focusEditor with editor", () => {
       const editor = createBasicElement();
-      editor.onFocus();
+      editor.handleFocus();
       sinon.assert.calledWith(Bridge.focusEditor, editor);
     });
 
     it("calls props.onFocus with editor if exists", () => {
       const editor = createBasicElement({ onFocus: sinon.spy() });
-      editor.onFocus();
+      editor.handleFocus();
       sinon.assert.calledWith(editor.props.onFocus, editor);
     });
   });
 
   describe("onRemove", () => {
-    let domNode;
-
     beforeEach(() => {
-      domNode = {};
-      sinon.stub(ReactDOM, "unmountComponentAtNode");
-      sinon.stub(ReactDOM, "findDOMNode").returns(domNode);
       sinon.stub(Bridge, "detachEditor");
     });
 
     afterEach(() => {
-      ReactDOM.unmountComponentAtNode.restore();
-      ReactDOM.findDOMNode.restore();
       Bridge.detachEditor.restore();
     });
 
@@ -467,14 +640,6 @@ describe("RCEWrapper", () => {
       editor.onRemove();
       sinon.assert.calledWith(editor.props.onRemove, editor);
     });
-
-    it("unmounts the rce component", () => {
-      const editor = createBasicElement();
-      editor.refs = { rce: {} };
-      editor.onRemove();
-      sinon.assert.calledWith(ReactDOM.findDOMNode, editor.refs.rce);
-      sinon.assert.calledWith(ReactDOM.unmountComponentAtNode, domNode);
-    });
   });
 
   describe("setup option", () => {
@@ -488,17 +653,17 @@ describe("RCEWrapper", () => {
     });
 
     it("registers editor to allow getting wrapper by editor", () => {
-      const editor = {};
+      const editor = {ui: { registry: { addIcon: () => {} } }};
       const tree = createdMountedElement({ editorOptions });
-      tree.subTree("TinyMCE").props.config.setup(editor);
+      tree.subTree("Editor").props.init.setup(editor);
       assert.equal(RCEWrapper.getByEditor(editor), tree.getMountedInstance());
     });
 
     it("it calls original setup from editorOptions", () => {
-      const editor = {};
+      const editor = {ui: { registry: { addIcon: () => {} } }};
       const spy = editorOptions.setup;
       const tree = createdMountedElement({ editorOptions });
-      tree.subTree("TinyMCE").props.config.setup(editor);
+      tree.subTree("Editor").props.init.setup(editor);
       sinon.assert.calledWithExactly(spy, editor);
     });
 
@@ -509,9 +674,9 @@ describe("RCEWrapper", () => {
 
     it("passes other options through unchanged", () => {
       const tree = createdMountedElement({ editorOptions });
-      tree.subTree("TinyMCE").props.config.setup(editor);
+      tree.subTree("Editor").props.init.setup(editor);
       assert.equal(
-        tree.subTree("TinyMCE").props.config.other,
+        tree.subTree("Editor").props.init.other,
         editorOptions.other
       );
     });
@@ -531,49 +696,6 @@ describe("RCEWrapper", () => {
       stubEventListeners(elem);
     });
 
-    describe("lifecycle", () => {
-      it("adds change listener after mount", () => {
-        instance.componentDidMount();
-        sinon.assert.calledWith(
-          elem.addEventListener,
-          "change",
-          instance.handleTextareaChange
-        );
-      });
-
-      it("updates change listener if textarea changes", () => {
-        instance.componentDidMount();
-        const oldElem = elem;
-        const appElem = document.getElementById("app");
-        appElem.removeChild(elem);
-        elem = document.createElement("textarea");
-        elem.id = textareaId;
-        stubEventListeners(elem);
-        appElem.appendChild(elem);
-        instance.componentDidUpdate();
-        sinon.assert.calledWith(
-          elem.addEventListener,
-          "change",
-          instance.handleTextareaChange
-        );
-        sinon.assert.calledWith(
-          oldElem.removeEventListener,
-          "change",
-          instance.handleTextareaChange
-        );
-      });
-
-      it("removes change listener before component unmounts", () => {
-        instance.componentDidMount();
-        instance.componentWillUnmount();
-        sinon.assert.calledWith(
-          elem.removeEventListener,
-          "change",
-          instance.handleTextareaChange
-        );
-      });
-    });
-
     describe("handleTextareaChange", () => {
       it("updates the editor content if editor is hidden", () => {
         const value = "foo";
@@ -590,4 +712,89 @@ describe("RCEWrapper", () => {
       });
     });
   });
+
+  describe('alert area', () => {
+
+    afterEach(() => {
+      jsdomify.destroy();
+    })
+
+    it('adds an alert and attaches an id when addAlert is called', () => {
+      const tree = createdMountedElement()
+      const rce = tree.getMountedInstance();
+      rce.resetAlertId()
+      rce.addAlert({
+        text: 'Something went wrong uploading, check your connection and try again.',
+        variant: 'error'
+      })
+      assert.ok(rce.state.messages[0].id === 0)
+      const alertArea = tree.dive(['AlertMessageArea'])
+      const alerts = alertArea.everySubTree('Alert')
+      assert.ok(alerts.length === 1)
+    })
+
+    it('adds multiple alerts', () => {
+      const tree = createdMountedElement()
+      const rce = tree.getMountedInstance();
+      rce.resetAlertId()
+      rce.addAlert({
+        text: 'Something went wrong uploading, check your connection and try again.',
+        variant: 'error'
+      })
+      rce.addAlert({
+        text: 'Something went wrong uploading 2, check your connection and try again.',
+        variant: 'error'
+      })
+      rce.addAlert({
+        text: 'Something went wrong uploading 3, check your connection and try again.',
+        variant: 'error'
+      })
+      const alertArea = tree.dive(['AlertMessageArea'])
+      const alerts = alertArea.everySubTree('Alert')
+      assert.ok(alerts.length === 3)
+    })
+
+    it('does not add alerts with the exact same text', () => {
+      const tree = createdMountedElement()
+      const rce = tree.getMountedInstance();
+      rce.resetAlertId()
+      rce.addAlert({
+        text: 'Something went wrong uploading, check your connection and try again.',
+        variant: 'error'
+      })
+      rce.addAlert({
+        text: 'Something went wrong uploading, check your connection and try again.',
+        variant: 'error'
+      })
+      rce.addAlert({
+        text: 'Something went wrong uploading, check your connection and try again.',
+        variant: 'error'
+      })
+      const alertArea = tree.dive(['AlertMessageArea'])
+      const alerts = alertArea.everySubTree('Alert')
+      assert.ok(alerts.length === 1)
+    })
+
+    it('removes an alert when removeAlert is called', () => {
+        const tree = createdMountedElement()
+        const rce = tree.getMountedInstance();
+        rce.resetAlertId()
+        rce.addAlert({
+          text: 'First',
+          variant: 'error'
+        })
+        rce.addAlert({
+          text: 'Second',
+          variant: 'error'
+        })
+        rce.addAlert({
+          text: 'Third',
+          variant: 'error'
+        })
+        rce.removeAlert(1)
+        const alertArea = tree.dive(['AlertMessageArea'])
+        const alerts = alertArea.everySubTree('Alert')
+        assert.ok(alerts.length === 2)
+    })
+  })
 });

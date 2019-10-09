@@ -196,6 +196,22 @@ describe NotificationMessageCreator do
       expect(DelayedMessage.last.send_at).to be > Time.now.utc
     end
 
+    it "should be able to set default policies to never for a specific user" do
+      notification_model(:category => 'TestImmediately', :name => "New notification")
+      expect(@notification.default_frequency).to eql("immediately")
+
+      u1 = user_model(:name => "user 1", :workflow_state => "registered")
+      u1.default_notifications_disabled = true
+      u1.save!
+      cc = u1.communication_channels.create(:path => "active@example.com", :workflow_state => 'active')
+      u2 = user_model(:name => "user 2", :workflow_state => "registered")
+      cc2 = u2.communication_channels.create(:path => "active2@example.com", :workflow_state => 'active')
+
+      @a = assignment_model
+      messages = NotificationMessageCreator.new(@notification, @a, :to_list => [u1, u2]).create_message
+      expect(messages.map(&:communication_channel).compact).to eq [cc2] # doesn't include u1's cc
+    end
+
     it "should make a delayed message for each user policy with a delayed frequency" do
       notification_set
       NotificationPolicy.delete_all
@@ -209,13 +225,28 @@ describe NotificationMessageCreator do
       expect { NotificationMessageCreator.new(@notification, @assignment, :to_list => @user).create_message }.to change(DelayedMessage, :count).by 0
 
       nps.each { |np| np.frequency = 'never'; np.save! }
+      @user.reload
       expect { NotificationMessageCreator.new(@notification, @assignment, :to_list => @user).create_message }.to change(DelayedMessage, :count).by 0
 
       nps.each { |np| np.frequency = 'daily'; np.save! }
+      @user.reload
       expect { NotificationMessageCreator.new(@notification, @assignment, :to_list => @user).create_message }.to change(DelayedMessage, :count).by 3
 
       nps.each { |np| np.frequency = 'weekly'; np.save! }
+      @user.reload
       expect { NotificationMessageCreator.new(@notification, @assignment, :to_list => @user).create_message }.to change(DelayedMessage, :count).by 3
+    end
+
+    it "should make a delayed message for a notification with a set delayed frequency (even if another policy is set to immediate)" do
+      notification_set
+      @notification_policy.update_attribute(:frequency, 'daily')
+
+      other_notification =  Notification.create!(:subject => "yo", :name => "Test Not 2")
+      other_np = NotificationPolicy.create!(:notification => other_notification, :communication_channel => @communication_channel)
+
+      NotificationMessageCreator.new(@notification, @assignment, :to_list => @user).create_message
+      expect(Message.where(:communication_channel_id => @communication_channel).exists?).to eq false # no immediate message
+      expect(DelayedMessage.where(:communication_channel_id => @communication_channel).exists?).to eq true
     end
 
     it "should make a delayed message for the default channel based on the notification's default frequency when there is no policy on any channel for the notification" do
@@ -230,6 +261,7 @@ describe NotificationMessageCreator do
       expect { NotificationMessageCreator.new(@notification, @assignment, :to_list => @user).create_message }.to change(DelayedMessage, :count).by 1
       DelayedMessage.delete_all
       NotificationPolicy.delete_all # gotta do this because create_message actually creates the default policy
+      @user.reload
       notification_policy_model(:notification => @notification,
                                 :communication_channel => @communication_channel,
                                 :frequency => 'immediately')
@@ -333,6 +365,7 @@ describe NotificationMessageCreator do
 
       @communication_channel.bounce_count = CommunicationChannel::RETIRE_THRESHOLD
       @communication_channel.save!
+      @user.reload
       messages = NotificationMessageCreator.new(@notification, @assignment, :to_list => @user).create_message
       expect(messages.select{|m| m.to == 'valid@example.com'}.size).to eq 0
     end

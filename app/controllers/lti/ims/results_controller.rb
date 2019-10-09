@@ -17,9 +17,6 @@
 
 module Lti::Ims
   # @API Result
-  # @internal
-  #
-  # TODO: remove internal flags
   #
   # Result API for IMS Assignment and Grade Services
   #
@@ -36,7 +33,7 @@ module Lti::Ims
   #          "userId": {
   #            "description": "The lti_user_id or the Canvas user_id",
   #            "example": "50 | 'abcasdf'",
-  #            "type": "number|string"
+  #            "type": "string"
   #          },
   #          "resultScore": {
   #            "description": "The score of the result as defined by Canvas, scaled to the resultMaximum",
@@ -44,9 +41,7 @@ module Lti::Ims
   #            "type": "number"
   #          },
   #          "resultMaximum": {
-  #            "description": "Maximum possible score for this result;
-  #                            1 is the default value and will be assumed if not specified otherwise. Minimum
-  #                            value of 0 required.",
+  #            "description": "Maximum possible score for this result; 1 is the default value and will be assumed if not specified otherwise. Minimum value of 0 required.",
   #            "example": "50",
   #            "type": "number"
   #          },
@@ -70,7 +65,6 @@ module Lti::Ims
     MIME_TYPE = 'application/vnd.ims.lis.v2.resultcontainer+json'.freeze
 
     # @API Show a collection of Results
-    # @internal
     #
     # Show existing Results of a line item. Can be used to retrieve a specific student's
     # result by adding the user_id (defined as the lti_user_id or the Canvas user_id) as
@@ -82,20 +76,19 @@ module Lti::Ims
     def index
       render(json: [], content_type: MIME_TYPE) and return if user.present? && !context.user_is_student?(user)
 
-      results = Lti::Result.where(line_item: line_item)
-      results = results.where(user: user) if params.key?(:user_id)
-      results = Api.paginate(results, self, results_url, pagination_args)
+      results = Lti::Result.active.where(line_item: line_item)
+      results = results.where(user: user).preload(:user) if params.key?(:user_id)
+      results = Api.paginate(results, self, "#{line_item_url}/results", pagination_args)
       render json: results_collection(results), content_type: MIME_TYPE
     end
 
     # @API Show a Result
-    # @internal
     #
     # Show existing Result of a line item.
     #
     # @returns Result
     def show
-      render json: Lti::Ims::ResultsSerializer.new(result, results_url).as_json, content_type: MIME_TYPE
+      render json: Lti::Ims::ResultsSerializer.new(result, line_item_url).as_json, content_type: MIME_TYPE
     end
 
 
@@ -112,21 +105,17 @@ module Lti::Ims
       raise ActiveRecord::RecordNotFound unless result.line_item == line_item
     end
 
-    def results_url
-      "#{line_item_url}/results"
-    end
-
     def line_item_url
       lti_line_item_show_url(course_id: params[:course_id], id: params[:line_item_id])
     end
 
     def result
-      @_result = Lti::Result.find(params[:id])
+      @_result = Lti::Result.active.find(params[:id])
     end
 
     def results_collection(results)
       results.map do |result|
-        Lti::Ims::ResultsSerializer.new(result, results_url).as_json
+        Lti::Ims::ResultsSerializer.new(result, line_item_url).as_json
       end
     end
   end

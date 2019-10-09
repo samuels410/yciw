@@ -18,26 +18,20 @@
 
 import React from 'react'
 import PropTypes from 'prop-types'
-import Pagination, {PaginationButton} from '@instructure/ui-pagination/lib/components/Pagination'
+import {Pagination, PaginationButton} from '@instructure/ui-pagination'
 
 const Paginator = ({loadPage, page, pageCount}) => {
-
   if (pageCount <= 1) {
-    return (<span/> )
+    return <span />
   }
 
   return (
     <Pagination variant="compact">
-      {
-        Array.from(Array(pageCount)).map((v, i) =>
-          <PaginationButton
-            onClick={() => loadPage(i + 1)}
-            key={i + 1}
-            current={page === (i + 1)}>
-            {i+1}
-          </PaginationButton>
-        )
-      }
+      {Array.from(Array(pageCount)).map((v, i) => (
+        <PaginationButton onClick={() => loadPage(i + 1)} key={i + 1} current={page === i + 1}>
+          {i + 1}
+        </PaginationButton>
+      ))}
     </Pagination>
   )
 }

@@ -18,7 +18,7 @@
 
 import React from 'react'
 import PropTypes from 'prop-types'
-import I18n from 'i18n!assignments'
+import I18n from 'i18n!OriginalityReportVisibilityPicker'
 
 export default class OriginalityReportVisibilityPicker extends React.Component {
   static propTypes = {
@@ -46,7 +46,7 @@ export default class OriginalityReportVisibilityPicker extends React.Component {
       <div>
         <hr />
         <label id="report_visibility_picker_label" htmlFor="report_visibility_picker_select">
-          {I18n.t('Show originality report to students')}
+          {I18n.t('Show report to students')}
         </label>
         <div id="report_visibility_picker">
           <select

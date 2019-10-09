@@ -17,12 +17,11 @@
  */
 import PropTypes from 'prop-types'
 import React from 'react'
-import Checkbox from '@instructure/ui-forms/lib/components/Checkbox'
-import Flex, {FlexItem} from '@instructure/ui-layout/lib/components/Flex'
-import ScreenReaderContent from '@instructure/ui-a11y/lib/components/ScreenReaderContent'
-import View from '@instructure/ui-layout/lib/components/View'
+import {Checkbox} from '@instructure/ui-forms'
+import {Flex, FlexItem, View} from '@instructure/ui-layout'
+import {ScreenReaderContent} from '@instructure/ui-a11y'
 import I18n from 'i18n!react_developer_keys'
-import DeveloperKeyScopesMethod from './ScopesMethod'
+import ScopesMethod from './ScopesMethod'
 
 const DeveloperKeyScope = props => {
   return (
@@ -44,7 +43,7 @@ const DeveloperKeyScope = props => {
           {props.scope.scope}
         </FlexItem>
         <FlexItem>
-          <DeveloperKeyScopesMethod method={props.scope.verb} />
+          <ScopesMethod method={props.scope.verb} />
         </FlexItem>
       </Flex>
     </View>

@@ -277,7 +277,7 @@ class AccountsController < ApplicationController
   before_action :require_user, :only => [:index, :terms_of_service, :help_links]
   before_action :reject_student_view_student
   before_action :get_context
-  before_action :rich_content_service_config, only: [:settings]
+  before_action :rce_js_env, only: [:settings]
 
   include Api::V1::Account
   include CustomSidebarLinksHelper
@@ -523,7 +523,7 @@ class AccountsController < ApplicationController
   # @argument search_term [String]
   #   The partial course name, code, or full ID to match and return in the results list. Must be at least 3 characters.
   #
-  # @argument include[] [String, "syllabus_body"|"term"|"course_progress"|"storage_quota_used_mb"|"total_students"|"teachers"|"account_name"]
+  # @argument include[] [String, "syllabus_body"|"term"|"course_progress"|"storage_quota_used_mb"|"total_students"|"teachers"|"account_name"|"concluded"]
   #   - All explanations can be seen in the {api:CoursesController#index Course API index documentation}
   #   - "sections", "needs_grading_count" and "total_scores" are not valid options at the account level
   #
@@ -549,30 +549,27 @@ class AccountsController < ApplicationController
       params[:state] -= %w{available}
     end
 
-    name_col = Course.best_unicode_collation_key('name')
-    sortable_name_col = User.sortable_name_order_by_clause(nil)
+    sortable_name_col = User.sortable_name_order_by_clause('users')
 
     order = if params[:sort] == 'course_name'
-              "#{name_col}"
+              "#{Course.best_unicode_collation_key('courses.name')}"
             elsif params[:sort] == 'sis_course_id'
-              "#{Course.quoted_table_name}.sis_source_id"
+              "courses.sis_source_id"
             elsif params[:sort] == 'teacher'
               "(SELECT #{sortable_name_col} FROM #{User.quoted_table_name}
-                JOIN #{Enrollment.quoted_table_name} on #{User.quoted_table_name}.id
-                = #{Enrollment.quoted_table_name}.user_id
-                WHERE #{Enrollment.quoted_table_name}.workflow_state <> 'deleted'
-                AND #{Enrollment.quoted_table_name}.type = 'TeacherEnrollment'
-                AND #{Enrollment.quoted_table_name}.course_id = #{Course.quoted_table_name}.id
+                JOIN #{Enrollment.quoted_table_name} on users.id = enrollments.user_id
+                WHERE enrollments.workflow_state <> 'deleted'
+                AND enrollments.type = 'TeacherEnrollment'
+                AND enrollments.course_id = courses.id
                 ORDER BY #{sortable_name_col} LIMIT 1)"
             # leaving subaccount as an option for backwards compatibility
             elsif params[:sort] == 'subaccount' || params[:sort] == 'account_name'
-              "(SELECT #{name_col} FROM #{Account.quoted_table_name}
-                WHERE #{Account.quoted_table_name}.id
-                = #{Course.quoted_table_name}.account_id)"
+              "(SELECT #{Account.best_unicode_collation_key('accounts.name')} FROM #{Account.quoted_table_name}
+                WHERE accounts.id = courses.account_id)"
             elsif params[:sort] == 'term'
-              "(SELECT #{EnrollmentTerm.quoted_table_name}.name FROM #{EnrollmentTerm.quoted_table_name}
-                WHERE #{EnrollmentTerm.quoted_table_name}.id
-                = #{Course.quoted_table_name}.enrollment_term_id)"
+              "(SELECT #{EnrollmentTerm.best_unicode_collation_key('enrollment_terms.name')}
+                FROM #{EnrollmentTerm.quoted_table_name}
+                WHERE enrollment_terms.id = courses.enrollment_term_id)"
             else
               "id"
             end
@@ -655,19 +652,23 @@ class AccountsController < ApplicationController
 
     page_opts = {}
     page_opts[:total_entries] = nil if params[:search_term] # doesn't calculate a total count
-    @courses = Api.paginate(@courses, self, api_v1_account_courses_url, page_opts)
 
-    ActiveRecord::Associations::Preloader.new.preload(@courses, [:account, :root_account, course_account_associations: :account])
-    preload_teachers(@courses) if includes.include?("teachers")
-    ActiveRecord::Associations::Preloader.new.preload(@courses, [:enrollment_term]) if includes.include?("term")
+    all_precalculated_permissions = nil
+    Shackles.activate(:slave) do
+      @courses = Api.paginate(@courses, self, api_v1_account_courses_url, page_opts)
 
-    if includes.include?("total_students")
-      student_counts = StudentEnrollment.not_fake.where("enrollments.workflow_state NOT IN ('rejected', 'completed', 'deleted', 'inactive')").
-        where(:course_id => @courses).group(:course_id).distinct.count(:user_id)
-      @courses.each {|c| c.student_count = student_counts[c.id] || 0 }
+      ActiveRecord::Associations::Preloader.new.preload(@courses, [:account, :root_account, course_account_associations: :account])
+      preload_teachers(@courses) if includes.include?("teachers")
+      ActiveRecord::Associations::Preloader.new.preload(@courses, [:enrollment_term]) if includes.include?("term") || includes.include?('concluded')
+
+      if includes.include?("total_students")
+        student_counts = StudentEnrollment.not_fake.where("enrollments.workflow_state NOT IN ('rejected', 'completed', 'deleted', 'inactive')").
+          where(:course_id => @courses).group(:course_id).distinct.count(:user_id)
+        @courses.each {|c| c.student_count = student_counts[c.id] || 0 }
+      end
+      all_precalculated_permissions = @current_user.precalculate_permissions_for_courses(@courses, [:read_sis, :manage_sis])
     end
 
-    all_precalculated_permissions = @current_user.precalculate_permissions_for_courses(@courses, [:read_sis, :manage_sis])
     render :json => @courses.map { |c| course_json(c, @current_user, session, includes, nil,
       precalculated_permissions: all_precalculated_permissions&.dig(c.global_id)) }
   end
@@ -711,11 +712,7 @@ class AccountsController < ApplicationController
       unless account_settings.empty?
         if @account.grants_right?(@current_user, session, :manage_account_settings)
           if account_settings[:settings]
-            account_settings[:settings].slice!(:restrict_student_past_view,
-                                               :restrict_student_future_view,
-                                               :restrict_student_future_listing,
-                                               :lock_all_announcements,
-                                               :sis_assignment_name_length_input)
+            account_settings[:settings].slice!(*permitted_api_account_settings)
             ensure_sis_max_name_length_value!(account_settings)
           end
           @account.errors.add(:name, t(:account_name_required, 'The account name cannot be blank')) if account_params.has_key?(:name) && account_params[:name].blank?
@@ -831,10 +828,17 @@ class AccountsController < ApplicationController
     return update_api if api_request?
     if authorized_action(@account, @current_user, :manage_account_settings)
       respond_to do |format|
-
         if @account.root_account?
           terms_attrs = params[:account][:terms_of_service]
           @account.update_terms_of_service(terms_attrs) if terms_attrs.present?
+          if @account.feature_enabled?(:slack_notifications)
+            slack_api_key = params[:account].dig(:slack, :slack_api_key)
+            if slack_api_key.present?
+              encrypted_slack_key, salt = Canvas::Security.encrypt_password(slack_api_key.to_s, 'instructure_slack_encrypted_key')
+              @account.settings[:encrypted_slack_key] = encrypted_slack_key
+              @account.settings[:encrypted_slack_key_salt] = salt
+            end
+          end
         end
 
         custom_help_links = params[:account].delete :custom_help_links
@@ -846,7 +850,7 @@ class AccountsController < ApplicationController
             hash.assert_valid_keys ["text", "subtext", "url", "available_to", "type", "id"]
             hash
           end
-          @account.settings[:custom_help_links] = Account::HelpLinks.process_links_before_save(sorted_help_links)
+          @account.settings[:custom_help_links] = @account.help_links_builder.process_links_before_save(sorted_help_links)
           @account.settings[:new_custom_help_links] = true
         end
 
@@ -865,13 +869,14 @@ class AccountsController < ApplicationController
           end
           params[:account].delete :services
         end
-        if @account.grants_right?(@current_user, :manage_site_settings)
-          # If the setting is present (update is called from 2 different settings forms, one for notifications)
-          if params[:account][:settings] && params[:account][:settings][:outgoing_email_default_name_option].present?
-            # If set to default, remove the custom name so it doesn't get saved
-            params[:account][:settings][:outgoing_email_default_name] = '' if params[:account][:settings][:outgoing_email_default_name_option] == 'default'
-          end
 
+        # If the setting is present (update is called from 2 different settings forms, one for notifications)
+        if params[:account][:settings] && params[:account][:settings][:outgoing_email_default_name_option].present?
+          # If set to default, remove the custom name so it doesn't get saved
+          params[:account][:settings][:outgoing_email_default_name] = '' if params[:account][:settings][:outgoing_email_default_name_option] == 'default'
+        end
+
+        if @account.grants_right?(@current_user, :manage_site_settings)
           google_docs_domain = params[:account][:settings].try(:delete, :google_docs_domain)
           if @account.feature_enabled?(:google_docs_domain_restriction) &&
              @account.root_account? &&
@@ -885,6 +890,7 @@ class AccountsController < ApplicationController
             # these shouldn't get set for the site admin account
             params[:account][:settings].delete(:enable_alerts)
             params[:account][:settings].delete(:enable_eportfolios)
+            params[:account][:settings].delete(:include_integration_ids_in_gradebook_exports)
           end
         else
           # must have :manage_site_settings to update these
@@ -894,6 +900,7 @@ class AccountsController < ApplicationController
             :enable_eportfolios,
             :enable_profiles,
             :enable_turnitin,
+            :include_integration_ids_in_gradebook_exports,
             :show_scheduler,
             :global_includes,
             :gmail_domain
@@ -924,7 +931,7 @@ class AccountsController < ApplicationController
           end
         end
 
-        process_external_integration_keys
+        @account.process_external_integration_keys(params[:account][:external_integration_keys], @current_user)
 
         can_edit_email = params[:account][:settings].try(:delete, :edit_institution_email)
         if @account.root_account? && !can_edit_email.nil?
@@ -950,23 +957,33 @@ class AccountsController < ApplicationController
     end
   end
 
+  def reports_tab
+    if authorized_action(@account, @current_user, :read_reports)
+      @available_reports = AccountReport.available_reports
+      @root_account = @account.root_account
+      @account.shard.activate do
+        scope = @account.account_reports.active.where("report_type=name").most_recent
+        @last_complete_reports = AccountReport.from("unnest('{#{@available_reports.keys.join(',')}}'::text[]) report_types (name),
+                LATERAL (#{scope.complete.to_sql}) account_reports ").
+          order("report_types.name").
+          preload(:attachment).
+          index_by(&:report_type)
+        @last_reports = AccountReport.from("unnest('{#{@available_reports.keys.join(',')}}'::text[]) report_types (name),
+                LATERAL (#{scope.to_sql}) account_reports ").
+          order("report_types.name").
+          index_by(&:report_type)
+      end
+      render :layout => false
+    end
+  end
+
+  def terms_of_service_custom_content
+    TermsOfService.ensure_terms_for_account(@domain_root_account)
+    render plain: @domain_root_account.terms_of_service.terms_of_service_content&.content
+  end
+
   def settings
     if authorized_action(@account, @current_user, :read)
-      @available_reports = AccountReport.available_reports if @account.grants_right?(@current_user, @session, :read_reports)
-      if @available_reports
-        @account.shard.activate do
-          scope = @account.account_reports.active.where("report_type=name").most_recent
-          @last_complete_reports = AccountReport.from("unnest('{#{@available_reports.keys.join(',')}}'::text[]) report_types (name),
-                LATERAL (#{scope.complete.to_sql}) account_reports ").
-              order("report_types.name").
-              preload(:attachment).
-              index_by(&:report_type)
-          @last_reports = AccountReport.from("unnest('{#{@available_reports.keys.join(',')}}'::text[]) report_types (name),
-                LATERAL (#{scope.to_sql}) account_reports ").
-              order("report_types.name").
-              index_by(&:report_type)
-        end
-      end
       load_course_right_side
       @account_users = @account.account_users.active
       ActiveRecord::Associations::Preloader.new.preload(@account_users, user: :communication_channels)
@@ -982,16 +999,23 @@ class AccountsController < ApplicationController
 
       @announcements = @account.announcements.order(:created_at).paginate(page: params[:page], per_page: 50)
       @external_integration_keys = ExternalIntegrationKey.indexed_keys_for(@account)
-
       js_env({
         APP_CENTER: { enabled: Canvas::Plugin.find(:app_center).enabled? },
         LTI_LAUNCH_URL: account_tool_proxy_registration_path(@account),
+        EXTERNAL_TOOLS_CREATE_URL: url_for(controller: :external_tools, action: :create, account_id: @context.id),
+        TOOL_CONFIGURATION_SHOW_URL: account_show_tool_configuration_url(account_id: @context.id, developer_key_id: ':developer_key_id'),
         MEMBERSHIP_SERVICE_FEATURE_FLAG_ENABLED: @account.root_account.feature_enabled?(:membership_service_for_lti_tools),
-        LTI_13_TOOLS_FEATURE_FLAG_ENABLED: @account.root_account.feature_enabled?(:lti_1_3),
         CONTEXT_BASE_URL: "/accounts/#{@context.id}",
         MASKED_APP_CENTER_ACCESS_TOKEN: @account.settings[:app_center_access_token].try(:[], 0...5),
+        NEW_FEATURES_UI: @account.root_account.feature_enabled?(:new_features_ui),
         PERMISSIONS: {
           :create_tool_manually => @account.grants_right?(@current_user, session, :create_tool_manually),
+          :manage_feature_flags => @account.grants_right?(@current_user, session, :manage_feature_flags)
+        },
+        CSP: {
+          :enabled => @account.csp_enabled?,
+          :inherited => @account.csp_inherited?,
+          :settings_locked => @account.csp_locked?,
         }
       })
       js_env(edit_help_links_env, true)
@@ -1010,11 +1034,14 @@ class AccountsController < ApplicationController
     authentication_logging = @account.grants_any_right?(@current_user, :view_statistics, :manage_user_logins)
     grade_change_logging = @account.grants_right?(@current_user, :view_grade_changes)
     course_logging = @account.grants_right?(@current_user, :view_course_changes)
-    if authentication_logging || grade_change_logging || course_logging
+    mutation_logging = @account.feature_enabled?(:mutation_audit_log) &&
+      @account.grants_right?(@current_user, :manage_account_settings)
+    if authentication_logging || grade_change_logging || course_logging || mutation_logging
       logging = {
         authentication: authentication_logging,
         grade_change: grade_change_logging,
-        course: course_logging
+        course: course_logging,
+        mutation: mutation_logging,
       }
     end
     logging ||= false
@@ -1341,18 +1368,7 @@ class AccountsController < ApplicationController
   end
 
   def process_external_integration_keys(account = @account)
-    if params_keys = params[:account][:external_integration_keys]
-      ExternalIntegrationKey.indexed_keys_for(account).each do |key_type, key|
-        next unless params_keys.key?(key_type)
-        next unless key.grants_right?(@current_user, :write)
-        unless params_keys[key_type].blank?
-          key.key_value = params_keys[key_type]
-          key.save!
-        else
-          key.delete
-        end
-      end
-    end
+    account.process_external_integration_keys(params[:account][:external_integration_keys], @current_user)
   end
 
   def set_default_dashboard_view(new_view)
@@ -1373,11 +1389,6 @@ class AccountsController < ApplicationController
     count > 99 ? "99+" : count
   end
   private :format_avatar_count
-
-  protected
-  def rich_content_service_config
-    rce_js_env(:basic)
-  end
 
   private
 
@@ -1407,6 +1418,7 @@ class AccountsController < ApplicationController
                                    :enable_profiles, :enable_gravatar, :enable_turnitin, :equella_endpoint,
                                    :equella_teaser, :external_notification_warning, :global_includes,
                                    :google_docs_domain, :help_link_icon, :help_link_name,
+                                   :include_integration_ids_in_gradebook_exports,
                                    :include_students_in_global_survey, :license_type,
                                    {:lock_all_announcements => [:value, :locked]}.freeze,
                                    :login_handle_name, :mfa_settings, :no_enrollments_can_create_courses,
@@ -1435,6 +1447,14 @@ class AccountsController < ApplicationController
       :default_user_storage_quota_mb, :default_group_storage_quota_mb, :integration_id, :brand_config_md5,
       :settings => PERMITTED_SETTINGS_FOR_UPDATE, :ip_filters => strong_anything
     ]
+  end
+
+  def permitted_api_account_settings
+    [:restrict_student_past_view,
+      :restrict_student_future_view,
+      :restrict_student_future_listing,
+      :lock_all_announcements,
+      :sis_assignment_name_length_input]
   end
 
   def strong_account_params
@@ -1466,7 +1486,7 @@ class AccountsController < ApplicationController
       help_link_name: @account.settings[:help_link_name] || default_help_link_name,
       help_link_icon: @account.settings[:help_link_icon] || 'help',
       CUSTOM_HELP_LINKS: @account.help_links || [],
-      DEFAULT_HELP_LINKS: Account::HelpLinks.instantiate_links(Account::HelpLinks.default_links)
+      DEFAULT_HELP_LINKS: @account.help_links_builder.instantiate_links(@account.help_links_builder.default_links)
     }
   end
 

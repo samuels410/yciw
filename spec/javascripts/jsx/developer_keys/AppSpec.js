@@ -19,7 +19,7 @@
 import React from 'react'
 import ReactDOM from 'react-dom'
 import TestUtils from 'react-dom/test-utils'
-import Spinner from '@instructure/ui-elements/lib/components/Spinner'
+import {Spinner} from '@instructure/ui-elements'
 import {mount} from 'enzyme'
 
 import DeveloperKeysApp from 'jsx/developer_keys/App';
@@ -306,8 +306,10 @@ test('displays the developer key on click of show key button', () => {
     <DeveloperKeysApp {...props} />
   )
 
-  wrapper.find('Button').at(1).simulate('click')
-  ok(wrapper.find('Popover').first().html().includes("Hide Key"))
+  btn = wrapper.find('table button').first()
+  ok(btn.html().includes('Show Key'))
+  btn.simulate('click')
+  ok(btn.html().includes('Hide Key'))
   wrapper.unmount()
 })
 
@@ -336,10 +338,6 @@ test('renders the spinner', () => {
 })
 
 test('opens the key selection menu when the create button is clicked', () => {
-  window.ENV = {
-    LTI_1_3_ENABLED: true
-  }
-
   const applicationState = {
     listDeveloperKeyScopes,
     createOrEditDeveloperKey: {},
@@ -373,7 +371,7 @@ test('opens the key selection menu when the create button is clicked', () => {
 
   notOk(wrapper.find('Menu').first().find('Portal').exists())
   wrapper.find('Button').first().simulate('click')
-  ok(wrapper.find('Menu').first().find('Portal').prop('open'))
+  ok(wrapper.find('Menu').first().find('Portal').first().prop('open'))
   wrapper.unmount()
   window.ENV = {}
 })

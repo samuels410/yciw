@@ -19,11 +19,15 @@
 import React from 'react'
 import { mount } from 'enzyme'
 
-import IconEyeLine from '@instructure/ui-icons/lib/Line/IconEye'
+import {IconEditLine, IconEyeLine} from '@instructure/ui-icons'
 
 import ActionButtons from '../ActionButtons'
 
-const props = ({ showVisibilityToggle = true } = {}) => {
+const props = ({ showVisibilityToggle = true, developerKey =  {
+  id: '1',
+  api_key: 'test',
+  created_at: 'test'
+}} = {}) => {
   return {
     dispatch: jest.fn(),
     makeVisibleDeveloperKey: jest.fn(),
@@ -31,11 +35,7 @@ const props = ({ showVisibilityToggle = true } = {}) => {
     deleteDeveloperKey: jest.fn(),
     editDeveloperKey: jest.fn(),
     developerKeysModalOpen: jest.fn(),
-    developerKey:{
-      id: '1',
-      api_key: 'test',
-      created_at: 'test'
-    },
+    developerKey,
     visible: true,
     developerName: 'Unnamed Tool',
     onDelete: jest.fn(),
@@ -51,4 +51,36 @@ it('renders visibility icon for Site Admin', () => {
 it('does not render visibility icon for root account', () => {
   const wrapper = mount(<ActionButtons {...props({showVisibilityToggle: false})} />)
   expect(wrapper.find(IconEyeLine).exists()).toBe(false)
+})
+
+it('renders edit button for non lti keys', () => {
+  const wrapper = mount(<ActionButtons {...props()} />)
+  expect(wrapper.find(IconEditLine).exists()).toBe(true)
+})
+
+it('does render edit button for non lti keys', () => {
+  const wrapper = mount(<ActionButtons {...props({developerKey: {
+    id: '1',
+    api_key: 'test',
+    created_at: 'test',
+    is_lti_key: true
+  }})} />)
+  expect(wrapper.find(IconEditLine).exists()).toBe(true)
+})
+
+it('warns the user when deleting a LTI key', () => {
+  const oldConfirm = window.confirm
+  const wrapper = mount(<ActionButtons {...props({developerKey: {
+    id: '1',
+    api_key: 'test',
+    created_at: 'test',
+    is_lti_key: true
+  }})} />)
+
+  window.confirm = jest.fn()
+  wrapper.find('Button').at(2).simulate('click')
+  expect(window.confirm).toHaveBeenCalledWith(
+    "Are you sure you want to delete this developer key? This action will also delete all tools associated with the developer key in this context."
+  )
+  window.confirm = oldConfirm
 })

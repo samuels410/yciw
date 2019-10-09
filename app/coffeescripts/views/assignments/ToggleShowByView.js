@@ -17,39 +17,37 @@
 
 import React from 'react'
 import ReactDOM from 'react-dom'
-import I18n from 'i18n!assignments'
+import I18n from 'i18n!assignmentsToggleShowByView'
 import $ from 'jquery'
 import _ from 'underscore'
 import Backbone from 'Backbone'
 import Cache from '../../class/cache'
-import hasLocalStorage from '../../util/hasLocalStorage'
 import AssignmentGroup from '../../models/AssignmentGroup'
-import RadioInputGroup from '@instructure/ui-forms/lib/components/RadioInputGroup'
-import RadioInput from '@instructure/ui-forms/lib/components/RadioInput'
-import ScreenReaderContent from '@instructure/ui-a11y/lib/components/ScreenReaderContent'
+import {RadioInputGroup, RadioInput} from '@instructure/ui-forms'
+import {ScreenReaderContent} from '@instructure/ui-a11y'
 
 export default class ToggleShowByView extends Backbone.View {
   initialize(...args) {
     super.initialize(...args)
     this.initialized = $.Deferred()
     this.course.on('change', () => this.initializeCache())
-    this.course.on('change', this.render)
+    this.course.on('change', this.render, this)
     this.assignmentGroups.once('change:submissions', () => this.initializeDateGroups())
     this.on('changed:showBy', () => this.setAssignmentGroups())
-    this.on('changed:showBy', this.render)
+    this.on('changed:showBy', this.render, this)
   }
 
   initializeCache() {
     if (this.course.get('id') == null) return
     $.extend(true, this, Cache)
-    if (hasLocalStorage && (ENV.current_user_id != null)) this.cache.use('localStorage')
+    if (ENV.current_user_id != null) this.cache.use('localStorage')
     if (this.cache.get(this.cacheKey()) == null) this.cache.set(this.cacheKey(), true)
     return this.initialized.resolve()
   }
 
   initializeDateGroups() {
     const assignments = _.flatten(this.assignmentGroups.map(ag => ag.get('assignments').models))
-    const dated = _.select(assignments, a => a.dueAt())
+    const dated = _.filter(assignments, a => a.dueAt())
     const undated = _.difference(assignments, dated)
     const past = []
     const overdue = []
@@ -138,7 +136,7 @@ export default class ToggleShowByView extends Backbone.View {
   setAssignmentGroups() {
     let groups = this.showByDate() ? this.groupedByDate : this.groupedByAG
     this.setAssignmentGroupAssociations(groups)
-    groups = _.select(groups, group => {
+    groups = _.filter(groups, group => {
       const hasWeight = this.course.get('apply_assignment_group_weights') && group.get('group_weight') > 0
       return group.get('assignments').length > 0 || hasWeight
     })

@@ -18,15 +18,12 @@
 import React from 'react'
 import PropTypes from 'prop-types'
 import _ from 'lodash'
-import Dialog from '@instructure/ui-a11y/lib/components/Dialog'
-import ScreenReaderContent from '@instructure/ui-a11y/lib/components/ScreenReaderContent'
-import Button from '@instructure/ui-buttons/lib/components/Button'
-import CloseButton from '@instructure/ui-buttons/lib/components/CloseButton'
-import Heading from '@instructure/ui-elements/lib/components/Heading'
-import Text from '@instructure/ui-elements/lib/components/Text'
-import IconOutcomes from '@instructure/ui-icons/lib/Line/IconOutcomes'
-import Modal, { ModalHeader, ModalBody } from '@instructure/ui-overlays/lib/components/Modal'
-import I18n from 'i18n!edit_rubric'
+import {Dialog, ScreenReaderContent} from '@instructure/ui-a11y'
+import {Button, CloseButton} from '@instructure/ui-buttons'
+import {Heading, Text} from '@instructure/ui-elements'
+import {IconOutcomesLine} from '@instructure/ui-icons'
+import {Modal} from '@instructure/ui-overlays'
+import I18n from 'i18n!edit_rubricCriterion'
 
 import numberHelper from 'jsx/shared/helpers/numberHelper'
 import { assessmentShape, criterionShape } from './types'
@@ -37,13 +34,12 @@ import Ratings from './Ratings'
 
 const OutcomeIcon = () => (
   <span>
-    <IconOutcomes />&nbsp;
+    <IconOutcomesLine />&nbsp;
     <ScreenReaderContent>{I18n.t('This criterion is linked to a Learning Outcome')}</ScreenReaderContent>
   </span>
 )
 
 const LongDescription = ({ showLongDescription }) => (
-  // eslint-disable-next-line jsx-a11y/anchor-is-valid
   <Button fluidWidth variant="link" onClick={() => showLongDescription()}>
     <Text size="x-small">{I18n.t('view longer description')}</Text>
   </Button>
@@ -54,7 +50,6 @@ LongDescription.propTypes = {
 
 const LongDescriptionDialog = ({ open, close, longDescription }) => {
   const modalHeader = I18n.t('Criterion Long Description')
-  /* eslint-disable react/no-danger */
   return (
     <Modal
        open={open}
@@ -63,7 +58,7 @@ const LongDescriptionDialog = ({ open, close, longDescription }) => {
        label={modalHeader}
        shouldCloseOnDocumentClick
     >
-      <ModalHeader>
+      <Modal.Header>
         <CloseButton
           placement="end"
           offset="medium"
@@ -73,12 +68,12 @@ const LongDescriptionDialog = ({ open, close, longDescription }) => {
           Close
         </CloseButton>
         <Heading>{modalHeader}</Heading>
-      </ModalHeader>
-      <ModalBody>
+      </Modal.Header>
+      <Modal.Body>
         <Text lineHeight="double">
           <div dangerouslySetInnerHTML={{ __html: longDescription }} />
         </Text>
-      </ModalBody>
+      </Modal.Body>
     </Modal>
   )
   /* eslint-enable react/no-danger */
@@ -249,7 +244,7 @@ export default class Criterion extends React.Component {
             !(hidePoints || _.isNil(threshold)) ? <Threshold threshold={threshold} /> : null
           }
         </th>
-        <td className="ratings">
+        <td className="ratings" colSpan={isSummary ? "2" : null}>
           {ratings}
         </td>
         {

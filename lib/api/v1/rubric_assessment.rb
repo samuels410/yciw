@@ -48,4 +48,18 @@ module Api::V1::RubricAssessment
     hash['comments'] = rubric_assessment.data.map{|rad| rad[:comments]} if opts[:style] == "comments_only"
     hash
   end
+
+  def indexed_rubric_assessment_json(rubric_assessment)
+    rubric_assessment.data.map do |r|
+      [r[:criterion_id], { rating_id: r[:id] }.merge(r.slice(:comments, :points))]
+    end.to_h
+  end
+
+  def full_rubric_assessment_json_for_submissions(rubric_assessment, user, session)
+    hash = rubric_assessment_json(rubric_assessment, user, session, {:style=> "full"})
+    assessor = User.find(rubric_assessment.assessor_id)
+    hash['assessor_name'] = assessor.name
+    hash['assessor_avatar_url'] = assessor.avatar_image_url
+    hash
+  end
 end

@@ -67,7 +67,9 @@ import 'jquery.cookie'
     // original code (now the else block) always returns 0.
     // if chrome > 60, force it to return documentElement.scrollTop
     const chromeVer = window.navigator.userAgent.match(/Chrome\/(\d+)/)
-    if (chromeVer && parseInt(chromeVer[1], 10) > 60) {
+    // edge 42+ also reports as chrome 64+, so exclude it explicitly. yay user agent sniffing.
+    const edgeVer = window.navigator.userAgent.match(/Edge\/(\d+)/)
+    if (!edgeVer && chromeVer && parseInt(chromeVer[1], 10) > 60) {
       return $("html").scrollTop()
     } else {
       return ($.browser.safari ? $("body") : $("html")).scrollTop();
@@ -75,7 +77,7 @@ import 'jquery.cookie'
   };
 
   // indicate we want stringified IDs for JSON responses
-  $.ajaxPrefilter("json", function( options, originalOptions, jqXHR ) {
+  $.ajaxPrefilter("json", (options, originalOptions, jqXHR) => {
     if (options.accepts.json)
       options.accepts.json = options.accepts.json + ', application/json+canvas-string-ids';
     else
@@ -88,20 +90,8 @@ import 'jquery.cookie'
     if (csrfToken) xhr.setRequestHeader('X-CSRF-Token', csrfToken);
   }
 
-  $.ajaxPrefilter(function( options, originalOptions, jqXHR ) {
+  $.ajaxPrefilter((options, originalOptions, jqXHR) => {
     if ( !options.crossDomain ) CSRFProtection(jqXHR);
-
-    // sends timing info of XHRs to google analytics so we can track ajax speed.
-    // (ONLY for ajax requests that took longer than a second)
-    var urlWithoutPageViewParam = options.url;
-    var start = new Date().getTime();
-    jqXHR.done(function(data, textStatus, jqXHR){
-      var duration = new Date().getTime() - start;
-      if (duration > 1000) {
-        var label = '{"requestingPage": "' + window.location + '," "status": "' + textStatus + '", "X-Request-Context-Id" : "' + jqXHR.getResponseHeader('X-Request-Context-Id') + '", "X-Runtime": ' + jqXHR.getResponseHeader('X-Runtime') + '}';
-        $.trackEvent('XHRs', urlWithoutPageViewParam, label, duration );
-      }
-    });
   });
 
 export default $;

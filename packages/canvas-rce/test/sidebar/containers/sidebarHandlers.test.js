@@ -25,6 +25,8 @@ import * as images from "../../../src/sidebar/actions/images";
 import * as upload from "../../../src/sidebar/actions/upload";
 import * as flickr from "../../../src/sidebar/actions/flickr";
 import * as files from "../../../src/sidebar/actions/files";
+import * as documents from "../../../src/sidebar/actions/documents";
+import * as context from "../../../src/sidebar/actions/context";
 
 describe("sidebarHandlers", () => {
   let handlers, dispatch;
@@ -67,9 +69,14 @@ describe("sidebarHandlers", () => {
     testHandler("fetchFolders", upload, "fetchFolders");
   });
 
-  it("ties images fetch images to store", () => {
-    testHandler("fetchImages", images, "fetchImages", {});
+  it("ties images fetch initial images to store", () => {
+    testHandler("fetchInitialImages", images, "fetchInitialImages");
   });
+
+  it("ties images fetch next images to store", () => {
+    testHandler("fetchNextImages", images, "fetchNextImages");
+  });
+
 
   it("ties upload preflight to store", () => {
     testHandler("startUpload", upload, "uploadPreflight", "images", {
@@ -88,4 +95,20 @@ describe("sidebarHandlers", () => {
   it("ties toggle upload form to store", () => {
     testHandler("toggleUploadForm", upload, "openOrCloseUploadForm");
   });
+
+  it("ties media up;load to store", () => {
+    testHandler("startMediaUpload", upload, "uploadToMediaFolder", "images", {})
+  })
+
+  it("ties documents fetch initial documents to store", () => {
+    testHandler("fetchInitialDocs", documents, "fetchInitialDocs")
+  })
+
+  it("ties documents fetch nest documents to store", () => {
+    testHandler("fetchNextDocs", documents, "fetchNextDocs")
+  })
+
+  it("ties context change context to store", () => {
+    testHandler("onChangeContext", context, "changeContext", "newContext")
+  })
 });

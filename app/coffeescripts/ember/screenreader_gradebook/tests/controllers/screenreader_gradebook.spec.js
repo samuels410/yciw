@@ -19,12 +19,13 @@
 import _ from 'underscore'
 import ajax from 'ic-ajax'
 import startApp from '../start_app'
-import Ember from 'ember'
+import Ember, {ObjectProxy} from 'ember'
 import fixtures from '../shared_ajax_fixtures'
 import {createCourseGradesWithGradingPeriods} from 'spec/jsx/gradebook/GradeCalculatorSpecHelper'
 import SRGBController from '../../controllers/screenreader_gradebook_controller'
 import userSettings from '../../../../userSettings'
 import CourseGradeCalculator from 'jsx/gradebook/CourseGradeCalculator'
+import * as FinalGradeOverrideApi from '../../../../../jsx/gradezilla/default_gradebook/FinalGradeOverrides/FinalGradeOverrideApi'
 import 'vendor/jquery.ba-tinypubsub'
 import AsyncHelper from '../AsyncHelper'
 
@@ -44,8 +45,8 @@ QUnit.module('ScreenReader Gradebook', suiteHooks => {
     window.ENV = {}
     QUnit.config.testTimeout = 2000
     fixtures.create()
-    sinon.stub(userSettings, 'contextGet')
-    sinon.stub(userSettings, 'contextSet')
+    sandbox.stub(userSettings, 'contextGet')
+    sandbox.stub(userSettings, 'contextSet')
     userSettings.contextGet
       .withArgs('sort_grade_columns_by')
       .returns({sortType: 'assignment_group'})
@@ -56,8 +57,6 @@ QUnit.module('ScreenReader Gradebook', suiteHooks => {
 
   suiteHooks.afterEach(() => {
     asyncHelper.stop()
-    userSettings.contextGet.restore()
-    userSettings.contextSet.restore()
     Ember.run(App, 'destroy')
     QUnit.config.testTimeout = qunitTimeout
     window.ENV = originalENV
@@ -213,103 +212,142 @@ QUnit.module('ScreenReader Gradebook', suiteHooks => {
       }))
   })
 
-  QUnit.module('Loading Submissions', hooks => {
-    hooks.beforeEach(() => {
-      ajax.defineFixture(window.ENV.GRADEBOOK_OPTIONS.submissions_url, {
-        response: [
-          {
-            submissions: [
-              {
-                assignment_id: '1',
-                assignment_visible: true,
-                cached_due_date: '2015-03-01T12:00:00Z',
-                score: 10,
-                user_id: '1'
-              },
-              {
-                assignment_id: '2',
-                assignment_visible: true,
-                cached_due_date: '2015-05-02T12:00:00Z',
-                score: 9,
-                user_id: '1'
-              }
-            ],
-            user_id: '01'
+  QUnit.module('Loading Submissions', () => {
+    QUnit.module('when everything has loaded', contextHooks => {
+      contextHooks.beforeEach(() => {
+        ajax.defineFixture(window.ENV.GRADEBOOK_OPTIONS.submissions_url, {
+          response: [
+            {
+              submissions: [
+                {
+                  assignment_id: '1',
+                  assignment_visible: true,
+                  cached_due_date: '2015-03-01T12:00:00Z',
+                  score: 10,
+                  user_id: '1'
+                },
+                {
+                  assignment_id: '2',
+                  assignment_visible: true,
+                  cached_due_date: '2015-05-02T12:00:00Z',
+                  score: 9,
+                  user_id: '1'
+                }
+              ],
+              user_id: '01'
+            },
+            {
+              submissions: [
+                {
+                  assignment_id: '1',
+                  assignment_visible: true,
+                  cached_due_date: '2015-07-03T12:00:00Z',
+                  score: 8,
+                  user_id: '2'
+                }
+              ],
+              user_id: '2'
+            }
+          ],
+          jqXHR: {
+            getResponseHeader() {
+              return {}
+            }
           },
-          {
-            submissions: [
-              {
-                assignment_id: '1',
-                assignment_visible: true,
-                cached_due_date: '2015-07-03T12:00:00Z',
-                score: 8,
-                user_id: '2'
-              }
-            ],
-            user_id: '2'
-          }
-        ],
-        jqXHR: {
-          getResponseHeader() {
-            return {}
-          }
-        },
-        textStatus: 'success'
+          textStatus: 'success'
+        })
+
+        ENV.GRADEBOOK_OPTIONS.grading_period_set = {
+          id: '1501',
+          grading_periods: [
+            {
+              id: '1403',
+              close_date: '2015-07-08T12:00:00Z',
+              end_date: '2015-07-01T12:00:00Z',
+              is_closed: false,
+              start_date: '2015-05-01T12:00:00Z'
+            },
+            {
+              id: '1401',
+              close_date: '2015-03-08T12:00:00Z',
+              end_date: '2015-03-01T12:00:00Z',
+              is_closed: true,
+              start_date: '2015-01-01T12:00:00Z'
+            },
+            {
+              id: '1402',
+              close_date: '2015-05-08T12:00:00Z',
+              end_date: '2015-05-01T12:00:00Z',
+              is_closed: false,
+              start_date: '2015-03-01T12:00:00Z'
+            }
+          ],
+          weighted: true
+        }
+
+        return initializeApp()
       })
 
-      ENV.GRADEBOOK_OPTIONS.grading_period_set = {
-        id: '1501',
-        grading_periods: [
-          {
-            id: '1403',
-            close_date: '2015-07-08T12:00:00Z',
-            end_date: '2015-07-01T12:00:00Z',
-            is_closed: false,
-            start_date: '2015-05-01T12:00:00Z'
-          },
-          {
-            id: '1401',
-            close_date: '2015-03-08T12:00:00Z',
-            end_date: '2015-03-01T12:00:00Z',
-            is_closed: true,
-            start_date: '2015-01-01T12:00:00Z'
-          },
-          {
-            id: '1402',
-            close_date: '2015-05-08T12:00:00Z',
-            end_date: '2015-05-01T12:00:00Z',
-            is_closed: false,
-            start_date: '2015-03-01T12:00:00Z'
-          }
-        ],
-        weighted: true
-      }
+      test('updates effective due dates', () =>
+        asyncHelper.waitForRequests().then(() => {
+          const effectiveDueDates = srgb.get('effectiveDueDates.content')
+          deepEqual(Object.keys(effectiveDueDates), ['1', '2'])
+          deepEqual(Object.keys(effectiveDueDates[1]), ['1', '2'])
+          deepEqual(Object.keys(effectiveDueDates[2]), ['1'])
+        }))
 
-      return initializeApp()
+      test('updates effective due dates on related assignments', () =>
+        asyncHelper.waitForRequests().then(() => {
+          deepEqual(Object.keys(srgb.get('assignments').findBy('id', '1').effectiveDueDates), [
+            '1',
+            '2'
+          ])
+          deepEqual(Object.keys(srgb.get('assignments').findBy('id', '2').effectiveDueDates), ['1'])
+        }))
+
+      test('updates inClosedGradingPeriod on related assignments', () =>
+        asyncHelper.waitForRequests().then(() => {
+          strictEqual(srgb.get('assignments').findBy('id', '1').inClosedGradingPeriod, true)
+          strictEqual(srgb.get('assignments').findBy('id', '2').inClosedGradingPeriod, false)
+        }))
     })
 
-    test('updates effective due dates', () =>
-      asyncHelper.waitForRequests().then(() => {
-        const effectiveDueDates = srgb.get('effectiveDueDates.content')
-        deepEqual(Object.keys(effectiveDueDates), ['1', '2'])
-        deepEqual(Object.keys(effectiveDueDates[1]), ['1', '2'])
-        deepEqual(Object.keys(effectiveDueDates[2]), ['1'])
-      }))
+    QUnit.module('when assignment groups load after submissions', contextHooks => {
+      let student
 
-    test('updates effective due dates on related assignments', () =>
-      asyncHelper.waitForRequests().then(() => {
-        deepEqual(Object.keys(srgb.get('assignments').findBy('id', '1').effectiveDueDates), [
-          '1',
-          '2'
-        ])
-        deepEqual(Object.keys(srgb.get('assignments').findBy('id', '2').effectiveDueDates), ['1'])
-      }))
+      contextHooks.beforeEach(() => {
+        initializeApp()
+        return asyncHelper.waitForRequests().then(() => {
+          student = srgb.get('students.firstObject')
 
-    test('updates inClosedGradingPeriod on related assignments', () =>
-      asyncHelper.waitForRequests().then(() => {
-        strictEqual(srgb.get('assignments').findBy('id', '1').inClosedGradingPeriod, true)
-        strictEqual(srgb.get('assignments').findBy('id', '2').inClosedGradingPeriod, false)
-      }))
+          /*
+           * Set all submissions for the student as hidden.
+           * This would result in a zero grade for the student.
+           */
+          let submissions = srgb.submissionsForStudent(student)
+          submissions.forEach(submission => {
+            srgb.updateSubmission({...submission, hidden: true}, student)
+          })
+          submissions = srgb.submissionsForStudent(student)
+
+          // Clear the student's current grade.
+          Ember.set(student, 'total_grade', null)
+
+          // Simulate the assignments being determined again.
+          srgb.set('assignmentsFromGroups.isLoaded', false)
+          srgb.set('assignmentsFromGroups.isLoaded', true)
+        })
+      })
+
+      test('updates the hidden state of submissions', () => {
+        const [submission] = srgb.submissionsForStudent(student)
+        deepEqual(submission.hidden, false)
+      })
+
+      test('recalculates grades for students', () => {
+        deepEqual(student.total_grade, {score: 3, possible: 140})
+      })
+    })
   })
 
   QUnit.module('#gradesAreWeighted', hooks => {
@@ -786,12 +824,10 @@ QUnit.module('ScreenReader Gradebook', suiteHooks => {
       }
       initializeApp()
       return asyncHelper.waitForRequests().then(() => {
-        sinon.stub(CourseGradeCalculator, 'calculate').returns('expected')
+        sandbox.stub(CourseGradeCalculator, 'calculate').returns('expected')
         student = srgb.get('students.firstObject')
       })
     })
-
-    hooks.afterEach(() => CourseGradeCalculator.calculate.restore())
 
     test('calculates grades using properties from the gradebook', () => {
       const grades = srgb.calculate(student)
@@ -868,12 +904,10 @@ QUnit.module('ScreenReader Gradebook', suiteHooks => {
       exampleGrades = createCourseGradesWithGradingPeriods()
       initializeApp()
       return asyncHelper.waitForRequests().then(() => {
-        sinon.stub(CourseGradeCalculator, 'calculate').returns(exampleGrades)
+        sandbox.stub(CourseGradeCalculator, 'calculate').returns(exampleGrades)
         return (student = srgb.get('students.firstObject'))
       })
     })
-
-    hooks.afterEach(() => CourseGradeCalculator.calculate.restore())
 
     test('stores the current grade on the student when not including ungraded assignments', () => {
       const grades = srgb.calculateStudentGrade(student)
@@ -1057,6 +1091,370 @@ QUnit.module('ScreenReader Gradebook', suiteHooks => {
     test('is PUT when the notes column exists', () => {
       Ember.run(() => srgb.set('shouldCreateNotes', false))
       equal(srgb.get('notesVerb'), 'PUT')
+    })
+  })
+
+  QUnit.module('includeUngradedAssignments', hooks => {
+    hooks.beforeEach(() => {
+      initializeApp()
+    })
+
+    test('returns true when include_ungraded_assignments is true', () => {
+      userSettings.contextGet.withArgs('include_ungraded_assignments').returns(true)
+      strictEqual(srgb.get('includeUngradedAssignments'), true)
+    })
+
+    test('returns false when include_ungraded_assignments is false', () => {
+      userSettings.contextGet.withArgs('include_ungraded_assignments').returns(false)
+      strictEqual(srgb.get('includeUngradedAssignments'), false)
+    })
+  })
+
+  QUnit.module('updateIncludeUngradedAssignmentsSetting', hooks => {
+    hooks.beforeEach(() => {
+      initializeApp()
+    })
+
+    test('changing includeUngradedAssignments calls updateIncludeUngradedAssignmentsSetting', () => {
+      const updateIncludeUngradedAssignmentsSettingStub = sinon.stub(
+        srgb,
+        'updateIncludeUngradedAssignmentsSetting'
+      )
+      srgb.set('includeUngradedAssignments', false)
+      strictEqual(updateIncludeUngradedAssignmentsSettingStub.callCount, 1)
+    })
+
+    test('updateIncludeUngradedAssignmentsSetting sets the userSetting for include_ungraded_assignments', () => {
+      srgb.set('includeUngradedAssignments', false)
+      strictEqual(userSettings.contextSet.firstCall.args[0], 'include_ungraded_assignments')
+    })
+
+    test('updateIncludeUngradedAssignmentsSetting updates the setting value', () => {
+      srgb.set('includeUngradedAssignments', false)
+      strictEqual(userSettings.contextSet.firstCall.args[1], false)
+    })
+  })
+
+  QUnit.module('showConcludedEnrollments', hooks => {
+    hooks.beforeEach(() => {
+      window.ENV.GRADEBOOK_OPTIONS.settings = {}
+      initializeApp()
+    })
+
+    test('returns true when show_concluded_enrollments is true', () => {
+      window.ENV.GRADEBOOK_OPTIONS.settings.show_concluded_enrollments = 'true'
+      strictEqual(srgb.get('showConcludedEnrollments'), true)
+    })
+
+    test('returns false when show_concluded_enrollments is false', () => {
+      window.ENV.GRADEBOOK_OPTIONS.settings.show_concluded_enrollments = 'false'
+      strictEqual(srgb.get('showConcludedEnrollments'), false)
+    })
+  })
+
+  QUnit.module('updateShowConcludedEnrollmentsSetting', hooks => {
+    let fetchCorrectEnrollmentsStub
+
+    hooks.beforeEach(() => {
+      window.ENV.GRADEBOOK_OPTIONS.settings = {}
+      window.ENV.GRADEBOOK_OPTIONS.settings.show_concluded_enrollments = 'true'
+      window.ENV.GRADEBOOK_OPTIONS.settings_update_url = 'gradebook_settings'
+      ajax.defineFixture(window.ENV.GRADEBOOK_OPTIONS.settings.settings_update_url, {
+        response: [],
+        textStatus: 'success'
+      })
+      initializeApp()
+      fetchCorrectEnrollmentsStub = sinon.stub(srgb, 'fetchCorrectEnrollments')
+    })
+
+    test('changing showConcludedEnrollments calls updateShowConcludedEnrollmentsSetting', () => {
+      const updateShowConcludedEnrollmentsSettingStub = sinon.stub(
+        srgb,
+        'updateShowConcludedEnrollmentsSetting'
+      )
+      srgb.set('showConcludedEnrollments', false)
+      strictEqual(updateShowConcludedEnrollmentsSettingStub.callCount, 1)
+    })
+
+    test('updateShowConcludedEnrollmentsSetting uses the gradebook settings endpoint', () => {
+      const ajaxRequestSpy = sandbox.stub(ajax, 'request')
+      srgb.set('showConcludedEnrollments', false)
+      strictEqual(ajaxRequestSpy.firstCall.args[0].url, 'gradebook_settings')
+    })
+
+    test('updateShowConcludedEnrollmentsSetting passes the updated setting state', () => {
+      const ajaxRequestSpy = sandbox.stub(ajax, 'request')
+      srgb.set('showConcludedEnrollments', false)
+      deepEqual(ajaxRequestSpy.firstCall.args[0].data.gradebook_settings, {
+        show_concluded_enrollments: false
+      })
+    })
+  })
+
+  QUnit.module('finalGradeOverrideEnabled', hooks => {
+    hooks.beforeEach(() => {
+      initializeApp()
+    })
+
+    test('returns true when final_grade_override_enabled is true', () => {
+      window.ENV.GRADEBOOK_OPTIONS.final_grade_override_enabled = true
+      strictEqual(srgb.get('finalGradeOverrideEnabled'), true)
+    })
+
+    test('returns false when final_grade_override_enabled is false', () => {
+      window.ENV.GRADEBOOK_OPTIONS.final_grade_override_enabled = false
+      strictEqual(srgb.get('finalGradeOverrideEnabled'), false)
+    })
+  })
+
+  QUnit.module('allowFinalGradeOverride', hooks => {
+    hooks.beforeEach(() => {
+      window.ENV.GRADEBOOK_OPTIONS.course_settings = {}
+      initializeApp()
+    })
+
+    test('returns true when allow_final_grade_override is true', () => {
+      window.ENV.GRADEBOOK_OPTIONS.course_settings.allow_final_grade_override = true
+      strictEqual(srgb.get('allowFinalGradeOverride'), true)
+    })
+
+    test('returns false when allow_final_grade_override is false', () => {
+      window.ENV.GRADEBOOK_OPTIONS.course_settings.allow_final_grade_override = false
+      strictEqual(srgb.get('allowFinalGradeOverride'), false)
+    })
+  })
+
+  QUnit.module('updateAllowFinalGradeOverride', hooks => {
+    hooks.beforeEach(() => {
+      window.ENV.GRADEBOOK_OPTIONS.course_settings = {}
+      window.ENV.GRADEBOOK_OPTIONS.course_settings.allow_final_grade_override = true
+      ajax.defineFixture(`/api/v1/courses/${ENV.GRADEBOOK_OPTIONS.context_id}/settings`, {
+        response: [],
+        textStatus: 'success'
+      })
+      initializeApp()
+    })
+
+    test('changing allowFinalGradeOverride calls updateAllowFinalGradeOverride', () => {
+      const updateAllowFinalGradeOverrideStub = sinon.stub(srgb, 'updateAllowFinalGradeOverride')
+      srgb.set('allowFinalGradeOverride', false)
+      strictEqual(updateAllowFinalGradeOverrideStub.callCount, 1)
+    })
+
+    test('updateAllowFinalGradeOverride uses the course settings endpoint', () => {
+      const ajaxRequestSpy = sandbox.stub(ajax, 'request')
+      const url = `/api/v1/courses/${ENV.GRADEBOOK_OPTIONS.context_id}/settings`
+      srgb.set('allowFinalGradeOverride', false)
+      strictEqual(ajaxRequestSpy.firstCall.args[0].url, url)
+    })
+
+    test('updateAllowFinalGradeOverride passes the updated setting state', () => {
+      const ajaxRequestSpy = sandbox.stub(ajax, 'request')
+      srgb.set('allowFinalGradeOverride', false)
+      deepEqual(ajaxRequestSpy.firstCall.args[0].data, {
+        allow_final_grade_override: false
+      })
+    })
+  })
+
+  QUnit.module('selectedStudentFinalGradeOverrideChanged', hooks => {
+    let student
+    let student2
+
+    hooks.beforeEach(() => {
+      initializeApp()
+
+      // These observe the selectedGradingPeriod, so tests setting that
+      // property will trigger these unless stubbed out.
+      sinon.stub(srgb, 'fetchStudentSubmissions')
+      sinon.stub(srgb, 'fetchAssignmentGroups')
+      sinon.stub(srgb, 'calculateStudentGrade')
+      student = srgb.get('students.firstObject')
+      student2 = {...student, id: student.id + 100}
+
+      srgb.set('selectedStudent', student)
+      srgb.set(
+        'final_grade_overrides',
+        ObjectProxy.create({
+          content: {
+            finalGradeOverrides: {
+              [student.id]: {
+                courseGrade: {
+                  percentage: 67.1
+                },
+                gradingPeriodGrades: {
+                  1: {
+                    percentage: 93.2
+                  }
+                }
+              },
+              [student2.id]: {
+                courseGrade: {
+                  percentage: 1
+                }
+              }
+            }
+          },
+          isLoaded: true
+        })
+      )
+    })
+
+    test('sets selectedStudentFinalGradeOverride to the grading period override', () => {
+      const selectedGradingPeriod = {id: '1'}
+      srgb.set('selectedGradingPeriod', selectedGradingPeriod)
+      strictEqual(srgb.get('selectedStudentFinalGradeOverride.percentage'), 93.2)
+    })
+
+    test('sets selectedStudentFinalGradeOverride to the course override', () => {
+      const selectedGradingPeriod = {id: '0'}
+      srgb.set('selectedGradingPeriod', selectedGradingPeriod)
+      strictEqual(srgb.get('selectedStudentFinalGradeOverride.percentage'), 67.1)
+    })
+
+    test('sets selectedStudentFinalGradeOverride to the course override if no grading period', () => {
+      strictEqual(srgb.get('selectedStudentFinalGradeOverride.percentage'), 67.1)
+    })
+
+    test('changing final_grade_overrides updates selectedStudentFinalGradeOverride', () => {
+      const overrides = srgb.get('final_grade_overrides.content.finalGradeOverrides')
+      overrides[student.id].courseGrade.percentage = 91
+      srgb.set('final_grade_overrides.content', {finalGradeOverrides: overrides})
+      strictEqual(srgb.get('selectedStudentFinalGradeOverride.percentage'), 91)
+    })
+
+    test('changing selectedStudent updates selectedStudentFinalGradeOverride', () => {
+      srgb.set('selectedStudent', student2)
+      strictEqual(srgb.get('selectedStudentFinalGradeOverride.percentage'), 1)
+    })
+
+    test('changing to a student without grading period overrides does not cause an error', () => {
+      const selectedGradingPeriod = {id: '1'}
+      srgb.set('selectedGradingPeriod', selectedGradingPeriod)
+      srgb.set('selectedStudent', student2)
+      deepEqual(srgb.get('selectedStudentFinalGradeOverride'), {})
+    })
+  })
+
+  QUnit.module('onEditFinalGradeOverride', hooks => {
+    let student
+    let updateFinalGradeOverrideStub
+
+    hooks.beforeEach(() => {
+      initializeApp()
+
+      // These observe the selectedGradingPeriod, so tests setting that
+      // property will trigger these unless stubbed out.
+      sinon.stub(srgb, 'fetchStudentSubmissions')
+      sinon.stub(srgb, 'fetchAssignmentGroups')
+      sinon.stub(srgb, 'calculateStudentGrade')
+      student = srgb.get('students.firstObject')
+
+      srgb.set('selectedStudent', student)
+      srgb.set(
+        'final_grade_overrides',
+        ObjectProxy.create({
+          content: {
+            finalGradeOverrides: {
+              [student.id]: {
+                courseGrade: {
+                  percentage: 67.1
+                },
+                gradingPeriodGrades: {
+                  1: {
+                    percentage: 93.2
+                  }
+                }
+              }
+            }
+          },
+          isLoaded: true
+        })
+      )
+
+      updateFinalGradeOverrideStub = sandbox.stub(FinalGradeOverrideApi, 'updateFinalGradeOverride')
+    })
+
+    test('given an invalid grade, final_grade_overrides is unchanged', () => {
+      srgb.send('onEditFinalGradeOverride', 'howdy doody')
+      const overrides = srgb.get('final_grade_overrides').content.finalGradeOverrides[student.id]
+      strictEqual(overrides.courseGrade.percentage, 67.1)
+    })
+
+    test('given an invalid grade, the overrides endpoint is not hit', () => {
+      srgb.send('onEditFinalGradeOverride', 'howdy doody')
+      strictEqual(updateFinalGradeOverrideStub.callCount, 0)
+    })
+
+    test('given an unchanged grade, the overrides endpoint is not hit', () => {
+      srgb.send('onEditFinalGradeOverride', 67.1)
+      strictEqual(updateFinalGradeOverrideStub.callCount, 0)
+    })
+
+    test('given a changed, valid grade, final_grade_overrides is updated for grading period', () => {
+      const gradingPeriod = {id: '1'}
+      srgb.set('selectedGradingPeriod', gradingPeriod)
+      srgb.send('onEditFinalGradeOverride', 91)
+      const overrides = srgb.get('final_grade_overrides').content.finalGradeOverrides[student.id]
+      const gradingPeriodOverride = overrides.gradingPeriodGrades[gradingPeriod.id]
+      strictEqual(gradingPeriodOverride.percentage, 91)
+    })
+
+    test('given a new, valid grade, final_grade_overrides is updated for the student', () => {
+      const student2 = {...student, id: student.id + 100}
+      Ember.run(() => {
+        const enrollments = {content: [{id: 1, user_id: student2.id}]}
+        srgb.set('enrollments', enrollments)
+      })
+      srgb.set('selectedStudent', student2)
+      srgb.send('onEditFinalGradeOverride', 100)
+      const overrides = srgb.get('final_grade_overrides.content.finalGradeOverrides')[student2.id]
+      strictEqual(overrides.courseGrade.percentage, 100)
+    })
+
+    test('when no override exists for a grading period, a valid grade is accepted without issue', () => {
+      srgb.set('gradingPeriods', [{id: '1'}, {id: '9001'}])
+      srgb.set('selectedGradingPeriod', {id: '9001'})
+      srgb.send('onEditFinalGradeOverride', 100)
+      strictEqual(true, true)
+    })
+
+    test('given a changed, valid grade, selectedStudentFinalGradeOverride is updated for course', () => {
+      srgb.send('onEditFinalGradeOverride', 91)
+      const overrides = srgb.get('final_grade_overrides').content.finalGradeOverrides[student.id]
+      strictEqual(overrides.courseGrade.percentage, 91)
+    })
+
+    test('given a changed, valid grade, the overrides endpoint is hit', () => {
+      srgb.send('onEditFinalGradeOverride', 91)
+      strictEqual(updateFinalGradeOverrideStub.callCount, 1)
+    })
+
+    test('given a changed, valid grade, the overrides endpoint is passed the enrollment id', () => {
+      // Setting enrollments without Ember.run has asynchronous side-effects.
+      Ember.run(() => {
+        const enrollments = {content: [{id: 1, user_id: student.id}]}
+        srgb.set('enrollments', enrollments)
+      })
+      srgb.send('onEditFinalGradeOverride', 91)
+      strictEqual(updateFinalGradeOverrideStub.firstCall.args[0], 1)
+    })
+
+    test('given a changed, valid grade, the overrides endpoint is passed the grading period id', () => {
+      const gradingPeriod = {id: '1'}
+      srgb.set('selectedGradingPeriod', gradingPeriod)
+      srgb.send('onEditFinalGradeOverride', 91)
+      strictEqual(updateFinalGradeOverrideStub.firstCall.args[1], '1')
+    })
+
+    test('given a changed, valid grade, the overrides endpoint is passed null when no grading period is selected', () => {
+      srgb.send('onEditFinalGradeOverride', 91)
+      strictEqual(updateFinalGradeOverrideStub.firstCall.args[1], null)
+    })
+
+    test('given a changed, valid grade, the overrides endpoint is passed the new override grade', () => {
+      srgb.send('onEditFinalGradeOverride', 91)
+      strictEqual(updateFinalGradeOverrideStub.firstCall.args[2].percentage, 91)
     })
   })
 

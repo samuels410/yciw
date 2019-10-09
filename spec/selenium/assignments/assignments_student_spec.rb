@@ -41,6 +41,8 @@ describe "assignments" do
       @fourth_assignment = @course.assignments.create!(:title => 'assignment 4', :name => 'assignment 4', :due_at => @due_date - 1.day)
 
       get "/courses/#{@course.id}/assignments"
+      wait_for_no_such_element { f('[data-view="assignmentGroups"] .loadingIndicator') }
+      wait_for_ajaximations
       titles = ff('.ig-title')
       expect(titles[0].text).to eq @fourth_assignment.title
       expect(titles[1].text).to eq @assignment.title
@@ -123,7 +125,7 @@ describe "assignments" do
       new_course.enroll_user(@user, 'StudentEnrollment')
       get "/courses/#{new_course.id}/assignments/#{assignment.id}"
 
-      expect(f('.ui-state-error')).to be_displayed
+      expect(f('#unauthorized_message')).to be_displayed
       expect(f("#content")).not_to contain_css('#assignment_show')
     end
 
@@ -142,6 +144,8 @@ describe "assignments" do
     it "should verify due date is enforced" do
       due_date_assignment = @course.assignments.create!(:name => 'due date assignment', :due_at => 5.days.ago)
       get "/courses/#{@course.id}/assignments"
+      wait_for_no_such_element { f('[data-view="assignmentGroups"] .loadingIndicator') }
+      wait_for_ajaximations
       expect(f("#assignment_group_past #assignment_#{due_date_assignment.id}")).to be_displayed
       due_date_assignment.update_attributes(:due_at => 2.days.from_now)
       refresh_page # to show the updated assignment
@@ -320,6 +324,7 @@ describe "assignments" do
       ag = @course.assignment_groups.first
 
       get "/courses/#{@course.id}/assignments"
+      wait_for_no_such_element { f('[data-view="assignmentGroups"] .loadingIndicator') }
       wait_for_ajaximations
 
       move_to_click("label[for=show_by_type]")
@@ -332,6 +337,7 @@ describe "assignments" do
       ag = @course.assignment_groups.first
 
       get "/courses/#{@course.id}/assignments"
+      wait_for_no_such_element { f('[data-view="assignmentGroups"] .loadingIndicator') }
       wait_for_ajaximations
 
       expect(f("#content")).not_to contain_css('.new_assignment')
@@ -345,6 +351,7 @@ describe "assignments" do
       @course.assignments.create!(:title => 'undated assignment', :name => 'undated assignment')
 
       get "/courses/#{@course.id}/assignments"
+      wait_for_no_such_element { f('[data-view="assignmentGroups"] .loadingIndicator') }
       wait_for_ajaximations
 
       expect(is_checked('#show_by_date')).to be_truthy
@@ -358,6 +365,7 @@ describe "assignments" do
       ag = @course.assignment_groups.first
 
       get "/courses/#{@course.id}/assignments"
+      wait_for_no_such_element { f('[data-view="assignmentGroups"] .loadingIndicator') }
       wait_for_ajaximations
 
       move_to_click("label[for=show_by_type]")
@@ -365,6 +373,7 @@ describe "assignments" do
       expect(f("#assignment_group_#{ag.id}")).not_to be_nil
 
       get "/courses/#{@course.id}/assignments"
+      wait_for_no_such_element { f('[data-view="assignmentGroups"] .loadingIndicator') }
       wait_for_ajaximations
       expect(is_checked('#show_by_type')).to be_truthy
     end
@@ -374,6 +383,7 @@ describe "assignments" do
       empty_ag = @course.assignment_groups.create!(:name => "Empty")
 
       get "/courses/#{@course.id}/assignments"
+      wait_for_no_such_element { f('[data-view="assignmentGroups"] .loadingIndicator') }
       wait_for_ajaximations
 
       expect(f("#content")).not_to contain_css('#assignment_group_overdue')
@@ -394,6 +404,7 @@ describe "assignments" do
       empty_ag = @course.assignment_groups.create!(:name => "Empty", :group_weight => 10)
 
       get "/courses/#{@course.id}/assignments"
+      wait_for_no_such_element { f('[data-view="assignmentGroups"] .loadingIndicator') }
       wait_for_ajaximations
 
       move_to_click("label[for=show_by_type]")
@@ -405,6 +416,7 @@ describe "assignments" do
       undated, upcoming = @course.assignments.partition{ |a| a.due_date.nil? }
 
       get "/courses/#{@course.id}/assignments"
+      wait_for_no_such_element { f('[data-view="assignmentGroups"] .loadingIndicator') }
       wait_for_ajaximations
 
       undated.each do |a|
@@ -413,6 +425,39 @@ describe "assignments" do
 
       upcoming.each do |a|
         expect(f("#assignment_group_upcoming #assignment_#{a.id}")).not_to be_nil
+      end
+    end
+
+    context "with more than one page of assignment groups" do
+      before do
+        ApplicationController::ASSIGNMENT_GROUPS_TO_FETCH_PER_PAGE_ON_ASSIGNMENTS_INDEX = 10
+        @count_to_make = ApplicationController::ASSIGNMENT_GROUPS_TO_FETCH_PER_PAGE_ON_ASSIGNMENTS_INDEX + 2
+
+        # we suspend these callbacks here to speed up the spec
+        AssignmentGroup.suspend_callbacks(kind: :save) do
+          Assignment.suspend_callbacks(kind: :save) do
+            @count_to_make.times do |i|
+              ag = @course.assignment_groups.create!(name: "AG #{i}")
+              ag.assignments.create!(context: @course, name: "assignment #{i}")
+            end
+          end
+        end
+        # by enrolling a new user it will do all the DuedateCacher stuff we skipped above
+        course_with_student_logged_in(course: @course)
+      end
+
+      it "should exhaust all pagination of assignment groups" do
+        get "/courses/#{@course.id}/assignments"
+        wait_for_no_such_element { f('[data-view="assignmentGroups"] .loadingIndicator') }
+        wait_for_ajaximations
+        # if there are more assignment_groups visible than we fetch per page,
+        # it must mean that it paginated succcessfully
+
+        count_to_expect = @count_to_make + 1 # add one for the @assignment created in the root `before` block
+        expect(ff('[data-view="assignmentGroups"] .assignment').length).to eq(count_to_expect)
+
+        move_to_click("label[for=show_by_type]")
+        expect(ff('[data-view="assignmentGroups"] .assignment_group').length).to eq(count_to_expect)
       end
     end
   end

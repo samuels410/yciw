@@ -20,7 +20,7 @@ import $ from 'jquery'
 import React from 'react'
 import PropTypes from 'prop-types'
 import I18n from 'i18n!course_nickname_edit'
-import TextInput from '@instructure/ui-forms/lib/components/TextInput'
+import {TextInput} from '@instructure/ui-forms'
 
 class CourseNicknameEdit extends React.Component {
   // ===============
@@ -41,6 +41,12 @@ class CourseNicknameEdit extends React.Component {
         ? ''
         : props.nicknameInfo.nickname
     this.state = {nickname, originalNickname: nickname}
+  }
+
+  componentDidMount() {
+    if (this.nicknameInput) {
+      this.nicknameInput.setAttribute('maxLength', '59')
+    }
   }
 
   // ===============

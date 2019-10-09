@@ -22,7 +22,7 @@ import PropTypes from 'prop-types'
 import OverrideStudentStore from '../due_dates/OverrideStudentStore'
 import Override from 'compiled/models/AssignmentOverride'
 import TokenInput, {Option as ComboboxOption} from 'react-tokeninput'
-import I18n from 'i18n!assignments'
+import I18n from 'i18n!DueDateTokenWrapper'
 import $ from 'jquery'
 import SearchHelpers from '../shared/helpers/searchHelpers'
 import DisabledTokenInput from '../due_dates/DisabledTokenInput'
@@ -230,14 +230,14 @@ class DueDateTokenWrapper extends React.Component {
   conditionalReleaseOptions = () => {
     if (!ENV.CONDITIONAL_RELEASE_SERVICE_ENABLED) return []
 
-    const selectable = _.contains(this.filteredTagsForType('noop'), Override.conditionalRelease)
+    const selectable = _.includes(this.filteredTagsForType('noop'), Override.conditionalRelease)
     return selectable ? [this.headerOption('conditional_release', Override.conditionalRelease)] : []
   }
 
   optionsForType = optionType => {
     const header = this.headerOption(optionType)
     const options = this.selectableOptions(optionType)
-    return _.any(options) ? _.union([header], options) : []
+    return _.some(options) ? _.union([header], options) : []
   }
 
   headerOption = (heading, set) => {

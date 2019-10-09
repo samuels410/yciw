@@ -27,8 +27,6 @@ const STUFF_TO_REV = [
   'public/fonts/**/*.{eot,otf,svg,ttf,woff,woff2}',
   'public/images/**/*',
 
-
-
   // These files have links in their css to images from their own dir
   'public/javascripts/vendor/slickgrid/images/*',
 
@@ -64,42 +62,17 @@ gulp.task('rev', () => {
     .pipe(rename(path => path.dirname = '/timezone'))
     .pipe(gulpTimezonePlugin())
 
-  const fontfaceObserverStream = gulp
-    .src('node_modules/fontfaceobserver/fontfaceobserver.standalone.js')
-    .pipe(gulpPlugins.rename('lato-fontfaceobserver.js'))
-    .pipe(gulpPlugins.insert.wrap(`
-      // Optimization for Repeat Views
-      if (sessionStorage.latoFontLoaded) {
-        document.documentElement.classList.remove('lato-font-not-loaded-yet')
-      } else {
-      `
-      ,
-      `
-        new FontFaceObserver('LatoWeb').load().then(function () {
-          sessionStorage.latoFontLoaded = true;
-          document.documentElement.classList.remove('lato-font-not-loaded-yet')
-        }, console.log.bind(console, 'Failed to load Lato font'));
-      }
-      `
-    ))
-
   return makeIE11Polyfill().then((IE11PolyfillCode) => {
 
     let stream = merge(
       timezonesStream,
       customTimezoneStream,
-      fontfaceObserverStream,
       gulpPlugins.file('ie11-polyfill.js', IE11PolyfillCode, { src: true }),
       gulp.src(STUFF_TO_REV, {
         base: 'public', // tell it to use the 'public' folder as the base of all paths
         follow: true // follow symlinks, so it picks up on images inside plugins and stuff
       }),
       gulp.src([
-        // on the mobile login screen, we don't load any of our webpack js bundles. but if they
-        // have a custom js file, we do load a raw copy of jquery for their custom js to use.
-        // See `include_account_js` in mobile_auth.html.erb
-        'node_modules/jquery/jquery.js',
-
         'node_modules/tinymce/skins/lightgray/**/*',
       ], {
         base: '.'
@@ -152,21 +125,29 @@ function makeIE11Polyfill () {
   const coreJsBuilder = require('core-js-builder')
 
   const FEATURES_TO_POLYFILL = [
-    'es6.promise',
-    'es6.object.assign',
-    'es6.object.is',
-    'es7.object.values',
-    'es7.object.entries',
-    'es6.array',
-    'es7.array.includes',
-    'es6.function',
-    'es6.string.ends-with',
-    'es6.string.includes',
-    'es6.string.starts-with',
-    'es6.string.iterator',
-    'es6.symbol',
-    'es6.map',
-    'es6.number'
+    'es.promise.finally',
+    'es.array',
+    'es.function',
+    'es.map',
+    'es.number',
+    'es.number.is-integer',
+    'es.object.assign',
+    'es.object.is',
+    'es.promise',
+    'es.set',
+    'es.string.code-point-at',
+    'es.string.ends-with',
+    'es.string.from-code-point',
+    'es.string.includes',
+    'es.string.iterator',
+    'es.string.repeat',
+    'es.string.starts-with',
+    'es.symbol',
+    'es.weak-set',
+    'es.array.includes',
+    'es.object.entries',
+    'es.object.values',
+    'web.dom.collections'
   ]
 
   return coreJsBuilder({
@@ -181,3 +162,4 @@ ${FEATURES_TO_POLYFILL}
 ${code}`
   )
 }
+

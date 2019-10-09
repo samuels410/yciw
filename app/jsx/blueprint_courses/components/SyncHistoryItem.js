@@ -16,12 +16,11 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-import I18n from 'i18n!blueprint_settings'
+import I18n from 'i18n!blueprint_settingsSyncHistoryItem'
 import React from 'react'
 import PropTypes from 'prop-types'
 
-import Heading from '@instructure/ui-elements/lib/components/Heading'
-import Text from '@instructure/ui-elements/lib/components/Text'
+import {Heading, Text} from '@instructure/ui-elements'
 import FriendlyDatetime from 'jsx/shared/FriendlyDatetime'
 import SyncChange from './SyncChange'
 

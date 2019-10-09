@@ -19,14 +19,11 @@
 import React from 'react'
 import PropTypes from 'prop-types'
 import axios from 'axios'
-import Modal, {ModalBody, ModalFooter} from '../shared/components/InstuiModal'
-import RadioInputGroup from '@instructure/ui-forms/lib/components/RadioInputGroup'
-import RadioInput from '@instructure/ui-forms/lib/components/RadioInput'
-import Button from '@instructure/ui-buttons/lib/components/Button'
-import Text from '@instructure/ui-elements/lib/components/Text'
-import Link from '@instructure/ui-elements/lib/components/Link'
-import ScreenReaderContent from '@instructure/ui-a11y/lib/components/ScreenReaderContent'
-import AccessibleContent from '@instructure/ui-a11y/lib/components/AccessibleContent'
+import Modal from '../shared/components/InstuiModal'
+import {RadioInputGroup, RadioInput} from '@instructure/ui-forms'
+import {Button} from '@instructure/ui-buttons'
+import {Text, Link} from '@instructure/ui-elements'
+import {ScreenReaderContent, AccessibleContent} from '@instructure/ui-a11y'
 import I18n from 'i18n!course_home_dialog'
 import plainStoreShape from '../shared/proptypes/plainStoreShape'
 
@@ -72,7 +69,7 @@ class CourseHomeDialog extends React.Component {
         <AccessibleContent>*</AccessibleContent>
         <ScreenReaderContent>
           <Link href={wikiUrl}>
-            {I18n.t('Front page must be set first')}
+            {I18n.t('Front Page must be set first')}
           </Link>
         </ScreenReaderContent>
       </span>
@@ -133,7 +130,7 @@ class CourseHomeDialog extends React.Component {
         onDismiss={this.props.onRequestClose}
         onClose={this.onClose}
       >
-        <ModalBody>
+        <Modal.Body>
           <div className="content-box-mini" style={{marginTop: '0'}}>
             <AccessibleContent>
               <Text weight="bold" size="small">
@@ -163,15 +160,17 @@ class CourseHomeDialog extends React.Component {
               null
             ) : (
               <div className="content-box-mini">
-              * <Link href={wikiUrl}>{I18n.t('Front page must be set first')}
-              </Link></div>
+              * <Button variant="link" href={wikiUrl} theme={{mediumPadding: '0', mediumHeight: '1.5rem'}}>
+                {I18n.t('Front Page must be set first')}
+                </Button>
+              </div>
             )
           }
 
-        </ModalBody>
+        </Modal.Body>
 
-        <ModalFooter>
-          <Button onClick={this.props.onRequestClose}>{I18n.t('Cancel')}</Button>&nbsp;
+        <Modal.Footer>
+          <Button onClick={this.props.onRequestClose} margin="0 x-small">{I18n.t('Cancel')}</Button>
           <Button
             onClick={this.onSubmit}
             disabled={this.props.isPublishing && this.state.selectedDefaultView === 'modules'}
@@ -179,7 +178,7 @@ class CourseHomeDialog extends React.Component {
           >{
             this.props.isPublishing ? I18n.t('Choose and Publish') : I18n.t('Save')
           }</Button>
-        </ModalFooter>
+        </Modal.Footer>
       </Modal>
     );
   }

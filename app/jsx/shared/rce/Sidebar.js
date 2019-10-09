@@ -17,18 +17,10 @@
  */
 
 import $ from 'jquery'
-// for legacy pathways
 import serviceRCELoader from './serviceRCELoader'
-import featureFlag from './featureFlag'
-import wikiSidebar from 'wikiSidebar'
 
 function loadServiceSidebar (callback) {
   serviceRCELoader.loadSidebarOnTarget($('#editor_tabs').get(0), callback)
-}
-
-function loadLegacySidebar (callback) {
-  wikiSidebar.init()
-  callback(wikiSidebar)
 }
 
 const Sidebar = {
@@ -60,11 +52,7 @@ const Sidebar = {
           this.show()
         }
       }
-      if (featureFlag()) {
-        loadServiceSidebar(callback)
-      } else {
-        loadLegacySidebar(callback)
-      }
+      loadServiceSidebar(callback)
     }
     this.subscriptions = subscriptions
   },

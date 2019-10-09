@@ -97,6 +97,16 @@ describe CommunicationChannel do
     expect(@cc.confirmation_code).not_to eql(old_cc)
   end
 
+  it "should not send two reset confirmation code" do
+    cc = communication_channel_model
+    enable_cache do
+      expect(cc).to receive(:set_confirmation_code).twice # once from create, once from first forgot
+      cc.forgot_password!
+      cc.forgot_password!
+      cc.forgot_password!
+    end
+  end
+
   it "should use a 15-digit confirmation code for default or email path_type settings" do
     communication_channel_model
     expect(@cc.path_type).to eql('email')
@@ -166,6 +176,25 @@ describe CommunicationChannel do
     expect(@cc1.position).to eql(2)
     @cc3.reload
     expect(@cc3.position).to eql(1)
+  end
+
+  it "should correctly count the number of confirmations sent" do
+    account = Account.create!
+    @u1 = User.create!
+    @cc1 = @u1.communication_channels.create!(:path => 'landong@instructure.com')
+    @cc1.send_confirmation!(account)
+    @cc1.send_confirmation!(account)
+    @cc1.send_confirmation!(account)
+    # Note this 4th one should not count up
+    @cc1.send_confirmation!(account)
+    @cc2 = @u1.communication_channels.create!(:path => 'steveb@instructure.com')
+    @cc2.send_confirmation!(account)
+    @cc2.send_confirmation!(account)
+    @cc3 = @u1.communication_channels.create!(:path => 'aaronh@instructure.com')
+    @cc3.send_confirmation!(account)
+    expect(@cc1.confirmation_sent_count).to eql(3)
+    expect(@cc2.confirmation_sent_count).to eql(2)
+    expect(@cc3.confirmation_sent_count).to eql(1)
   end
 
   context "can_notify?" do
@@ -580,6 +609,54 @@ describe CommunicationChannel do
       expect(Services::NotificationService).to receive(:process).never
       expect(cc).to receive(:send_otp_via_sms_gateway!).once
       cc.send_otp!('123456')
+    end
+  end
+
+  describe '#user_can_have_more_channels?' do
+    before(:each) do
+      @domain_root_account = Account.default
+      @user = User.create!
+    end
+
+    subject { CommunicationChannel.user_can_have_more_channels?(@user, @domain_root_account) }
+
+    it 'returns true if :max_communication_channels settings is not set' do
+      expect(subject).to be_truthy
+    end
+
+    describe 'when :max_communication_channels is set' do
+      before(:each) do
+        @domain_root_account.settings[:max_communication_channels] = 2
+        @domain_root_account.save!
+      end
+
+      it 'returns true if the current number of CCs is less then the setting' do
+        @user.communication_channels.create!(:path => 'cc1@test.com')
+        expect(subject).to be_truthy
+      end
+
+      describe 'when there are more CCs then the setting' do
+        before(:each) do
+          @cc1 = @user.communication_channels.create!(:path => 'cc1@test.com')
+          @cc2 = @user.communication_channels.create!(:path => 'cc2@test.com')
+        end
+
+        it 'returns false if the CCs are active' do
+          expect(subject).to be_falsey
+        end
+
+        it 'returns false if the CCs are retired and were recently created' do
+          @cc1.destroy!
+          @cc2.destroy!
+          expect(subject).to be_falsey
+        end
+
+        it 'returns true if the CCs are retired and not recently created' do
+          @cc1.update_columns(created_at: 1.day.ago)
+          @cc1.destroy!
+          expect(subject).to be_truthy
+        end
+      end
     end
   end
 end

@@ -105,6 +105,41 @@ describe PlannerController do
         expect(user_event['plannable']['title']).to eq 'user_event'
       end
 
+      it "should not show group events from inactive courses" do
+        @course1 = course_factory
+        @course2 = course_factory
+
+        @student1 = user_factory(active_all: true)
+        @student1_enrollment = course_with_student(course: @course1, user: @student1, active_all: true)
+        course_with_student(course: @course2, user: @student1, active_all: true)
+
+        @course1_group = @course1.groups.create(:name => "some group")
+        @course1_group.add_user(@student1)
+
+        @course2_group = @course2.groups.create(:name => "some other group")
+        @course2_group.add_user(@student1)
+
+        course1_event = @course1_group.calendar_events.create!(start_at: 2.days.from_now, title: 'user_event1')
+        course2_event = @course2_group.calendar_events.create!(start_at: 3.days.from_now, title: 'user_event2')
+
+        user_session(@student1)
+        get :index
+        response_json = json_parse(response.body)
+        expect(response_json.length).to eq 2
+        expect(response_json.find { |i| i['plannable_id'] == course1_event.id }).to_not be_nil
+        expect(response_json.find { |i| i['plannable_id'] == course2_event.id }).to_not be_nil
+
+        @student1_enrollment.deactivate
+        @student1 = User.find(@student1.id)
+        user_session(@student1)
+
+        get :index
+        response_json = json_parse(response.body)
+        expect(response_json.length).to eq 1
+        expect(response_json.find { |i| i['plannable_id'] == course1_event.id }).to be_nil
+        expect(response_json.find { |i| i['plannable_id'] == course2_event.id }).to_not be_nil
+      end
+
       it "shows the appropriate section-specific event for the user" do
         other_section = @course.course_sections.create!(name: 'Other Section')
         event = @course.calendar_events.build(:title => 'event', :child_event_data =>
@@ -297,6 +332,14 @@ describe PlannerController do
           expect(response_json.length).to be 16
         end
 
+        it "does not restrict user if session has appropriate permissions for public_to_auth course" do
+          @course.update_attribute(:is_public_to_auth_users, true)
+          user_factory(active_all: true)
+          user_session(@user)
+          get :index, params: {context_codes: [@course.asset_string]}
+          assert_status(200)
+        end
+
         it "should only return data from contexted courses if specified" do
           get :index, params: {context_codes: [@course1.asset_string]}
           response_json = json_parse(response.body)
@@ -331,6 +374,21 @@ describe PlannerController do
           expect(response_hash).to include(['wiki_page', @group_page.id])
           expect(response_hash).to include(['calendar_event', @group_event.id])
           expect(response_hash.length).to be 5
+        end
+
+        it "should return items from all context_codes specified for group and a different course" do
+          get :index, params: {context_codes: [@group.asset_string, @course2.asset_string]}
+          response_json = json_parse(response.body)
+          response_hash = response_json.map{|i| [i['plannable_type'], i['plannable_id']]}
+          # stuff from course
+          expect(response_hash).to include(['assignment', @assignment2.id])
+          expect(response_hash).to include(['planner_note', @course2_note.id])
+          expect(response_hash).to include(['calendar_event', @course2_event.id])
+          # stuff from group of other course
+          expect(response_hash).to include(['discussion_topic', @group_topic.id])
+          expect(response_hash).to include(['wiki_page', @group_page.id])
+          expect(response_hash).to include(['calendar_event', @group_event.id])
+          expect(response_hash.length).to be 6
         end
 
         it "returns unauthorized if the user doesn't have read permission on a context_code" do

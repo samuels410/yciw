@@ -1,3 +1,4 @@
+# frozen_string_literal: true
 #
 # Copyright (C) 2018 - present Instructure, Inc.
 #
@@ -27,10 +28,9 @@ module Types
     field :students, [UserType], null: true
 
     def students
-      Loaders::AssociationLoader.for(AssignmentOverride,
-                                     assignment_override_students: :user)
-      .load(override)
-      .then { override.assignment_override_students.map(&:user) }
+      load_association(:assignment_override_students).then do |override_students|
+        Loaders::AssociationLoader.for(AssignmentOverrideStudent, :user).load_many(override_students)
+      end
     end
   end
 
@@ -55,10 +55,9 @@ module Types
 
     implements GraphQL::Types::Relay::Node
     implements Interfaces::TimestampInterface
+    implements Interfaces::LegacyIDInterface
 
     alias :override :object
-
-    field :_id, ID, "legacy canvas id", method: :id, null: false
 
     field :assignment, AssignmentType, null: true
     def assignment

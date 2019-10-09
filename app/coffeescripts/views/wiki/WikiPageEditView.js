@@ -16,7 +16,6 @@
 // with this program. If not, see <http://www.gnu.org/licenses/>.
 
 import $ from 'jquery'
-import Backbone from 'Backbone'
 import React from 'react'
 import ReactDOM from 'react-dom'
 import RichContentEditor from 'jsx/shared/rce/RichContentEditor'
@@ -32,21 +31,6 @@ import 'jquery.instructure_date_and_time'
 RichContentEditor.preloadRemoteModule()
 
 export default class WikiPageEditView extends ValidatedFormView {
-  constructor(...args) {
-    {
-      // Hack: trick Babel/TypeScript into allowing this before super.
-      if (false) { super(); }
-      let thisFn = (() => { return this; }).toString();
-      let thisName = thisFn.slice(thisFn.indexOf('return') + 6 + 1, thisFn.lastIndexOf(';')).trim();
-      eval(`${thisName} = this;`);
-    }
-    this.onUnload = this.onUnload.bind(this)
-    this.toggleStudentTodo = this.toggleStudentTodo.bind(this)
-    this.handleStudentTodoUpdate = this.handleStudentTodoUpdate.bind(this)
-    this.renderStudentTodoAtDate = this.renderStudentTodoAtDate.bind(this)
-    this.onSaveFail = this.onSaveFail.bind(this)
-    super(...args)
-  }
 
   static initClass() {
     this.mixin({
@@ -90,6 +74,7 @@ export default class WikiPageEditView extends ValidatedFormView {
   toJSON() {
     let IS
     const json = super.toJSON(...arguments)
+    json.use_rce_enhancements = ENV.use_rce_enhancements
 
     json.IS = IS = {
       TEACHER_ROLE: false,
@@ -152,7 +137,7 @@ export default class WikiPageEditView extends ValidatedFormView {
     return this.$studentTodoAtContainer.toggle()
   }
 
-  handleStudentTodoUpdate(newDate) {
+  handleStudentTodoUpdate = (newDate) => {
     this.studentTodoAtDateValue = newDate
     return this.renderStudentTodoAtDate()
   }
@@ -194,7 +179,7 @@ export default class WikiPageEditView extends ValidatedFormView {
     RichContentEditor.loadNewEditor(this.$wikiPageBody, {focus: true, manageParent: true})
 
     this.checkUnsavedOnLeave = true
-    $(window).on('beforeunload', this.onUnload)
+    $(window).on('beforeunload', this.onUnload.bind(this))
 
     if (!this.firstRender) {
       this.firstRender = true

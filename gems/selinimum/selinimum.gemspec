@@ -16,8 +16,11 @@ Gem::Specification.new do |spec|
 
   # pin to exactly what canvas pins to, to avoid dependency issues when invoked
   # directly from bin/selinimize
-  spec.add_dependency "aws-sdk-s3", "1.19.0"
+  spec.add_dependency "aws-sdk-s3", "1.45.0"
   spec.add_dependency "activesupport", ">= 3.2"
   spec.add_dependency "activerecord", ">= 3.2"
   spec.add_dependency "globby", ">= 0.1.2"
+
+  spec.add_development_dependency "rspec"
+  spec.add_development_dependency "byebug"
 end

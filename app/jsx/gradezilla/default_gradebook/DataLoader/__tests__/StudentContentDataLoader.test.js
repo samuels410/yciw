@@ -21,8 +21,10 @@ import sinon from 'sinon'
 import FakeServer, {paramsFromRequest} from '../../../../__tests__/FakeServer'
 import * as FlashAlert from '../../../../shared/FlashAlert'
 import * as FinalGradeOverrideApi from '../../FinalGradeOverrides/FinalGradeOverrideApi'
+import CourseSettings from '../../CourseSettings'
 import FinalGradeOverrides from '../../FinalGradeOverrides'
 import StudentContentDataLoader from '../StudentContentDataLoader'
+import NaiveRequestDispatch from '../NaiveRequestDispatch'
 
 describe('Gradebook StudentContentDataLoader', () => {
   const exampleData = {
@@ -48,6 +50,7 @@ describe('Gradebook StudentContentDataLoader', () => {
   let gradebook
   let options
   let server
+  let dispatch
 
   function latchPromise() {
     const latch = {}
@@ -81,8 +84,14 @@ describe('Gradebook StudentContentDataLoader', () => {
       .returns(Promise.resolve({finalGradeOverrides: exampleData.finalGradeOverrides}))
 
     gradebook = {
-      finalGradeOverrides: new FinalGradeOverrides({})
+      course: {
+        id: '1201'
+      }
     }
+
+    gradebook.finalGradeOverrides = new FinalGradeOverrides(gradebook)
+    gradebook.courseSettings = new CourseSettings(gradebook, {allowFinalGradeOverride: true})
+
     sinon.stub(gradebook.finalGradeOverrides, 'setGrades')
 
     options = {
@@ -96,6 +105,8 @@ describe('Gradebook StudentContentDataLoader', () => {
       submissionsChunkSize: 2,
       submissionsUrl: urls.submissions
     }
+
+    dispatch = new NaiveRequestDispatch()
   })
 
   afterEach(() => {
@@ -105,7 +116,7 @@ describe('Gradebook StudentContentDataLoader', () => {
 
   describe('.load()', () => {
     async function load(studentIds) {
-      dataLoader = new StudentContentDataLoader(options)
+      dataLoader = new StudentContentDataLoader(options, dispatch)
       await dataLoader.load(studentIds || exampleData.studentIds)
     }
 
@@ -205,6 +216,13 @@ describe('Gradebook StudentContentDataLoader', () => {
         expect(params.response_fields).toContain('cached_due_date')
       })
 
+      it('includes "posted_at" in response fields', async () => {
+        await load()
+        const submissionsRequest = server.findRequest(urls.submissions)
+        const params = paramsFromRequest(submissionsRequest)
+        expect(params.response_fields).toContain('posted_at')
+      })
+
       it('calls the submissions chunk callback for each chunk of submissions', async () => {
         const submissionChunks = []
         options.onSubmissionsChunkLoaded = submissionChunks.push.bind(submissionChunks)
@@ -245,17 +263,13 @@ describe('Gradebook StudentContentDataLoader', () => {
     })
 
     describe('loading final grade overrides', () => {
-      beforeEach(() => {
-        options.getFinalGradeOverrides = true
-      })
-
       it('optionally requests final grade overrides', async () => {
         await load()
         expect(FinalGradeOverrideApi.getFinalGradeOverrides.callCount).toEqual(1)
       })
 
       it('optionally does not request final grade overrides', async () => {
-        options.getFinalGradeOverrides = false
+        gradebook.courseSettings = new CourseSettings(gradebook, {allowFinalGradeOverride: false})
         await load()
         expect(FinalGradeOverrideApi.getFinalGradeOverrides.callCount).toEqual(0)
       })
@@ -322,14 +336,14 @@ describe('Gradebook StudentContentDataLoader', () => {
 
         server
           .for(urls.submissions, {student_ids: exampleData.studentIds.slice(0, 2)})
-          .beforeRespond(async request => {
+          .beforeRespond(request => {
             events.push(`request submissions:${joinRequestIds(request, 'student_ids')}`)
           })
           .afterRespond(submissionPromises[0].resolve)
           .respond([{status: 200, body: exampleData.submissions.slice(0, 1)}])
         server
           .for(urls.submissions, {student_ids: exampleData.studentIds.slice(2, 3)})
-          .beforeRespond(async request => {
+          .beforeRespond(request => {
             events.push(`request submissions:${joinRequestIds(request, 'student_ids')}`)
           })
           .afterRespond(submissionPromises[1].resolve)
@@ -413,7 +427,7 @@ describe('Gradebook StudentContentDataLoader', () => {
 
         server
           .for(urls.submissions, {student_ids: exampleData.studentIds.slice(0, 2)})
-          .beforeRespond(async request => {
+          .beforeRespond(request => {
             events.push(`request submissions page ${getPage(request)}`)
           })
           .afterRespond(submissionPromises[0].resolve)
@@ -424,7 +438,7 @@ describe('Gradebook StudentContentDataLoader', () => {
           ])
         server
           .for(urls.submissions, {student_ids: exampleData.studentIds.slice(2, 3)})
-          .beforeRespond(async request => {
+          .beforeRespond(request => {
             events.push(`request submissions:${joinRequestIds(request, 'student_ids')}`)
           })
           .afterRespond(submissionPromises[1].resolve)

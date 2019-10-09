@@ -17,7 +17,8 @@
  */
 
 import ReactDOM from 'react-dom'
-import {createGradebook, setFixtureHtml} from 'jsx/gradezilla/default_gradebook/__tests__/GradebookSpecHelper'
+
+import {createGradebook} from 'jsx/gradezilla/default_gradebook/__tests__/GradebookSpecHelper'
 import AssignmentColumnHeaderRenderer from 'jsx/gradezilla/default_gradebook/GradebookGrid/headers/AssignmentColumnHeaderRenderer'
 
 /* eslint-disable qunit/no-identical-names */
@@ -27,6 +28,7 @@ QUnit.module('GradebookGrid AssignmentColumnHeaderRenderer', suiteHooks => {
   let assignment
   let column
   let component
+  let gradebookOptions
   let renderer
   let student
   let submission
@@ -47,9 +49,18 @@ QUnit.module('GradebookGrid AssignmentColumnHeaderRenderer', suiteHooks => {
   suiteHooks.beforeEach(() => {
     $container = document.createElement('div')
     document.body.appendChild($container)
-    setFixtureHtml($container)
 
-    gradebook = createGradebook()
+    gradebookOptions = {
+      post_policies_enabled: false
+    }
+  })
+
+  suiteHooks.afterEach(() => {
+    $container.remove()
+  })
+
+  function buildGradebook() {
+    gradebook = createGradebook(gradebookOptions)
     sinon.stub(gradebook, 'saveSettings')
 
     assignment = {
@@ -63,6 +74,7 @@ QUnit.module('GradebookGrid AssignmentColumnHeaderRenderer', suiteHooks => {
       name: 'Math Assignment',
       omit_from_final_grade: false,
       only_visible_to_overrides: false,
+      post_manually: false,
       published: true,
       submission_types: ['online_text_entry']
     }
@@ -72,9 +84,11 @@ QUnit.module('GradebookGrid AssignmentColumnHeaderRenderer', suiteHooks => {
       assignment_id: '2301',
       excused: false,
       late_policy_status: null,
+      posted_at: null,
       score: null,
       submitted_at: null,
-      user_id: '441'
+      user_id: '441',
+      workflow_state: 'unsubmitted'
     }
 
     student = {
@@ -82,7 +96,8 @@ QUnit.module('GradebookGrid AssignmentColumnHeaderRenderer', suiteHooks => {
       assignment_2301: submission,
       isInactive: false,
       name: 'Guy B. Studying',
-      enrollments: [{type: 'StudentEnrollment', user_id: '441', course_section_id: '1'}]
+      enrollments: [{type: 'StudentEnrollment', user_id: '441', course_section_id: '1'}],
+      sortable_name: 'Studying, Guy B.'
     }
 
     gradebook.gotAllAssignmentGroups([
@@ -91,14 +106,11 @@ QUnit.module('GradebookGrid AssignmentColumnHeaderRenderer', suiteHooks => {
 
     column = {id: gradebook.getAssignmentColumnId('2301'), assignmentId: '2301'}
     renderer = new AssignmentColumnHeaderRenderer(gradebook)
-  })
-
-  suiteHooks.afterEach(() => {
-    $container.remove()
-  })
+  }
 
   QUnit.module('#render()', () => {
     test('renders the AssignmentColumnHeader to the given container node', () => {
+      buildGradebook()
       render()
       ok(
         $container.innerText.includes('Math Assignment'),
@@ -107,11 +119,13 @@ QUnit.module('GradebookGrid AssignmentColumnHeaderRenderer', suiteHooks => {
     })
 
     test('calls the "ref" callback option with the component reference', () => {
+      buildGradebook()
       render()
       equal(component.constructor.name, 'AssignmentColumnHeader')
     })
 
     test('includes a callback for adding elements to the Gradebook KeyboardNav', () => {
+      buildGradebook()
       sinon.stub(gradebook.keyboardNav, 'addGradebookElement')
       render()
       component.props.addGradebookElement()
@@ -119,67 +133,86 @@ QUnit.module('GradebookGrid AssignmentColumnHeaderRenderer', suiteHooks => {
     })
 
     test('includes the assignment course id', () => {
+      buildGradebook()
       render()
       strictEqual(component.props.assignment.courseId, '1201')
     })
 
     test('includes the assignment html url', () => {
+      buildGradebook()
       render()
       equal(component.props.assignment.htmlUrl, '/assignments/2301')
     })
 
     test('includes the assignment id', () => {
+      buildGradebook()
       render()
       strictEqual(component.props.assignment.id, '2301')
     })
 
     test('includes the assignment muted status when true', () => {
+      buildGradebook()
       assignment.muted = true
       render()
       strictEqual(component.props.assignment.muted, true)
     })
 
     test('includes the assignment muted status when false', () => {
+      buildGradebook()
       assignment.muted = false
       render()
       strictEqual(component.props.assignment.muted, false)
     })
 
     test('includes the assignment name', () => {
+      buildGradebook()
       render()
       equal(component.props.assignment.name, 'Math Assignment')
     })
 
     test('includes the assignment points possible', () => {
+      buildGradebook()
       assignment.points_possible = 10
       render()
       strictEqual(component.props.assignment.pointsPossible, 10)
     })
 
     test('includes the assignment published status for a published assignment', () => {
+      buildGradebook()
       assignment.published = true
       render()
       strictEqual(component.props.assignment.published, true)
     })
 
     test('includes the assignment published status for an unpublished assignment', () => {
+      buildGradebook()
       assignment.published = false
       render()
       strictEqual(component.props.assignment.published, false)
     })
 
     test('includes the assignment submission types', () => {
+      buildGradebook()
       render()
       deepEqual(component.props.assignment.submissionTypes, ['online_text_entry'])
     })
 
+    test('includes the assignment post manually property', () => {
+      buildGradebook()
+      assignment.post_manually = true
+      render()
+      strictEqual(component.props.assignment.postManually, true)
+    })
+
     test('includes the curve grades action', () => {
+      buildGradebook()
       sinon.spy(gradebook, 'getCurveGradesAction')
       render()
       equal(component.props.curveGradesAction, gradebook.getCurveGradesAction.returnValues[0])
     })
 
     test('includes the download submissions action', () => {
+      buildGradebook()
       sinon.spy(gradebook, 'getDownloadSubmissionsAction')
       render()
       equal(
@@ -189,53 +222,62 @@ QUnit.module('GradebookGrid AssignmentColumnHeaderRenderer', suiteHooks => {
     })
 
     test('the anonymizeStudents prop is `true` when the assignment is anonymous', () => {
+      buildGradebook()
       assignment.anonymize_students = true
       render()
       strictEqual(component.props.assignment.anonymizeStudents, true)
     })
 
     test('the anonymizeStudents prop is `false` when the assignment is not anonymous', () => {
+      buildGradebook()
       render()
       strictEqual(component.props.assignment.anonymizeStudents, false)
     })
 
     test('shows the "enter grades as" setting for a "points" assignment', () => {
+      buildGradebook()
       assignment.grading_type = 'points'
       render()
       strictEqual(component.props.enterGradesAsSetting.hidden, false)
     })
 
     test('shows the "enter grades as" setting for a "percent" assignment', () => {
+      buildGradebook()
       assignment.grading_type = 'percent'
       render()
       strictEqual(component.props.enterGradesAsSetting.hidden, false)
     })
 
     test('shows the "enter grades as" setting for a "letter grade" assignment', () => {
+      buildGradebook()
       assignment.grading_type = 'letter_grade'
       render()
       strictEqual(component.props.enterGradesAsSetting.hidden, false)
     })
 
     test('shows the "enter grades as" setting for a "GPA scale" assignment', () => {
+      buildGradebook()
       assignment.grading_type = 'gpa_scale'
       render()
       strictEqual(component.props.enterGradesAsSetting.hidden, false)
     })
 
     test('hides the "enter grades as" setting for a "pass/fail" assignment', () => {
+      buildGradebook()
       assignment.grading_type = 'pass_fail'
       render()
       strictEqual(component.props.enterGradesAsSetting.hidden, true)
     })
 
     test('hides the "enter grades as" setting for a "not graded" assignment', () => {
+      buildGradebook()
       assignment.grading_type = 'not_graded'
       render()
       strictEqual(component.props.enterGradesAsSetting.hidden, true)
     })
 
     test('includes a callback for changing the "enter grades as" setting', () => {
+      buildGradebook()
       sinon.stub(gradebook, 'updateEnterGradesAsSetting')
       render()
       component.props.enterGradesAsSetting.onSelect('percent')
@@ -243,6 +285,7 @@ QUnit.module('GradebookGrid AssignmentColumnHeaderRenderer', suiteHooks => {
     })
 
     test('includes the assignment id when changing the "enter grades as" setting', () => {
+      buildGradebook()
       sinon.stub(gradebook, 'updateEnterGradesAsSetting')
       render()
       component.props.enterGradesAsSetting.onSelect('percent')
@@ -251,6 +294,7 @@ QUnit.module('GradebookGrid AssignmentColumnHeaderRenderer', suiteHooks => {
     })
 
     test('includes the new setting when changing the "enter grades as" setting', () => {
+      buildGradebook()
       sinon.stub(gradebook, 'updateEnterGradesAsSetting')
       render()
       component.props.enterGradesAsSetting.onSelect('percent')
@@ -259,42 +303,224 @@ QUnit.module('GradebookGrid AssignmentColumnHeaderRenderer', suiteHooks => {
     })
 
     test('uses the current "enter grades as" setting for the assignment', () => {
+      buildGradebook()
       gradebook.setEnterGradesAsSetting('2301', 'percent')
       render()
       equal(component.props.enterGradesAsSetting.selected, 'percent')
     })
 
     test('hides the "enter grades as" grading scheme option for a "points" assignment', () => {
+      buildGradebook()
       assignment.grading_type = 'points'
       render()
       strictEqual(component.props.enterGradesAsSetting.showGradingSchemeOption, false)
     })
 
     test('hides the "enter grades as" grading scheme option for a "percent" assignment', () => {
+      buildGradebook()
       assignment.grading_type = 'percent'
       render()
       strictEqual(component.props.enterGradesAsSetting.showGradingSchemeOption, false)
     })
 
     test('shows the "enter grades as" grading scheme option for a "letter grade" assignment', () => {
+      buildGradebook()
       assignment.grading_type = 'letter_grade'
       render()
       strictEqual(component.props.enterGradesAsSetting.showGradingSchemeOption, true)
     })
 
     test('shows the "enter grades as" grading scheme option for a "GPA scale" assignment', () => {
+      buildGradebook()
       assignment.grading_type = 'gpa_scale'
       render()
       strictEqual(component.props.enterGradesAsSetting.showGradingSchemeOption, true)
     })
 
     test('includes the mute assignment action', () => {
+      buildGradebook()
       sinon.spy(gradebook, 'getMuteAssignmentAction')
       render()
       equal(component.props.muteAssignmentAction, gradebook.getMuteAssignmentAction.returnValues[0])
     })
 
+    QUnit.module('"Post grades" action', () => {
+      QUnit.module('when Post Policies is enabled', contextHooks => {
+        let onSelectCallback
+
+        contextHooks.beforeEach(() => {
+          gradebookOptions.post_policies_enabled = true
+          onSelectCallback = sinon.spy()
+          buildGradebook()
+
+          sinon.stub(gradebook.postPolicies, 'showPostAssignmentGradesTray')
+        })
+
+        test('sets featureEnabled to true', () => {
+          gradebook.gotChunkOfStudents([student])
+          render()
+          strictEqual(component.props.postGradesAction.featureEnabled, true)
+        })
+
+        test('sets hasGrades to true if at least one graded submission is graded', () => {
+          submission.workflow_state = 'graded'
+          submission.score = 1
+          gradebook.gotChunkOfStudents([student])
+          render()
+          strictEqual(component.props.postGradesAction.hasGrades, true)
+        })
+
+        test('sets hasGrades to false if no submissions are graded', () => {
+          gradebook.gotChunkOfStudents([student])
+          render()
+          strictEqual(component.props.postGradesAction.hasGrades, false)
+        })
+
+        test('sets hasGradesToPost to true if at least one graded submission has no posted_at date', () => {
+          submission.workflow_state = 'graded'
+          submission.score = 1
+          gradebook.gotChunkOfStudents([student])
+          render()
+          strictEqual(component.props.postGradesAction.hasGradesToPost, true)
+        })
+
+        test('sets hasGradesToPost to false if all submissions have a posted_at date', () => {
+          submission.posted_at = new Date('Wed Oct 1 1997')
+
+          gradebook.gotChunkOfStudents([student])
+          render()
+          strictEqual(component.props.postGradesAction.hasGradesToPost, false)
+        })
+
+        test('includes a callback to show the "Post Assignment Grades" tray', () => {
+          gradebook.gotChunkOfStudents([student])
+          render()
+          component.props.postGradesAction.onSelect(onSelectCallback)
+          strictEqual(gradebook.postPolicies.showPostAssignmentGradesTray.callCount, 1)
+        })
+
+        test('includes the assignment id when showing the "Post Assignment Grades" tray', () => {
+          gradebook.gotChunkOfStudents([student])
+          render()
+          component.props.postGradesAction.onSelect(onSelectCallback)
+          const [{assignmentId}] = gradebook.postPolicies.showPostAssignmentGradesTray.lastCall.args
+          strictEqual(assignmentId, '2301')
+        })
+
+        test('includes the `onSelect` callback when showing the "Post Assignment Grades" tray', () => {
+          gradebook.gotChunkOfStudents([student])
+          render()
+          component.props.postGradesAction.onSelect(onSelectCallback)
+          const [{onExited}] = gradebook.postPolicies.showPostAssignmentGradesTray.lastCall.args
+          strictEqual(onExited, onSelectCallback)
+        })
+      })
+
+      test('sets featureEnabled to false when Post Policies is not enabled', () => {
+        gradebookOptions.post_policies_enabled = false
+        buildGradebook()
+        render()
+        strictEqual(component.props.postGradesAction.featureEnabled, false)
+      })
+    })
+
+    QUnit.module('"Hide grades" action', hooks => {
+      let onSelectCallback
+
+      hooks.beforeEach(() => {
+        gradebookOptions.post_policies_enabled = true
+        onSelectCallback = sinon.spy()
+        buildGradebook()
+        submission.posted_at = new Date('Wed Oct 1 1997')
+
+        sinon.stub(gradebook.postPolicies, 'showHideAssignmentGradesTray')
+      })
+
+      test('sets hasGrades to true if at least one graded submission is graded', () => {
+        submission.workflow_state = 'graded'
+        submission.score = 1
+        gradebook.gotChunkOfStudents([student])
+        render()
+        strictEqual(component.props.hideGradesAction.hasGrades, true)
+      })
+
+      test('sets hasGrades to false if no submissions are graded', () => {
+        gradebook.gotChunkOfStudents([student])
+        render()
+        strictEqual(component.props.hideGradesAction.hasGrades, false)
+      })
+
+      test('sets hasGradesToHide to true if at least one submission has a posted_at date', () => {
+        gradebook.gotChunkOfStudents([student])
+        render()
+        strictEqual(component.props.hideGradesAction.hasGradesToHide, true)
+      })
+
+      test('sets hasGradesToHide to false if no submission has a posted_at date', () => {
+        submission.posted_at = null
+        gradebook.gotChunkOfStudents([student])
+        render()
+        strictEqual(component.props.hideGradesAction.hasGradesToHide, false)
+      })
+
+      test('includes a callback to show the "Hide Assignment Grades" tray', () => {
+        gradebook.gotChunkOfStudents([student])
+        render()
+        component.props.hideGradesAction.onSelect(onSelectCallback)
+        strictEqual(gradebook.postPolicies.showHideAssignmentGradesTray.callCount, 1)
+      })
+
+      test('includes the assignment id when showing the "Hide Assignment Grades" tray', () => {
+        gradebook.gotChunkOfStudents([student])
+        render()
+        component.props.hideGradesAction.onSelect(onSelectCallback)
+        const [{assignmentId}] = gradebook.postPolicies.showHideAssignmentGradesTray.lastCall.args
+        strictEqual(assignmentId, '2301')
+      })
+
+      test('includes the `onSelect` callback when showing the "Hide Assignment Grades" tray', () => {
+        gradebook.gotChunkOfStudents([student])
+        render()
+        component.props.hideGradesAction.onSelect(onSelectCallback)
+        const [{onExited}] = gradebook.postPolicies.showHideAssignmentGradesTray.lastCall.args
+        strictEqual(onExited, onSelectCallback)
+      })
+    })
+
+    QUnit.module('"Grade Posting Policy" action', hooks => {
+      let onSelectCallback
+
+      hooks.beforeEach(() => {
+        gradebookOptions.post_policies_enabled = true
+        onSelectCallback = sinon.spy()
+        buildGradebook()
+        render()
+
+        sinon.stub(gradebook.postPolicies, 'showAssignmentPostingPolicyTray')
+      })
+
+      test('includes a callback to show the "Grade Posting Policy" tray', () => {
+        component.props.showGradePostingPolicyAction.onSelect(onSelectCallback)
+        strictEqual(gradebook.postPolicies.showAssignmentPostingPolicyTray.callCount, 1)
+      })
+
+      test('includes the assignment id when showing the "Grade Posting Policy" tray', () => {
+        component.props.showGradePostingPolicyAction.onSelect(onSelectCallback)
+        const [
+          {assignmentId}
+        ] = gradebook.postPolicies.showAssignmentPostingPolicyTray.lastCall.args
+        strictEqual(assignmentId, '2301')
+      })
+
+      test('includes the `onSelect` callback when showing the "Grade Posting Policy" tray', () => {
+        component.props.showGradePostingPolicyAction.onSelect(onSelectCallback)
+        const [{onExited}] = gradebook.postPolicies.showAssignmentPostingPolicyTray.lastCall.args
+        strictEqual(onExited, onSelectCallback)
+      })
+    })
+
     test('student submissions for the assignment include "excused"', () => {
+      buildGradebook()
       submission.excused = true
       gradebook.gotChunkOfStudents([student])
       render()
@@ -303,6 +529,7 @@ QUnit.module('GradebookGrid AssignmentColumnHeaderRenderer', suiteHooks => {
     })
 
     test('"excused" is false if the student does not have a submission', () => {
+      buildGradebook()
       submission.excused = true
       delete student.assignment_2301
       gradebook.gotChunkOfStudents([student])
@@ -312,6 +539,7 @@ QUnit.module('GradebookGrid AssignmentColumnHeaderRenderer', suiteHooks => {
     })
 
     test('student submissions for the assignment include "latePolicyStatus"', () => {
+      buildGradebook()
       submission.late_policy_status = 'missing'
       gradebook.gotChunkOfStudents([student])
       render()
@@ -320,6 +548,7 @@ QUnit.module('GradebookGrid AssignmentColumnHeaderRenderer', suiteHooks => {
     })
 
     test('"latePolicyStatus" is null if the student does not have a submission', () => {
+      buildGradebook()
       submission.late_policy_status = 'missing'
       delete student.assignment_2301
       gradebook.gotChunkOfStudents([student])
@@ -329,6 +558,7 @@ QUnit.module('GradebookGrid AssignmentColumnHeaderRenderer', suiteHooks => {
     })
 
     test('student submissions for the assignment include "score"', () => {
+      buildGradebook()
       submission.score = 9
       gradebook.gotChunkOfStudents([student])
       render()
@@ -337,6 +567,7 @@ QUnit.module('GradebookGrid AssignmentColumnHeaderRenderer', suiteHooks => {
     })
 
     test('"score" is null if the student does not have a submission', () => {
+      buildGradebook()
       submission.score = 9
       delete student.assignment_2301
       gradebook.gotChunkOfStudents([student])
@@ -346,6 +577,7 @@ QUnit.module('GradebookGrid AssignmentColumnHeaderRenderer', suiteHooks => {
     })
 
     test('student submissions for the assignment include "submittedAt"', () => {
+      buildGradebook()
       const submittedAt = new Date('Mon Nov 3 2016')
       submission.submitted_at = submittedAt
       gradebook.gotChunkOfStudents([student])
@@ -355,6 +587,7 @@ QUnit.module('GradebookGrid AssignmentColumnHeaderRenderer', suiteHooks => {
     })
 
     test('"submittedAt" is null if the student does not have a submission', () => {
+      buildGradebook()
       submission.submittedAt = new Date('Mon Nov 3 2016')
       delete student.assignment_2301
       gradebook.gotChunkOfStudents([student])
@@ -363,7 +596,28 @@ QUnit.module('GradebookGrid AssignmentColumnHeaderRenderer', suiteHooks => {
       strictEqual(studentProp.submission.submittedAt, null)
     })
 
+    test('student submissions for the assignment include "postedAt"', () => {
+      buildGradebook()
+      const postedAt = new Date('Mon Nov 3 2016')
+      submission.posted_at = postedAt
+      gradebook.gotChunkOfStudents([student])
+      render()
+      const studentProp = component.props.students.find(s => s.id === student.id)
+      strictEqual(studentProp.submission.postedAt, postedAt)
+    })
+
+    test('"postedAt" is null if the student does not have a submission', () => {
+      buildGradebook()
+      submission.postedAt = new Date('Mon Nov 3 2016')
+      delete student.assignment_2301
+      gradebook.gotChunkOfStudents([student])
+      render()
+      const studentProp = component.props.students.find(s => s.id === student.id)
+      strictEqual(studentProp.submission.postedAt, null)
+    })
+
     test('includes a callback for keyDown events', () => {
+      buildGradebook()
       sinon.stub(gradebook, 'handleHeaderKeyDown')
       render()
       component.props.onHeaderKeyDown({})
@@ -371,6 +625,7 @@ QUnit.module('GradebookGrid AssignmentColumnHeaderRenderer', suiteHooks => {
     })
 
     test('calls Gradebook#handleHeaderKeyDown with a given event', () => {
+      buildGradebook()
       const exampleEvent = new Event('example')
       sinon.stub(gradebook, 'handleHeaderKeyDown')
       render()
@@ -380,6 +635,7 @@ QUnit.module('GradebookGrid AssignmentColumnHeaderRenderer', suiteHooks => {
     })
 
     test('calls Gradebook#handleHeaderKeyDown with a given event', () => {
+      buildGradebook()
       sinon.stub(gradebook, 'handleHeaderKeyDown')
       render()
       component.props.onHeaderKeyDown({})
@@ -388,6 +644,7 @@ QUnit.module('GradebookGrid AssignmentColumnHeaderRenderer', suiteHooks => {
     })
 
     test('includes a callback for closing the column header menu', () => {
+      buildGradebook()
       const clock = sinon.useFakeTimers()
       sinon.stub(gradebook, 'handleColumnHeaderMenuClose')
       render()
@@ -401,6 +658,7 @@ QUnit.module('GradebookGrid AssignmentColumnHeaderRenderer', suiteHooks => {
       // The React render lifecycle is not yet complete at this time.
       // The callback must begin after React finishes to avoid conflicts.
       const clock = sinon.useFakeTimers()
+      buildGradebook()
       sinon.stub(gradebook, 'handleColumnHeaderMenuClose')
       render()
       component.props.onMenuDismiss()
@@ -409,6 +667,7 @@ QUnit.module('GradebookGrid AssignmentColumnHeaderRenderer', suiteHooks => {
     })
 
     test('includes a callback for removing elements to the Gradebook KeyboardNav', () => {
+      buildGradebook()
       sinon.stub(gradebook.keyboardNav, 'removeGradebookElement')
       render()
       component.props.removeGradebookElement()
@@ -416,6 +675,7 @@ QUnit.module('GradebookGrid AssignmentColumnHeaderRenderer', suiteHooks => {
     })
 
     test('includes the reupload submissions action', () => {
+      buildGradebook()
       sinon.spy(gradebook, 'getReuploadSubmissionsAction')
       render()
       equal(
@@ -425,6 +685,7 @@ QUnit.module('GradebookGrid AssignmentColumnHeaderRenderer', suiteHooks => {
     })
 
     test('includes the set default grade action', () => {
+      buildGradebook()
       sinon.spy(gradebook, 'getSetDefaultGradeAction')
       render()
       equal(
@@ -434,23 +695,27 @@ QUnit.module('GradebookGrid AssignmentColumnHeaderRenderer', suiteHooks => {
     })
 
     test('shows the "unposted" menu setting when "new gradebook development" is enabled', () => {
+      buildGradebook()
       gradebook.options.new_gradebook_development_enabled = true
       render()
       strictEqual(component.props.showUnpostedMenuItem, true)
     })
 
     test('does not show the "unposted" menu setting when "new gradebook development" is disabled', () => {
+      buildGradebook()
       gradebook.options.new_gradebook_development_enabled = false
       render()
       strictEqual(component.props.showUnpostedMenuItem, false)
     })
 
     test('includes the "Sort by" direction setting', () => {
+      buildGradebook()
       render()
       equal(component.props.sortBySetting.direction, 'ascending')
     })
 
     test('sets the "Sort by" disabled setting to true when assignments are not loaded', () => {
+      buildGradebook()
       gradebook.setAssignmentsLoaded(false)
       gradebook.setStudentsLoaded(true)
       gradebook.setSubmissionsLoaded(true)
@@ -459,6 +724,7 @@ QUnit.module('GradebookGrid AssignmentColumnHeaderRenderer', suiteHooks => {
     })
 
     test('sets the "Sort by" disabled setting to true when anonymize_students is true', () => {
+      buildGradebook()
       gradebook.setAssignmentsLoaded(true)
       gradebook.setStudentsLoaded(true)
       gradebook.setSubmissionsLoaded(true)
@@ -468,6 +734,7 @@ QUnit.module('GradebookGrid AssignmentColumnHeaderRenderer', suiteHooks => {
     })
 
     test('sets the "Sort by" disabled setting to true when students are not loaded', () => {
+      buildGradebook()
       gradebook.setAssignmentsLoaded(true)
       gradebook.setStudentsLoaded(false)
       gradebook.setSubmissionsLoaded(true)
@@ -476,6 +743,7 @@ QUnit.module('GradebookGrid AssignmentColumnHeaderRenderer', suiteHooks => {
     })
 
     test('sets the "Sort by" disabled setting to true when submissions are not loaded', () => {
+      buildGradebook()
       gradebook.setAssignmentsLoaded(true)
       gradebook.setStudentsLoaded(true)
       gradebook.setSubmissionsLoaded(false)
@@ -484,6 +752,7 @@ QUnit.module('GradebookGrid AssignmentColumnHeaderRenderer', suiteHooks => {
     })
 
     test('sets the "Sort by" disabled setting to false when necessary data are loaded', () => {
+      buildGradebook()
       gradebook.setAssignmentsLoaded(true)
       gradebook.setStudentsLoaded(true)
       gradebook.setSubmissionsLoaded(true)
@@ -492,18 +761,21 @@ QUnit.module('GradebookGrid AssignmentColumnHeaderRenderer', suiteHooks => {
     })
 
     test('sets the "Sort by" isSortColumn setting to true when sorting by this column', () => {
+      buildGradebook()
       gradebook.setSortRowsBySetting('assignment_2301', 'grade', 'ascending')
       render()
       strictEqual(component.props.sortBySetting.isSortColumn, true)
     })
 
     test('sets the "Sort by" isSortColumn setting to false when not sorting by this column', () => {
+      buildGradebook()
       gradebook.setSortRowsBySetting('student', 'sortable_name', 'ascending')
       render()
       strictEqual(component.props.sortBySetting.isSortColumn, false)
     })
 
     test('includes the onSortByGradeAscending callback', () => {
+      buildGradebook()
       gradebook.setSortRowsBySetting('assignment_2301', 'grade', 'ascending')
       render()
       component.props.sortBySetting.onSortByGradeAscending()
@@ -512,6 +784,7 @@ QUnit.module('GradebookGrid AssignmentColumnHeaderRenderer', suiteHooks => {
     })
 
     test('includes the onSortByGradeDescending callback', () => {
+      buildGradebook()
       gradebook.setSortRowsBySetting('assignment_2301', 'grade', 'ascending')
       render()
       component.props.sortBySetting.onSortByGradeDescending()
@@ -520,6 +793,7 @@ QUnit.module('GradebookGrid AssignmentColumnHeaderRenderer', suiteHooks => {
     })
 
     test('includes the onSortByLate callback', () => {
+      buildGradebook()
       gradebook.setSortRowsBySetting('assignment_2301', 'grade', 'ascending')
       render()
       component.props.sortBySetting.onSortByLate()
@@ -528,6 +802,7 @@ QUnit.module('GradebookGrid AssignmentColumnHeaderRenderer', suiteHooks => {
     })
 
     test('includes the onSortByMissing callback', () => {
+      buildGradebook()
       gradebook.setSortRowsBySetting('assignment_2301', 'grade', 'ascending')
       render()
       component.props.sortBySetting.onSortByMissing()
@@ -536,6 +811,7 @@ QUnit.module('GradebookGrid AssignmentColumnHeaderRenderer', suiteHooks => {
     })
 
     test('includes the onSortByUnposted callback', () => {
+      buildGradebook()
       gradebook.setSortRowsBySetting('assignment_2301', 'grade', 'ascending')
       render()
       component.props.sortBySetting.onSortByUnposted()
@@ -544,6 +820,7 @@ QUnit.module('GradebookGrid AssignmentColumnHeaderRenderer', suiteHooks => {
     })
 
     test('includes the "Sort by" settingKey', () => {
+      buildGradebook()
       gradebook.setSortRowsBySetting('assignment_2301', 'grade', 'ascending')
       render()
       equal(component.props.sortBySetting.settingKey, 'grade')
@@ -552,6 +829,7 @@ QUnit.module('GradebookGrid AssignmentColumnHeaderRenderer', suiteHooks => {
 
   QUnit.module('#destroy()', () => {
     test('unmounts the component', () => {
+      buildGradebook()
       render()
       renderer.destroy({}, $container)
       const removed = ReactDOM.unmountComponentAtNode($container)

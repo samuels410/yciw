@@ -18,9 +18,9 @@
 
 import React from 'react'
 import {bool, func, string} from 'prop-types'
-import Menu, {MenuItem} from '@instructure/ui-menu/lib/components/Menu'
-import Text from '@instructure/ui-elements/lib/components/Text'
-import I18n from 'i18n!gradebook'
+import {Menu, MenuItem} from '@instructure/ui-menu'
+import {Text} from '@instructure/ui-elements'
+import I18n from 'i18n!SpeedGraderSettingsMenu'
 
 // We're foregoing the use of InstUI buttons or instructure-icons icons here to be consistent
 // with the look/styling of this button's siblings. When those siblings have been updated to
@@ -39,12 +39,12 @@ const menuTrigger = (
 )
 
 export default function SpeedGraderSettingsMenu(props) {
-  function handleModerationPageSelect () {
+  function handleModerationPageSelect() {
     const url = `/courses/${props.courseID}/assignments/${props.assignmentID}/moderate`
     window.open(url, '_blank')
   }
 
-  function handleHelpSelect () {
+  function handleHelpSelect() {
     SpeedGraderSettingsMenu.setURL(props.helpURL)
   }
 
@@ -66,12 +66,20 @@ export default function SpeedGraderSettingsMenu(props) {
       </MenuItem>
 
       {props.showModerationMenuItem && (
-        <MenuItem name="moderationPage" onSelect={handleModerationPageSelect} value="moderationPage">
+        <MenuItem
+          name="moderationPage"
+          onSelect={handleModerationPageSelect}
+          value="moderationPage"
+        >
           <Text>{I18n.t('Moderation Page')}</Text>
         </MenuItem>
       )}
 
-      <MenuItem name="keyboardShortcuts" onSelect={props.openKeyboardShortcutsModal} value="keyboardShortcuts">
+      <MenuItem
+        name="keyboardShortcuts"
+        onSelect={props.openKeyboardShortcutsModal}
+        value="keyboardShortcuts"
+      >
         <Text>{I18n.t('Keyboard Shortcuts')}</Text>
       </MenuItem>
 
@@ -101,6 +109,6 @@ SpeedGraderSettingsMenu.defaultProps = {
   onMenuShow() {}
 }
 
-SpeedGraderSettingsMenu.setURL = function (url) {
+SpeedGraderSettingsMenu.setURL = function(url) {
   window.location.href = url
 }

@@ -26,14 +26,14 @@ module BasicLTI
     def handle_replaceResult(tool, _course, assignment, user)
       self.body = "<replaceResultResponse />"
       return true unless valid_request?(assignment)
-
       quiz_lti_submission = QuizzesNextVersionedSubmission.new(assignment, user)
-      quiz_lti_submission.
+      quiz_lti_submission = quiz_lti_submission.
         with_params(
           submission_type: 'basic_lti_launch',
           submitted_at: submitted_at_date
-        ).
-        commit_history(result_data_launch_url, grade, -tool.id)
+        )
+      return quiz_lti_submission.revert_history(result_url, -tool.id) if submission_reopened?
+      quiz_lti_submission.commit_history(result_url, grade, -tool.id)
     end
     # rubocop:enable Naming/MethodName
 
@@ -44,9 +44,35 @@ module BasicLTI
       self.description = message
     end
 
+    def result_url
+      result_data_launch_url || result_data_url
+    end
+
     def submitted_at_date
-      return nil if submission_submitted_at.blank?
-      @_submitted_at_date ||= Time.zone.parse(submission_submitted_at)
+      # we store submitted_at date in the resultData node because
+      # the IMS LTI gem does not have a method to put it elsewhere
+      return nil if submitted_at_date_text.blank?
+      @_submitted_at_date ||= Time.zone.parse(submitted_at_date_text)
+    end
+
+    def result_data_text_json
+      return nil if result_data_text.blank?
+      json = JSON.parse(result_data_text)
+      json.with_indifferent_access
+    rescue JSON::ParserError
+      nil
+    end
+
+    def submitted_at_date_text
+      json = result_data_text_json
+      return result_data_text if json.blank?
+      json[:submitted_at]
+    end
+
+    def submission_reopened?
+      json = result_data_text_json
+      return false if json.blank?
+      json[:reopened]
     end
 
     def grade
@@ -72,6 +98,8 @@ module BasicLTI
     end
 
     def valid_score?
+      # don't check score for reopen requests
+      return true if submission_reopened?
       if raw_score.blank? && percentage_score.blank?
         error_message(I18n.t('lib.basic_lti.no_score', "No score given"))
         return false

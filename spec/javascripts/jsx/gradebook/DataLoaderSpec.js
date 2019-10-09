@@ -22,7 +22,6 @@ import $ from 'jquery'
 import _ from 'underscore'
 
 QUnit.module('Gradebook Data Loader', hooks => {
-  let savedTrackEvent
   let fakeXhr
   let XHRS, XHR_HANDLERS, handlerIndex
 
@@ -48,16 +47,11 @@ QUnit.module('Gradebook Data Loader', hooks => {
         }
       })
     }
-
-    // google analytics stuff :/
-    savedTrackEvent = $.trackEvent
-    $.trackEvent = () => {}
   })
 
   hooks.afterEach(() => {
     fakeXhr.restore()
     XHR_HANDLERS = null
-    $.trackEvent = savedTrackEvent
   })
 
   const callLoadGradebookData = opts => {
@@ -282,7 +276,7 @@ QUnit.module('Gradebook Data Loader', hooks => {
 
   QUnit.module('Grading Period Assignments')
 
-  test('resolves promise with data when grading period assignments are loaded', function(assert) {
+  test('resolves promise with data when grading period assignments are loaded', assert => {
     const responseData = {grading_period_assignments: GRADING_PERIOD_ASSIGNMENTS}
     XHR_HANDLERS = [
       () => {
@@ -299,7 +293,7 @@ QUnit.module('Gradebook Data Loader', hooks => {
     })
   })
 
-  test('optionally does not request grading period assignments', function() {
+  test('optionally does not request grading period assignments', () => {
     const responseData = {grading_period_assignments: GRADING_PERIOD_ASSIGNMENTS}
     XHR_HANDLERS = [
       () => {

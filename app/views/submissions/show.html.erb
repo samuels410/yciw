@@ -15,42 +15,58 @@
 # You should have received a copy of the GNU Affero General Public License along
 # with this program. If not, see <http://www.gnu.org/licenses/>.
 %>
-
 <%
-  js_env ga_page_title: "#{@assignment.title} Submission Details"
-%>
-<%
-  currently_peer_reviewing = @assessment_request.try(:assigned?)
+  presenter = Submission::ShowPresenter.new(
+    submission: @submission,
+    current_user: @current_user,
+    assessment_request: @assessment_request
+  )
   submission_comments = @submission.visible_submission_comments_for(@current_user)
-  js_bundle :submissions
-  css_bundle :submission
+
+  if presenter.anonymize_submission_owner?
+    submission_owner_param = {anonymous_id: @submission.anonymous_id}
+    rubric_assessment_user_param = {anonymous_id: @submission.anonymous_id}
+  else
+    submission_owner_param = {user_id: @submission.user_id}
+    rubric_assessment_user_param = {assessment_user_id: @submission.user_id}
+  end
+
+  assessment_type = if !presenter.currently_peer_reviewing? && can_do(@submission, @current_user, :grade)
+    "grading"
+  else
+    "peer_review"
+  end
+
   js_env({
     :RUBRIC_ASSESSMENT => {
-      :assessment_user_id => @submission.user_id,
-      :assessor_id => @current_user ? @current_user.id : "null",
-      :assessment_type => (!currently_peer_reviewing && can_do(@submission, @current_user, :grade)) ? "grading" : "peer_review"
+      assessment_type: assessment_type,
+      assessor_id: @current_user ? @current_user.id : "null",
+      **rubric_assessment_user_param
     },
 
     :SUBMISSION => {
-      :user_id => @submission.user_id,
-      :assignment_id => @assignment.id,
-      # don't leak grades if assignment is muted
-      :submission => @assignment.muted? ? {} : @submission.attributes.merge(entered_grade: @submission.entered_grade, entered_score: @submission.entered_score)
+      assignment_id: @assignment.id,
+      # don't leak grades if submission is not posted
+      submission: if @submission.user_can_read_grade?(@current_user, session)
+        @submission.attributes.merge(
+          entered_grade: @submission.entered_grade,
+          entered_score: @submission.entered_score
+        )
+      else
+        {}
+      end,
+      **submission_owner_param
     }
   })
-  content_for :page_title, join_title(@assignment.title, submission_author_name_for(@assessment_request))
-  add_crumb(t('crumbs.assignments', "Assignments"), context_url(@context, :context_assignments_url))
-  add_crumb(@assignment.title, context_url(@context, :context_assignment_url, @assignment.id))
-  add_crumb(user_crumb_name)
-  @active_tab = "assignments"
+  provide :page_title, join_title(@assignment.title, submission_author_name_for(@assessment_request))
+  provide_blank :right_side
 %>
-<% content_for :stylesheets do %>
+
   <style>
     .rubric {
       max-width: 600px;
     }
   </style>
-<% end %>
 
 <% if @assignment.omit_from_final_grade %>
   <div class="alert alert-info omit-from-final-warning">
@@ -59,17 +75,15 @@
 <% end %>
   <div class="submission-details-header submission_details">
     <div class="submission-details-header__heading-and-grades">
-      <h2 class="submission-details-header__heading submission_header">
+      <h1 class="submission-details-header__heading submission_header">
         <%= @assessment_request ? t('peer_review', "Peer Review") : t('submission_details', "Submission Details") %>
-      </h2>
+      </h1>
       <div class="submission-details-header__grade-summary">
-        <% if @assignment.muted? %>
-          <p style="width: 200px"><%= t(:student_mute_notification, "Grades are unavailable because the instructor is working on them.") %></p>
-        <% elsif @submission.user_can_read_grade?(@current_user, session) %>
+        <% if @submission.user_can_read_grade?(@current_user, session) %>
         <table class="grade-values">
           <tbody>
             <tr>
-              <th><%= I18n.t('Grade:') %></td>
+              <th><%= I18n.t('Grade:') %></th>
               <td class="bold">
                 <% if can_do(@assignment, @current_user, :grade) %>
                   <%= render :partial => "gradebooks/grading_box", :object => @assignment, :locals => {:submission => @submission} %>
@@ -93,11 +107,11 @@
                 grade_breakdown_style = hidden unless points_deducted && !@submission.excused?
             %>
               <tr class="error late-penalty-display" style="<%= grade_breakdown_style %>">
-                <th><%= I18n.t('Late penalty:') %></td>
+                <th><%= I18n.t('Late penalty:') %></th>
                 <td class="late_penalty bold"><%= points_deducted %></td>
               </tr>
               <tr class="late-penalty-display" style="<%= grade_breakdown_style %>">
-                <th><%= I18n.t('Final grade:') %></td>
+                <th><%= I18n.t('Final grade:') %></th>
                 <td class="bold">
                   <% if can_do(@assignment, @current_user, :grade) %>
                     <span class="published_grade"><%= i18n_grade(round_if_whole(@submission.grade), @submission.grading_type) %></span>
@@ -122,8 +136,10 @@
             </span>
           <% end %>
         <% end %>
+        <% elsif @submission.hide_grade_from_student? %>
+          <p style="width: 200px"><%= t(:student_mute_notification, "Grades are unavailable because the instructor is working on them.") %></p>
         <% end %>
-        <% if @submission.can_view_plagiarism_report('vericite', @current_user, session) && !@assignment.muted? %>
+        <% if @submission.can_view_plagiarism_report('vericite', @current_user, session) && @submission.posted? %>
           <% if (vericite_score = @submission.vericite_data(true)[@submission.asset_string]) && @submission.turnitin_data[:provider] == :vericite && vericite_score[:similarity_score] %>
             <span class="turnitin_score_container">
               <span class="vericite_score_container_caret <%= vericite_score[:state] %>_score"></span>
@@ -153,7 +169,7 @@
     </div>
     <div class="ic-Action-header">
       <div class="ic-Action-header__Primary">
-        <h3 class="submission-details-header__heading"><%= @assignment.title %></h3>
+        <h2 class="submission-details-header__heading h3"><%= @assignment.title %></h2>
         <div class="submission-details-header__info">
           <span class="submission-details-header__time <%='late' if @submission.late? %> <%= 'hidden' unless @submission.submitted_at %>">
             <%= submission_author_name_for @assessment_request %> <%= t('submitted_at', 'submitted %{submit_date}', :submit_date => datetime_string(@submission.submitted_at)) %>
@@ -179,7 +195,7 @@
       </div>
       <div class="ic-Action-header__Secondary ic-Action-header__Secondary--auto">
         <% if can_do(@context, @current_user, :grade) %>
-          <a class="Button" href="<%= context_url(@context, :speed_grader_context_gradebook_url, :assignment_id => @assignment.id) + "#" + CGI::escape({:student_id => @submission.user_id }.to_json) %>">
+          <a class="Button" href="<%= context_url(@context, :speed_grader_context_gradebook_url, assignment_id: @assignment.id, student_id: @submission.user_id) %>">
             <i class="icon-speed-grader" aria-hidden="true"></i>
             <%= t('speedgrader', 'SpeedGrader™') %>
           </a>
@@ -244,8 +260,9 @@
         partial: 'shared/rubric',
         object: @assignment.rubric,
         locals: {
-          rubric_association: @assignment.rubric_association,
-          assessing: @submission.grants_right?(@current_user, :grade) || currently_peer_reviewing
+          anonymize_student: presenter.anonymize_submission_owner?,
+          assessing: @submission.grants_right?(@current_user, :grade) || presenter.currently_peer_reviewing?,
+          rubric_association: @assignment.rubric_association
         }}) %>
     <% end %>
     <%= render :partial => "shared/rubric_criterion_dialog" %>
@@ -259,16 +276,12 @@
   <% end %>
 
   <div style="display: none;">
-    <% if !currently_peer_reviewing && can_do(@context, @current_user, :manage_grades) %>
-      <a style="display: none;" title="POST" href="<%= context_url(@context, :update_submission_context_gradebook_url) %>" class="update_submission_url">&nbsp;</a>
-    <% else %>
-      <a style="display: none;" title="PUT" href="<%= context_url(@context, :context_assignment_submission_url, @submission.assignment_id, @submission.user_id) %>" class="update_submission_url">&nbsp;</a>
-    <% end %>
-    <a style="display: none;" href="<%= context_url(@context, :context_assignment_submission_url, @submission.assignment_id, @submission.user_id) %>" class="submission_data_url">&nbsp;</a>
+    <a style="display: none;" title="<%= presenter.add_comment_method %>" href="<%= presenter.add_comment_url %>" class="update_submission_url">&nbsp;</a>
+    <a style="display: none;" href="<%= presenter.submission_data_url %>" class="submission_data_url">&nbsp;</a>
   </div>
   <div class="submission-details-container">
     <div class="submission-details-frame">
-      <iframe id="preview_frame" src="<%= context_url(@context, :context_assignment_submission_url, @assignment.id, @submission.user_id, :preview => 1, :rand => rand(999999)) %>" allowfullscreen="true" frameborder="0" style="border: 0; width: 100%; height: 300px; display: block;" title="<%= t('Preview') %>"></iframe>
+      <iframe id="preview_frame" src="<%= presenter.submission_preview_frame_url %>" allowfullscreen="true" frameborder="0" style="border: 0; width: 100%; height: 300px; display: block;" title="<%= t('Preview') %>"></iframe>
     </div>
     <div class="submission-details-comments" style="word-wrap: break-word; min-width: 1%;">
       <div style="background-color: #fff;">
@@ -277,7 +290,7 @@
           <button type="button" class="btn button-secondary cancel_comment_button" style="display: none; float: <%= direction('right') %>; margin-<%= direction('right') %>:0 !important;"><%= image_tag("delete_circle.png", :alt => t('Delete')) %></button>
           <div class="comment_list" aria-live="polite" style="padding: 10px; clear:right;">
             <% unless @submission.user_can_read_grade?(@current_user, session) %>
-              <% if @assignment.muted? %>
+              <% if @submission.hide_grade_from_student? %>
                 <i><%= t('only_see_your_own_comments_muted', "You may not see all comments right now because the assignment is currently being graded") %></i>
               <% else %>
                 <i><%= t('only_see_your_own_comments_peer', "As a peer reviewing student, you will only see comments written by you.") %></i>
@@ -309,7 +322,7 @@
                 <div class="comment_attachments" style="text-align: <%= direction('right') %>; margin-<%= direction('right') %>: 10px;">
                   <% comment.attachments.each do |attachment| %>
                     <div class="comment_attachment">
-                      <a href="<%= context_url(@context, :context_assignment_submission_url, @assignment.id, @submission.user_id, :comment_id => comment.id, :download => attachment.id) %>" class="comment_attachment_link <%= attachment.mime_class %>"><%= attachment.display_name %></a>
+                      <a href="<%= presenter.comment_attachment_download_url(submission_comment: comment, attachment: attachment) %>" class="comment_attachment_link <%= attachment.mime_class %>"><%= attachment.display_name %></a>
                     </div>
                   <% end %>
                 </div>
@@ -330,7 +343,7 @@
             </div>
           </div>
           <div class="comment_attachment" id="comment_attachment_blank" style="display: none;">
-            <a class="comment_attachment_link" href="<%= context_url(@context, :context_assignment_submission_url, @assignment.id, @submission.user_id, :comment_id => "{{ comment_id }}", :download => "{{ id }}") %>"><span class="display_name">&nbsp;</span></a>
+            <a class="comment_attachment_link" href="<%= presenter.comment_attachment_template_url %>"><span class="display_name">&nbsp;</span></a>
           </div>
           <div class="comment" id="comment_blank" style="display: none; margin-bottom: 10px;">
             <span class="comment" style="color: #444; white-space: pre-wrap;"></span>

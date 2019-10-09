@@ -142,6 +142,7 @@ describe ContentZipper do
 
     it "should zip up online_text_entry submissions" do
       course_with_student(active_all: true)
+      @student.update_attribute(:name, "some student name")
       submission_model(body: "hai this is my answer")
       attachment = Attachment.new(display_name: 'my_download.zip')
       attachment.user = @teacher
@@ -151,11 +152,32 @@ describe ContentZipper do
       ContentZipper.process_attachment(attachment, @teacher)
       attachment.reload
       expect(attachment.workflow_state).to eq 'zipped'
+
+      content = nil
       Zip::File.foreach(attachment.full_filename) do |f|
-        if f.file?
-          expect(f.get_input_stream.read).to be_include("hai this is my answer")
-        end
+        content = f.get_input_stream.read if f.file?
       end
+      expect(content).to include("hai this is my answer")
+      expect(content).to include(@student.name)
+    end
+
+    it "should not include student name in online_text_entry submissions if anonymous" do
+      course_with_student(active_all: true)
+      @student.update_attribute(:name, "some student name")
+
+      @assignment = @course.assignments.create!(anonymous_grading: true, muted: true)
+      submission_model(body: "hai this is my answer", assignment: @assignment, user: @student)
+      attachment = Attachment.create!(display_name: 'my_download.zip', user: @teacher,
+        workflow_state: 'to_be_zipped', context: @assignment)
+      ContentZipper.process_attachment(attachment, @teacher)
+      attachment.reload
+      content = nil
+      Zip::File.foreach(attachment.full_filename) do |f|
+        content = f.get_input_stream.read if f.file?
+      end
+      expect(content).to include("hai this is my answer")
+      expect(content).to_not include(@student.name)
+      expect(content).to include("Anonymous User")
     end
 
     it "should only include submissions in the correct section " do
@@ -208,11 +230,12 @@ describe ContentZipper do
       end
     end
 
-    it 'only includes un-deleted attachments' do
+    it 'excludes deleted attachments' do
       course_with_student(active_all: true)
 
       assignment = assignment_model(course: @course)
       att = attachment_model(uploaded_data: stub_file_data('test.txt', 'asdf', 'text/plain'), context: @student)
+      submission_model(user: @student, assignment: assignment, attachments: [att])
       att.destroy
 
       attachment = Attachment.new(display_name: 'my_download.zip')
@@ -222,15 +245,25 @@ describe ContentZipper do
       attachment.save!
 
       ContentZipper.process_attachment(attachment, @teacher)
+      expect(Zip::File.new(attachment.open).entries.count).to eq 0
+    end
 
-      # assert no submissions
-      submission_count = 0
-      full_filename = attachment.full_filename
-      Zip::File.foreach(full_filename) do
-        submission_count += 1
-      end
+    it 'strips harmful characters from submission filenames' do
+      course_with_student(active_all: true)
 
-      expect(submission_count).to eq 0
+      assignment = assignment_model(course: @course)
+      att = attachment_model(uploaded_data: stub_file_data('A/V??.txt', 'a/v', 'text/plain'), context: @student)
+      submission_model(user: @student, assignment: assignment, attachments: [att])
+
+      attachment = Attachment.new(display_name: 'my_download.zip')
+      attachment.user = @teacher
+      attachment.workflow_state = 'to_be_zipped'
+      attachment.context = assignment
+      attachment.save!
+
+      ContentZipper.process_attachment(attachment, @teacher)
+      entry = Zip::File.new(attachment.open).entries.first
+      expect(entry.name).to end_with 'A_V_.txt'
     end
   end
 
@@ -454,8 +487,55 @@ describe ContentZipper do
       end
       attachment.save!
       expect {
-        ContentZipper.zip_eportfolio(attachment, eportfolio)
+        ContentZipper.new.zip_eportfolio(attachment, eportfolio)
       }.to_not raise_error
+    end
+
+    context "with restricted permissions" do
+      before do
+        course_with_student(active_all: true)
+        folder = Folder.root_folders(@course).first
+        attachment_model(uploaded_data: stub_png_data('hidden.png'),
+                         content_type: 'image/png', folder: folder, display_name: 'hidden.png')
+      end
+
+      let(:eportfolio) do
+        eportfolio = @user.eportfolios.create!(name: 'an name')
+        eportfolio.ensure_defaults
+        entry = eportfolio.eportfolio_entries.first
+        entry.parse_content({:section_count => 1, :section_1 => {:section_type => 'rich_text', :content => "/files/#{@attachment.id}/download"}})
+        entry.save!
+        eportfolio
+      end
+
+      let(:zipped_file) do
+        eportfolio.attachments.create do |attachment|
+          attachment.display_name = 'an_attachment'
+          attachment.user = @user
+          attachment.workflow_state = 'to_be_zipped'
+        end
+      end
+
+      let(:zipped_filenames) { Zip::File.new(zipped_file.full_filename).entries.map(&:name) }
+
+      it "does not process attachments that user cannot see" do
+        @user = User.create!
+        ContentZipper.new.zip_eportfolio(zipped_file, eportfolio)
+        expect(zipped_filenames).not_to include a_string_matching(/hidden.png/)
+      end
+
+      it "does not process attachments that user cannot download" do
+        @user = @student
+        @attachment.update! locked: true
+        ContentZipper.new.zip_eportfolio(zipped_file, eportfolio)
+        expect(zipped_filenames).not_to include a_string_matching(/hidden.png/)
+      end
+
+      it "does process attachments that user can download" do
+        @user = @student
+        ContentZipper.new.zip_eportfolio(zipped_file, eportfolio)
+        expect(zipped_filenames).to include a_string_matching(/hidden.png/)
+      end
     end
 
     it "processes the zip file name" do

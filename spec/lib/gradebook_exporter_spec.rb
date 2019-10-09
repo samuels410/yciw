@@ -25,6 +25,12 @@ describe GradebookExporter do
     course_with_teacher(course: @course, active_all: true)
   end
 
+  def enable_final_grade_override!
+    @course.enable_feature!(:new_gradebook)
+    @course.enable_feature!(:final_grades_override)
+    @course.update!(allow_final_grade_override: true)
+  end
+
   describe "#to_csv" do
     def exporter(opts = {})
       GradebookExporter.new(@course, @teacher, opts)
@@ -69,6 +75,15 @@ describe GradebookExporter do
 
       subject(:csv) { exporter.to_csv }
 
+      let(:expected_headers) do
+        [
+          "Student", "ID", "SIS Login ID", "Section", "Custom Column 1", "Custom Column 2",
+          "Current Points", "Final Points",
+          "Current Score", "Unposted Current Score", "Final Score", "Unposted Final Score",
+          "Current Grade", "Unposted Current Grade", "Final Grade", "Unposted Final Grade"
+        ]
+      end
+
       it { is_expected.to be_a String }
 
       it "is a csv with two rows" do
@@ -81,16 +96,54 @@ describe GradebookExporter do
       end
 
       it "has headers in a default order" do
-        expected_headers = [
-          "Student", "ID", "SIS Login ID", "Section", "Custom Column 1", "Custom Column 2",
-          "Current Points", "Final Points",
-          "Current Score", "Unposted Current Score", "Final Score", "Unposted Final Score",
-          "Current Grade", "Unposted Current Grade", "Final Grade", "Unposted Final Grade"
-        ]
-
         actual_headers = CSV.parse(csv, headers: true).headers
-
         expect(actual_headers).to match_array(expected_headers)
+      end
+
+      context "when Final Grade Override is enabled" do
+        before(:once) { enable_final_grade_override! }
+        let_once(:override_headers) { expected_headers.push("Override Score") }
+
+        it "includes the Override Score and Override Grade headers when the course has a grading standard" do
+          actual_headers = CSV.parse(csv, headers: true).headers
+          expect(actual_headers).to match_array(override_headers.push("Override Grade"))
+        end
+
+        it "omits the Override Grade header when the course lacks a grading standard" do
+          @course.update!(grading_standard_id: nil)
+          actual_headers = CSV.parse(exporter.to_csv, headers: true).headers
+          expect(actual_headers).not_to include("Override Grade")
+        end
+      end
+
+      context "when Final Grade Override is not enabled" do
+        before(:once) do
+          @course.enable_feature!(:new_gradebook)
+          @course.enable_feature!(:final_grades_override)
+          @course.update!(allow_final_grade_override: false)
+        end
+
+        it "excludes the Override Score headers" do
+          actual_headers = CSV.parse(csv, headers: true).headers
+          expect(actual_headers).not_to include("Override Grade")
+        end
+
+        it "excludes the Override Grade headers when the course has a grading standard" do
+          actual_headers = CSV.parse(csv, headers: true).headers
+          expect(actual_headers).not_to include("Override Score")
+        end
+      end
+
+      context "when Final Grade Override is not enabled" do
+        it "excludes the Override Score headers" do
+          actual_headers = CSV.parse(csv, headers: true).headers
+          expect(actual_headers).not_to include("Override Grade")
+        end
+
+        it "excludes the Override Grade headers when the course has a grading standard" do
+          actual_headers = CSV.parse(csv, headers: true).headers
+          expect(actual_headers).not_to include("Override Score")
+        end
       end
 
       describe "byte-order mark" do
@@ -130,11 +183,63 @@ describe GradebookExporter do
           expect(header_row_length).to eq muted_row_length
         end
 
+        it "the length of the 'muted' row matches the length of the header row when integration_ids are passed" do
+          @exporter_options[:include_sis_id] = true
+          @course.root_account.settings[:include_integration_ids_in_gradebook_exports] = true
+          @course.root_account.save!
+          expect(header_row_length).to eq muted_row_length
+        end
+
         it "the length of the 'muted' row matches the length of the header row when include_sis_id " \
           "is true and the account is a trust account" do
           expect(@course.root_account).to receive(:trust_exists?).and_return(true)
           @exporter_options[:include_sis_id] = true
           expect(header_row_length).to eq muted_row_length
+        end
+      end
+
+      context "when post policies are enabled" do
+        before(:once) do
+          @course.enable_feature!(:new_gradebook)
+          PostPolicy.enable_feature!
+        end
+
+        let(:csv) do
+          unparsed_csv = GradebookExporter.new(@course, @teacher, {}).to_csv
+          CSV.parse(unparsed_csv, headers: true)
+        end
+
+        context "when at least one assignment is manually-posted" do
+          let_once(:manual_assignment) { @course.assignments.create!(title: "manual") }
+          let_once(:manual_header) { "manual (#{manual_assignment.id})" }
+          let_once(:auto_assignment) { @course.assignments.create!(title: "auto") }
+          let_once(:auto_header) { "auto (#{auto_assignment.id})" }
+
+          before(:once) do
+            manual_assignment.ensure_post_policy(post_manually: true)
+            auto_assignment.ensure_post_policy(post_manually: false)
+          end
+
+          let(:manual_posting_row) { csv[0] }
+
+          it "includes a line consisting entirely of 'Manual Posting' or empty values" do
+            expect(manual_posting_row.fields.uniq).to contain_exactly(nil, "Manual Posting")
+          end
+
+          it "designates manually-posted assignments as 'Manual Posting'" do
+            expect(manual_posting_row[manual_header]).to eq "Manual Posting"
+          end
+
+          it "emits an empty value for auto-posted assignments" do
+            expect(manual_posting_row[auto_header]).to be nil
+          end
+        end
+
+        it "omits the 'Manual Posting' row if no assignments are manually-posted" do
+          auto_assignment = @course.assignments.create!(title: "auto")
+          auto_assignment.ensure_post_policy(post_manually: false)
+
+          expect(csv[0].fields).not_to include("Manual Posting")
         end
       end
     end
@@ -559,6 +664,77 @@ describe GradebookExporter do
         expect(enrollment).to receive(:unposted_final_grade).with({ grading_period_id: grading_period.id })
         exporter.to_csv
       end
+
+      context "when final grade override is enabled for the course" do
+        before(:each) { enable_final_grade_override! }
+
+        let(:parsed_csv) { CSV.parse(exporter.to_csv, headers: true) }
+
+        it "includes the overridden score for the current grading period" do
+          aggregate_failures do
+            expect(enrollment).to receive(:override_score).with({ grading_period_id: grading_period.id }).and_return(64)
+            expect(parsed_csv[1]["Override Score"]).to eq("64")
+          end
+        end
+
+        it "includes the overridden grade for the current grading period if the course has a grading standard" do
+          aggregate_failures do
+            expect(enrollment).to receive(:override_grade).with({ grading_period_id: grading_period.id }).and_return("D")
+            expect(parsed_csv[1]["Override Grade"]).to eq("D")
+          end
+        end
+
+        it "omits the overridden grade for the current grading period if the course has no grading standard" do
+          @course.update!(grading_standard_id: nil)
+
+          aggregate_failures do
+            expect(enrollment).not_to receive(:override_grade)
+            expect(parsed_csv.headers).not_to include("Override Grade")
+          end
+        end
+      end
+
+      context "when final grade override is not allowed for the course" do
+        before(:each) do
+          @course.enable_feature!(:new_gradebook)
+          @course.enable_feature!(:final_grades_override)
+          @course.update!(allow_final_grade_override: false)
+        end
+
+        let(:parsed_csv) { CSV.parse(exporter.to_csv, headers: true) }
+
+        it "does not include the overridden score for the current grading period" do
+          aggregate_failures do
+            expect(enrollment).not_to receive(:override_score)
+            expect(parsed_csv.headers).not_to include("Override Score")
+          end
+        end
+
+        it "does not include the overridden grade for the current grading period" do
+          aggregate_failures do
+            expect(enrollment).not_to receive(:override_grade)
+            expect(parsed_csv.headers).not_to include("Override Grade")
+          end
+        end
+      end
+
+      context "when final grade override is not enabled for the course" do
+        let(:parsed_csv) { CSV.parse(exporter.to_csv, headers: true) }
+
+        it "does not include the overridden score for the current grading period" do
+          aggregate_failures do
+            expect(enrollment).not_to receive(:override_score)
+            expect(parsed_csv.headers).not_to include("Override Score")
+          end
+        end
+
+        it "does not include the overridden grade for the current grading period" do
+          aggregate_failures do
+            expect(enrollment).not_to receive(:override_grade)
+            expect(parsed_csv.headers).not_to include("Override Grade")
+          end
+        end
+      end
     end
 
     context "when no grading period is supplied" do
@@ -606,6 +782,76 @@ describe GradebookExporter do
       it 'includes the unposted final grade for the course' do
         expect(enrollment).to receive(:unposted_final_grade).with(Score.params_for_course)
         exporter.to_csv
+      end
+
+      context "when final grade override is enabled for the course" do
+        before(:each) { enable_final_grade_override! }
+
+        let(:parsed_csv) { CSV.parse(exporter.to_csv, headers: true) }
+
+        it "includes the overridden score for the course" do
+          aggregate_failures do
+            expect(enrollment).to receive(:override_score).with(Score.params_for_course).and_return(78)
+            expect(parsed_csv[1]["Override Score"]).to eq("78")
+          end
+        end
+
+        it "includes the overridden grade for the course" do
+          aggregate_failures do
+            expect(enrollment).to receive(:override_grade).with(Score.params_for_course).and_return("C+")
+            expect(parsed_csv[1]["Override Grade"]).to eq("C+")
+          end
+        end
+
+        it "omits the overridden grade for the course if the course has no grading standard" do
+          @course.update!(grading_standard_id: nil)
+          aggregate_failures do
+            expect(enrollment).not_to receive(:override_grade)
+            expect(parsed_csv.headers).not_to include("Override Grade")
+          end
+        end
+      end
+
+      context "when final grade override is not allowed for the course" do
+        before(:each) do
+          @course.enable_feature!(:new_gradebook)
+          @course.enable_feature!(:final_grades_override)
+          @course.update!(allow_final_grade_override: false)
+        end
+
+        let(:parsed_csv) { CSV.parse(exporter.to_csv, headers: true) }
+
+        it "does not include the overridden score for the course" do
+          aggregate_failures do
+            expect(enrollment).not_to receive(:override_score)
+            expect(parsed_csv.headers).not_to include("Override Score")
+          end
+        end
+
+        it "does not include the overridden grade for the course" do
+          aggregate_failures do
+            expect(enrollment).not_to receive(:override_grade)
+            expect(parsed_csv.headers).not_to include("Override Grade")
+          end
+        end
+      end
+
+      context "when final grade override is not enabled for the course" do
+        let(:parsed_csv) { CSV.parse(exporter.to_csv, headers: true) }
+
+        it "does not include the overridden score for the course" do
+          aggregate_failures do
+            expect(enrollment).not_to receive(:override_score)
+            expect(parsed_csv.headers).not_to include("Override Score")
+          end
+        end
+
+        it "does not include the overridden grade for the course" do
+          aggregate_failures do
+            expect(enrollment).not_to receive(:override_grade)
+            expect(parsed_csv.headers).not_to include("Override Grade")
+          end
+        end
       end
     end
   end

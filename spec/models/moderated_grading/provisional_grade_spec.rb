@@ -41,8 +41,8 @@ describe ModeratedGrading::ProvisionalGrade do
       class_name('ModeratedGrading::Selection')
   end
 
-  it { is_expected.to belong_to(:submission) }
-  it { is_expected.to belong_to(:scorer).class_name('User') }
+  it { is_expected.to belong_to(:submission).required }
+  it { is_expected.to belong_to(:scorer).required.class_name('User') }
   it { is_expected.to have_many(:rubric_assessments) }
 
   it { is_expected.to validate_presence_of(:scorer) }
@@ -364,7 +364,7 @@ describe ModeratedGrading::ProvisionalGrade do
 
       expect(prov_assmt.score).to eq 3
 
-      pg.send :publish_rubric_assessments!
+      pg.publish!
 
       real_assmt = sub.rubric_assessments.first
       expect(real_assmt.score).to eq 3
@@ -389,7 +389,7 @@ describe ModeratedGrading::ProvisionalGrade do
 
 
       expect do
-        pg.send :publish_rubric_assessments!
+        pg.publish!
       end.to change { LearningOutcomeResult.count }.by(1)
     end
   end
@@ -490,81 +490,6 @@ describe ModeratedGrading::ProvisionalGrade do
         AnonymousOrModerationEvent.where(assignment: assignment, submission: submission).
           submission_comment_created.count
       }
-    end
-  end
-
-  describe "copy_to_final_mark!" do
-    before(:once) do
-      @course = course
-      @scorer = scorer
-      @moderator = teacher_in_course(:course => @course, :active_all => true).user
-      assignment.update!(moderated_grading: true, grader_count: 2, final_grader: @moderator)
-      outcome_with_rubric
-      @association = @rubric.associate_with(assignment, course, :purpose => 'grading', :use_for_grading => true)
-      @sub = assignment.submit_homework(student, :submission_type => 'online_text_entry', :body => 'hallo')
-      @pg = @sub.find_or_create_provisional_grade!(@scorer, score: 80)
-      @prov_assmt = @association.assess(:user => student, :assessor => @scorer, :artifact => @pg,
-        :assessment => { :assessment_type => 'grading',
-                         :"criterion_#{@rubric.criteria_object.first.id}" => { :points => 3, :comments => "wat" } })
-      @prov_comment = @sub.add_comment(:commenter => @scorer, :comment => 'blah', :provisional => true)
-    end
-
-    def test_copy_to_final_mark
-      final_mark = @pg.copy_to_final_mark!(@moderator)
-      expect(final_mark.id).not_to eq @pg.id
-      expect(final_mark.source_provisional_grade_id).to eq @pg.id
-
-      expect(final_mark.grade).to eq @pg.grade
-      expect(final_mark.score).to eq @pg.score
-      expect(final_mark.scorer).to eq @moderator
-      expect(final_mark.final).to eq true
-
-      expect(@sub.submission_comments.count).to eq 0
-      expect(final_mark.submission_comments.count).to eq 1
-      final_comment = final_mark.submission_comments.first
-      expect(final_comment.id).not_to eq @prov_comment.id
-      expect(final_comment.author).to eq @scorer
-      expect(final_comment.comment).to eq @prov_comment.comment
-
-      expect(@sub.rubric_assessments.count).to eq 0
-      expect(final_mark.rubric_assessments.count).to eq 1
-      final_assmt = final_mark.rubric_assessments.first
-      expect(final_assmt.score).to eq 3
-      expect(final_assmt.assessor).to eq @scorer
-      expect(final_assmt.rubric_association).to eq @association
-      expect(final_assmt.data).to eq @prov_assmt.data
-    end
-
-    it "copies grade, score, comments, and rubric assessments to a final mark" do
-      test_copy_to_final_mark
-    end
-
-    it "overwrites an existing final mark (including comments and rubric assessments)" do
-      final_mark = @sub.find_or_create_provisional_grade!(@moderator, score: 90, final: true)
-      fa = @association.assess(:user => student, :assessor => @moderator, :artifact => final_mark,
-         :assessment => { :assessment_type => 'grading',
-                          :"criterion_#{@rubric.criteria_object.first.id}" => { :points => 4, :comments => "srsly" } })
-      fc = @sub.add_comment(:commenter => @moderator, :comment => 'no rly deleteme', :provisional => true, :final => true)
-      expect(fc.provisional_grade_id).to eq final_mark.id
-
-      test_copy_to_final_mark
-
-      expect(RubricAssessment.find_by(id: fa.id)).to be_nil
-      expect(SubmissionComment.find_by(id: fc.id)).to be_nil
-    end
-
-    it "generates attachment_info with all participants" do
-      att = double(:id => 100, :crocodoc_available? => true, :canvadoc_available? => true)
-      whitelist = [@sub.user, @moderator, @scorer].map { |u| u.moderated_grading_ids(true) }
-      url_opts = {enable_annotations: true, moderated_grading_whitelist: whitelist}
-      expect(att).to receive(:crocodoc_url).with(@moderator, url_opts).and_return('fake_url')
-      expect(att).to receive(:canvadoc_url).with(@moderator, url_opts).and_return('fake_canvadoc_url')
-      final_mark = @pg.copy_to_final_mark!(@moderator)
-      expect(final_mark.attachment_info(@moderator, att)).to eq({
-        attachment_id: 100,
-        crocodoc_url: 'fake_url',
-        canvadoc_url: 'fake_canvadoc_url'
-      })
     end
   end
 end
