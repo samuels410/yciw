@@ -164,7 +164,7 @@
     "gulp-rev": "^8",
     "gulp-sourcemaps": "^2",
     "gulp-uglify": "^3",
-    "handlebars": "1.3.0",
+    "handlebars": "4.3.0",
     "happypack": "^3.1.0",
     "imports-loader": "^0.8",
     "istanbul-instrumenter-loader": "^3",
