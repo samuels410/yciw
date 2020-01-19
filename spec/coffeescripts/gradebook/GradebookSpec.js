@@ -50,7 +50,10 @@ test('normalizes the grading period set from the env', function() {
     ...exampleGradebookOptions,
     grading_period_set: {
       id: '1501',
-      grading_periods: [{id: '701', weight: 50}, {id: '702', weight: 50}],
+      grading_periods: [
+        {id: '701', weight: 50},
+        {id: '702', weight: 50}
+      ],
       weighted: true
     }
   }
@@ -74,10 +77,16 @@ QUnit.module('Gradebook#calculateStudentGrade', {
       isAllGradingPeriods: Gradebook.prototype.isAllGradingPeriods,
       assignmentGroups: [{id: 301, group_weight: 60, rules: {}, assignments}],
       options: {group_weighting_scheme: 'points'},
-      gradingPeriods: [{id: 701, weight: 50}, {id: 702, weight: 50}],
+      gradingPeriods: [
+        {id: 701, weight: 50},
+        {id: 702, weight: 50}
+      ],
       gradingPeriodSet: {
         id: '1501',
-        gradingPeriods: [{id: '701', weight: 50}, {id: '702', weight: 50}],
+        gradingPeriods: [
+          {id: '701', weight: 50},
+          {id: '702', weight: 50}
+        ],
         weighted: true
       },
       effectiveDueDates: {201: {101: {grading_period_id: '701'}}},
@@ -872,7 +881,10 @@ QUnit.module('Gradebook#gotSubmissionsChunk', function(hooks) {
     gradebook.gotSubmissionsChunk(studentSubmissions)
     return gradebook.gridReady.resolve().then(() => {
       const [students] = Array.from(gradebook.setupGrading.lastCall.args)
-      deepEqual(students.map(student => student.id), ['1101', '1102'])
+      deepEqual(
+        students.map(student => student.id),
+        ['1101', '1102']
+      )
     })
   })
 })

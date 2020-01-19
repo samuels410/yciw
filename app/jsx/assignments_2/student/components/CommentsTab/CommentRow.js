@@ -89,4 +89,3 @@ export default function CommentRow(props) {
 CommentRow.propTypes = {
   comment: SubmissionComment.shape.isRequired
 }
-

@@ -91,7 +91,4 @@ export default class UnsyncedChanges extends Component {
 
 const connectState = state => select(state, ['unsyncedChanges'])
 const connectActions = dispatch => bindActionCreators(actions, dispatch)
-export const ConnectedUnsyncedChanges = connect(
-  connectState,
-  connectActions
-)(UnsyncedChanges)
+export const ConnectedUnsyncedChanges = connect(connectState, connectActions)(UnsyncedChanges)

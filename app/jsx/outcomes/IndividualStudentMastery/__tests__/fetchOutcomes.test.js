@@ -55,7 +55,10 @@ describe('fetchOutcomes', () => {
     rollupsResponse: {
       rollups: [
         {
-          scores: [{score: 3.0, links: {outcome: 1}}, {score: 1.0, links: {outcome: 2}}]
+          scores: [
+            {score: 3.0, links: {outcome: 1}},
+            {score: 1.0, links: {outcome: 2}}
+          ]
         }
       ]
     },

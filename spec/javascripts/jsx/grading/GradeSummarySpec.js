@@ -32,7 +32,13 @@ let exampleGrades
 
 function createAssignmentGroups() {
   return [
-    {id: '301', assignments: [{id: '201', muted: false}, {id: '202', muted: true}]},
+    {
+      id: '301',
+      assignments: [
+        {id: '201', muted: false},
+        {id: '202', muted: true}
+      ]
+    },
     {id: '302', assignments: [{id: '203', muted: true}]}
   ]
 }
@@ -210,7 +216,10 @@ QUnit.module('GradeSummary.getGradingPeriodSet', {
 test('normalizes the grading period set from the env', () => {
   ENV.grading_period_set = {
     id: '1501',
-    grading_periods: [{id: '701', weight: 50}, {id: '702', weight: 50}],
+    grading_periods: [
+      {id: '701', weight: 50},
+      {id: '702', weight: 50}
+    ],
     weighted: true
   }
   const gradingPeriodSet = GradeSummary.getGradingPeriodSet()
@@ -388,7 +397,13 @@ QUnit.module('GradeSummary.calculateTotals', suiteHooks => {
     contextHooks.beforeEach(() => {
       exampleGrades = createExampleGrades()
       exampleGrades.current = {score: 23, possible: 100}
-      ENV.grading_scheme = [['A', 0.9], ['B', 0.8], ['C', 0.7], ['D', 0.6], ['F', 0]]
+      ENV.grading_scheme = [
+        ['A', 0.9],
+        ['B', 0.8],
+        ['C', 0.7],
+        ['D', 0.6],
+        ['F', 0]
+      ]
     })
 
     test('sets the letter grade to the effective grade', () => {
@@ -584,7 +599,10 @@ QUnit.module('GradeSummary.calculateGrades', {
     ENV.group_weighting_scheme = 'points'
     ENV.grading_period_set = {
       id: '1501',
-      grading_periods: [{id: '701', weight: 50}, {id: '702', weight: 50}],
+      grading_periods: [
+        {id: '701', weight: 50},
+        {id: '702', weight: 50}
+      ],
       weighted: true
     }
     ENV.effective_due_dates = {201: {101: {grading_period_id: '701'}}}
@@ -1318,7 +1336,10 @@ test('returns the score with points possible if assignment groups are not weight
 test('returns an empty string if grading periods are weighted and "All Grading Periods" is selected', () => {
   ENV.grading_period_set = {
     id: '1501',
-    grading_periods: [{id: '701', weight: 50}, {id: '702', weight: 50}],
+    grading_periods: [
+      {id: '701', weight: 50},
+      {id: '702', weight: 50}
+    ],
     weighted: true
   }
   ENV.current_grading_period_id = '0'
@@ -1329,7 +1350,10 @@ test('returns an empty string if grading periods are weighted and "All Grading P
 test('returns the score with points possible if grading periods are weighted and a period is selected', () => {
   ENV.grading_period_set = {
     id: '1501',
-    grading_periods: [{id: '701', weight: 50}, {id: '702', weight: 50}],
+    grading_periods: [
+      {id: '701', weight: 50},
+      {id: '702', weight: 50}
+    ],
     weighted: true
   }
   ENV.current_grading_period_id = '701'
@@ -1340,7 +1364,10 @@ test('returns the score with points possible if grading periods are weighted and
 test('returns the score with points possible if grading periods are not weighted', () => {
   ENV.grading_period_set = {
     id: '1501',
-    grading_periods: [{id: '701', weight: 50}, {id: '702', weight: 50}],
+    grading_periods: [
+      {id: '701', weight: 50},
+      {id: '702', weight: 50}
+    ],
     weighted: false
   }
 
@@ -1511,7 +1538,10 @@ QUnit.module('GradeSummary', () => {
     })
 
     test('sets students to the students environment variable', () => {
-      ENV.students = [{id: 42, name: 'Abel'}, {id: 43, name: 'Baker'}]
+      ENV.students = [
+        {id: 42, name: 'Abel'},
+        {id: 43, name: 'Baker'}
+      ]
 
       deepEqual(GradeSummary.getSelectMenuGroupProps().students, ENV.students)
     })

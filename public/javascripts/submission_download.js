@@ -87,7 +87,13 @@ INST.downloadSubmissions = function(url, onClose) {
             }
             $('#download_submissions_dialog .status').text(message)
             if (progress <= 5 || progress === lastProgress) {
-              $.ajaxJSON(`${url}&compile=1`, 'GET', {}, () => {}, () => {})
+              $.ajaxJSON(
+                `${url}&compile=1`,
+                'GET',
+                {},
+                () => {},
+                () => {}
+              )
             }
             lastProgress = progress
           }

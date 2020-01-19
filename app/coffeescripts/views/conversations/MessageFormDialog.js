@@ -322,7 +322,11 @@ export default class MessageFormDialog extends DialogBaseView {
     this.$fullDialog.on('dblclick', '.attachment', e => this.handleAttachmentDblClick(e))
     this.$fullDialog.on('change', '.file_input', e => this.handleAttachment(e))
 
-    this.$fullDialog.on('click', '.attach-media', preventDefault(() => this.addMediaComment()))
+    this.$fullDialog.on(
+      'click',
+      '.attach-media',
+      preventDefault(() => this.addMediaComment())
+    )
     this.$fullDialog.on(
       'click',
       '.media_comment .remove_link',

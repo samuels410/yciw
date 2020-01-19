@@ -58,9 +58,7 @@ export default class AssignmentGroupCollection extends PaginatedCollection {
       const collection = new SubmissionCollection()
       if (ENV.observed_student_ids.length === 1) {
         collection.url = () =>
-          `${this.courseSubmissionsURL}?student_ids[]=${
-            ENV.observed_student_ids[0]
-          }&per_page=${PER_PAGE_LIMIT}`
+          `${this.courseSubmissionsURL}?student_ids[]=${ENV.observed_student_ids[0]}&per_page=${PER_PAGE_LIMIT}`
       } else {
         collection.url = () => `${this.courseSubmissionsURL}?per_page=${PER_PAGE_LIMIT}`
       }

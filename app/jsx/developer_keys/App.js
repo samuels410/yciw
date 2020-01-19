@@ -97,13 +97,15 @@ class DeveloperKeysApp extends React.Component {
     } = this.props
 
     const callBack = this.inheritedTableRef.createSetFocusCallback()
-    getRemainingInheritedDeveloperKeys(inheritedNextPage, [], callBack)(dispatch).then(
-      foundActiveKey => {
-        if (!foundActiveKey) {
-          this.focusInheritedTab()
-        }
+    getRemainingInheritedDeveloperKeys(
+      inheritedNextPage,
+      [],
+      callBack
+    )(dispatch).then(foundActiveKey => {
+      if (!foundActiveKey) {
+        this.focusInheritedTab()
       }
-    )
+    })
   }
 
   showMoreInheritedButton() {

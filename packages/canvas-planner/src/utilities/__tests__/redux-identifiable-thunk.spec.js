@@ -26,7 +26,10 @@ it('returns a thunk that is identical to itself ', () => {
   expect(called).toBe(false)
   const doSomethingThunk = doSomething()
   expect(doSomethingThunk).toBe(doSomething)
-  doSomethingThunk(() => {}, () => {})
+  doSomethingThunk(
+    () => {},
+    () => {}
+  )
   expect(called).toBe(true)
 })
 
@@ -36,7 +39,10 @@ it('passes arguments to the fn', () => {
     expect(first).toBe('first')
     expect(second).toBe('second')
   })
-  doSomething('first', 'second')(() => {}, () => {})
+  doSomething('first', 'second')(
+    () => {},
+    () => {}
+  )
 })
 
 it('passes only the specified args to the function', () => {
@@ -44,7 +50,10 @@ it('passes only the specified args to the function', () => {
   const doSomething = identifiableThunk((...args) => (dispatch, getState) => (passedArgs = args))
   const thunk = doSomething()
   expect(doSomething.args()).toEqual([])
-  thunk(() => {}, () => {})
+  thunk(
+    () => {},
+    () => {}
+  )
   expect(passedArgs).toEqual([])
 })
 
@@ -52,7 +61,12 @@ it('forwards the return value of the thunked function', () => {
   const doSomething = identifiableThunk(() => (dispatch, getState) => {
     return 42
   })
-  expect(doSomething()(() => {}, () => {})).toBe(42)
+  expect(
+    doSomething()(
+      () => {},
+      () => {}
+    )
+  ).toBe(42)
 })
 
 it('lets us alternate between calling it with args and calling it as a thunk', () => {
@@ -60,8 +74,14 @@ it('lets us alternate between calling it with args and calling it as a thunk', (
   const doSomething = identifiableThunk(increment => (dispatch, getState) => {
     sum += increment
   })
-  doSomething(1)(() => {}, () => {})
-  doSomething(2)(() => {}, () => {})
+  doSomething(1)(
+    () => {},
+    () => {}
+  )
+  doSomething(2)(
+    () => {},
+    () => {}
+  )
   expect(sum).toBe(3)
 })
 
@@ -75,15 +95,29 @@ it('throws if the thunk is not invoked before we call it with normal args again'
 
 it('throws if the action is invoked as a thunk before it is called with normal args', () => {
   const doSomething = identifiableThunk(() => () => {})
-  expect(() => doSomething(() => {}, () => {})).toThrow()
+  expect(() =>
+    doSomething(
+      () => {},
+      () => {}
+    )
+  ).toThrow()
 })
 
 it('can invoke itself recursively', () => {
   const doSomething = identifiableThunk(recur => (dispatch, getState) => {
-    if (recur) return doSomething(false)(() => {}, () => {})
+    if (recur)
+      return doSomething(false)(
+        () => {},
+        () => {}
+      )
     else return 'recurred'
   })
-  expect(doSomething(true)(() => {}, () => {})).toBe('recurred')
+  expect(
+    doSomething(true)(
+      () => {},
+      () => {}
+    )
+  ).toBe('recurred')
 })
 
 it('can reset args and be called as a normal function twice in a row', () => {
@@ -104,11 +138,24 @@ it('can access the current args', () => {
   expect(doSomething.args()).not.toBeDefined()
   const thunk = doSomething(1, 2, 3)
   expect(doSomething.args()).toEqual([1, 2, 3])
-  thunk(() => {}, () => {})
+  thunk(
+    () => {},
+    () => {}
+  )
   expect(doSomething.args()).not.toBeDefined()
 })
 
 it('can be invoked with more than 3 args', () => {
   const doSomething = identifiableThunk((a, b, c, d) => (dispatch, getState) => a + b + c + d)
-  expect(doSomething(1, 2, 3, 4)(() => {}, () => {})).toBe(10)
+  expect(
+    doSomething(
+      1,
+      2,
+      3,
+      4
+    )(
+      () => {},
+      () => {}
+    )
+  ).toBe(10)
 })

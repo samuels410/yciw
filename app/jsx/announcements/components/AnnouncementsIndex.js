@@ -208,7 +208,4 @@ const connectActions = dispatch =>
     dispatch
   )
 
-export const ConnectedAnnouncementsIndex = connect(
-  connectState,
-  connectActions
-)(AnnouncementsIndex)
+export const ConnectedAnnouncementsIndex = connect(connectState, connectActions)(AnnouncementsIndex)

@@ -29,7 +29,10 @@ function renderComponent(props) {
         assignments: {
           hasMore: false,
           isLoading: false,
-          links: [{href: 'url1', title: 'link1'}, {href: 'url2', title: 'link2'}]
+          links: [
+            {href: 'url1', title: 'link1'},
+            {href: 'url2', title: 'link2'}
+          ]
         }
       }}
       collection="assignments"

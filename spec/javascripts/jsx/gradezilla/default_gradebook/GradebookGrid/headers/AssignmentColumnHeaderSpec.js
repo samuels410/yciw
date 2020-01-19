@@ -880,7 +880,10 @@ QUnit.module('GradebookGrid AssignmentColumnHeader', suiteHooks => {
         mountAndOpenOptionsMenu()
         getMenuItem($menuContent, 'Message Students Who').click()
         const [settings] = window.messageStudents.lastCall.args
-        deepEqual(settings.students.map(student => student.name), ['Betty Ford', 'Charlie Xi'])
+        deepEqual(
+          settings.students.map(student => student.name),
+          ['Betty Ford', 'Charlie Xi']
+        )
       })
     })
   })

@@ -139,7 +139,4 @@ const connectState = state =>
     'willSendNotification'
   ])
 const connectActions = dispatch => bindActionCreators(actions, dispatch)
-export const ConnectedMigrationSync = connect(
-  connectState,
-  connectActions
-)(MigrationSync)
+export const ConnectedMigrationSync = connect(connectState, connectActions)(MigrationSync)

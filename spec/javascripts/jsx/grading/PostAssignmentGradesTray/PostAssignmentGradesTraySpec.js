@@ -42,7 +42,10 @@ QUnit.module('PostAssignmentGradesTray', suiteHooks => {
       },
       onExited: sinon.spy(),
       onPosted: sinon.spy(),
-      sections: [{id: '2001', name: 'Freshmen'}, {id: '2002', name: 'Sophomores'}]
+      sections: [
+        {id: '2001', name: 'Freshmen'},
+        {id: '2002', name: 'Sophomores'}
+      ]
     }
 
     const bindRef = ref => {

@@ -166,7 +166,4 @@ const connectState = state =>
     'willIncludeCourseSettings'
   ])
 const connectActions = dispatch => bindActionCreators(actions, dispatch)
-export const ConnectedMigrationOptions = connect(
-  connectState,
-  connectActions
-)(MigrationOptions)
+export const ConnectedMigrationOptions = connect(connectState, connectActions)(MigrationOptions)

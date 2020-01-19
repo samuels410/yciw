@@ -86,7 +86,13 @@ $.fn.loadDocPreview = function(options) {
     function tellAppIViewedThisInline(serviceUsed) {
       // if I have a url to ping back to the app that I viewed this file inline, ping it.
       if (opts.attachment_view_inline_ping_url) {
-        $.ajaxJSON(opts.attachment_view_inline_ping_url, 'POST', {}, () => {}, () => {})
+        $.ajaxJSON(
+          opts.attachment_view_inline_ping_url,
+          'POST',
+          {},
+          () => {},
+          () => {}
+        )
         trackEvent(
           'Doc Previews',
           serviceUsed,

@@ -100,8 +100,8 @@ export default class CollectionView extends React.Component {
 
   isActiveEditableTheme = sharedBrandConfig =>
     !isSystemTheme(sharedBrandConfig) &&
-    (this.props.activeBrandConfig &&
-      this.props.activeBrandConfig.md5 === sharedBrandConfig.brand_config.md5)
+    this.props.activeBrandConfig &&
+    this.props.activeBrandConfig.md5 === sharedBrandConfig.brand_config.md5
 
   multipleThemesReflectActiveOne = () =>
     this.props.sharedBrandConfigs.filter(this.isActiveEditableTheme).length > 1

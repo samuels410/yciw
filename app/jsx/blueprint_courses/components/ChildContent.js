@@ -107,7 +107,4 @@ const connectState = state => ({
   terms: state.terms
 })
 const connectActions = dispatch => bindActionCreators(actions, dispatch)
-export const ConnectedChildContent = connect(
-  connectState,
-  connectActions
-)(ChildContent)
+export const ConnectedChildContent = connect(connectState, connectActions)(ChildContent)

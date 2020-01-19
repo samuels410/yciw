@@ -64,28 +64,40 @@ test('listInheritedDeveloperKeysFailed returns a error', () => {
 
 test('getDeveloperKeys retrieves account key data', () => {
   const getStub = sinon.stub(axios, 'get').returns(thenStub())
-  actions.getDeveloperKeys('http://www.test.com', {})(() => {}, () => {})
+  actions.getDeveloperKeys('http://www.test.com', {})(
+    () => {},
+    () => {}
+  )
   ok(getStub.calledWith('http://www.test.com'))
   axios.get.restore()
 })
 
 test('getDeveloperKeys retrieves account key data', () => {
   const getStub = sinon.stub(axios, 'get').returns(thenStub())
-  actions.getDeveloperKeys('http://www.test.com', {})(() => {}, () => {})
+  actions.getDeveloperKeys('http://www.test.com', {})(
+    () => {},
+    () => {}
+  )
   ok(getStub.calledWith('http://www.test.com?inherited=true'))
   axios.get.restore()
 })
 
 test('getRemainingDeveloperKeys requests keys from the specified URL', () => {
   const getStub = sinon.stub(axios, 'get').returns(thenStub())
-  actions.getRemainingDeveloperKeys('http://www.test.com', [])(() => {}, () => {})
+  actions.getRemainingDeveloperKeys('http://www.test.com', [])(
+    () => {},
+    () => {}
+  )
   ok(getStub.calledWith('http://www.test.com'))
   axios.get.restore()
 })
 
 test('getRemainingInheritedDeveloperKeys requests keys from the specified URL with inherited param', () => {
   const getStub = sinon.stub(axios, 'get').returns(thenStub())
-  actions.getRemainingInheritedDeveloperKeys('http://www.test.com', [])(() => {}, () => {})
+  actions.getRemainingInheritedDeveloperKeys('http://www.test.com', [])(
+    () => {},
+    () => {}
+  )
   ok(getStub.calledWith('http://www.test.com?inherited=true'))
   axios.get.restore()
 })

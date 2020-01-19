@@ -31,7 +31,10 @@ const defaultProps = () => ({
     }
   ],
   moveOptions: {
-    siblings: [{id: '12', title: 'Making Cake'}, {id: '30', title: 'Very Hard Quiz'}]
+    siblings: [
+      {id: '12', title: 'Making Cake'},
+      {id: '30', title: 'Very Hard Quiz'}
+    ]
   },
   onSelect: () => {}
 })
@@ -72,7 +75,10 @@ test('hasSelectedPosition() is true if selectedPosition is a relative position a
 test('isDoneSelecting() is true if props.moveOptions is siblings and hasSelectedPosition() is true', () => {
   const props = defaultProps()
   props.moveOptions = {
-    siblings: [{id: '12', title: 'Making Cake'}, {id: '30', title: 'Very Hard Quiz'}]
+    siblings: [
+      {id: '12', title: 'Making Cake'},
+      {id: '30', title: 'Very Hard Quiz'}
+    ]
   }
   const tree = enzyme.mount(<MoveSelect {...props} />)
   const instance = tree.instance()
@@ -83,7 +89,10 @@ test('isDoneSelecting() is true if props.moveOptions is siblings and hasSelected
 test('isDoneSelecting() is true if props.moveOptions is siblings because of default position', () => {
   const props = defaultProps()
   props.moveOptions = {
-    siblings: [{id: '12', title: 'Making Cake'}, {id: '30', title: 'Very Hard Quiz'}]
+    siblings: [
+      {id: '12', title: 'Making Cake'},
+      {id: '30', title: 'Very Hard Quiz'}
+    ]
   }
   const tree = enzyme.mount(<MoveSelect {...props} />)
   const instance = tree.instance()
@@ -95,7 +104,10 @@ test('isDoneSelecting() is false if props.moveOptions is groups and selectedGrou
   const props = defaultProps()
   props.moveOptions = {
     groupsLabel: 'groups',
-    groups: [{id: '12', title: 'Making Cake'}, {id: '30', title: 'Very Hard Quiz'}]
+    groups: [
+      {id: '12', title: 'Making Cake'},
+      {id: '30', title: 'Very Hard Quiz'}
+    ]
   }
   const tree = enzyme.mount(<MoveSelect {...props} />)
   const instance = tree.instance()
@@ -140,7 +152,10 @@ test('isDoneSelecting() is true if props.moveOptions is groups and selectedGroup
   const props = defaultProps()
   props.moveOptions = {
     groupsLabel: 'groups',
-    groups: [{id: '12', title: 'Making Cake'}, {id: '30', title: 'Very Hard Quiz'}]
+    groups: [
+      {id: '12', title: 'Making Cake'},
+      {id: '30', title: 'Very Hard Quiz'}
+    ]
   }
   const tree = enzyme.mount(<MoveSelect {...props} />)
   const instance = tree.instance()
@@ -167,12 +182,18 @@ test('submitSelection() calls onSelect with properly ordered items for groups', 
       {
         id: '12',
         title: 'Making Cake',
-        items: [{id: '2', title: 'foo bar'}, {id: '8', title: 'baz foo'}]
+        items: [
+          {id: '2', title: 'foo bar'},
+          {id: '8', title: 'baz foo'}
+        ]
       },
       {
         id: '30',
         title: 'Very Hard Quiz',
-        items: [{id: '4', title: 'foo baz'}, {id: '6', title: 'bar foo'}]
+        items: [
+          {id: '4', title: 'foo baz'},
+          {id: '6', title: 'bar foo'}
+        ]
       }
     ]
   }
@@ -211,12 +232,18 @@ test('submitSelection() calls onSelect with properly ordered items for multple i
       {
         id: '12',
         title: 'Making Cake',
-        items: [{id: '2', title: 'foo bar'}, {id: '8', title: 'baz foo'}]
+        items: [
+          {id: '2', title: 'foo bar'},
+          {id: '8', title: 'baz foo'}
+        ]
       },
       {
         id: '30',
         title: 'Very Hard Quiz',
-        items: [{id: '4', title: 'foo baz'}, {id: '6', title: 'bar foo'}]
+        items: [
+          {id: '4', title: 'foo baz'},
+          {id: '6', title: 'bar foo'}
+        ]
       }
     ]
   }
@@ -261,12 +288,18 @@ test('submitSelection() calls onSelect with properly ordered items for multple i
       {
         id: '12',
         title: 'Making Cake',
-        items: [{id: '2', title: 'foo bar'}, {id: '8', title: 'baz foo'}]
+        items: [
+          {id: '2', title: 'foo bar'},
+          {id: '8', title: 'baz foo'}
+        ]
       },
       {
         id: '30',
         title: 'Very Hard Quiz',
-        items: [{id: '4', title: 'foo baz'}, {id: '6', title: 'bar foo'}]
+        items: [
+          {id: '4', title: 'foo baz'},
+          {id: '6', title: 'bar foo'}
+        ]
       }
     ]
   }
@@ -311,12 +344,18 @@ test('submitSelection() calls onSelect with properly ordered items for a selecte
       {
         id: '12',
         title: 'Making Cake',
-        items: [{id: '2', title: 'foo bar'}, {id: '8', title: 'baz foo'}]
+        items: [
+          {id: '2', title: 'foo bar'},
+          {id: '8', title: 'baz foo'}
+        ]
       },
       {
         id: '30',
         title: 'Very Hard Quiz',
-        items: [{id: '4', title: 'foo baz'}, {id: '6', title: 'bar foo'}]
+        items: [
+          {id: '4', title: 'foo baz'},
+          {id: '6', title: 'bar foo'}
+        ]
       }
     ]
   }

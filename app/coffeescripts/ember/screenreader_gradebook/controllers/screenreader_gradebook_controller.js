@@ -113,8 +113,8 @@ const ScreenreaderGradebookController = Ember.ObjectController.extend({
 
     if (
       currentProgress &&
-      (currentProgress.progress.workflow_state !== 'completed' &&
-        currentProgress.progress.workflow_state !== 'failed')
+      currentProgress.progress.workflow_state !== 'completed' &&
+      currentProgress.progress.workflow_state !== 'failed'
     ) {
       const attachmentProgress = {
         progress_id: currentProgress.progress.id,
@@ -330,9 +330,10 @@ const ScreenreaderGradebookController = Ember.ObjectController.extend({
       $('#gradebook-export').prop('disabled', true)
       $('#last-exported-gradebook').hide()
 
-      return $.ajaxJSON(ENV.GRADEBOOK_OPTIONS.export_gradebook_csv_url, 'GET').then(
-        attachment_progress => this.pollGradebookCsvProgress(attachment_progress)
-      )
+      return $.ajaxJSON(
+        ENV.GRADEBOOK_OPTIONS.export_gradebook_csv_url,
+        'GET'
+      ).then(attachment_progress => this.pollGradebookCsvProgress(attachment_progress))
     },
 
     gradeUpdated(submissions) {

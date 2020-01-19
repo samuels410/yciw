@@ -69,10 +69,7 @@ export default class AddPeopleApp {
     const mapDispatchToProps = dispatch => bindActionCreators(actions, dispatch)
 
     // connect our top-level component to redux
-    this.ConnectedApp = connect(
-      mapStateToProps,
-      mapDispatchToProps
-    )(AddPeople)
+    this.ConnectedApp = connect(mapStateToProps, mapDispatchToProps)(AddPeople)
   }
 
   open() {

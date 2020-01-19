@@ -44,7 +44,10 @@ describe('DirectShareUserModal', () => {
     jest.useFakeTimers()
 
     useContentShareUserSearchApi.mockImplementationOnce(({success}) => {
-      success([{id: 'abc', name: 'abc'}, {id: 'cde', name: 'cde'}])
+      success([
+        {id: 'abc', name: 'abc'},
+        {id: 'cde', name: 'cde'}
+      ])
     })
   })
 

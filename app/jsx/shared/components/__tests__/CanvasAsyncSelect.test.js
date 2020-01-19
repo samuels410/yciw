@@ -79,7 +79,10 @@ describe('CanvasAsyncSelect', () => {
     rerender(
       selectElement({
         isLoading: false,
-        options: [{id: 'foo', label: 'bar'}, {id: 'baz', label: 'bing'}]
+        options: [
+          {id: 'foo', label: 'bar'},
+          {id: 'baz', label: 'bing'}
+        ]
       })
     )
     expect(domGetByText(ariaLive, /2 options loaded/i)).toBeInTheDocument()
@@ -94,7 +97,10 @@ describe('CanvasAsyncSelect', () => {
     rerender(
       selectElement({
         isLoading: false,
-        options: [{id: 'foo', label: 'bar'}, {id: 'baz', label: 'bing'}]
+        options: [
+          {id: 'foo', label: 'bar'},
+          {id: 'baz', label: 'bing'}
+        ]
       })
     )
     expect(domQueryByText(ariaLive, /options loaded/i)).toBe(null)

@@ -456,9 +456,4 @@ const mapDispatchToProps = {
   togglePlannerItemCompletion,
   updateTodo
 }
-export default notifier(
-  connect(
-    mapStateToProps,
-    mapDispatchToProps
-  )(ResponsivePlannerApp)
-)
+export default notifier(connect(mapStateToProps, mapDispatchToProps)(ResponsivePlannerApp))

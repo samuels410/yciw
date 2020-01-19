@@ -41,7 +41,10 @@ export default class IframesTableFix {
   cleanHackedTables(editor) {
     const hackedTables = this.getHackedTables(editor)
     const tables = editor.dom.select('table')
-    this.setHackedTables(editor, hackedTables.filter(t => tables.indexOf(t) > -1))
+    this.setHackedTables(
+      editor,
+      hackedTables.filter(t => tables.indexOf(t) > -1)
+    )
   }
 
   isTableHacked(editor, table) {

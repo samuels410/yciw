@@ -36,5 +36,8 @@ QUnit.module('DisabledTokenInput', {
 
 test('renders a list item for each token passed in', function() {
   const listItems = scryRenderedDOMComponentsWithTag(this.input, 'li')
-  propEqual(listItems.map(item => item.textContent), tokens)
+  propEqual(
+    listItems.map(item => item.textContent),
+    tokens
+  )
 })

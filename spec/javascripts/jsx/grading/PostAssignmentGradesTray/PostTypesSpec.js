@@ -112,13 +112,19 @@ QUnit.module('PostAssignmentGradesTray PostTypes', suiteHooks => {
   QUnit.module('"disabled" prop', () => {
     test('inputs are enabled when false', () => {
       mountComponent()
-      strictEqual(getPostTypeInputs().every($input => !$input.disabled), true)
+      strictEqual(
+        getPostTypeInputs().every($input => !$input.disabled),
+        true
+      )
     })
 
     test('inputs are disabled when true', () => {
       context.disabled = true
       mountComponent()
-      strictEqual(getPostTypeInputs().every($input => $input.disabled), true)
+      strictEqual(
+        getPostTypeInputs().every($input => $input.disabled),
+        true
+      )
     })
   })
 })

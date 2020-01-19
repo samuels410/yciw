@@ -468,7 +468,9 @@ describe('copyInheritedIfNeeded', () => {
     thunk(fakeDispatch, fakeGetState, {axios: fakeAxios})
     expect(fakeAxios.post).toHaveBeenCalledWith(
       '/api/v1/accounts/1/csp_settings/domains/batch_create',
-      {domains: ['canvaslms.com', 'instructure.com']}
+      {
+        domains: ['canvaslms.com', 'instructure.com']
+      }
     )
   })
 
@@ -487,7 +489,9 @@ describe('copyInheritedIfNeeded', () => {
     thunk(fakeDispatch, fakeGetState, {axios: fakeAxios})
     expect(fakeAxios.post).toHaveBeenCalledWith(
       '/api/v1/accounts/1/csp_settings/domains/batch_create',
-      {domains: ['canvaslms.com']}
+      {
+        domains: ['canvaslms.com']
+      }
     )
   })
 })

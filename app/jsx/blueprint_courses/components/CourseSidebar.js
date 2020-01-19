@@ -395,7 +395,4 @@ const connectState = state =>
     }
   )
 const connectActions = dispatch => bindActionCreators(actions, dispatch)
-export const ConnectedCourseSidebar = connect(
-  connectState,
-  connectActions
-)(CourseSidebar)
+export const ConnectedCourseSidebar = connect(connectState, connectActions)(CourseSidebar)

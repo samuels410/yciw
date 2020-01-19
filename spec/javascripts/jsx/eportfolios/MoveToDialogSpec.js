@@ -31,7 +31,10 @@ const mountDialog = (opts = {}) => {
   opts = {
     header: 'This is a dialog',
     source: {label: 'foo', id: '0'},
-    destinations: [{label: 'bar', id: '1'}, {label: 'baz', id: '2'}],
+    destinations: [
+      {label: 'bar', id: '1'},
+      {label: 'baz', id: '2'}
+    ],
     ...opts
   }
 

@@ -182,7 +182,10 @@ describe('daysHashToDays', () => {
       '2017-12-19': [mockItem('2017-12-18', {uniqueId: 3})]
     }
     const result = daysHashToDays(days)
-    expect(result).toEqual([['2017-12-18', days['2017-12-18']], ['2017-12-19', days['2017-12-19']]])
+    expect(result).toEqual([
+      ['2017-12-18', days['2017-12-18']],
+      ['2017-12-19', days['2017-12-19']]
+    ])
   })
 })
 
@@ -194,7 +197,10 @@ describe('itemsToDays', () => {
       mockItem('2017-12-19', {uniqueId: 3})
     ]
     const result = itemsToDays(items)
-    expect(result).toEqual([['2017-12-18', [items[0]]], ['2017-12-19', [items[1], items[2]]]])
+    expect(result).toEqual([
+      ['2017-12-18', [items[0]]],
+      ['2017-12-19', [items[1], items[2]]]
+    ])
   })
 })
 

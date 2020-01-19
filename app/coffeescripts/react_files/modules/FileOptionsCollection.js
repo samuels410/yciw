@@ -74,7 +74,8 @@ class FileOptionsCollection {
         const matchingFile = this.findMatchingFile(nameToTest)
         if (
           matchingFile &&
-          (file.dup !== 'overwrite' && (file.expandZip == null || file.expandZip === false))
+          file.dup !== 'overwrite' &&
+          (file.expandZip == null || file.expandZip === false)
         ) {
           if (matchingFile.get('restricted_by_master_course')) {
             file.cannotOverwrite = true

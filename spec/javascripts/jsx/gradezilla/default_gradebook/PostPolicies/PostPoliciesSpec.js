@@ -124,7 +124,10 @@ QUnit.module('Gradebook PostPolicies', suiteHooks => {
         submission_types: ['online_text_entry']
       }
       gradebook.setAssignments({2301: assignment})
-      gradebook.setSections([{id: '2001', name: 'Hogwarts'}, {id: '2002', name: 'Freshmen'}])
+      gradebook.setSections([
+        {id: '2001', name: 'Hogwarts'},
+        {id: '2002', name: 'Freshmen'}
+      ])
 
       postPolicies.initialize()
       sinon.stub(postPolicies._hideAssignmentGradesTray, 'show')
@@ -162,7 +165,10 @@ QUnit.module('Gradebook PostPolicies', suiteHooks => {
     test('includes the sections', () => {
       postPolicies.showHideAssignmentGradesTray({assignmentId: '2301'})
       const [{sections}] = postPolicies._hideAssignmentGradesTray.show.lastCall.args
-      deepEqual(sections, [{id: '2001', name: 'Hogwarts'}, {id: '2002', name: 'Freshmen'}])
+      deepEqual(sections, [
+        {id: '2001', name: 'Hogwarts'},
+        {id: '2002', name: 'Freshmen'}
+      ])
     })
 
     test('includes the `onExited` callback when showing the "Hide Assignment Grades" tray', () => {
@@ -265,7 +271,10 @@ QUnit.module('Gradebook PostPolicies', suiteHooks => {
 
       gradebook.setAssignments({2301: assignment})
       gradebook.gotChunkOfStudents([student])
-      gradebook.setSections([{id: '2001', name: 'Hogwarts'}, {id: '2002', name: 'Freshmen'}])
+      gradebook.setSections([
+        {id: '2001', name: 'Hogwarts'},
+        {id: '2002', name: 'Freshmen'}
+      ])
 
       postPolicies.initialize()
       sinon.stub(postPolicies._postAssignmentGradesTray, 'show')
@@ -303,7 +312,10 @@ QUnit.module('Gradebook PostPolicies', suiteHooks => {
     test('includes the sections', () => {
       postPolicies.showPostAssignmentGradesTray({assignmentId: '2301'})
       const [{sections}] = postPolicies._postAssignmentGradesTray.show.lastCall.args
-      deepEqual(sections, [{id: '2001', name: 'Hogwarts'}, {id: '2002', name: 'Freshmen'}])
+      deepEqual(sections, [
+        {id: '2001', name: 'Hogwarts'},
+        {id: '2002', name: 'Freshmen'}
+      ])
     })
 
     test('includes the submissions', () => {

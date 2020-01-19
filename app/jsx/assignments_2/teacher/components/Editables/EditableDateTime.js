@@ -120,7 +120,10 @@ export default class EditableDateTime extends React.Component {
     return event => {
       event.persist()
       const t = window.setTimeout(() => {
-        this._timers.splice(this._timers.findIndex(tid => tid === t), 1)
+        this._timers.splice(
+          this._timers.findIndex(tid => tid === t),
+          1
+        )
         handler(event)
       }, 100)
       this._timers.push(t)
@@ -141,7 +144,10 @@ export default class EditableDateTime extends React.Component {
         // let EditableDateTime handle the value change,
         // then flip me to view mode
         const t = window.setTimeout(() => {
-          this._timers.splice(this._timers.findIndex(tid => tid === t), 1)
+          this._timers.splice(
+            this._timers.findIndex(tid => tid === t),
+            1
+          )
           this.props.onChangeMode('view')
         }, 100)
         this._timers.push(t)

@@ -396,9 +396,6 @@ const mapDispatchToProps = dispatch => ({
   }
 })
 
-export default connect(
-  mapStateToProps,
-  mapDispatchToProps
-)(SearchFormComponent)
+export default connect(mapStateToProps, mapDispatchToProps)(SearchFormComponent)
 
 export {SearchFormComponent}

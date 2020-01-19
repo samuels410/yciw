@@ -880,10 +880,7 @@ export const DraggableDiscussionRow = compose(
     connectDragPreview: dConnect.dragPreview()
   }))
 )(DiscussionRow)
-export const ConnectedDiscussionRow = connect(
-  mapState,
-  mapDispatch
-)(DiscussionRow)
+export const ConnectedDiscussionRow = connect(mapState, mapDispatch)(DiscussionRow)
 export const ConnectedDraggableDiscussionRow = connect(
   mapState,
   mapDispatch

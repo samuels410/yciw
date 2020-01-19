@@ -35,7 +35,10 @@ $.fn.fixDialogButtons = function() {
         // clicking it will cause the dialog to close
         if ($button.is('.dialog_closer')) {
           $button.off('.fixdialogbuttons')
-          $button.on('click.fixdialogbuttons', preventDefault(() => $dialog.dialog('close')))
+          $button.on(
+            'click.fixdialogbuttons',
+            preventDefault(() => $dialog.dialog('close'))
+          )
         }
 
         if ($button.prop('type') === 'submit' && $button[0].form) {

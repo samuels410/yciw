@@ -31,7 +31,10 @@ const defaultProps = () => ({
     }
   ],
   moveOptions: {
-    siblings: [{id: '12', title: 'Making Cake'}, {id: '30', title: 'Very Hard Quiz'}]
+    siblings: [
+      {id: '12', title: 'Making Cake'},
+      {id: '30', title: 'Very Hard Quiz'}
+    ]
   },
   focusOnExit: () => {},
   formatSaveUrl: () => {},

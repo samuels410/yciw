@@ -181,7 +181,10 @@ QUnit.module('GradebookGrid StudentColumnHeaderRenderer', suiteHooks => {
     })
 
     test('sets sectionsEnabled to true when sections are in use', () => {
-      gradebook.gotSections([{id: '2001', name: 'Freshmen'}, {id: '2002', name: 'Sophomores'}])
+      gradebook.gotSections([
+        {id: '2001', name: 'Freshmen'},
+        {id: '2002', name: 'Sophomores'}
+      ])
       render()
       strictEqual(component.props.sectionsEnabled, true)
     })
@@ -194,7 +197,10 @@ QUnit.module('GradebookGrid StudentColumnHeaderRenderer', suiteHooks => {
     test('sets studentGroupsEnabled to true when student groups are present', () => {
       gradebook.setStudentGroups([
         {
-          groups: [{id: '1', name: 'Default Group 1'}, {id: '2', name: 'Default Group 2'}],
+          groups: [
+            {id: '1', name: 'Default Group 1'},
+            {id: '2', name: 'Default Group 2'}
+          ],
           id: '1',
           name: 'Default Group'
         }

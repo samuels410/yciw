@@ -177,7 +177,4 @@ const mapStateToProps = state => ({
 })
 const mapDispatchToProps = {sidebarLoadInitialItems, sidebarCompleteItem}
 
-export default connect(
-  mapStateToProps,
-  mapDispatchToProps
-)(ToDoSidebar)
+export default connect(mapStateToProps, mapDispatchToProps)(ToDoSidebar)

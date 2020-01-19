@@ -45,7 +45,10 @@ QUnit.module('SpeedGrader PostPolicies', suiteHooks => {
     document.body.appendChild($hideTrayMountPoint)
     document.body.appendChild($postTrayMountPoint)
 
-    const sections = [{id: '2001', name: 'Hogwarts'}, {id: '2002', name: 'Freshmen'}]
+    const sections = [
+      {id: '2001', name: 'Hogwarts'},
+      {id: '2002', name: 'Freshmen'}
+    ]
     afterUpdateSubmission = sinon.stub()
     updateSubmission = sinon.stub()
     postPolicies = new PostPolicies({
@@ -113,7 +116,10 @@ QUnit.module('SpeedGrader PostPolicies', suiteHooks => {
     test('passes the sections to "show"', () => {
       postPolicies.showHideAssignmentGradesTray({})
       const {sections} = hideGradesShowArgs()
-      deepEqual(sections, [{id: '2001', name: 'Hogwarts'}, {id: '2002', name: 'Freshmen'}])
+      deepEqual(sections, [
+        {id: '2001', name: 'Hogwarts'},
+        {id: '2002', name: 'Freshmen'}
+      ])
     })
 
     test('passes updateSubmission to "show"', () => {
@@ -205,7 +211,10 @@ QUnit.module('SpeedGrader PostPolicies', suiteHooks => {
     test('passes sections to "show"', () => {
       postPolicies.showPostAssignmentGradesTray({})
       const {sections} = postGradesShowArgs()
-      deepEqual(sections, [{id: '2001', name: 'Hogwarts'}, {id: '2002', name: 'Freshmen'}])
+      deepEqual(sections, [
+        {id: '2001', name: 'Hogwarts'},
+        {id: '2002', name: 'Freshmen'}
+      ])
     })
 
     test('passes submissions to "show"', () => {

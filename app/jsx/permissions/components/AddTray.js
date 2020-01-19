@@ -251,7 +251,4 @@ const mapDispatchToProps = {
   hideTray: actions.hideAllTrays
 }
 
-export const ConnectedAddTray = connect(
-  mapStateToProps,
-  mapDispatchToProps
-)(AddTray)
+export const ConnectedAddTray = connect(mapStateToProps, mapDispatchToProps)(AddTray)

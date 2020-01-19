@@ -18,8 +18,14 @@
 
 export default function getSampleData() {
   return {
-    terms: [{id: '1', name: 'Term One'}, {id: '2', name: 'Term Two'}],
-    subAccounts: [{id: '1', name: 'Account One'}, {id: '2', name: 'Account Two'}],
+    terms: [
+      {id: '1', name: 'Term One'},
+      {id: '2', name: 'Term Two'}
+    ],
+    subAccounts: [
+      {id: '1', name: 'Account One'},
+      {id: '2', name: 'Account Two'}
+    ],
     childCourse: {
       id: '1',
       enrollment_term_id: '1',

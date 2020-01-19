@@ -594,7 +594,10 @@ test('checkMigration dispatches CHECK_MIGRATION_FAIL if API returns error', asse
 
 test('addAssociations dispatches ADD_COURSE_ASSOCIATIONS when added associations are new', () => {
   const getState = () => ({
-    courses: [{id: '1', name: 'First Course'}, {id: '2', name: 'Second Course'}],
+    courses: [
+      {id: '1', name: 'First Course'},
+      {id: '2', name: 'Second Course'}
+    ],
     existingAssociations: []
   })
   const dispatchSpy = sinon.spy()
@@ -608,7 +611,10 @@ test('addAssociations dispatches ADD_COURSE_ASSOCIATIONS when added associations
 
 test('addAssociations dispatches UNDO_REMOVE_COURSE_ASSOCIATIONS when added associations are existing', () => {
   const getState = () => ({
-    courses: [{id: '1', name: 'First Course'}, {id: '2', name: 'Second Course'}],
+    courses: [
+      {id: '1', name: 'First Course'},
+      {id: '2', name: 'Second Course'}
+    ],
     existingAssociations: [{id: '1', name: 'First Course'}]
   })
   const dispatchSpy = sinon.spy()
@@ -620,7 +626,10 @@ test('addAssociations dispatches UNDO_REMOVE_COURSE_ASSOCIATIONS when added asso
 
 test('removeAssociations dispatches REMOVE_COURSE_ASSOCIATIONS when removed associations are existing', () => {
   const getState = () => ({
-    courses: [{id: '1', name: 'First Course'}, {id: '2', name: 'Second Course'}],
+    courses: [
+      {id: '1', name: 'First Course'},
+      {id: '2', name: 'Second Course'}
+    ],
     existingAssociations: [{id: '1', name: 'First Course'}]
   })
   const dispatchSpy = sinon.spy()
@@ -634,7 +643,10 @@ test('removeAssociations dispatches REMOVE_COURSE_ASSOCIATIONS when removed asso
 
 test('removeAssociations dispatches UNDO_ADD_COURSE_ASSOCIATIONS when removed associations are new', () => {
   const getState = () => ({
-    courses: [{id: '1', name: 'First Course'}, {id: '2', name: 'Second Course'}],
+    courses: [
+      {id: '1', name: 'First Course'},
+      {id: '2', name: 'Second Course'}
+    ],
     existingAssociations: []
   })
   const dispatchSpy = sinon.spy()

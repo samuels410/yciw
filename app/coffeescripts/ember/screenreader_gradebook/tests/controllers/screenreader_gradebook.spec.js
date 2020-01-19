@@ -357,7 +357,10 @@ QUnit.module('ScreenReader Gradebook', suiteHooks => {
       initializeApp()
       gradingPeriodSet = {
         id: '1501',
-        gradingPeriods: [{id: '701', weight: 50}, {id: '702', weight: 50}],
+        gradingPeriods: [
+          {id: '701', weight: 50},
+          {id: '702', weight: 50}
+        ],
         weighted: true
       }
     })
@@ -439,7 +442,10 @@ QUnit.module('ScreenReader Gradebook', suiteHooks => {
     test('normalizes the grading period set from the env', () => {
       ENV.GRADEBOOK_OPTIONS.grading_period_set = {
         id: '1501',
-        grading_periods: [{id: '701', weight: 50}, {id: '702', weight: 50}],
+        grading_periods: [
+          {id: '701', weight: 50},
+          {id: '702', weight: 50}
+        ],
         weighted: true
       }
       return asyncHelper.waitForRequests().then(() => {

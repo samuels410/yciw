@@ -223,7 +223,10 @@ export default class EditAppointmentGroupDetails {
           apptCounts[e.user.id] += 1
         })
       })
-    return this.helpIconShowIf(checkbox, _.some(apptCounts, (count, userId) => count > apptLimit))
+    return this.helpIconShowIf(
+      checkbox,
+      _.some(apptCounts, (count, userId) => count > apptLimit)
+    )
   }
 
   // show/hide the help icon
@@ -405,7 +408,8 @@ export default class EditAppointmentGroupDetails {
     if (
       contextCodes.length === 1 &&
       sectionCodes.length === 0 &&
-      (context.group_categories && context.group_categories.length > 0)
+      context.group_categories &&
+      context.group_categories.length > 0
     ) {
       this.enableGroups(context)
       if (this.apptGroup.sub_context_codes.length > 0) {

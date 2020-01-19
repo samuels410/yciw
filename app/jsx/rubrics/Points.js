@@ -64,7 +64,7 @@ const Points = props => {
           <Flex alignItems="end" wrapItems>
             <Flex.Item size="4rem" margin="none small none none">
               <TextInput
-                display='inline-block'
+                display="inline-block"
                 renderLabel={<ScreenReaderContent>{I18n.t('Points')}</ScreenReaderContent>}
                 messages={[
                   ...pointError(points),

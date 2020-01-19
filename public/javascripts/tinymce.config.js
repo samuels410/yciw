@@ -142,7 +142,8 @@ export default class EditorConfig {
     if (
       this.instConfig &&
       this.instConfig.allowMediaComments &&
-      (this.instConfig.kalturaSettings && !this.instConfig.kalturaSettings.hide_rte_button)
+      this.instConfig.kalturaSettings &&
+      !this.instConfig.kalturaSettings.hide_rte_button
     ) {
       instructure_buttons += ' instructure_record'
     }

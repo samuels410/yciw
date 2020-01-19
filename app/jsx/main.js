@@ -76,8 +76,8 @@ $('body').on(
 if (
   window.ENV.NEW_USER_TUTORIALS &&
   window.ENV.NEW_USER_TUTORIALS.is_enabled &&
-  (window.ENV.context_asset_string &&
-    splitAssetString(window.ENV.context_asset_string)[0] === 'courses')
+  window.ENV.context_asset_string &&
+  splitAssetString(window.ENV.context_asset_string)[0] === 'courses'
 ) {
   import('./new_user_tutorial/initializeNewUserTutorials').then(
     ({default: initializeNewUserTutorials}) => {

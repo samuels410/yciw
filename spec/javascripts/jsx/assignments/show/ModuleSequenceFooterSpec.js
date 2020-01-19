@@ -83,7 +83,10 @@ QUnit.module('renderModuleSequenceFooter', hooks => {
       env.group_categories = [
         {
           id: '2201',
-          groups: [{id: '2101', name: 'group 1'}, {id: '2102', name: 'group 2'}],
+          groups: [
+            {id: '2101', name: 'group 1'},
+            {id: '2102', name: 'group 2'}
+          ],
           name: 'group category 1'
         }
       ]

@@ -161,7 +161,10 @@ export function mockAssignment(overrides) {
     state: 'published',
     needsGradingCount: 0,
     course: mockCourse(),
-    modules: [{lid: '1', name: 'module 1'}, {lid: '2', name: 'module 2'}],
+    modules: [
+      {lid: '1', name: 'module 1'},
+      {lid: '2', name: 'module 2'}
+    ],
     assignmentGroup: {lid: '1', name: 'assignment group'},
     lockInfo: {
       isLocked: false

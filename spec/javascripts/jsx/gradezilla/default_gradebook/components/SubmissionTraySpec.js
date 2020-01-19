@@ -49,7 +49,12 @@ QUnit.module('SubmissionTray', hooks => {
       editSubmissionComment() {},
       enterGradesAs: 'points',
       gradingDisabled: false,
-      gradingScheme: [['A', 0.9], ['B+', 0.85], ['B', 0.8], ['B-', 0.75]],
+      gradingScheme: [
+        ['A', 0.9],
+        ['B+', 0.85],
+        ['B', 0.8],
+        ['B-', 0.75]
+      ],
       locale: 'en',
       onAnonymousSpeedGraderClick() {},
       onGradeSubmission() {},
@@ -411,7 +416,13 @@ QUnit.module('SubmissionTray', hooks => {
     })
 
     test('receives the "gradingScheme" given to the Tray', () => {
-      const gradingScheme = [['A', 0.9], ['B+', 0.85], ['B', 0.8], ['B-', 0.75], ['C+', 0.7]]
+      const gradingScheme = [
+        ['A', 0.9],
+        ['B+', 0.85],
+        ['B', 0.8],
+        ['B-', 0.75],
+        ['C+', 0.7]
+      ]
       mountComponent({enterGradesAs: 'gradingScheme', gradingScheme})
       const $el = content.querySelector('#final-grade-value')
       strictEqual($el.textContent, 'C+')
@@ -669,7 +680,13 @@ QUnit.module('SubmissionTray', hooks => {
     })
 
     test('receives the "gradingScheme" given to the Tray', () => {
-      const gradingScheme = [['A', 0.9], ['B+', 0.85], ['B', 0.8], ['B-', 0.75], ['C+', 0.7]]
+      const gradingScheme = [
+        ['A', 0.9],
+        ['B+', 0.85],
+        ['B', 0.8],
+        ['B-', 0.75],
+        ['C+', 0.7]
+      ]
       mountComponent({enterGradesAs: 'gradingScheme', gradingScheme})
       equal(findGradeInput().labelText, 'Letter Grade')
     })

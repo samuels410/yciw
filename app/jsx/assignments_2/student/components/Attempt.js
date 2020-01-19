@@ -51,4 +51,3 @@ Attempt.propTypes = {
   assignment: Assignment.shape,
   submission: Submission.shape
 }
-

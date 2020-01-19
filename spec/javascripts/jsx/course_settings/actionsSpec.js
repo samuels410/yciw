@@ -77,7 +77,10 @@ test('getCourseImage', assert => {
     }
   }
 
-  Actions.getCourseImage(1, fakeAjaxLib)(dispatched => {
+  Actions.getCourseImage(
+    1,
+    fakeAjaxLib
+  )(dispatched => {
     deepEqual(dispatched, expectedAction, 'the proper action was dispatched')
     done()
   })
@@ -121,7 +124,12 @@ test('prepareSetImage without a imageUrl calls the API to get the url', assert =
 
   sinon.spy(Actions, 'putImageData')
 
-  Actions.prepareSetImage(null, 1, 0, fakeAjaxLib)(dispatched => {
+  Actions.prepareSetImage(
+    null,
+    1,
+    0,
+    fakeAjaxLib
+  )(dispatched => {
     ok(Actions.putImageData.called, 'putImageData was called indicating successfully hit API')
     Actions.putImageData.restore()
     done()
@@ -164,7 +172,10 @@ test('uploadFile returns false when image is not valid', assert => {
     }
   }
 
-  Actions.uploadFile(fakeDragonDropEvent, 1)(dispatched => {
+  Actions.uploadFile(
+    fakeDragonDropEvent,
+    1
+  )(dispatched => {
     deepEqual(dispatched, expectedAction, 'the REJECTED_UPLOAD action was fired')
     done()
   })
@@ -189,7 +200,10 @@ test('uploadFile dispatches UPLOADING_IMAGE when file type is valid', assert => 
     type: 'UPLOADING_IMAGE'
   }
 
-  Actions.uploadFile(fakeDragonDropEvent, 1)(dispatched => {
+  Actions.uploadFile(
+    fakeDragonDropEvent,
+    1
+  )(dispatched => {
     if (dispatched.type === 'UPLOADING_IMAGE') {
       deepEqual(dispatched, expectedAction, 'the UPLOADING_IMAGE action was fired')
       done()
@@ -248,7 +262,11 @@ test('uploadFile dispatches prepareSetImage when successful', assert => {
 
   sinon.spy(Actions, 'prepareSetImage')
 
-  Actions.uploadFile(fakeDragonDropEvent, 1, fakeAjaxLib)(dispatched => {
+  Actions.uploadFile(
+    fakeDragonDropEvent,
+    1,
+    fakeAjaxLib
+  )(dispatched => {
     if (dispatched.type !== 'UPLOADING_IMAGE') {
       ok(getStub.calledWith(successUrl), 'made request to success url')
       ok(Actions.prepareSetImage.called, 'prepareSetImage was called')

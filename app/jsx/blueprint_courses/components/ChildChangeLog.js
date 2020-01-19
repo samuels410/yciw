@@ -91,7 +91,4 @@ const connectState = state => ({
   migration: state.selectedChangeLog && state.changeLogs[state.selectedChangeLog].data
 })
 const connectActions = () => ({})
-export const ConnectedChildChangeLog = connect(
-  connectState,
-  connectActions
-)(ChildChangeLog)
+export const ConnectedChildChangeLog = connect(connectState, connectActions)(ChildChangeLog)

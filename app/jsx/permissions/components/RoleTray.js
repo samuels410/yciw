@@ -541,7 +541,4 @@ const mapDispatchToProps = {
   deleteRole: actions.deleteRole
 }
 
-export const ConnectedRoleTray = connect(
-  mapStateToProps,
-  mapDispatchToProps
-)(RoleTray)
+export const ConnectedRoleTray = connect(mapStateToProps, mapDispatchToProps)(RoleTray)

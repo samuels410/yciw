@@ -128,7 +128,4 @@ const connectState = state => {
   )
 }
 const connectActions = dispatch => bindActionCreators(actions, dispatch)
-export const ConnectedSyncHistory = connect(
-  connectState,
-  connectActions
-)(SyncHistory)
+export const ConnectedSyncHistory = connect(connectState, connectActions)(SyncHistory)

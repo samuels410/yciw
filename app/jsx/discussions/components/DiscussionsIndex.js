@@ -326,8 +326,5 @@ const connectActions = dispatch =>
     dispatch
   )
 export const ConnectedDiscussionsIndex = DragDropContext(HTML5Backend)(
-  connect(
-    connectState,
-    connectActions
-  )(DiscussionsIndex)
+  connect(connectState, connectActions)(DiscussionsIndex)
 )

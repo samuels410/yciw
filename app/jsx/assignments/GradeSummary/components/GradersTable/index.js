@@ -126,7 +126,4 @@ function mapDispatchToProps(dispatch) {
   }
 }
 
-export default connect(
-  mapStateToProps,
-  mapDispatchToProps
-)(GradersTable)
+export default connect(mapStateToProps, mapDispatchToProps)(GradersTable)

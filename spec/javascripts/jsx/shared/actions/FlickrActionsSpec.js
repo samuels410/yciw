@@ -35,7 +35,10 @@ test('receiveFlickrResults removes images with needs_interstitial=1', () => {
     type: 'RECEIVE_FLICKR_RESULTS',
     results: {
       photos: {
-        photo: [{id: 1, needs_interstitial: 0}, {id: 3, needs_interstitial: 0}]
+        photo: [
+          {id: 1, needs_interstitial: 0},
+          {id: 3, needs_interstitial: 0}
+        ]
       }
     }
   })

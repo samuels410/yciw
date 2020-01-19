@@ -46,7 +46,10 @@ it('adds items to the state on ADD_OPPORTUNITIES', () => {
   const newState = opportunitiesReducer(initialState, {
     type: 'ADD_OPPORTUNITIES',
     payload: {
-      items: [{id: '1', date: '2017-04-28'}, {id: '2', date: '2017-04-29'}],
+      items: [
+        {id: '1', date: '2017-04-28'},
+        {id: '2', date: '2017-04-29'}
+      ],
       nextUrl: null
     }
   })
@@ -62,7 +65,10 @@ it('discards duplicate items on ADD_OPPORTUNITIES', () => {
   const newState = opportunitiesReducer(initialState, {
     type: 'ADD_OPPORTUNITIES',
     payload: {
-      items: [{id: '6', date: '2017-04-28'}, {id: '2', date: '2017-04-29'}],
+      items: [
+        {id: '6', date: '2017-04-28'},
+        {id: '2', date: '2017-04-29'}
+      ],
       nextUrl: null
     }
   })

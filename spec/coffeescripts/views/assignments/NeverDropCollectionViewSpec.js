@@ -75,7 +75,10 @@ const addNeverDrop = function() {
 }
 
 test('possibleValues is set to the range of assignment ids', function() {
-  deepEqual(this.never_drops.possibleValues, this.assignments.map(a => a.id))
+  deepEqual(
+    this.never_drops.possibleValues,
+    this.assignments.map(a => a.id)
+  )
 })
 
 test('adding a NeverDrop to the collection reduces availableValues by one', function() {

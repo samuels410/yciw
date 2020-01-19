@@ -153,7 +153,10 @@ export class DiscussionsContainer extends Component {
 
     const newDiscussions = update(this.state, {
       discussions: {
-        $splice: [[dragIndex, 1], [hoverIndex, 0, dragDiscussion]]
+        $splice: [
+          [dragIndex, 1],
+          [hoverIndex, 0, dragDiscussion]
+        ]
       }
     })
     this.setState({discussions: newDiscussions.discussions})
@@ -252,10 +255,7 @@ export const DroppableDiscussionsContainer = DropTarget(
   })
 )(DiscussionsContainer)
 
-export const ConnectedDiscussionsContainer = connect(
-  mapState,
-  mapDispatch
-)(DiscussionsContainer)
+export const ConnectedDiscussionsContainer = connect(mapState, mapDispatch)(DiscussionsContainer)
 
 export const DroppableConnectedDiscussionsContainer = connect(
   mapState,

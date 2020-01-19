@@ -159,7 +159,10 @@ const StudentView = createReactClass({
   },
 
   _removeUser(groupModel, userId) {
-    groupModel.set('users', groupModel.get('users').filter(u => u.id !== userId))
+    groupModel.set(
+      'users',
+      groupModel.get('users').filter(u => u.id !== userId)
+    )
     // If user was a leader, unset the leader attribute.
     const leader = groupModel.get('leader')
     if (leader && leader.id === userId) {

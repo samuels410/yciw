@@ -5228,7 +5228,10 @@ QUnit.module('SpeedGrader', rootHooks => {
 
       test('unselects existing grades when isNewGrade is passed', () => {
         EG.handleProvisionalGradeSelected({isNewGrade: true})
-        strictEqual(submission.provisional_grades.some(grade => grade.selected), false)
+        strictEqual(
+          submission.provisional_grades.some(grade => grade.selected),
+          false
+        )
       })
     })
 

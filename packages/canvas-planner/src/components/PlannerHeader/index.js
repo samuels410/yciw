@@ -502,7 +502,4 @@ const mapDispatchToProps = {
   scrollToNewActivity
 }
 
-export default connect(
-  mapStateToProps,
-  mapDispatchToProps
-)(NotifierPlannerHeader)
+export default connect(mapStateToProps, mapDispatchToProps)(NotifierPlannerHeader)

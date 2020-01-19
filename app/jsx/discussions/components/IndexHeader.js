@@ -255,7 +255,4 @@ const selectedActions = [
   'toggleModalOpen'
 ]
 const connectActions = dispatch => bindActionCreators(select(actions, selectedActions), dispatch)
-export const ConnectedIndexHeader = connect(
-  connectState,
-  connectActions
-)(IndexHeader)
+export const ConnectedIndexHeader = connect(connectState, connectActions)(IndexHeader)

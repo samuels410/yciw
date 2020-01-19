@@ -50,7 +50,10 @@ describe('RCE "Links" Plugin > LinkSet', () => {
       collection: {
         hasMore: false,
         isLoading: false,
-        links: [{href: 'url1', title: 'link1'}, {href: 'url2', title: 'link2'}]
+        links: [
+          {href: 'url1', title: 'link1'},
+          {href: 'url2', title: 'link2'}
+        ]
       }
     })
 
@@ -64,7 +67,10 @@ describe('RCE "Links" Plugin > LinkSet', () => {
       collection: {
         hasMore: true,
         isLoading: false,
-        links: [{href: 'url1', title: 'link1'}, {href: 'url2', title: 'link2'}]
+        links: [
+          {href: 'url1', title: 'link1'},
+          {href: 'url2', title: 'link2'}
+        ]
       }
     })
 
@@ -91,7 +97,10 @@ describe('RCE "Links" Plugin > LinkSet', () => {
       collection: {
         hasMore: true,
         isLoading: false,
-        links: [{href: 'url1', title: 'link1'}, {href: 'url2', title: 'link2'}]
+        links: [
+          {href: 'url1', title: 'link1'},
+          {href: 'url2', title: 'link2'}
+        ]
       },
       fetchNextPage
     })
@@ -107,7 +116,10 @@ describe('RCE "Links" Plugin > LinkSet', () => {
       collection: {
         hasMore: true,
         isLoading: false,
-        links: [{href: 'url1', title: 'link1'}, {href: 'url2', title: 'link2'}],
+        links: [
+          {href: 'url1', title: 'link1'},
+          {href: 'url2', title: 'link2'}
+        ],
         lastError: {}
       },
       fetchNextPage
@@ -137,7 +149,10 @@ describe('RCE "Links" Plugin > LinkSet', () => {
       collection: {
         hasMore: true,
         isLoading: true,
-        links: [{href: 'url1', title: 'link1'}, {href: 'url2', title: 'link2'}],
+        links: [
+          {href: 'url1', title: 'link1'},
+          {href: 'url2', title: 'link2'}
+        ],
         lastError: {}
       },
       fetchNextPage

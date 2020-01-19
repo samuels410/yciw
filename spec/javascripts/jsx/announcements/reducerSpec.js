@@ -275,7 +275,11 @@ test('DELETE_EXTERNAL_FEED_SUCCESS should set isDeleting to false', () => {
 test('DELETE_EXTERNAL_FEED_SUCCESS should delete feed from state', () => {
   const newState = reduce(actions.deleteExternalFeedSuccess({feedId: 12}), {
     externalRssFeed: {
-      feeds: [{id: 12, title: 'Felix M'}, {id: 34, title: 'Aaron H'}, {id: 37, title: 'Steve B'}]
+      feeds: [
+        {id: 12, title: 'Felix M'},
+        {id: 34, title: 'Aaron H'},
+        {id: 37, title: 'Steve B'}
+      ]
     }
   })
   deepEqual(newState.externalRssFeed.feeds, [
@@ -287,7 +291,11 @@ test('DELETE_EXTERNAL_FEED_SUCCESS should delete feed from state', () => {
 test('DELETE_EXTERNAL_FEED_FAIL should not delete feed', () => {
   const newState = reduce(actions.deleteExternalFeedFail({feedId: 12}), {
     externalRssFeed: {
-      feeds: [{id: 12, title: 'Felix M'}, {id: 34, title: 'Aaron H'}, {id: 37, title: 'Steve B'}]
+      feeds: [
+        {id: 12, title: 'Felix M'},
+        {id: 34, title: 'Aaron H'},
+        {id: 37, title: 'Steve B'}
+      ]
     }
   })
   deepEqual(newState.externalRssFeed.feeds, [

@@ -146,12 +146,7 @@ test('renders no Uncynced Changes link if there are none', () => {
   const props = defaultProps()
   const state = {...initialState}
   state.unsyncedChanges = []
-  const tree = enzyme.mount(
-    connect(
-      props,
-      state
-    )
-  )
+  const tree = enzyme.mount(connect(props, state))
   tree.find('button').simulate('click')
   ok(sidebarContentRef)
   const sidebar = $(sidebarContentRef)
@@ -165,12 +160,7 @@ test('renders no Uncynced Changes link if there are no associations', () => {
   const props = defaultProps()
   const state = {...initialState}
   state.existingAssociations = []
-  const tree = enzyme.mount(
-    connect(
-      props,
-      state
-    )
-  )
+  const tree = enzyme.mount(connect(props, state))
   tree.find('button').simulate('click')
   ok(sidebarContentRef)
   const sidebar = $(sidebarContentRef)
@@ -184,12 +174,7 @@ test('renders no Uncynced Changes link if sync is in progress', () => {
   const props = defaultProps()
   const state = {...initialState}
   state.migrationStatus = MigrationStates.states.imports_queued
-  const tree = enzyme.mount(
-    connect(
-      props,
-      state
-    )
-  )
+  const tree = enzyme.mount(connect(props, state))
   tree.find('button').simulate('click')
   ok(sidebarContentRef)
   const sidebar = $(sidebarContentRef)
@@ -203,12 +188,7 @@ test('renders no Associations link if the user not an admin', () => {
   const props = defaultProps()
   const state = {...initialState}
   state.canManageCourse = false
-  const tree = enzyme.mount(
-    connect(
-      props,
-      state
-    )
-  )
+  const tree = enzyme.mount(connect(props, state))
   tree.find('button').simulate('click')
   ok(sidebarContentRef)
   const sidebar = $(sidebarContentRef)
@@ -223,12 +203,7 @@ test('renders Sync button if has associations and sync is active and no unsyced 
   const state = {...initialState}
   state.unsyncedChanges = []
   state.migrationStatus = MigrationStates.states.imports_queued
-  const tree = enzyme.mount(
-    connect(
-      props,
-      state
-    )
-  )
+  const tree = enzyme.mount(connect(props, state))
   tree.find('button').simulate('click')
   clock.tick(500)
   ok(sidebarContentRef)
@@ -241,12 +216,7 @@ test('renders Sync button if has associations and sync is active and no unsyced 
 test('renders Sync button if has associations and has unsynced changes', () => {
   const props = defaultProps()
   const state = {...initialState}
-  const tree = enzyme.mount(
-    connect(
-      props,
-      state
-    )
-  )
+  const tree = enzyme.mount(connect(props, state))
   tree.find('button').simulate('click')
   clock.tick(500)
   ok(sidebarContentRef)
@@ -260,12 +230,7 @@ test('renders no Sync button if there are no associations', () => {
   const props = defaultProps()
   const state = {...initialState}
   state.existingAssociations = []
-  const tree = enzyme.mount(
-    connect(
-      props,
-      state
-    )
-  )
+  const tree = enzyme.mount(connect(props, state))
   tree.find('button').simulate('click')
   ok(sidebarContentRef)
   const sidebar = $(sidebarContentRef)
@@ -278,12 +243,7 @@ test('renders no Sync button if there are associations, but no unsynced changes 
   const props = defaultProps()
   const state = {...initialState}
   state.unsyncedChanges = []
-  const tree = enzyme.mount(
-    connect(
-      props,
-      state
-    )
-  )
+  const tree = enzyme.mount(connect(props, state))
   tree.find('button').simulate('click')
   ok(sidebarContentRef)
   const sidebar = $(sidebarContentRef)

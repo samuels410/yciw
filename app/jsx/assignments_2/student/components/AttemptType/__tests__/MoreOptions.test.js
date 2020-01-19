@@ -173,7 +173,10 @@ describe('MoreOptions', () => {
     it('renders the external tools in tabs', async () => {
       const overrides = {
         ExternalToolConnection: {
-          nodes: [{_id: '1', name: 'Tool 1'}, {_id: '2', name: 'Tool 2'}]
+          nodes: [
+            {_id: '1', name: 'Tool 1'},
+            {_id: '2', name: 'Tool 2'}
+          ]
         }
       }
       const mocks = await createGraphqlMocks(overrides)
@@ -193,7 +196,10 @@ describe('MoreOptions', () => {
     it('closes the modal when it receives the "LtiDeepLinkingResponse" event', async () => {
       const overrides = {
         ExternalToolConnection: {
-          nodes: [{_id: '1', name: 'Tool 1'}, {_id: '2', name: 'Tool 2'}]
+          nodes: [
+            {_id: '1', name: 'Tool 1'},
+            {_id: '2', name: 'Tool 2'}
+          ]
         }
       }
       const mocks = await createGraphqlMocks(overrides)

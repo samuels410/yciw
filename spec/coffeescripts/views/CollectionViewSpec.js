@@ -61,7 +61,10 @@ ItemView.initClass()
 QUnit.module('CollectionView', {
   setup() {
     fakeENV.setup()
-    collection = new Collection([{name: 'Jon', id: 24}, {name: 'Ryan', id: 56}])
+    collection = new Collection([
+      {name: 'Jon', id: 24},
+      {name: 'Ryan', id: 56}
+    ])
     view = new CollectionView({
       collection,
       emptyMessage() {

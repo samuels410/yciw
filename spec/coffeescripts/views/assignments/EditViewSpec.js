@@ -1597,7 +1597,10 @@ QUnit.module('EditView#validateGraderCount', hooks => {
 QUnit.module('EditView#renderModeratedGradingFormFieldGroup', suiteHooks => {
   let view
   let server
-  const availableModerators = [{name: 'John Doe', id: '21'}, {name: 'Jane Doe', id: '89'}]
+  const availableModerators = [
+    {name: 'John Doe', id: '21'},
+    {name: 'Jane Doe', id: '89'}
+  ]
 
   suiteHooks.beforeEach(() => {
     fixtures.innerHTML = `

@@ -72,4 +72,3 @@ export default function AssignmentGroupModuleNav({assignment}) {
 AssignmentGroupModuleNav.propTypes = {
   assignment: Assignment.shape
 }
-

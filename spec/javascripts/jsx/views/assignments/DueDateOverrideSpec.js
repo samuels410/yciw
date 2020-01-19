@@ -88,7 +88,10 @@ test('Does not date restrict individual student overrides', () => {
 
 QUnit.module('DueDateOverride#validateDatetimes', () => {
   test('skips overrides whose row key has already been validated', () => {
-    const overrides = [{rowKey: '1', student_ids: [1]}, {rowKey: '1', student_ids: [1]}]
+    const overrides = [
+      {rowKey: '1', student_ids: [1]},
+      {rowKey: '1', student_ids: [1]}
+    ]
     const data = {assignment_overrides: overrides}
 
     const validateSpy = sinon.spy(DateValidator.prototype, 'validateDatetimes')

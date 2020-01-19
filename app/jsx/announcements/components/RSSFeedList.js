@@ -149,7 +149,4 @@ const connectActions = dispatch =>
     Object.assign(select(actions, ['getExternalFeeds', 'deleteExternalFeed'])),
     dispatch
   )
-export const ConnectedRSSFeedList = connect(
-  connectState,
-  connectActions
-)(RSSFeedList)
+export const ConnectedRSSFeedList = connect(connectState, connectActions)(RSSFeedList)

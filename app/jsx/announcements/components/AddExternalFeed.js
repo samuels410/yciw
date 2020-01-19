@@ -260,7 +260,4 @@ export default class AddExternalFeed extends React.Component {
 const connectState = state => ({isSaving: state.externalRssFeed.isSaving})
 const connectActions = dispatch =>
   bindActionCreators(select(actions, ['addExternalFeed']), dispatch)
-export const ConnectedAddExternalFeed = connect(
-  connectState,
-  connectActions
-)(AddExternalFeed)
+export const ConnectedAddExternalFeed = connect(connectState, connectActions)(AddExternalFeed)

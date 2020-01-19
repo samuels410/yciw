@@ -79,4 +79,3 @@ LatePolicyStatusDisplay.propTypes = {
   pointsDeducted: PropTypes.number.isRequired,
   pointsPossible: PropTypes.number.isRequired
 }
-

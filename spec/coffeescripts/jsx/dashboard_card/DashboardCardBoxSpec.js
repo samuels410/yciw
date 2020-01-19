@@ -95,9 +95,9 @@ QUnit.module('DashboardCardBox', suiteHooks => {
   }
 
   function getUnfavoriteButton() {
-    return [...getDashboardMenu().querySelectorAll('.DashboardCardMenu__MovementItem')].find(
-      $button => $button.textContent.includes('Unfavorite')
-    )
+    return [
+      ...getDashboardMenu().querySelectorAll('.DashboardCardMenu__MovementItem')
+    ].find($button => $button.textContent.includes('Unfavorite'))
   }
 
   function getModal() {

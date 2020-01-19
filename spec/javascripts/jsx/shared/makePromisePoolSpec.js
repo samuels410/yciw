@@ -65,7 +65,10 @@ test('makePromisePool reports successes and failures correctly', assert => {
 
   makePromisePool(dataList, makePromise, options).then(results => {
     deepEqual(results, {
-      successes: [{data: 2, res: {}}, {data: 4, res: {}}],
+      successes: [
+        {data: 2, res: {}},
+        {data: 4, res: {}}
+      ],
       failures: [
         {data: 1, err: 'odd number'},
         {data: 3, err: 'odd number'},

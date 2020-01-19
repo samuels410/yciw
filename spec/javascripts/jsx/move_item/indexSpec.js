@@ -60,7 +60,11 @@ test('backbone.collectionToItems parses collection correctly', () => {
   }
 
   const result = backbone.collectionToItems(coll)
-  const desired = [{id: '4', title: 'foo'}, {id: '6', title: 'bar'}, {id: '8', title: 'buzz'}]
+  const desired = [
+    {id: '4', title: 'foo'},
+    {id: '6', title: 'bar'},
+    {id: '8', title: 'buzz'}
+  ]
 
   deepEqual(result, desired)
 })
@@ -97,8 +101,22 @@ test('backbone.collectionToGroups parses collection correctly', () => {
 
   const result = backbone.collectionToGroups(coll, col => col.attributes.users)
   const desired = [
-    {id: '4', title: 'foo', items: [{id: '4', title: 'foo'}, {id: '6', title: 'bar'}]},
-    {id: '6', title: 'bar', items: [{id: '4', title: 'foo'}, {id: '6', title: 'bar'}]}
+    {
+      id: '4',
+      title: 'foo',
+      items: [
+        {id: '4', title: 'foo'},
+        {id: '6', title: 'bar'}
+      ]
+    },
+    {
+      id: '6',
+      title: 'bar',
+      items: [
+        {id: '4', title: 'foo'},
+        {id: '6', title: 'bar'}
+      ]
+    }
   ]
 
   deepEqual(result, desired)

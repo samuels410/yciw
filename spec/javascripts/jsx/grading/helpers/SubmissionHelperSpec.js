@@ -146,17 +146,18 @@ QUnit.module('SubmissionHelper', suiteHooks => {
         test('sorts scored entries by decreasing similarity score', () => {
           const entries = extractSimilarityInfo(submissionWithAttachments).entries
           const scoredEntries = entries.filter(entry => entry.data.status === 'scored')
-          deepEqual(scoredEntries.map(entry => entry.data.similarity_score), [75, 25])
+          deepEqual(
+            scoredEntries.map(entry => entry.data.similarity_score),
+            [75, 25]
+          )
         })
 
         test('sets the "id" field for each entry to the ID of the attachment for that entry', () => {
           const entries = extractSimilarityInfo(submissionWithAttachments).entries
-          deepEqual(entries.map(entry => entry.id), [
-            'attachment_2004',
-            'attachment_2003',
-            'attachment_2002',
-            'attachment_2001'
-          ])
+          deepEqual(
+            entries.map(entry => entry.id),
+            ['attachment_2004', 'attachment_2003', 'attachment_2002', 'attachment_2001']
+          )
         })
 
         test('uses data from the "attachment" field nested inside the attachment if present', () => {

@@ -37,7 +37,10 @@ export default class SearchView extends View {
   }
 
   onSearch(tokens) {
-    return this.trigger('search', _.map(tokens, x => `user_${x}`))
+    return this.trigger(
+      'search',
+      _.map(tokens, x => `user_${x}`)
+    )
   }
 }
 SearchView.initClass()

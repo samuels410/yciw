@@ -144,7 +144,8 @@ class __Folder extends FilesystemObject {
   isEmpty() {
     return (
       !!(this.files.loadedAll && this.files.length === 0) &&
-      (this.folders.loadedAll && this.folders.length === 0)
+      this.folders.loadedAll &&
+      this.folders.length === 0
     )
   }
 

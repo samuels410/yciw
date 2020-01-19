@@ -156,7 +156,10 @@ QUnit.module('Gradebook Submissions', suiteHooks => {
     test('uses the ids of the related students to set up grading', () => {
       gradebook.gotSubmissionsChunk(studentSubmissions)
       const [students] = gradebook.setupGrading.lastCall.args
-      deepEqual(students.map(student => student.id), ['1101', '1102'])
+      deepEqual(
+        students.map(student => student.id),
+        ['1101', '1102']
+      )
     })
 
     QUnit.module('when the assignment is only visible to overrides', contextHooks => {
