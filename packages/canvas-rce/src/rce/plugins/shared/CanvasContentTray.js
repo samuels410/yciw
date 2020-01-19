@@ -43,15 +43,17 @@ function getTrayLabel({contentType, contentSubtype}) {
 
   switch (contentSubtype) {
     case 'images':
-        return contentType === 'course_files' ?
-          formatMessage('Course Images') :
-          formatMessage('User Images')
-    // case 'media':
-    //   return formatMessage('Course Media')
+      return contentType === 'course_files'
+        ? formatMessage('Course Images')
+        : formatMessage('User Images')
+    case 'media':
+      return contentType === 'course_files'
+        ? formatMessage('Course Media')
+        : formatMessage('User Media')
     case 'documents':
-      return contentType === 'course_files' ?
-        formatMessage('Course Documents') :
-        formatMessage('User Documents')
+      return contentType === 'course_files'
+        ? formatMessage('Course Documents')
+        : formatMessage('User Documents')
     default:
       return formatMessage('Tray') // Shouldn't ever get here
   }
@@ -61,7 +63,9 @@ const thePanels = {
   links: React.lazy(() => import('../instructure_links/components/LinksPanel')),
   images: React.lazy(() => import('../instructure_image/Images')),
   documents: React.lazy(() => import('../instructure_documents/components/DocumentsPanel')),
-  // media: React.lazy(() => import('./FakeComponent'))
+  media: React.lazy(() => import('../instructure_record/MediaPanel')),
+  all: React.lazy(() => import('./FileBrowser')),
+  unknown: React.lazy(() => import('./UnknownFileTypePanel'))
 }
 /**
  * @param {contentType, contentSubType} filterSettings: key to which panel is desired
@@ -73,18 +77,60 @@ function renderContentComponent({contentType, contentSubtype}, contentProps) {
   if (contentType === 'links') {
     Component = thePanels.links
   } else {
-    Component = thePanels[contentSubtype]
+    Component = contentSubtype in thePanels ? thePanels[contentSubtype] : thePanels.unknown
   }
   return Component && <Component {...contentProps} />
 }
 
 const FILTER_SETTINGS_BY_PLUGIN = {
-  user_documents: {contextType: 'user', contentType: 'user_files', contentSubtype: 'documents', sortValue: 'date_added'},
-  course_documents: {contextType: 'course', contentType: 'course_files', contentSubtype: 'documents', sortValue: 'date_added'},
-  user_images: {contextType: 'user', contentType: 'user_files', contentSubtype: 'images', sortValue: 'date_added'},
-  course_images: {contextType: 'course', contentType: 'course_files', contentSubtype: 'images', sortValue: 'date_added'},
-  links: {contextType: 'course', contentType: 'links', contentSubtype: 'all', sortValue: 'date_added'},
-  // media: {contentType: 'files', contentSubtype: 'media', sortValue: 'date_added'}
+  user_documents: {
+    contextType: 'user',
+    contentType: 'user_files',
+    contentSubtype: 'documents',
+    sortValue: 'date_added'
+  },
+  course_documents: {
+    contextType: 'course',
+    contentType: 'course_files',
+    contentSubtype: 'documents',
+    sortValue: 'date_added'
+  },
+  user_images: {
+    contextType: 'user',
+    contentType: 'user_files',
+    contentSubtype: 'images',
+    sortValue: 'date_added'
+  },
+  course_images: {
+    contextType: 'course',
+    contentType: 'course_files',
+    contentSubtype: 'images',
+    sortValue: 'date_added'
+  },
+  user_media: {
+    contextType: 'user',
+    contentType: 'user_files',
+    contentSubtype: 'media',
+    sortValue: 'date_added'
+  },
+  course_media: {
+    contextType: 'course',
+    contentType: 'course_files',
+    contentSubtype: 'media',
+    sortValue: 'date_added'
+  },
+  links: {
+    contextType: 'course',
+    contentType: 'links',
+    contentSubtype: 'all',
+    sortValue: 'date_added'
+  },
+  all: {
+    contextType: 'course',
+    contentType: 'course_files',
+    contentSubtype: 'all',
+    sortValue: 'alphabetical'
+  }
 }
 
 /**
@@ -99,12 +145,10 @@ export default function CanvasContentTray(props) {
 
   const onTrayClosing = props.onTrayClosing
 
-  const handleDismissTray = useCallback(
-    () => {
-      onTrayClosing && onTrayClosing(true) // tell RCEWrapper we're closing
-      setIsOpen(false)
-    }, [onTrayClosing]
-  )
+  const handleDismissTray = useCallback(() => {
+    onTrayClosing && onTrayClosing(true) // tell RCEWrapper we're closing
+    setIsOpen(false)
+  }, [onTrayClosing])
 
   useEffect(() => {
     const controller = {
@@ -145,7 +189,7 @@ export default function CanvasContentTray(props) {
         case 'user_files':
           contextType = 'user'
           contextId = props.containingContext.userId
-          break;
+          break
         case 'course_files':
         case 'links':
           contextType = 'course'
@@ -193,7 +237,7 @@ export default function CanvasContentTray(props) {
               <Filter
                 {...filterSettings}
                 userContextType={props.contextType}
-                onChange={(newFilter) => {
+                onChange={newFilter => {
                   handleFilterChange(newFilter, contentProps.onChangeContext)
                 }}
               />
@@ -201,9 +245,9 @@ export default function CanvasContentTray(props) {
 
             <Flex.Item grow shrink margin="xx-small 0 0 0">
               <ErrorBoundary>
-                    <Suspense fallback={<Spinner renderTitle={renderLoading} size="large" />}>
-                      {renderContentComponent(filterSettings, contentProps)}
-                    </Suspense>
+                <Suspense fallback={<Spinner renderTitle={renderLoading} size="large" />}>
+                  {renderContentComponent(filterSettings, contentProps)}
+                </Suspense>
               </ErrorBoundary>
             </Flex.Item>
           </Flex>
@@ -215,7 +259,9 @@ export default function CanvasContentTray(props) {
 
 function requiredWithoutSource(props, propName, componentName) {
   if (props.source == null && props[propName] == null) {
-    throw new Error(`The prop \`${propName}\` is marked as required in \`${componentName}\`, but its value is \`${props[propName]}\`.`)
+    throw new Error(
+      `The prop \`${propName}\` is marked as required in \`${componentName}\`, but its value is \`${props[propName]}\`.`
+    )
   }
 }
 

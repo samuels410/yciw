@@ -21,6 +21,7 @@ require 'atom'
 class Account < ActiveRecord::Base
   include Context
   include OutcomeImportContext
+  include Pronouns
 
   INSTANCE_GUID_SUFFIX = 'canvas-lms'
 
@@ -200,6 +201,7 @@ class Account < ActiveRecord::Base
   add_setting :restrict_quiz_questions, :boolean => true, :root_only => true, :default => false
   add_setting :no_enrollments_can_create_courses, :boolean => true, :root_only => true, :default => false
   add_setting :allow_sending_scores_in_emails, :boolean => true, :root_only => true
+  add_setting :can_add_pronouns, :boolean => true, :root_only => true, :default => false
 
   add_setting :self_enrollment
   add_setting :equella_endpoint
@@ -248,6 +250,10 @@ class Account < ActiveRecord::Base
 
   add_setting :require_confirmed_email, :boolean => true, :root_only => true, :default => false
 
+  add_setting :enable_course_catalog, :boolean => true, :root_only => true, :default => false
+  add_setting :usage_rights_required, :boolean => true, :default => false, :inheritable => true
+
+
   def settings=(hash)
     if hash.is_a?(Hash) || hash.is_a?(ActionController::Parameters)
       hash.each do |key, val|
@@ -287,12 +293,25 @@ class Account < ActiveRecord::Base
     settings[:product_name] || t("#product_name", "Canvas")
   end
 
+  def usage_rights_required?
+    usage_rights_required[:value]
+  end
+
   def allow_global_includes?
     if root_account?
       global_includes?
     else
       root_account.try(:sub_account_includes?) && root_account.try(:allow_global_includes?)
     end
+  end
+
+  def pronouns
+    return [] unless settings[:can_add_pronouns]
+    settings[:pronouns]&.map{|p| translate_pronouns(p)} || Pronouns.default_pronouns
+  end
+
+  def pronouns=(pronouns)
+    settings[:pronouns] = pronouns&.map{|p| untranslate_pronouns(p)}&.reject(&:blank?)
   end
 
   def mfa_settings
@@ -1090,6 +1109,10 @@ class Account < ActiveRecord::Base
     }
     can :create_courses
 
+    # allow teachers to view term dates
+    given { |user| self.root_account? && !self.site_admin? && self.enrollments.active.of_instructor_type.where(:user_id => user).exists? }
+    can :read_terms
+
     # any logged in user can read global outcomes, but must be checked against the site admin
     given{ |user| self.site_admin? && user }
     can :read_global_outcomes
@@ -1440,6 +1463,7 @@ class Account < ActiveRecord::Base
   TAB_ADMIN_TOOLS = 17
   TAB_SEARCH = 18
   TAB_BRAND_CONFIGS = 19
+  TAB_EPORTFOLIO_MODERATION = 20
 
   # site admin tabs
   TAB_PLUGINS = 14
@@ -1493,6 +1517,14 @@ class Account < ActiveRecord::Base
     tabs += external_tool_tabs(opts, user)
     tabs += Lti::MessageHandler.lti_apps_tabs(self, [Lti::ResourcePlacement::ACCOUNT_NAVIGATION], opts)
     tabs << { :id => TAB_ADMIN_TOOLS, :label => t('#account.tab_admin_tools', "Admin Tools"), :css_class => 'admin_tools', :href => :account_admin_tools_path } if can_see_admin_tools_tab?(user)
+    if user && grants_right?(user, :moderate_user_content) && root_account.feature_enabled?(:eportfolio_moderation)
+      tabs << {
+        id: TAB_EPORTFOLIO_MODERATION,
+        label: t("ePortfolio Moderation"),
+        css_class: "eportfolio_moderation",
+        href: :account_eportfolio_moderation_path
+      }
+    end
     tabs << { :id => TAB_SETTINGS, :label => t('#account.tab_settings', "Settings"), :css_class => 'settings', :href => :account_settings_path }
     tabs.delete_if{ |t| t[:visibility] == 'admins' } unless self.grants_right?(user, :manage)
     tabs

@@ -19,9 +19,9 @@
 import React, {Component} from 'react'
 import I18n from 'i18n!security_panel'
 import {connect} from 'react-redux'
-import {bool, oneOf, string, func} from 'prop-types'
+import {bool, oneOf, string, func, number, arrayOf, element} from 'prop-types'
 import {Heading, Text, Spinner} from '@instructure/ui-elements'
-import {View, Grid, GridCol, GridRow} from '@instructure/ui-layout'
+import {View, Grid} from '@instructure/ui-layout'
 import {Checkbox} from '@instructure/ui-forms'
 import {
   getCspEnabled,
@@ -31,8 +31,6 @@ import {
   setCspInherited
 } from '../actions'
 import {ConnectedWhitelist} from './Whitelist'
-
-import {CONFIG} from '../index'
 
 export class SecurityPanel extends Component {
   static propTypes = {
@@ -46,7 +44,10 @@ export class SecurityPanel extends Component {
     setCspInherited: func.isRequired,
     getCurrentWhitelist: func.isRequired,
     isSubAccount: bool,
-    whitelistsHaveLoaded: bool
+    whitelistsHaveLoaded: bool,
+    maxDomains: number.isRequired,
+    accountId: string.isRequired,
+    liveRegion: arrayOf(element).isRequired
   }
 
   static defaultProps = {
@@ -84,14 +85,14 @@ export class SecurityPanel extends Component {
                (e.g. *.instructure.com). Canvas and Instructure domains are included
                automatically and do not count against your 50 domain limit.`,
               {
-                max_domains: CONFIG.max_domains
+                max_domains: this.props.maxDomains
               }
             )}
           </Text>
         </View>
         <Grid>
-          <GridRow>
-            <GridCol>
+          <Grid.Row>
+            <Grid.Col>
               {this.props.isSubAccount && (
                 <View margin="0 xx-small">
                   <Checkbox
@@ -109,13 +110,13 @@ export class SecurityPanel extends Component {
                 checked={this.props.cspEnabled}
                 disabled={this.props.cspInherited && this.props.isSubAccount}
               />
-            </GridCol>
-          </GridRow>
-          <GridRow>
-            <GridCol>
+            </Grid.Col>
+          </Grid.Row>
+          <Grid.Row>
+            <Grid.Col>
               {!this.props.whitelistsHaveLoaded ? (
                 <View as="div" margin="large" padding="large" textAlign="center">
-                  <Spinner size="large" title={I18n.t('Loading')} />
+                  <Spinner size="large" renderTitle={I18n.t('Loading')} />
                 </View>
               ) : (
                 <ConnectedWhitelist
@@ -123,10 +124,13 @@ export class SecurityPanel extends Component {
                   contextId={this.props.contextId}
                   isSubAccount={this.props.isSubAccount}
                   inherited={this.props.cspInherited}
+                  maxDomains={this.props.maxDomains}
+                  accountId={this.props.accountId}
+                  liveRegion={this.props.liveRegion}
                 />
               )}
-            </GridCol>
-          </GridRow>
+            </Grid.Col>
+          </Grid.Row>
         </Grid>
       </div>
     )
@@ -150,7 +154,4 @@ const mapDispatchToProps = {
   getCurrentWhitelist
 }
 
-export const ConnectedSecurityPanel = connect(
-  mapStateToProps,
-  mapDispatchToProps
-)(SecurityPanel)
+export const ConnectedSecurityPanel = connect(mapStateToProps, mapDispatchToProps)(SecurityPanel)

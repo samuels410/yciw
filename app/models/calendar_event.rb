@@ -164,9 +164,14 @@ class CalendarEvent < ActiveRecord::Base
     SQL
   }
 
-  scope :not_hidden, -> {
-    where("NOT EXISTS (SELECT id FROM #{CalendarEvent.quoted_table_name} sub_events WHERE sub_events.parent_calendar_event_id=calendar_events.id)")
-  }
+  scope :not_hidden, -> do
+    where("NOT EXISTS (
+      SELECT id 
+      FROM #{CalendarEvent.quoted_table_name} sub_events
+      WHERE sub_events.parent_calendar_event_id=calendar_events.id
+        AND sub_events.workflow_state <> 'deleted'
+    )")
+  end
 
   scope :undated, -> { where(:start_at => nil, :end_at => nil) }
 
@@ -356,6 +361,7 @@ class CalendarEvent < ActiveRecord::Base
         context.touch if context_type == 'AppointmentGroup' # ensures end_at/start_at get updated
         # when deleting an appointment or appointment_participant, make sure we reset the cache
         appointment_group.clear_cached_available_slots!
+        appointment_group.save!
       end
       if parent_event && parent_event.locked? && parent_event.child_events.size == 0
         parent_event.workflow_state = 'active'

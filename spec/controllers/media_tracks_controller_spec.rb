@@ -53,6 +53,16 @@ describe MediaTracksController do
       post 'create', params: {:media_object_id => @mo.media_id, :kind => 'subtitles', :locale => 'en', :content => example_ttml_susceptible_to_xss}
       expect(response).to have_http_status(:unprocessable_entity)
     end
+
+    it "should validate :kind" do
+      post 'create', params: {:media_object_id => @mo.media_id, :kind => 'unkind', :locale => 'en', :content => '1'}
+      expect(response).to have_http_status(:unprocessable_entity)
+    end
+
+    it "should validate :locale" do
+      post 'create', params: {:media_object_id => @mo.media_id, :kind => 'subtitles', :locale => '<img src="lolcats.gif">', :content => '1'}
+      expect(response).to have_http_status(:unprocessable_entity)
+    end
   end
 
   describe "#show" do
@@ -60,7 +70,7 @@ describe MediaTracksController do
       track = @mo.media_tracks.create!(kind: 'subtitles', locale: 'en', content: "subs")
       get 'show', params: {:media_object_id => @mo.media_id, :id => track.id}
       expect(response).to be_successful
-      expect(response.body).to eq track.content
+      expect(response.body).to eq track.webvtt_content
     end
 
     it "should not show tracks that are in TTML format because it is vulnerable to xss" do

@@ -143,7 +143,7 @@ export default class DiscussionSettings extends Component {
         className="discussion-settings-v2-spinner-container"
         tabIndex="-1"
       >
-        <Spinner title={I18n.t('Saving')} size="small" />
+        <Spinner renderTitle={I18n.t('Saving')} size="small" />
       </div>
     )
   }
@@ -190,7 +190,8 @@ export default class DiscussionSettings extends Component {
           <Modal.Footer>
             <Button disabled={this.props.isSavingSettings} onClick={this.props.toggleModalOpen}>
               {I18n.t('Cancel')}
-            </Button>&nbsp;
+            </Button>
+            &nbsp;
             <Button
               id="submit_discussion_settings"
               disabled={this.props.isSavingSettings}

@@ -379,15 +379,18 @@ class FilesController < ApplicationController
         has_external_tools = !context.is_a?(Group) && tool_context
 
         file_menu_tools = (has_external_tools ? external_tools_display_hashes(:file_menu, tool_context, [:accept_media_types]) : [])
+        file_index_menu_tools = (has_external_tools && @domain_root_account&.feature_enabled?(:commons_favorites)) ?
+          external_tools_display_hashes(:file_index_menu, tool_context) : []
 
         {
           asset_string: context.asset_string,
           name: context == @current_user ? t('my_files', 'My Files') : context.name,
-          usage_rights_required: context.feature_enabled?(:usage_rights_required),
+          usage_rights_required: tool_context.respond_to?(:usage_rights_required?) && tool_context.usage_rights_required?,
           permissions: {
             manage_files: context.grants_right?(@current_user, session, :manage_files),
           },
-          file_menu_tools: file_menu_tools
+          file_menu_tools: file_menu_tools,
+          file_index_menu_tools: file_index_menu_tools
         }
       end
 
@@ -1108,7 +1111,7 @@ class FilesController < ApplicationController
       @attachment.hidden = value_to_boolean(params[:hidden]) if params.key?(:hidden)
 
       @attachment.set_publish_state_for_usage_rights if @attachment.context.is_a?(Group)
-      if !@attachment.locked? && @attachment.locked_changed? && @attachment.usage_rights_id.nil? && @context.respond_to?(:feature_enabled?)  && @context.feature_enabled?(:usage_rights_required)
+      if !@attachment.locked? && @attachment.locked_changed? && @attachment.usage_rights_id.nil? && @context.respond_to?(:usage_rights_required?) && @context.usage_rights_required?
         return render :json => { :message => I18n.t('This file must have usage_rights set before it can be published.') }, :status => :bad_request
       end
       if (@attachment.folder_id_changed? || @attachment.display_name_changed?) && @attachment.folder.active_file_attachments.where(display_name: @attachment.display_name).where("id<>?", @attachment.id).exists?
@@ -1192,7 +1195,14 @@ class FilesController < ApplicationController
     if @context.is_a?(User)
       @context.can_masquerade?(@current_user, @domain_root_account)
     else
-      @context.grants_right?(@current_user, nil, :manage_files) &&
+      permission_context =
+        case @context
+        when Course, Account, Group
+          @context
+        else
+          @context.respond_to?(:context) ? @context.context : @context
+        end
+      permission_context.grants_right?(@current_user, nil, :manage_files) &&
         @domain_root_account.grants_right?(@current_user, nil, :become_user)
     end
   end

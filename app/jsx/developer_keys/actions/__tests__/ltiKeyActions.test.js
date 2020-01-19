@@ -16,8 +16,7 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-import actions from 'jsx/developer_keys/actions/ltiKeyActions'
-import developerKeysActions from 'jsx/developer_keys/actions/developerKeysActions'
+import actions from 'jsx/developer_keys/actions/developerKeysActions'
 import axios from 'axios'
 
 const dispatch = jest.fn()
@@ -47,22 +46,13 @@ describe('saveLtiToolConfiguration', () => {
 
   it('sets the developer key with provided fields', () => {
     save()
-    expect(dispatch).toBeCalledWith(developerKeysActions.setEditingDeveloperKey({name: 'test'}))
-  })
-
-  it('sets the tool configuration url if provided', () => {
-    save(true)
-    expect(dispatch).toBeCalledWith(actions.setLtiToolConfigurationUrl('test.url'))
+    expect(dispatch).toHaveBeenCalledWith(actions.setEditingDeveloperKey({name: 'test'}))
   })
 
   describe('on successful response', () => {
-    it('sets the tool configuration', () => {
-      expect(dispatch).toBeCalledWith(actions.setLtiToolConfiguration({test: 'config'}))
-    })
-
     it('prepends the developer key to the list', () => {
-      expect(dispatch).toBeCalledWith(
-        developerKeysActions.listDeveloperKeysPrepend({
+      expect(dispatch).toHaveBeenCalledWith(
+        actions.listDeveloperKeysPrepend({
           id: 100000000087,
           name: 'test key',
           tool_configuration: {test: 'config'}
@@ -72,7 +62,7 @@ describe('saveLtiToolConfiguration', () => {
   })
 })
 
-describe('ltiKeysUpdateCustomizations', () => {
+describe('updateLtiKey', () => {
   beforeAll(() => {
     axios.put = jest.fn().mockResolvedValue({})
   })
@@ -89,17 +79,21 @@ describe('ltiKeysUpdateCustomizations', () => {
   const customFields = 'foo=bar\r\nkey=value'
   const developerKey = {
     scopes,
-    redirect_uris: redirectUris
+    redirect_uris: redirectUris,
+    name: 'Test',
+    notes: 'This is a test',
+    email: 'test@example.com',
+    access_token_count: 1
   }
 
-  const update = dispatch => {
-    actions.ltiKeysUpdateCustomizations(
+  const update = () => {
+    actions.updateLtiKey(
       developerKey,
       disabledPlacements,
       developerKeyId,
       toolConfiguration,
       customFields
-    )(dispatch)
+    )
   }
 
   it('makes a request to the tool config update endpoint', () => {
@@ -110,7 +104,10 @@ describe('ltiKeysUpdateCustomizations', () => {
       {
         developer_key: {
           scopes,
-          redirect_uris: redirectUris
+          redirect_uris: redirectUris,
+          name: developerKey.name,
+          notes: developerKey.notes,
+          email: developerKey.email
         },
         tool_configuration: {
           disabled_placements: disabledPlacements,

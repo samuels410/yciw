@@ -143,6 +143,11 @@ class Submission < ActiveRecord::Base
 
   scope :for_context_codes, lambda { |context_codes| where(:context_code => context_codes) }
 
+  scope :postable, -> { graded.union(with_hidden_comments) }
+  scope :with_hidden_comments, -> {
+    where("EXISTS (?)", SubmissionComment.where("submission_id = submissions.id AND hidden = true"))
+  }
+
   # This should only be used in the course drop down to show assignments recently graded.
   scope :recently_graded_assignments, lambda { |user_id, date, limit|
     select("assignments.id, assignments.title, assignments.points_possible, assignments.due_at,
@@ -213,6 +218,7 @@ class Submission < ActiveRecord::Base
   IdBookmarker = BookmarkedCollection::SimpleBookmarker.new(Submission, :id)
 
   scope :anonymized, -> { where.not(anonymous_id: nil) }
+  scope :due_in_past, -> { where('cached_due_date <= ?', Time.now.utc) }
 
   scope :posted, -> { where.not(posted_at: nil) }
   scope :unposted, -> { where(posted_at: nil) }
@@ -1104,6 +1110,10 @@ class Submission < ActiveRecord::Base
       if self.body.blank?
         errors.add(:body, 'Text entry submission cannot be empty')
       end
+    when 'online_url'
+      if self.url.blank?
+        errors.add(:url, 'URL entry submission cannot be empty')
+      end
     end
   end
 
@@ -1903,20 +1913,6 @@ class Submission < ActiveRecord::Base
     self.assignment.grading_type
   end
 
-  # Note 2012-10-12:
-  #   Deprecating this method due to view code in the model. The only place
-  #   it appears to be used is in the _recent_feedback.html.erb partial.
-  def readable_grade
-    warn "[DEPRECATED] The Submission#readable_grade method will be removed soon"
-    return nil unless grade
-    case grading_type
-      when 'points'
-        "#{grade} out of #{assignment.points_possible}" rescue grade.capitalize
-      else
-        grade.capitalize
-    end
-  end
-
   def last_teacher_comment
     if association(:submission_comments).loaded?
       submission_comments.reverse.detect{ |com| !com.draft && com.author_id != user_id }
@@ -2041,7 +2037,7 @@ class Submission < ActiveRecord::Base
     opts[:draft] = !!opts[:draft_comment]
     if opts[:comment].empty?
       if opts[:media_comment_id]
-        opts[:comment] = t('media_comment', "This is a media comment.")
+        opts[:comment] = ''
       elsif opts[:attachments].try(:length)
         opts[:comment] = t('attached_files_comment', "See attached files.")
       end
@@ -2062,7 +2058,7 @@ class Submission < ActiveRecord::Base
     valid_keys = [:comment, :author, :media_comment_id, :media_comment_type,
                   :group_comment_id, :assessment_request, :attachments,
                   :anonymous, :hidden, :provisional_grade_id, :draft, :attempt]
-    if opts[:comment].present?
+    if opts[:comment].present? || opts[:media_comment_id]
       comment = submission_comments.create!(opts.slice(*valid_keys))
     end
     opts[:assessment_request].comment_added(comment) if opts[:assessment_request] && comment
@@ -2476,9 +2472,10 @@ class Submission < ActiveRecord::Base
     if assignment.post_manually?
       posted_at.blank?
     else
-      # there must be a grade to hide otherwise we're incorrectly indicating
-      # that a grade is hidden when there isn't one present
-      graded? && !posted?
+      # Only indicate that the grade is hidden if there's an actual grade.
+      # Similarly, hide the grade if the student resubmits (which will keep
+      # the old grade but bump the workflow back to "submitted").
+      (graded? || resubmitted?) && !posted?
     end
   end
 
@@ -2501,11 +2498,25 @@ class Submission < ActiveRecord::Base
     !self.has_submission? && !self.graded?
   end
 
-  def visible_rubric_assessments_for(viewing_user)
+  def visible_rubric_assessments_for(viewing_user, attempt: nil)
     return [] unless posted? || grants_right?(viewing_user, :read_grade)
     return [] unless self.assignment.rubric_association
 
-    filtered_assessments = self.rubric_assessments.select do |a|
+    assessments =
+      if attempt
+        self.rubric_assessments.each_with_object([]) do |assessment, assessments_for_attempt|
+          if assessment.artifact_attempt == attempt
+            assessments_for_attempt << assessment
+          else
+            version = assessment.versions.find { |v| v.model.artifact_attempt == attempt }
+            assessments_for_attempt << version.model if version
+          end
+        end
+      else
+        self.rubric_assessments
+      end
+
+    filtered_assessments = assessments.select do |a|
       a.grants_right?(viewing_user, :read) &&
         a.rubric_association == self.assignment.rubric_association
     end
@@ -2696,8 +2707,9 @@ class Submission < ActiveRecord::Base
   def comment_causes_posting?(author:, draft:, provisional:)
     return false if posted? || assignment.post_manually?
     return false if draft || provisional
+    return false if author.blank?
 
-    author.present? && assignment.context.instructor_ids.include?(author.id)
+    assignment.context.instructor_ids.include?(author.id) || assignment.context.account_membership_allows(author)
   end
 
   def handle_posted_at_changed

@@ -38,13 +38,11 @@
 #         },
 #         "assignment": {
 #           "description": "The submission's assignment (see the assignments API) (optional)",
-#           "example": "Assignment",
-#           "type": "string"
+#           "$ref": "Assignment"
 #         },
 #         "course": {
 #           "description": "The submission's course (see the course API) (optional)",
-#           "example": "Course",
-#           "type": "string"
+#           "$ref": "Course"
 #         },
 #         "attempt": {
 #           "description": "This is the submission attempt number.",
@@ -124,8 +122,7 @@
 #         },
 #         "user": {
 #           "description": "The submissions user (see user API) (optional)",
-#           "example": "User",
-#           "type": "string"
+#           "$ref": "User"
 #         },
 #         "late": {
 #           "description": "Whether the submission was made after the applicable due date",
@@ -397,8 +394,8 @@ class SubmissionsApiController < ApplicationController
       return render json: { error: 'too many students' }, status: 400
     end
 
+    enrollments = (@section || @context).all_student_enrollments
     if (enrollment_state = params[:enrollment_state].presence)
-      enrollments = (@section || @context).all_student_enrollments
       state_based_on_date = params[:state_based_on_date] ? value_to_boolean(params[:state_based_on_date]) : true
       case [enrollment_state, state_based_on_date]
       when ['active', true]
@@ -417,8 +414,7 @@ class SubmissionsApiController < ApplicationController
 
     if value_to_boolean(params[:post_to_sis])
       if student_ids.is_a?(Array)
-        student_ids = (@section || @context).all_student_enrollments.
-          where(user_id: student_ids).where.not(sis_batch_id: nil).select(:user_id)
+        student_ids = enrollments.where(user_id: student_ids).where.not(sis_batch_id: nil).select(:user_id)
       else
         student_ids = student_ids.where.not(sis_batch_id: nil)
       end
@@ -472,29 +468,47 @@ class SubmissionsApiController < ApplicationController
     end
 
     if params[:grouped].present?
-      scope = (@section || @context).all_student_enrollments.
-        preload(:root_account, :sis_pseudonym, :user => :pseudonyms).
-        where(:user_id => student_ids).order(:user_id)
-      student_enrollments = Api.paginate(scope, self, polymorphic_url([:api_v1, @section || @context, :student_submissions]))
+      if @context.root_account.feature_enabled?(:allow_postable_submission_comments) && @context.post_policies_enabled?
+        includes << "has_postable_comments"
+      end
 
-      submissions_scope = Submission.active.where(user_id: student_enrollments.map(&:user_id), assignment_id: assignments)
+      # student_ids is either a subscope returning students in context visible to the caller,
+      # or an array whose contents have been verified to be a subset of these
+      student_scope = User.where(:id => student_ids).preload(:pseudonyms).order(:id)
+      students = Api.paginate(student_scope, self, polymorphic_url([:api_v1, @section || @context, :student_submissions]))
+
+      submissions_scope = Submission.active.where(user_id: students.map(&:id), assignment_id: assignments)
       submissions_scope = submissions_scope.where("submitted_at>?", submitted_since_date) if submitted_since_date
       submissions_scope = submissions_scope.where("graded_at>?", graded_since_date) if graded_since_date
       if params[:workflow_state].present?
         submissions_scope = submissions_scope.where(:workflow_state => params[:workflow_state])
       end
-      submissions_scope = submissions_scope.preload(:attachment) unless params[:exclude_response_fields]&.include?('attachments')
-      submissions = submissions_scope.preload(:originality_reports, :quiz_submission).to_a
+
+      submission_preloads = [:originality_reports, :quiz_submission]
+      submission_preloads << :attachment unless params[:exclude_response_fields]&.include?("attachments")
+      submissions = submissions_scope.preload(submission_preloads).to_a
+
+      ActiveRecord::Associations::Preloader.new.preload(
+        submissions,
+        :submission_comments,
+        {select: [:hidden, :submission_id]}
+      )
+
       bulk_load_attachments_and_previews(submissions)
       submissions_for_user = submissions.group_by(&:user_id)
 
-      seen_users = Set.new
       result = []
       show_sis_info = context.grants_any_right?(@current_user, :read_sis, :manage_sis)
-      student_enrollments.each do |enrollment|
-        student = enrollment.user
-        next if seen_users.include?(student.id)
-        seen_users << student.id
+
+      # preload the enrollments for this page of students, sorting to ensure active enrollments are preferred
+      page_enrollments = enrollments.where(user_id: students.map(&:id)).
+        joins(:enrollment_state).order(Enrollment.state_by_date_rank_sql).
+        preload(:root_account, :sis_pseudonym).to_a
+
+      students.each do |student|
+        enrollment = page_enrollments.find { |e| e.user_id == student.id }
+        next unless enrollment
+
         hash = { :user_id => student.id, :section_id => enrollment.course_section_id, :submissions => [] }
 
         pseudonym = SisPseudonym.for(student, enrollment)
@@ -606,10 +620,8 @@ class SubmissionsApiController < ApplicationController
   def create_file
     @assignment = api_find(@context.assignments.active, params[:assignment_id])
     @user = get_user_considering_section(params[:user_id])
-    if @assignment.root_account.feature_enabled?(:check_submission_file_type) && @assignment.allowed_extensions.any?
-      filetype = infer_upload_content_type(params)
-      reject!(t('unable to find filetype')) unless filetype
-      extension = File.mime_types[filetype]
+    if @assignment.allowed_extensions.any?
+      extension = infer_upload_filename(params).split('.').last&.downcase || File.mime_types[infer_upload_content_type(params)]
       reject!(t('unable to find extension')) unless extension
       reject!(t('filetype not allowed')) unless @assignment.allowed_extensions.include?(extension)
     end

@@ -31,8 +31,12 @@ class AssignmentsController < ApplicationController
   include KalturaHelper
   include SyllabusHelper
   before_action :require_context
-  add_crumb(proc { t '#crumbs.assignments', "Assignments" }, :except => [:destroy, :syllabus, :index]) { |c| c.send :course_assignments_path, c.instance_variable_get("@context") }
-  before_action { |c| c.active_tab = "assignments" }
+  add_crumb(
+    proc { t '#crumbs.assignments', "Assignments" },
+    except: [:destroy, :syllabus, :index, :new, :edit]
+  ) { |c| c.send :course_assignments_path, c.instance_variable_get("@context") }
+  before_action(except: [:new, :edit]) { |c| c.active_tab = "assignments" }
+  before_action(only: [:new, :edit]) { |c| setup_active_tab(c) }
   before_action :normalize_title_param, :only => [:new, :edit]
 
   def index
@@ -58,6 +62,7 @@ class AssignmentsController < ApplicationController
         set_js_assignment_data
         set_tutorial_js_env
         hash = {
+          COURSE_ID: @context.id.to_s,
           WEIGHT_FINAL_GRADES: @context.apply_group_weights?,
           POST_TO_SIS_DEFAULT: @context.account.sis_default_grade_export[:value],
           SIS_INTEGRATION_SETTINGS_ENABLED: sis_integration_settings_enabled,
@@ -67,7 +72,9 @@ class AssignmentsController < ApplicationController
           HAS_ASSIGNMENTS: @context.active_assignments.count > 0,
           QUIZ_LTI_ENABLED: quiz_lti_tool_enabled?,
           DUE_DATE_REQUIRED_FOR_ACCOUNT: due_date_required_for_account,
-          DIRECT_SHARE_ENABLED: @domain_root_account&.feature_enabled?(:direct_share),
+          FLAGS: {
+            newquizzes_on_quiz_page: @context.root_account.feature_enabled?(:newquizzes_on_quiz_page)
+          }
         }
 
         set_default_tool_env!(@context, hash)
@@ -84,36 +91,50 @@ class AssignmentsController < ApplicationController
     end
   end
 
+  def render_a2_student_view?
+    @assignment.a2_enabled? && !can_do(@context, @current_user, :read_as_admin) &&
+      (!params.key?(:assignments_2) || value_to_boolean(params[:assignments_2]))
+  end
+
+  def render_a2_student_view
+    submission = @assignment.submissions.find_by(user: @current_user)
+    graphql_submisison_id = nil
+    if submission
+      graphql_submisison_id = CanvasSchema.id_from_object(
+        submission,
+        CanvasSchema.resolve_type(submission, nil),
+        nil
+      )
+    end
+
+    assignment_prereqs =
+      if @locked && !@locked[:can_view]
+        context_module_sequence_items_by_asset_id(@assignment.id, "Assignment")
+      else
+        {}
+      end
+
+    js_env({
+      ASSIGNMENT_ID: params[:id],
+      COURSE_ID: @context.id,
+      PREREQS: assignment_prereqs,
+      SUBMISSION_ID: graphql_submisison_id
+    })
+    css_bundle :assignments_2_student
+    js_bundle :assignments_2_show_student
+    render html: '', layout: true
+  end
+
   def show
     Shackles.activate(:slave) do
       @assignment ||= @context.assignments.find(params[:id])
-      a2_enabled = @context.feature_enabled?(:assignments_2) &&
-                   (!params.key?(:assignments_2) || value_to_boolean(params[:assignments_2]))
-
-      # We will need to do some additional work here about figuring out when we
-      # can short-circuit to A2 vs when we need to go through the rest of the
-      # method here.
-      if a2_enabled && @assignment.submission_types != 'external_tool'
-        unless can_do(@context, @current_user, :read_as_admin)
-          assignment_prereqs = context_module_sequence_items_by_asset_id(params[:id], "Assignment")
-          js_env({
-            ASSIGNMENT_ID: params[:id],
-            COURSE_ID: @context.id,
-            PREREQS: assignment_prereqs
-          })
-          css_bundle :assignments_2_student
-          js_bundle :assignments_2_show_student
-          render html: '', layout: true
-          return
-        end
-      end
-
 
       if @assignment.deleted?
         flash[:notice] = t 'notices.assignment_delete', "This assignment has been deleted"
         redirect_to named_context_url(@context, :context_assignments_url)
         return
       end
+
       if authorized_action(@assignment, @current_user, :read)
         if @current_user && @assignment && !@assignment.visible_to_user?(@current_user)
           flash[:error] = t 'notices.assignment_not_available', "The assignment you requested is not available to your course section."
@@ -147,6 +168,11 @@ class AssignmentsController < ApplicationController
         end
 
         log_asset_access(@assignment, "assignments", @assignment.assignment_group)
+
+        if render_a2_student_view?
+          render_a2_student_view
+          return
+        end
 
         env = js_env({COURSE_ID: @context.id})
         env[:SETTINGS][:filter_speed_grader_by_student_group] = filter_speed_grader_by_student_group?
@@ -200,13 +226,13 @@ class AssignmentsController < ApplicationController
           PREREQS: assignment_prereqs
         })
 
-        if @context.feature_enabled?(:assignments_2) && (!params.key?(:assignments_2) || value_to_boolean(params[:assignments_2]))
+        if @context.feature_enabled?(:assignments_2_teacher) && (!params.key?(:assignments_2) || value_to_boolean(params[:assignments_2]))
           if can_do(@context, @current_user, :read_as_admin)
             css_bundle :assignments_2_teacher
             js_bundle :assignments_2_show_teacher
+            render html: '', layout: true
+            return
           end
-          render html: '', layout: true
-          return
         end
 
         # everything else here is only for the old assignment page and can be
@@ -252,6 +278,7 @@ class AssignmentsController < ApplicationController
         # this will set @user_has_google_drive
         user_has_google_drive
 
+        @can_direct_share = @context.root_account.feature_enabled?(:direct_share) && @assignment.grants_right?(@current_user, session, :update)
         @assignment_menu_tools = external_tools_display_hashes(:assignment_menu)
 
         @mark_done = MarkDonePresenter.new(self, @context, params["module_item_id"], @current_user, @assignment)
@@ -508,7 +535,7 @@ class AssignmentsController < ApplicationController
   def new
     @assignment ||= @context.assignments.temp_record
     @assignment.workflow_state = 'unpublished'
-    add_crumb t "Create new"
+    add_crumb_on_new_quizzes(true)
 
     if params[:submission_types] == 'discussion_topic'
       redirect_to new_polymorphic_url([@context, :discussion_topic], index_edit_params)
@@ -523,6 +550,7 @@ class AssignmentsController < ApplicationController
   def edit
     rce_js_env
     @assignment ||= @context.assignments.active.find(params[:id])
+    add_crumb_on_new_quizzes(false)
     if authorized_action(@assignment, @current_user, @assignment.new_record? ? :create : :update)
       @assignment.title = params[:title] if params[:title]
       @assignment.due_at = params[:due_at] if params[:due_at]
@@ -595,12 +623,12 @@ class AssignmentsController < ApplicationController
         VALID_DATE_RANGE: CourseDateRange.new(@context),
       }
 
-      add_crumb(@assignment.title, polymorphic_url([@context, @assignment]))
+      add_crumb(@assignment.title, polymorphic_url([@context, @assignment])) unless @assignment.new_record?
       hash[:POST_TO_SIS_DEFAULT] = @context.account.sis_default_grade_export[:value] if post_to_sis && @assignment.new_record?
       hash[:ASSIGNMENT] = assignment_json(@assignment, @current_user, session, override_dates: false)
       hash[:ASSIGNMENT][:has_submitted_submissions] = @assignment.has_submitted_submissions?
       hash[:URL_ROOT] = polymorphic_url([:api_v1, @context, :assignments])
-      hash[:CANCEL_TO] = @assignment.new_record? ? polymorphic_url([@context, :assignments]) : polymorphic_url([@context, @assignment])
+      hash[:CANCEL_TO] = set_cancel_to_url
       hash[:CONTEXT_ID] = @context.id
       hash[:CONTEXT_ACTION_SOURCE] = :assignments
       hash[:DUE_DATE_REQUIRED_FOR_ACCOUNT] = AssignmentUtil.due_date_required_for_account?(@context)
@@ -634,6 +662,13 @@ class AssignmentsController < ApplicationController
     end
   end
 
+  def set_cancel_to_url
+    if @assignment.quiz_lti? && @context.root_account.feature_enabled?(:newquizzes_on_quiz_page)
+      return polymorphic_url([@context, :quizzes])
+    end
+    @assignment.new_record? ? polymorphic_url([@context, :assignments]) : polymorphic_url([@context, @assignment])
+  end
+
   # @API Delete an assignment
   #
   # Delete the given assignment.
@@ -655,6 +690,42 @@ class AssignmentsController < ApplicationController
       respond_to do |format|
         format.html { redirect_to(named_context_url(@context, :context_assignments_url)) }
         format.json { render :json => assignment_json(@assignment, @current_user, session) }
+      end
+    end
+  end
+
+  # pulish a N.Q assignment from Quizzes Page
+  def publish_quizzes
+    if authorized_action(@context, @current_user, :manage_assignments)
+      @assignments = @context.assignments.active.where(id: params[:quizzes])
+      @assignments.each(&:publish!)
+
+      flash[:notice] = t('notices.quizzes_published',
+                         { :one => "1 quiz successfully published!",
+                           :other => "%{count} quizzes successfully published!" },
+                         :count => @assignments.length)
+
+      respond_to do |format|
+        format.html { redirect_to named_context_url(@context, :context_quizzes_url) }
+        format.json { render :json => {}, :status => :ok }
+      end
+    end
+  end
+
+  # unpulish a N.Q assignment from Quizzes Page
+  def unpublish_quizzes
+    if authorized_action(@context, @current_user, :manage_assignments)
+      @assignments = @context.assignments.active.where(id: params[:quizzes], workflow_state: 'published')
+      @assignments.each(&:unpublish!)
+
+      flash[:notice] = t('notices.quizzes_unpublished',
+                         { :one => "1 quiz successfully unpublished!",
+                           :other => "%{count} quizzes successfully unpublished!" },
+                         :count => @assignments.length)
+
+      respond_to do |format|
+        format.html { redirect_to named_context_url(@context, :context_quizzes_url) }
+        format.json { render :json => {}, :status => :ok }
       end
     end
   end
@@ -760,7 +831,8 @@ class AssignmentsController < ApplicationController
     # the tool should be enabled, this URL was chosen because we sometimes
     # want the tool enabled in beta or test. NOTE: This is a stop-gap until
     # Quizzes.Next has a beta env.
-    @context.feature_enabled?(:quizzes_next) &&
+    !@context.root_account.feature_enabled?(:newquizzes_on_quiz_page) &&
+      @context.feature_enabled?(:quizzes_next) &&
       quiz_lti_tool.present? &&
       quiz_lti_tool.url != 'http://void.url.inseng.net'
   end
@@ -770,5 +842,31 @@ class AssignmentsController < ApplicationController
     return false if @assignment.group_category? && !@assignment.grade_group_students_individually?
 
     @context.filter_speed_grader_by_student_group?
+  end
+
+  def add_crumb_on_new_quizzes(new_quiz)
+    return if !new_quiz && @assignment.new_record?
+
+    if on_quizzes_page? && params.key?(:quiz_lti)
+      add_crumb(t('#crumbs.quizzes', "Quizzes"), course_quizzes_path(@context))
+    else
+      add_crumb(t('#crumbs.assignments', "Assignments"), course_assignments_path(@context))
+    end
+
+    add_crumb(t('Create new')) if new_quiz
+  end
+
+  def setup_active_tab(controller)
+    if on_quizzes_page? && params.key?(:quiz_lti)
+      controller.active_tab = "quizzes"
+      return
+    end
+
+    controller.active_tab = "assignments"
+  end
+
+  def on_quizzes_page?
+    @context.root_account.feature_enabled?(:newquizzes_on_quiz_page) && \
+      @context.feature_enabled?(:quizzes_next) && @context.quiz_lti_tool.present?
   end
 end

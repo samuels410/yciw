@@ -150,7 +150,6 @@ describe "Files API", type: :request do
         'url' => file_download_url(@attachment, :verifier => @attachment.uuid, :download => '1', :download_frd => '1'),
         'content-type' => 'text/plain',
         'display_name' => 'test.txt',
-        'workflow_state' => 'processed',
         'filename' => @attachment.filename,
         'size' => @attachment.size,
         'unlock_at' => nil,
@@ -190,7 +189,6 @@ describe "Files API", type: :request do
         'url' => file_download_url(@attachment, :verifier => @attachment.uuid, :download => '1', :download_frd => '1'),
         'content-type' => 'text/plain',
         'display_name' => 'test.txt',
-        'workflow_state' => 'processed',
         'filename' => @attachment.filename,
         'size' => @attachment.size,
         'unlock_at' => nil,
@@ -369,7 +367,8 @@ describe "Files API", type: :request do
     end
 
     it "creates file locked when usage rights required" do
-      @course.enable_feature!(:usage_rights_required)
+      @course.usage_rights_required = true
+      @course.save!
       api_call(:post, "/api/v1/files/capture?#{base_params.to_query}",
                base_params.merge(controller: "files", action: "api_capture", format: "json"))
       attachment = Attachment.where(instfs_uuid: instfs_uuid).first
@@ -377,7 +376,8 @@ describe "Files API", type: :request do
     end
 
     it "creates file unlocked when usage rights not required" do
-      @course.disable_feature!(:usage_rights_required)
+      @course.usage_rights_required = false
+      @course.save!
       api_call(:post, "/api/v1/files/capture?#{base_params.to_query}",
                base_params.merge(controller: "files", action: "api_capture", format: "json"))
       attachment = Attachment.where(instfs_uuid: instfs_uuid).first
@@ -590,7 +590,8 @@ describe "Files API", type: :request do
           "id" => @user.id,
           "display_name" => @user.short_name,
           "avatar_image_url" => User.avatar_fallback_url(nil, request),
-          "html_url" => "http://www.example.com/courses/#{@course.id}/users/#{@user.id}"
+          "html_url" => "http://www.example.com/courses/#{@course.id}/users/#{@user.id}",
+          "pronouns"=>nil
         }
       ]
     end
@@ -653,7 +654,8 @@ describe "Files API", type: :request do
             "id" => user.id,
             "display_name" => user.short_name,
             "avatar_image_url" => User.avatar_fallback_url(nil, request),
-            "html_url" => "http://www.example.com/about/#{user.id}"
+            "html_url" => "http://www.example.com/about/#{user.id}",
+            "pronouns"=>nil
           }
         ]
       end
@@ -674,7 +676,8 @@ describe "Files API", type: :request do
             ['files', user],
             'files',
             'User',
-            nil
+            nil,
+            {context: nil, context_membership: @user}
           )
           subject
         end
@@ -890,7 +893,6 @@ describe "Files API", type: :request do
               'url' => file_download_url(@att, :verifier => @att.uuid, :download => '1', :download_frd => '1'),
               'content-type' => "image/png",
               'display_name' => 'test-frd.png',
-              'workflow_state' => 'processed',
               'filename' => @att.filename,
               'size' => @att.size,
               'unlock_at' => nil,
@@ -1029,7 +1031,8 @@ describe "Files API", type: :request do
         "id" => @user.id,
         "display_name" => @user.short_name,
         "avatar_image_url" => User.avatar_fallback_url(nil, request),
-        "html_url" => "http://www.example.com/courses/#{@course.id}/users/#{@user.id}"
+        "html_url" => "http://www.example.com/courses/#{@course.id}/users/#{@user.id}",
+        "pronouns"=>nil
       })
     end
 
@@ -1074,6 +1077,20 @@ describe "Files API", type: :request do
       assignment = @course.assignments.create!(title: 'one')
       account_admin_user(account: @account)
       @att.context = assignment
+      @att.save!
+      expect_any_instantiation_of(@att).to receive(:destroy_content_and_replace).once
+      @file_path_options[:replace] = true
+      api_call(:delete, @file_path, @file_path_options, {}, {}, expected_status: 200)
+    end
+
+    it 'should delete/replace a file tied to a quiz submission' do
+      course_with_student(:active_all => true)
+      quiz_model(:course => @course)
+      @quiz.update_attribute :one_question_at_a_time, true
+      @qs = @quiz.generate_submission(@student, false)
+
+      account_admin_user(account: @account)
+      @att.context = @qs
       @att.save!
       expect_any_instantiation_of(@att).to receive(:destroy_content_and_replace).once
       @file_path_options[:replace] = true
@@ -1230,7 +1247,8 @@ describe "Files API", type: :request do
 
     context "with usage_rights_required" do
       before do
-        @course.enable_feature! :usage_rights_required
+        @course.usage_rights_required = true
+        @course.save!
         user_session(@teacher)
         @att.update_attribute(:locked, true)
       end

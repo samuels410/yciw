@@ -20,19 +20,16 @@ import I18n from 'i18n!assignments_2'
 import React from 'react'
 
 import {Button} from '@instructure/ui-buttons'
-import {Flex, FlexItem} from '@instructure/ui-layout'
+import {Flex} from '@instructure/ui-layout'
 
 const MAX_DISPLAYED_MODULES = 2
 
-function AssignmentGroupModuleNav(props) {
-  const {
-    assignment: {assignmentGroup, modules, env}
-  } = props
-
+export default function AssignmentGroupModuleNav({assignment}) {
+  const {assignmentGroup, modules, env} = assignment
   return (
     <Flex margin="0 0 large 0" direction="column">
       {modules.slice(0, MAX_DISPLAYED_MODULES).map(module => (
-        <FlexItem key={module.id} overflowY="visible">
+        <Flex.Item key={module.id} overflowY="visible">
           <Button
             data-testid="module-link"
             href={env.moduleUrl}
@@ -41,10 +38,10 @@ function AssignmentGroupModuleNav(props) {
           >
             {module.name}
           </Button>
-        </FlexItem>
+        </Flex.Item>
       ))}
       {modules.length > MAX_DISPLAYED_MODULES && (
-        <FlexItem overflowY="visible">
+        <Flex.Item overflowY="visible">
           <Button
             data-testid="more-module-link"
             href={env.moduleUrl}
@@ -53,11 +50,11 @@ function AssignmentGroupModuleNav(props) {
           >
             {I18n.t('More Modules')}
           </Button>
-        </FlexItem>
+        </Flex.Item>
       )}
 
       {assignmentGroup && (
-        <FlexItem overflowY="visible">
+        <Flex.Item overflowY="visible">
           <Button
             data-testid="assignmentgroup-link"
             href={env.assignmentUrl}
@@ -66,7 +63,7 @@ function AssignmentGroupModuleNav(props) {
           >
             {assignmentGroup.name}
           </Button>
-        </FlexItem>
+        </Flex.Item>
       )}
     </Flex>
   )
@@ -76,4 +73,3 @@ AssignmentGroupModuleNav.propTypes = {
   assignment: Assignment.shape
 }
 
-export default React.memo(AssignmentGroupModuleNav)

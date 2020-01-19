@@ -78,7 +78,7 @@ module FilesCommon
     files.each do |file_name|
       file = driver.find_element(xpath: "//span[contains(text(), '#{file_name}') and @class='ef-name-col__text']")
                    .find_element(xpath: "../..")
-      driver.action.key_down(:control).click(file).key_up(:control).perform
+      driver.action.key_down(:command).click(file).key_up(:command).perform
     end
     wait_for_ajaximations
     f('.btn-move').click
@@ -111,6 +111,7 @@ module FilesCommon
         ff('.ui-datepicker-trigger.btn')[0].click
         fln("15").click
         ff('.ui-datepicker-trigger.btn')[0].send_keys(:enter) # close the calendar
+        wait_for_ajaximations
         ff('.ui-datepicker-trigger.btn')[1].click
         fln("25").click
         ff('.ui-datepicker-trigger.btn')[1].send_keys(:enter) # close the calendar

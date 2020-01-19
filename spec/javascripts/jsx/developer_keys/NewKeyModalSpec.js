@@ -24,17 +24,13 @@ import $ from 'compiled/jquery.rails_flash_notifications'
 QUnit.module('NewKeyModal')
 
 const selectedScopes = [
-  "url:POST|/api/v1/accounts/:account_id/account_notifications",
-  "url:PUT|/api/v1/accounts/:account_id/account_notifications/:id"
+  'url:POST|/api/v1/accounts/:account_id/account_notifications',
+  'url:PUT|/api/v1/accounts/:account_id/account_notifications/:id'
 ]
 
 const fakeActions = {
   createOrEditDeveloperKey: () => {},
   editDeveloperKey: () => {},
-  ltiKeysSetDisabledPlacements: () => {},
-  ltiKeysSetEnabledScopes: () => {},
-  ltiKeysSetPrivacyLevel: () => {},
-  setLtiConfigurationMethod: () => {},
   resetLtiState: () => {},
   developerKeysModalClose: () => {}
 }
@@ -60,56 +56,56 @@ const developerKey = {
 }
 
 const validToolConfig = {
-  title: "testTest",
-  description: "a",
+  title: 'testTest',
+  description: 'a',
   scopes: [
-      "https://purl.imsglobal.org/spec/lti-ags/scope/lineitem",
-      "https://purl.imsglobal.org/spec/lti-ags/scope/result.readonly",
-      "https://purl.imsglobal.org/spec/lti-ags/scope/score",
-      "https://purl.imsglobal.org/spec/lti-nrps/scope/contextmembership.readonly"
+    'https://purl.imsglobal.org/spec/lti-ags/scope/lineitem',
+    'https://purl.imsglobal.org/spec/lti-ags/scope/result.readonly',
+    'https://purl.imsglobal.org/spec/lti-ags/scope/score',
+    'https://purl.imsglobal.org/spec/lti-nrps/scope/contextmembership.readonly'
   ],
   extensions: [
-      {
-          domain: "test.testcloud.org",
-          tool_id: "toolid",
-          platform: "canvas.instructure.com",
-          settings: {
-              text: "test",
-              use_1_3: true,
-              icon_url: "/img/default-icon-16x16.png",
-              selection_width: 500,
-              selection_height: 500,
-              placements: [{
-                  placement: "editor_button",
-                  target_link_uri: "https://test.testcloud.org/test/lti/store/",
-                  text: "testTools",
-                  enabled: true,
-                  icon_url: "https://static.test.org/img/default-icon-16x16.png",
-                  message_type: "LtiDeepLinkingRequest",
-                  canvas_icon_class: "icon-lti"
-              }]
-          },
-          privacy_level: "public"
-      }
+    {
+      domain: 'test.testcloud.org',
+      tool_id: 'toolid',
+      platform: 'canvas.instructure.com',
+      settings: {
+        text: 'test',
+        use_1_3: true,
+        icon_url: '/img/default-icon-16x16.png',
+        selection_width: 500,
+        selection_height: 500,
+        placements: [
+          {
+            placement: 'editor_button',
+            target_link_uri: 'https://test.testcloud.org/test/lti/store/',
+            text: 'testTools',
+            enabled: true,
+            icon_url: 'https://static.test.org/img/default-icon-16x16.png',
+            message_type: 'LtiDeepLinkingRequest',
+            canvas_icon_class: 'icon-lti'
+          }
+        ]
+      },
+      privacy_level: 'public'
+    }
   ],
-  target_link_uri: "https://test.testcloud.org/test/lti/oidc_launch",
-  oidc_initiation_url: "https://test.testcloud.org/test/lti/oidc_login",
+  target_link_uri: 'https://test.testcloud.org/test/lti/oidc_launch',
+  oidc_initiation_url: 'https://test.testcloud.org/test/lti/oidc_login',
   public_jwk: {
-      kty: "RSA",
-      e: "AQAB",
-      n: "vESXFmlzHz-nhZXTkjo29SBpamCzkd7SnpMXgdFEWjLfDeOu0D3JivEEUQ4U67xUBMY9voiJsG2oydMXjgkmGliUIVg-rhyKdBUJu5v6F659FwCj60A8J8qcstIkZfBn3yyOPVwp1FHEUSNvtbDLSRIHFPv-kh8gYyvqz130hE37qAVcaNME7lkbDmH1vbxi3D3A8AxKtiHs8oS41ui2MuSAN9MDb7NjAlFkf2iXlSVxAW5xSek4nHGr4BJKe_13vhLOvRUCTN8h8z-SLORWabxoNIkzuAab0NtfO_Qh0rgoWFC9T69jJPAPsXMDCn5oQ3xh_vhG0vltSSIzHsZ8pw",
-      kid: "-1302712033",
-      alg:"RS256",
-      use:"sig"
+    kty: 'RSA',
+    e: 'AQAB',
+    n:
+      'vESXFmlzHz-nhZXTkjo29SBpamCzkd7SnpMXgdFEWjLfDeOu0D3JivEEUQ4U67xUBMY9voiJsG2oydMXjgkmGliUIVg-rhyKdBUJu5v6F659FwCj60A8J8qcstIkZfBn3yyOPVwp1FHEUSNvtbDLSRIHFPv-kh8gYyvqz130hE37qAVcaNME7lkbDmH1vbxi3D3A8AxKtiHs8oS41ui2MuSAN9MDb7NjAlFkf2iXlSVxAW5xSek4nHGr4BJKe_13vhLOvRUCTN8h8z-SLORWabxoNIkzuAab0NtfO_Qh0rgoWFC9T69jJPAPsXMDCn5oQ3xh_vhG0vltSSIzHsZ8pw',
+    kid: '-1302712033',
+    alg: 'RS256',
+    use: 'sig'
   }
 }
 
 const createLtiKeyState = {
   isLtiKey: false,
-  customizing: false,
-  toolConfiguration: {},
-  enabledScopes: ['https://www.test.com/lineitem'],
-  disabledPlacements: ['account_navigation'],
+  toolConfiguration: {}
 }
 
 const createDeveloperKeyState = {
@@ -182,12 +178,17 @@ test('it sends the contents of the form saving', () => {
   const createOrEditSpy = sinon.spy()
   const dispatchSpy = sinon.stub().resolves()
 
-  const mergedFakeActions = Object.assign({}, fakeActions, { createOrEditDeveloperKey: createOrEditSpy })
+  const mergedFakeActions = {...fakeActions, createOrEditDeveloperKey: createOrEditSpy}
   const fakeStore = {
     dispatch: dispatchSpy
   }
-  const developerKey2 = Object.assign({}, developerKey, { require_scopes: true, scopes: ['test'], test_cluster_only: true })
-  const editDeveloperKeyState2 = Object.assign({}, editDeveloperKeyState, { developerKey: developerKey2 })
+  const developerKey2 = {
+    ...developerKey,
+    require_scopes: true,
+    scopes: ['test'],
+    test_cluster_only: true
+  }
+  const editDeveloperKeyState2 = {...editDeveloperKeyState, developerKey: developerKey2}
 
   const wrapper = mount(
     <DeveloperKeyModal
@@ -228,7 +229,7 @@ test('sends form content without scopes and require_scopes set to false when not
   const createOrEditSpy = sinon.spy()
   const dispatchSpy = sinon.stub().resolves()
 
-  const mergedFakeActions = Object.assign({}, fakeActions, { createOrEditDeveloperKey: createOrEditSpy })
+  const mergedFakeActions = {...fakeActions, createOrEditDeveloperKey: createOrEditSpy}
   const fakeStore = {
     dispatch: dispatchSpy
   }
@@ -271,10 +272,10 @@ test('sends form content without scopes and require_scopes set to false when not
 test('it adds each selected scope to the form data', () => {
   const createOrEditSpy = sinon.spy()
   const dispatchSpy = sinon.stub().resolves()
-  const mergedFakeActions = Object.assign({}, fakeActions, { createOrEditDeveloperKey: createOrEditSpy })
-  const fakeStore = { dispatch: dispatchSpy }
-  const developerKey2 = Object.assign({}, developerKey, { require_scopes: true, scopes: ['test'] })
-  const editDeveloperKeyState2 = Object.assign({}, editDeveloperKeyState, { developerKey: developerKey2 })
+  const mergedFakeActions = {...fakeActions, createOrEditDeveloperKey: createOrEditSpy}
+  const fakeStore = {dispatch: dispatchSpy}
+  const developerKey2 = {...developerKey, require_scopes: true, scopes: ['test']}
+  const editDeveloperKeyState2 = {...editDeveloperKeyState, developerKey: developerKey2}
   const wrapper = mount(
     <DeveloperKeyModal
       createLtiKeyState={createLtiKeyState}
@@ -301,11 +302,11 @@ test('it adds each selected scope to the form data', () => {
 test('it removes testClusterOnly from the form data if it is undefined', () => {
   const createOrEditSpy = sinon.spy()
   const dispatchSpy = sinon.stub().resolves()
-  const mergedFakeActions = Object.assign({}, fakeActions, { createOrEditDeveloperKey: createOrEditSpy })
-  const fakeStore = { dispatch: dispatchSpy }
-  const developerKey2 = Object.assign({}, developerKey, { require_scopes: true, scopes: ['test'] })
+  const mergedFakeActions = {...fakeActions, createOrEditDeveloperKey: createOrEditSpy}
+  const fakeStore = {dispatch: dispatchSpy}
+  const developerKey2 = {...developerKey, require_scopes: true, scopes: ['test']}
   delete developerKey2.test_cluster_only
-  const editDeveloperKeyState2 = Object.assign({}, editDeveloperKeyState, { developerKey: developerKey2 })
+  const editDeveloperKeyState2 = {...editDeveloperKeyState, developerKey: developerKey2}
   const wrapper = mount(
     <DeveloperKeyModal
       createLtiKeyState={createLtiKeyState}
@@ -333,10 +334,10 @@ test('flashes an error if no scopes are selected', () => {
   const flashStub = sinon.stub($, 'flashError')
   const createOrEditSpy = sinon.spy()
   const dispatchSpy = sinon.stub().resolves()
-  const mergedFakeActions = Object.assign({}, fakeActions, { createOrEditDeveloperKey: createOrEditSpy })
-  const fakeStore = { dispatch: dispatchSpy }
-  const developerKey2 = Object.assign({}, developerKey, { require_scopes: true, scopes: [] })
-  const editDeveloperKeyState2 = Object.assign({}, editDeveloperKeyState, { developerKey: developerKey2 })
+  const mergedFakeActions = {...fakeActions, createOrEditDeveloperKey: createOrEditSpy}
+  const fakeStore = {dispatch: dispatchSpy}
+  const developerKey2 = {...developerKey, require_scopes: true, scopes: []}
+  const editDeveloperKeyState2 = {...editDeveloperKeyState, developerKey: developerKey2}
   const wrapper = mount(
     <DeveloperKeyModal
       createLtiKeyState={createLtiKeyState}
@@ -362,9 +363,9 @@ test('flashes an error if no scopes are selected', () => {
 test('allows saving if the key previously had scopes', () => {
   const flashStub = sinon.stub($, 'flashError')
   const dispatchSpy = sinon.stub().resolves()
-  const fakeStore = { dispatch: dispatchSpy }
-  const keyWithScopes = Object.assign({}, developerKey, { require_scopes: true, scopes: selectedScopes })
-  const editKeyWithScopesState = Object.assign({}, editDeveloperKeyState, { developerKey: keyWithScopes })
+  const fakeStore = {dispatch: dispatchSpy}
+  const keyWithScopes = {...developerKey, require_scopes: true, scopes: selectedScopes}
+  const editKeyWithScopesState = {...editDeveloperKeyState, developerKey: keyWithScopes}
   const wrapper = mount(
     <DeveloperKeyModal
       createLtiKeyState={createLtiKeyState}
@@ -390,7 +391,6 @@ test('clears the lti key state when modal is closed', () => {
   const ltiStub = sinon.spy()
   const actions = Object.assign(fakeActions, {
     developerKeysModalClose: () => {},
-    ltiKeysSetCustomizing: () => {},
     resetLtiState: ltiStub
   })
 
@@ -413,40 +413,14 @@ test('clears the lti key state when modal is closed', () => {
   wrapper.unmount()
 })
 
-test('saves customizations', () => {
-  const ltiStub = sinon.spy()
-  const dispatchSpy = sinon.stub().resolves()
-  const actions = Object.assign(fakeActions, {
-    ltiKeysUpdateCustomizations: ltiStub
-  })
-
-  const wrapper = mount(
-    <DeveloperKeyModal
-      createLtiKeyState={createLtiKeyState}
-      availableScopes={{}}
-      availableScopesPending={false}
-      closeModal={() => {}}
-      createOrEditDeveloperKeyState={createDeveloperKeyState}
-      actions={actions}
-      store={{dispatch: dispatchSpy}}
-      mountNode={modalMountNode}
-      selectedScopes={selectedScopes}
-      ctx={{params: {contextId: '1'}}}
-    />
-  )
-  wrapper.instance().saveCustomizations()
-  ok(ltiStub.calledWith({scopes: ['https://www.test.com/lineitem']}, ['account_navigation'], 22, {}, ""))
-  wrapper.unmount()
-})
-
 test('flashes an error if redirect_uris is empty', () => {
   const flashStub = sinon.stub($, 'flashError')
   const createOrEditSpy = sinon.spy()
   const dispatchSpy = sinon.stub().resolves()
-  const mergedFakeActions = Object.assign({}, fakeActions, { createOrEditDeveloperKey: createOrEditSpy })
-  const fakeStore = { dispatch: dispatchSpy }
-  const developerKey2 = Object.assign({}, developerKey, { require_scopes: true, scopes: [], redirect_uris: '' })
-  const editDeveloperKeyState2 = Object.assign({}, editDeveloperKeyState, { developerKey: developerKey2 })
+  const mergedFakeActions = {...fakeActions, createOrEditDeveloperKey: createOrEditSpy}
+  const fakeStore = {dispatch: dispatchSpy}
+  const developerKey2 = {...developerKey, require_scopes: true, scopes: [], redirect_uris: ''}
+  const editDeveloperKeyState2 = {...editDeveloperKeyState, developerKey: developerKey2}
   const wrapper = mount(
     <DeveloperKeyModal
       createLtiKeyState={createLtiKeyState}
@@ -472,16 +446,19 @@ test('flashes an error if redirect_uris is empty', () => {
 test('renders the saved toolConfiguration if it is present in state', () => {
   const ltiStub = sinon.spy()
   const actions = Object.assign(fakeActions, {
-    saveLtiToolConfiguration: () => ltiStub
+    saveLtiToolConfiguration: () => () => ({then: ltiStub})
   })
 
   const wrapper = mount(
     <DeveloperKeyModal
-      createLtiKeyState={Object.assign({}, createLtiKeyState, {configurationMethod: 'manual', isLtiKey: true})}
+      createLtiKeyState={{...createLtiKeyState, configurationMethod: 'manual'}}
       availableScopes={{}}
       availableScopesPending={false}
       closeModal={() => {}}
-      createOrEditDeveloperKeyState={{...createDeveloperKeyState, ...{developerKey: {...developerKey, tool_configuration: validToolConfig}}}}
+      createOrEditDeveloperKeyState={{
+        ...createDeveloperKeyState,
+        ...{developerKey: {...developerKey, tool_configuration: validToolConfig}, isLtiKey: true}
+      }}
       actions={actions}
       store={{dispatch: () => {}}}
       mountNode={modalMountNode}
@@ -490,7 +467,10 @@ test('renders the saved toolConfiguration if it is present in state', () => {
     />
   )
   wrapper.instance().saveLtiToolConfiguration()
-  strictEqual(wrapper.state().toolConfiguration.oidc_initiation_url, validToolConfig.oidc_initiation_url)
+  strictEqual(
+    wrapper.state().toolConfiguration.oidc_initiation_url,
+    validToolConfig.oidc_initiation_url
+  )
   ok(ltiStub.calledOnce)
   wrapper.unmount()
 })
@@ -498,7 +478,7 @@ test('renders the saved toolConfiguration if it is present in state', () => {
 test('clears state on modal close', () => {
   const ltiStub = sinon.spy()
   const actions = Object.assign(fakeActions, {
-    ltiKeysUpdateCustomizations: ltiStub
+    updateLtiKey: ltiStub
   })
 
   const wrapper = mount(

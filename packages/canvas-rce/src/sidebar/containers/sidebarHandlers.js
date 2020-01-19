@@ -16,22 +16,24 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-import { changeTab, changeAccordion } from "../actions/ui";
-import { fetchInitialPage, fetchNextPage } from "../actions/data";
-import { fetchInitialImages, fetchNextImages } from "../actions/images";
+import {changeTab, changeAccordion} from '../actions/ui'
+import {fetchInitialPage, fetchNextPage} from '../actions/data'
+import {fetchInitialImages, fetchNextImages} from '../actions/images'
 import {
   createMediaServerSession,
   fetchFolders,
   openOrCloseUploadForm,
-  saveMediaRecording,
+  // saveMediaRecording,
+  mediaUploadComplete,
   uploadPreflight,
   uploadToMediaFolder
-} from "../actions/upload";
-import { searchFlickr, openOrCloseFlickrForm } from "../actions/flickr";
-import { toggle as toggleFolder } from "../actions/files";
-import { openOrCloseNewPageForm } from "../actions/links";
-import { fetchInitialDocs, fetchNextDocs } from "../actions/documents";
-import { changeContext } from "../actions/context";
+} from '../actions/upload'
+import {searchFlickr, openOrCloseFlickrForm} from '../actions/flickr'
+import {toggle as toggleFolder} from '../actions/files'
+import {openOrCloseNewPageForm} from '../actions/links'
+import {fetchInitialDocs, fetchNextDocs} from '../actions/documents'
+import {fetchInitialMedia, fetchNextMedia, updateMediaObject} from '../actions/media'
+import {changeContext} from '../actions/context'
 
 export default function propsFromDispatch(dispatch) {
   return {
@@ -52,9 +54,13 @@ export default function propsFromDispatch(dispatch) {
     startMediaUpload: (tabContext, fileMetaProps) =>
       dispatch(uploadToMediaFolder(tabContext, fileMetaProps)),
     createMediaServerSession: () => dispatch(createMediaServerSession()),
-    saveMediaRecording: (file, editor, dismiss) => dispatch(saveMediaRecording(file, editor, dismiss)),
+    // saveMediaRecording: (file, editor, dismiss) => dispatch(saveMediaRecording(file, editor, dismiss)),
+    mediaUploadComplete: (error, uploadData) => dispatch(mediaUploadComplete(error, uploadData)),
     fetchInitialDocs: () => dispatch(fetchInitialDocs()),
     fetchNextDocs: () => dispatch(fetchNextDocs()),
-    onChangeContext: (newContext) => dispatch(changeContext(newContext))
-  };
+    fetchInitialMedia: () => dispatch(fetchInitialMedia()),
+    fetchNextMedia: () => dispatch(fetchNextMedia()),
+    updateMediaObject: new_values => dispatch(updateMediaObject(new_values)),
+    onChangeContext: newContext => dispatch(changeContext(newContext))
+  }
 }

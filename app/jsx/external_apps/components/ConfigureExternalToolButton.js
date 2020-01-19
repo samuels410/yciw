@@ -29,7 +29,7 @@ export default class ConfigureExternalToolButton extends React.Component {
     returnFocus: func.isRequired
   }
 
-  constructor (props) {
+  constructor(props) {
     super(props)
     this.state = {
       modalIsOpen: props.modalIsOpen,
@@ -39,8 +39,8 @@ export default class ConfigureExternalToolButton extends React.Component {
     }
   }
 
-  getLaunchUrl = () => {
-    const toolConfigUrl = this.props.tool.tool_configuration.url
+  getLaunchUrl = toolConfiguration => {
+    const toolConfigUrl = toolConfiguration.url || toolConfiguration.target_link_uri
     return `${ENV.CONTEXT_BASE_URL}/external_tools/retrieve?url=${encodeURIComponent(
       toolConfigUrl
     )}&display=borderless`
@@ -85,12 +85,8 @@ export default class ConfigureExternalToolButton extends React.Component {
   }
 
   renderIframe = () => {
-    const beforeAlertStyles = `before_external_content_info_alert ${
-      this.state.beforeExternalContentAlertClass
-    }`
-    const afterAlertStyles = `after_external_content_info_alert ${
-      this.state.afterExternalContentAlertClass
-    }`
+    const beforeAlertStyles = `before_external_content_info_alert ${this.state.beforeExternalContentAlertClass}`
+    const afterAlertStyles = `after_external_content_info_alert ${this.state.afterExternalContentAlertClass}`
 
     return (
       <div>
@@ -108,13 +104,14 @@ export default class ConfigureExternalToolButton extends React.Component {
           </div>
         </div>
         <iframe
-          src={this.getLaunchUrl()}
+          src={this.getLaunchUrl(this.props.tool.tool_configuration)}
           title={I18n.t('Tool Configuration')}
           className="tool_launch"
           style={this.state.iframeStyle}
           ref={e => {
             this.iframe = e
           }}
+          data-lti-launch="true"
         />
         <div
           onFocus={this.handleAlertFocus}

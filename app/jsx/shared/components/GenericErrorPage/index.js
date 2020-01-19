@@ -36,7 +36,7 @@ import ErrorPageHeader from './ErrorPageHeader'
  * to our errors_controller endpoint to explain how the
  * error occured
  */
-class GenericErrorPage extends React.Component {
+export default class GenericErrorPage extends React.Component {
   static propTypes = {
     errorSubject: string,
     errorCategory: string,
@@ -132,7 +132,9 @@ class GenericErrorPage extends React.Component {
               handleSubmitErrorReport={this.handleSubmitErrorReport}
             />
           )}
-          {this.state.submitLoading && <Spinner title={I18n.t('Loading')} margin="0 0 0 medium" />}
+          {this.state.submitLoading && (
+            <Spinner renderTitle={I18n.t('Loading')} margin="0 0 0 medium" />
+          )}
           {this.state.commentPosted && this.state.commentPostError && (
             <View display="block" data-test-id="generic-error-comments-submitted">
               <Text color="error" margin="x-small">
@@ -150,5 +152,3 @@ class GenericErrorPage extends React.Component {
     )
   }
 }
-
-export default React.memo(GenericErrorPage)

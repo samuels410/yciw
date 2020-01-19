@@ -21,7 +21,7 @@ import I18n from 'i18n!external_tools'
 import React from 'react'
 import PropTypes from 'prop-types'
 import Modal from '../../shared/components/InstuiModal'
-import store from '../../external_apps/lib/ExternalAppsStore'
+import store from '../lib/ExternalAppsStore'
 import 'compiled/jquery.rails_flash_notifications'
 import {Button} from '@instructure/ui-buttons'
 
@@ -77,28 +77,36 @@ export default class ExternalToolPlacementButton extends React.Component {
       account_navigation: I18n.t('Account Navigation'),
       assignment_edit: I18n.t('Assignment Edit'),
       assignment_selection: I18n.t('Assignment Selection'),
-      assignment_view: I18n.t("Assignment View"),
+      assignment_view: I18n.t('Assignment View'),
       similarity_detection: I18n.t('Similarity Detection'),
       assignment_menu: I18n.t('Assignment Menu'),
+      assignment_index_menu: I18n.t('Assignments Index Menu'),
+      assignment_group_menu: I18n.t('Assignments Group Menu'),
       collaboration: I18n.t('Collaboration'),
       course_assignments_menu: I18n.t('Course Assignments Menu'),
       course_home_sub_navigation: I18n.t('Course Home Sub Navigation'),
       course_navigation: I18n.t('Course Navigation'),
       course_settings_sub_navigation: I18n.t('Course Settings Sub Navigation'),
       discussion_topic_menu: I18n.t('Discussion Topic Menu'),
+      discussion_topic_index_menu: I18n.t('Discussions Index Menu'),
       editor_button: I18n.t('Editor Button'),
       file_menu: I18n.t('File Menu'),
+      file_index_menu: I18n.t('Files Index Menu'),
       global_navigation: I18n.t('Global Navigation'),
       homework_submission: I18n.t('Homework Submission'),
       link_selection: I18n.t('Link Selection'),
       migration_selection: I18n.t('Migration Selection'),
       module_menu: I18n.t('Module Menu'),
+      module_index_menu: I18n.t('Modules Index Menu'),
+      module_group_menu: I18n.t('Modules Group Menu'),
       post_grades: I18n.t('Sync Grades'),
       quiz_menu: I18n.t('Quiz Menu'),
+      quiz_index_menu: I18n.t('Quizzes Index Menu'),
       student_context_card: I18n.t('Student Context Card'),
       tool_configuration: I18n.t('Tool Configuration'),
       user_navigation: I18n.t('User Navigation'),
-      wiki_page_menu: I18n.t('Page Menu')
+      wiki_page_menu: I18n.t('Page Menu'),
+      wiki_index_menu: I18n.t('Pages Index Menu')
     }
 
     const tool = this.state.tool
@@ -123,9 +131,7 @@ export default class ExternalToolPlacementButton extends React.Component {
       onDismiss={this.closeModal}
       label={I18n.t('App Placements')}
     >
-      <Modal.Body>
-        {this.placements() || I18n.t('No Placements Enabled')}
-      </Modal.Body>
+      <Modal.Body>{this.placements() || I18n.t('No Placements Enabled')}</Modal.Body>
       <Modal.Footer>
         <Button onClick={this.closeModal}>{I18n.t('Close')}</Button>
       </Modal.Footer>

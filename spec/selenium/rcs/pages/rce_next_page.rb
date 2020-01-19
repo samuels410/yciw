@@ -100,8 +100,24 @@ module RCENextPage
     fj("[aria-label='Course Images'] button:contains('#{title}')")
   end
 
+  def image_links
+    ff("[aria-label='Course Images'] button")
+  end
+
+  def user_image_links
+    ff("[data-testid='instructure_links-ImagesPanel'] button")
+  end
+
   def document_link(title)
     fj("[aria-label='Course Documents'] [role='button']:contains('#{title}')")
+  end
+
+  def course_document_links
+    ff("[data-testid='instructure_links-Link']")
+  end
+
+  def course_media_links
+    ff("[data-testid='instructure_links-Link']")
   end
 
   def assignment_published_status
@@ -117,9 +133,10 @@ module RCENextPage
   end
 
   def possibly_hidden_toolbar_button(selector)
-    button = driver.execute_script("return document.querySelector('#{selector}')")
-    more_toolbar_button.click unless button
     f(selector)
+  rescue Selenium::WebDriver::Error::NoSuchElementError
+      more_toolbar_button.click
+      f(selector)
   end
 
   def links_toolbar_button
@@ -143,11 +160,19 @@ module RCENextPage
   end
 
   def lti_tools_button
-    possibly_hidden_toolbar_button('button[aria-label="LTI Tools"')
+    possibly_hidden_toolbar_button('button[aria-label="Apps"')
+  end
+
+  def lti_tools_modal
+    f('[role="dialog"][aria-label="Apps"]')
   end
 
   def course_images
     f('[role="menuitem"][title="Course Images"]')
+  end
+
+  def user_images
+    f('[role="menuitem"][title="User Images"]')
   end
 
   def upload_image_button
@@ -174,12 +199,24 @@ module RCENextPage
     f('[role="dialog"][aria-label="Upload Media"')
   end
 
+  def course_media
+    f('[role="menuitem"][title="Course Media"]')
+  end
+
+  def user_media
+    f('[role="menuitem"][title="User Media"]')
+  end
+
   def upload_document_button
     f('[role="menuitem"][title="Upload Document"]')
   end
 
   def course_documents
     f('[role="menuitem"][title="Course Documents"]')
+  end
+
+  def user_documents
+    f('[role="menuitem"][title="User Documents"]')
   end
 
   def upload_document_modal
@@ -271,15 +308,15 @@ module RCENextPage
   end
 
   def header_option
-    f('[role="menuitemcheckbox"][title="Header"]')
+    f('[role="menuitemcheckbox"][title="Heading 2"]')
   end
 
   def subheader_option
-    f('[role="menuitemcheckbox"][title=" Subheader"]')
+    f('[role="menuitemcheckbox"][title=" Heading 3"]')
   end
 
   def small_header_option
-    f('[role="menuitemcheckbox"][title=" Small header"]')
+    f('[role="menuitemcheckbox"][title=" Heading 4"]')
   end
 
   def preformatted_option
@@ -299,7 +336,7 @@ module RCENextPage
   end
 
   def tray_container
-    f('[data-cid="Tray"]')
+    f('[data-testid="CanvasContentTray"]')
   end
 
   def display_text_link_option
@@ -323,7 +360,7 @@ module RCENextPage
   end
 
   def decorative_options_checkbox
-    f('[data-cid="Checkbox"]')
+    fxpath('//div/input[@type="checkbox"]/..')
   end
 
   # ---------------------- Actions ----------------------
@@ -413,6 +450,11 @@ module RCENextPage
     wait_for_ajaximations
   end
 
+  def click_user_images
+    user_images.click
+    wait_for_ajaximations
+  end
+
   def click_upload_image
     upload_image_button.click
     wait_for_ajaximations
@@ -423,6 +465,16 @@ module RCENextPage
     wait_for_ajaximations
   end
 
+  def click_course_media
+    course_media.click
+    wait_for_ajaximations
+  end
+
+  def click_user_media
+    user_media.click
+    wait_for_ajaximations
+  end
+
   def click_upload_document
     upload_document_button.click
     wait_for_ajaximations
@@ -430,6 +482,11 @@ module RCENextPage
 
   def click_course_documents
     course_documents.click
+    wait_for_ajaximations
+  end
+
+  def click_user_documents
+    user_documents.click
     wait_for_ajaximations
   end
 

@@ -16,7 +16,7 @@
 # with this program. If not, see <http://www.gnu.org/licenses/>.
 #
 
-require 'spec_helper'
+require 'sharding_spec_helper'
 
 describe CoursesController do
   describe "GET 'index'" do
@@ -877,6 +877,19 @@ describe CoursesController do
       assert_unauthorized
     end
 
+    it 'includes analytics 2 link if installed' do
+      tool = analytics_2_tool_factory
+      Account.default.enable_feature!(:analytics_2)
+
+      get 'show', params: {id: @course.id}
+      expect(controller.course_custom_links).to include({
+        text: "Analytics 2",
+        url: "http://test.host/courses/#{@course.id}/external_tools/#{tool.id}?launch_type=course_navigation",
+        icon_class: "icon-analytics",
+        tool_id: ContextExternalTool::ANALYTICS_2
+      })
+    end
+
     def check_course_show(should_show)
       controller.instance_variable_set(:@context_all_permissions, nil)
       controller.instance_variable_set(:@js_env, nil)
@@ -1530,6 +1543,7 @@ describe CoursesController do
       @account = Account.default
       role = custom_account_role 'lamer', :account => @account
       @account.role_overrides.create! :permission => 'manage_courses', :enabled => true, :role => role
+      @visperm = @account.role_overrides.create! :permission => 'manage_course_visibility', :enabled => true, :role => role
       user_factory
       @account.account_users.create!(user: @user, role: role)
       user_session @user
@@ -1549,6 +1563,45 @@ describe CoursesController do
 
       post 'create', params: { :account_id => @account.id, :course =>
           { :name => course.name, :lock_all_announcements => true } }
+    end
+
+    it "should set the visibility settings when we have permission" do
+      post 'create', params: {
+        :account_id => @account.id, :course => {
+          name: 'new course',
+          is_public: true,
+          public_syllabus: true,
+          is_public_to_auth_users: true,
+          public_syllabus_to_auth: true
+        }
+      }, format: :json
+
+      json = JSON.parse response.body
+      expect(json['is_public']).to be true
+      expect(json['public_syllabus']).to be true
+      expect(json['is_public_to_auth_users']).to be true
+      expect(json['public_syllabus_to_auth']).to be true
+    end
+
+    it "should NOT allow visibility to be set when we don't have permission" do
+      @visperm.enabled = false
+      @visperm.save
+
+      post 'create', params: {
+        :account_id => @account.id, :course => {
+          name: 'new course',
+          is_public: true,
+          public_syllabus: true,
+          is_public_to_auth_users: true,
+          public_syllabus_to_auth: true
+        }
+      }, format: :json
+
+      json = JSON.parse response.body
+      expect(json['is_public']).to be false
+      expect(json['public_syllabus']).to be false
+      expect(json['is_public_to_auth_users']).to be false
+      expect(json['public_syllabus_to_auth']).to be false
     end
   end
 
@@ -1752,6 +1805,14 @@ describe CoursesController do
       @course.save!
       put 'update', params: {:id => @course.id, :course => { :lock_all_announcements => 0 }}
       expect(assigns[:course].lock_all_announcements).to be_falsey
+    end
+
+    it "should update its usage_rights_required setting" do
+      user_session(@teacher)
+      @course.usage_rights_required = true
+      @course.save!
+      put 'update', params: {:id => @course.id, :course => { :usage_rights_required => 0 }}
+      expect(assigns[:course].usage_rights_required).to be_falsey
     end
 
     it "should let sub-account admins move courses to other accounts within their sub-account" do
@@ -2695,7 +2756,7 @@ describe CoursesController do
       expect(json[0]).to include({ "id" => student1.id, "uuid" => student1.uuid })
     end
 
-    it 'can sort uesrs' do
+    it 'can sort users' do
       student1.update!(name: 'Student B')
       student2.update!(name: 'Student A')
 
@@ -2724,16 +2785,52 @@ describe CoursesController do
       expect(response).to be_bad_request
     end
 
-    it 'requires the user to have manage content permission for the course' do
+    it 'requires the user to have an admin role for the course' do
       course_with_student_logged_in
       get 'content_share_users', params: {course_id: @course.id, search_term: 'teacher'}
       expect(response).to be_unauthorized
+
+      course_with_designer(name: 'course designer', course: @course)
+      user_session(@designer)
+      get 'content_share_users', params: {course_id: @course.id, search_term: 'teacher'}
+      json = json_parse(response.body)
+      expect(json[0]).to include({'name' => 'search teacher'})
     end
 
     it 'requires the feature be enabled' do
       @course.root_account.disable_feature!(:direct_share)
       get 'content_share_users', params: {course_id: @course.id, search_term: 'teacher'}
       expect(response).to be_forbidden
+    end
+
+    it 'should return email, url avatar (if avatars are enabled), and name' do
+      user_session(@teacher)
+      @search_context = @course
+      course_with_teacher(name: 'course teacher')
+      @teacher.account.enable_service(:avatars)
+      get 'content_share_users', params: {course_id: @search_context.id, search_term: 'course'}
+      json = json_parse(response.body)
+      expect(json[0]).to include({'email' => nil, 'name' => 'course teacher', 'avatar_url' => "http://test.host/images/messages/avatar-50.png"})
+    end
+
+    it 'should search by name and email' do
+      user_session(@teacher)
+      @teacher.account.enable_service(:avatars)
+      user_model(name: "course teacher")
+      communication_channel_model(user: @user, path: 'course_teacher@test.edu')
+      course_with_teacher(user: @user, course: @course)
+
+      user_model(name: "course designer")
+      communication_channel_model(user: @user, path: 'course_designer@test.edu')
+      course_with_teacher(user: @user, course: @course)
+
+      get 'content_share_users', params: {course_id: @course.id, search_term: 'course teacher'}
+      json = json_parse(response.body)
+      expect(json[0]).to include({'email' => 'course_teacher@test.edu', 'name' => 'course teacher', 'avatar_url' => "http://test.host/images/messages/avatar-50.png"})
+
+      get 'content_share_users', params: {course_id: @course.id, search_term: 'course_designer@test.edu'}
+      json = json_parse(response.body)
+      expect(json[0]).to include({'email' => 'course_designer@test.edu', 'name' => 'course designer', 'avatar_url' => "http://test.host/images/messages/avatar-50.png"})
     end
 
     it 'searches for teachers, TAs, and designers' do
@@ -2746,7 +2843,50 @@ describe CoursesController do
       course_with_observer(name: 'course observer')
       get 'content_share_users', params: {course_id: @search_context.id, search_term: 'course'}
       json = json_parse(response.body)
-      expect(json.map{|user| user['display_name']}).to match_array(['course teacher', 'course ta', 'course designer'])
+      expect(json.map{|user| user['name']}).to eq(['course designer', 'course ta', 'course teacher'])
+    end
+
+    it 'should not return users with only deleted enrollments or deleted courses' do
+      user_session(@teacher)
+      @search_context = @course
+      course_with_teacher(name: 'course teacher').destroy
+      get 'content_share_users', params: {course_id: @search_context.id, search_term: 'course'}
+      json = json_parse(response.body)
+      expect(json.map{|user| user['name']}).not_to include('course teacher')
+
+      course_with_ta(name: 'course ta')
+      @course.destroy
+      get 'content_share_users', params: {course_id: @search_context.id, search_term: 'course'}
+      json = json_parse(response.body)
+      expect(json.map{|user| user['name']}).not_to include('course ta')
+    end
+
+    it 'search for root and sub-account admins' do
+      user_session(@teacher)
+      @search_context = @course
+      sub_account = account_model(parent_account: @course.root_account)
+      account_admin = user_factory(name: 'account admin')
+      sub_account_admin = user_factory(name: 'sub-account admin')
+      account_admin_user(account: @course.root_account, user: account_admin)
+      account_admin_user(account: sub_account, user: sub_account_admin)
+
+      get 'content_share_users', params: {course_id: @search_context.id, search_term: 'admin'}
+      json = json_parse(response.body)
+      expect(json.map{|user| user['name']}).to eq(['account admin', 'sub-account admin'])
+    end
+
+    it 'should not return users with deleted admin accounts' do
+      user_session(@teacher)
+      sub_account = account_model(parent_account: @course.root_account)
+      account_admin = user_factory(name: 'account admin')
+      sub_account_admin = user_factory(name: 'sub-account admin')
+      account_admin_user(account: @course.root_account, user: account_admin).destroy
+      account_admin_user(account: sub_account, user: sub_account_admin)
+      sub_account.destroy
+
+      get 'content_share_users', params: {course_id: @course.id, search_term: 'admin'}
+      json = json_parse(response.body)
+      expect(json.map{|user| user['name']}).not_to include('account admin', 'sub-account admin')
     end
 
     it 'should not return the searching user' do
@@ -2755,7 +2895,128 @@ describe CoursesController do
       course_with_teacher(name: 'course teacher')
       get 'content_share_users', params: {course_id: @search_context.id, search_term: 'teacher'}
       json = json_parse(response.body)
-      expect(json.map{|user| user['display_name']}).to match_array(['course teacher'])
+      expect(json.map{|user| user['name']}).to match_array(['course teacher'])
+    end
+
+    it 'should not return admin roles that do not have the "manage_content" permission' do
+      user_session(@teacher)
+      account_admin = user_factory(name: 'less privileged account admin')
+      role = custom_account_role('manage_content', account: @course.root_account)
+      account_admin_user(account: @course.root_account, user: account_admin, role: role)
+
+      get 'content_share_users', params: {course_id: @course.id, search_term: 'less privileged'}
+      json = json_parse(response.body)
+      expect(json.map{|user| user['name']}).not_to include('less privileged account admin')
+
+      role.role_overrides.create!(enabled: true, permission: 'manage_content', context: @course.root_account)
+      get 'content_share_users', params: {course_id: @course.id, search_term: 'less privileged'}
+      json = json_parse(response.body)
+      expect(json.map{|user| user['name']}).to include('less privileged account admin')
+    end
+
+    it 'should not return users from other root accounts' do
+      user_session(@teacher)
+      a1_course = @course
+      a2 = Account.create!(name: 'other root account')
+      a2_admin = user_factory(name: 'account 2 admin')
+      a2_teacher = user_factory(name: 'account 2 teacher')
+      account_admin_user(account: a2, user: a2_admin)
+      course_with_teacher(name: 'account 2 teacher', account: a2, user: a2_teacher)
+
+      get 'content_share_users', params: {course_id: a1_course.id, search_term: 'account 2'}
+      json = json_parse(response.body)
+      expect(json.map{|user| user['name']}).not_to include('account 2 admin', 'account 2 teacher')
+    end
+
+    context "sharding" do
+      specs_require_sharding
+
+      it "should still have a functional query when user is from another shard" do
+        @shard1.activate do
+          @cs_user = User.create!
+        end
+        @course.enroll_teacher(@cs_user, :enrollment_state => "active")
+        user_session(@cs_user)
+
+        sql = nil
+        allow(Api).to receive(:paginate) do |scope, _controller, _url|
+          sql = scope.to_sql
+        end
+
+        get 'content_share_users', params: {course_id: @course.id, search_term: 'hiyo'}
+        expect(sql).to_not include(@shard1.name) # can't just check for success since the query can still work depending on test shard setup
+      end
+    end
+  end
+
+  describe 'POST update' do
+    it 'allows an admin to change visibility' do
+      admin = account_admin_user
+      course = Course.create!
+      user_session(admin)
+
+      post 'update', params: { id: course.id,
+                               course: { course_visibility: 'public', indexed: true }}
+
+      course.reload
+      expect(course.is_public).to eq true
+      expect(course.indexed).to eq true
+
+    end
+
+    it 'allows the teacher to change visibility' do
+      course = Course.create!
+      teacher = teacher_in_course(course: course, active_all: true).user
+      user_session(teacher)
+
+      post 'update', params: { id: course.id,
+                               course: { course_visibility: 'public', indexed: true }}
+
+      course.reload
+      expect(course.is_public).to eq true
+      expect(course.indexed).to eq true
+    end
+
+    it 'does not allow a teacher without the permission to change visibility' do
+      course = Course.create!
+      teacher = teacher_in_course(course: course, active_all: true).user
+      course.account.role_overrides.create!(role: Role.get_built_in_role('TeacherEnrollment'), permission: 'manage_course_visibility', enabled: false)
+      user_session(teacher)
+
+      post 'update', params: { id: course.id,
+                               course: { course_visibility: 'public', indexed: true }}
+
+      course.reload
+      expect(course.is_public).not_to eq true
+      expect(course.indexed).not_to eq true
+    end
+
+    it 'does not allow an account admin without the permission to change visibility' do
+      admin = account_admin_user_with_role_changes(:role_changes => {'manage_course_visibility' => false})
+      course = Course.create!
+      user_session(admin)
+
+      post 'update', params: { id: course.id,
+                               course: { course_visibility: 'public', indexed: true }}
+
+      course.reload
+      expect(course.is_public).not_to eq true
+      expect(course.indexed).not_to eq true
+    end
+
+    it 'allows a site admin to change visibility even if account admins cannot' do
+      site_admin = site_admin_user
+      account = Account.create(name: 'fake-o')
+      account_with_role_changes(:account => account, :role_changes => { 'manage_course_visibility' => false })
+      course = course_factory(:account => account)
+      user_session(site_admin)
+
+      post 'update', params: { id: course.id,
+                               course: { course_visibility: 'public', indexed: true }}
+
+      course.reload
+      expect(course.is_public).to eq true
+      expect(course.indexed).to eq true
     end
   end
 end

@@ -25,11 +25,20 @@ import {ScreenReaderContent} from '@instructure/ui-a11y'
 import {SubmissionComment} from '../../graphqlData/SubmissionComment'
 import {VideoPlayer} from '@instructure/ui-media-player'
 
-function CommentRow(props) {
+export default function CommentRow(props) {
   const {author, mediaObject, read} = props.comment
+  let mediaTracks = null
   if (mediaObject) {
     mediaObject.mediaSources.forEach(mediaSource => {
       mediaSource.label = `${mediaSource.width}x${mediaSource.height}`
+    })
+    mediaTracks = mediaObject?.mediaTracks.map(track => {
+      return {
+        src: `/media_objects/${mediaObject._id}/media_tracks/${track._id}`,
+        label: track.locale,
+        type: track.kind,
+        language: track.locale
+      }
     })
   }
   return (
@@ -71,27 +80,7 @@ function CommentRow(props) {
             {attachment.displayName}
           </Button>
         ))}
-        {mediaObject && (
-          <VideoPlayer
-            tracks={[
-              {
-                src:
-                  'http://localhost:3000/media_objects/m-2bpCURwK6FnmB6kJzeuuF1PuboAraKdc/media_tracks/7',
-                label: 'en',
-                type: 'subtitles',
-                language: 'en'
-              },
-              {
-                src:
-                  'http://localhost:3000/media_objects/m-2bpCURwK6FnmB6kJzeuuF1PuboAraKdc/media_tracks/7',
-                label: 'fr',
-                type: 'subtitles',
-                language: 'fr'
-              }
-            ]}
-            sources={mediaObject.mediaSources}
-          />
-        )}
+        {mediaObject && <VideoPlayer tracks={mediaTracks} sources={mediaObject.mediaSources} />}
       </div>
     </div>
   )
@@ -101,4 +90,3 @@ CommentRow.propTypes = {
   comment: SubmissionComment.shape.isRequired
 }
 
-export default React.memo(CommentRow)

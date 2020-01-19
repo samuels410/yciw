@@ -157,6 +157,7 @@ describe "better_file_browsing" do
       end
 
       it "tabs through all buttons in the header button bar", priority: "1", test_id: 193816 do
+        skip('LA-371')
         buttons = ff('.ef-file-preview-header-buttons > *')
         driver.execute_script("$('.ef-file-preview-header-buttons').children().first().focus()")
         buttons.each do |button|
@@ -166,11 +167,13 @@ describe "better_file_browsing" do
       end
 
       it "returns focus to the link that was clicked when closing with the esc key", priority: "1", test_id: 193817 do
+        skip('LA-371')
         driver.switch_to.active_element.send_keys :escape
         check_element_has_focus(fln("example.pdf"))
       end
 
       it "returns focus to the link when the close button is clicked", priority: "1", test_id: 193818 do
+        skip('LA-371')
         f('.ef-file-preview-header-close').click
         check_element_has_focus(fln("example.pdf"))
       end
@@ -178,6 +181,7 @@ describe "better_file_browsing" do
 
     context "accessibility tests for Toolbar Previews" do
       it "returns focus to the preview toolbar button when closed", priority: "1", test_id: 193819 do
+        skip('LA-371')
         get "/courses/#{@course.id}/files"
         ff('.ef-item-row')[0].click
         f('.btn-view').click
@@ -340,6 +344,7 @@ describe "better_file_browsing" do
     end
 
     it "should switch files in preview when clicking the arrows" do
+      skip('LA-371')
       fln("a_file.txt").click
       ff('.ef-file-preview-container-arrow-link')[0].click
       expect(f('.ef-file-preview-header-filename')).to include_text('b_file.txt')
@@ -365,7 +370,8 @@ describe "better_file_browsing" do
 
     before :once do
       course_with_teacher(active_all: true)
-      Account.default.enable_feature!(:usage_rights_required)
+      @course.usage_rights_required = true
+      @course.save!
       add_file(fixture_file_upload('files/a_file.txt', 'text/plan'),
                @course, "a_file.txt")
       add_file(fixture_file_upload('files/amazing_file.txt', 'text/plan'),
@@ -409,6 +415,7 @@ describe "better_file_browsing" do
       end
 
       it "should set usage rights on a file inside a folder via the toolbar", priority: "1", test_id: 132585 do
+        skip('LA-371')
         folder_model name: "new folder"
         get "/courses/#{@course.id}/files"
         move("a_file.txt", 0, :cog_icon)
@@ -442,6 +449,7 @@ describe "better_file_browsing" do
 
     context "user files" do
       it "should update course files from user files page", priority: "1", test_id: 194248 do
+        skip('LA-371')
         get "/files/folder/courses_#{@course.id}/"
         f('.UsageRightsIndicator__openModal').click
         set_usage_rights_in_modal
@@ -473,7 +481,8 @@ describe "better_file_browsing" do
   context "When Require Usage Rights is turned-off" do
     it "sets files to published by default", priority: "1", test_id: 133136 do
       course_with_teacher_logged_in
-      Account.default.disable_feature!(:usage_rights_required)
+      @course.usage_rights_required = true
+      @course.save!
       add_file(fixture_file_upload("files/b_file.txt", 'text/plain'), @course, 'b_file.txt')
 
       get "/courses/#{@course.id}/files"

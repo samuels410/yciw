@@ -448,12 +448,31 @@ describe "Importing assignments" do
           tool_vendor_code: vendor_code,
           tool_product_code: product_code,
           tool_resource_type_code: resource_type_code,
-          tool_type: 'Lti::MessageHandler'
+          tool_type: 'Lti::MessageHandler',
+          context_type: 'Course'
         )
 
         Importers::AssignmentImporter.import_from_migration(assign_hash, @course, migration)
         assignment.reload
         expect(assignment.assignment_configuration_tool_lookups.count).to eq 1
+      end
+
+      it "creates assignment_configuration_tool_lookups with the proper context_type" do
+        actl1 = assignment.assignment_configuration_tool_lookups.create!(
+          tool_vendor_code: vendor_code,
+          tool_product_code: product_code,
+          tool_resource_type_code: resource_type_code,
+          tool_type: 'Lti::MessageHandler',
+          context_type: 'Account'
+        )
+
+        Importers::AssignmentImporter.import_from_migration(assign_hash, @course, migration)
+        assignment.reload
+        expect(assignment.assignment_configuration_tool_lookups.count).to eq 2
+        new_actls = assignment.assignment_configuration_tool_lookups.reject do |actl|
+          actl.id == actl1.id
+        end
+        expect(new_actls.map(&:context_type)).to eq(['Course'])
       end
     end
 
@@ -497,9 +516,8 @@ describe "Importing assignments" do
     end
 
     it "doesn't add a warning to the migratio if there is an active tool_proxy" do
-      tool_proxy_double = double("ToolProxy", preload: [tool_proxy])
       allow(Lti::ToolProxy).
-        to receive(:find_active_proxies_for_context_by_vendor_code_and_product_code) {tool_proxy_double}
+        to receive(:find_active_proxies_for_context_by_vendor_code_and_product_code) {[tool_proxy]}
       course_model
       migration = @course.content_migrations.create!
       @course.assignments.create! :title => "test", :due_at => Time.now, :unlock_at => 1.day.ago, :lock_at => 1.day.from_now, :peer_reviews_due_at => 2.days.from_now, :migration_id => migration_id

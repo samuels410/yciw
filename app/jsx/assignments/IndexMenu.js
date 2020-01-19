@@ -21,9 +21,11 @@ import PropTypes from 'prop-types'
 import I18n from 'i18n!assignment_index_menu'
 import ExternalToolModalLauncher from '../shared/ExternalToolModalLauncher'
 import Actions from './actions/IndexMenuActions'
+import ReactDOM from 'react-dom'
+import ContentTypeExternalToolTray from 'jsx/shared/ContentTypeExternalToolTray'
+import {ltiState} from '../../../public/javascripts/lti/post_message/handleLtiPostMessage'
 
 export default class IndexMenu extends React.Component {
-
   static propTypes = {
     store: PropTypes.object.isRequired,
     contextType: PropTypes.string.isRequired,
@@ -34,12 +36,13 @@ export default class IndexMenu extends React.Component {
     disableSyncToSis: PropTypes.func.isRequired,
     sisName: PropTypes.string.isRequired,
     postToSisDefault: PropTypes.bool.isRequired,
-    hasAssignments: PropTypes.bool.isRequired
+    hasAssignments: PropTypes.bool.isRequired,
+    assignmentGroupsCollection: PropTypes.object
   }
 
   state = this.props.store.getState()
 
-  componentWillMount () {
+  componentWillMount() {
     this.setState(this.props.store.getState())
   }
 
@@ -71,9 +74,9 @@ export default class IndexMenu extends React.Component {
   }
 
   onLaunchTool = tool => e => {
-      e.preventDefault()
-      this.props.store.dispatch(Actions.launchTool(tool))
-    }
+    e.preventDefault()
+    this.props.store.dispatch(Actions.launchTool(tool))
+  }
 
   closeModal = () => {
     this.props.store.dispatch(Actions.setModalOpen(false))
@@ -112,7 +115,8 @@ export default class IndexMenu extends React.Component {
     }
   }
 
-  renderTools = () => this.state.externalTools.map(tool => (
+  renderTools = () =>
+    this.state.externalTools.map(tool => (
       <li key={tool.definition_id} role="menuitem">
         <a aria-label={tool.name} href="#" onClick={this.onLaunchTool(tool)}>
           <i className="icon-import" />
@@ -120,6 +124,63 @@ export default class IndexMenu extends React.Component {
         </a>
       </li>
     ))
+
+  renderTrayTools = () => {
+    if (ENV.assignment_index_menu_tools) {
+      return ENV.assignment_index_menu_tools.map(tool => (
+        <li key={tool.id} role="menuitem">
+          <a aria-label={tool.title} href="#" onClick={this.onLaunchTrayTool(tool)}>
+            {this.iconForTrayTool(tool)}
+            {tool.title}
+          </a>
+        </li>
+      ))
+    }
+  }
+
+  iconForTrayTool(tool) {
+    if (tool.canvas_icon_class) {
+      return <i className={tool.canvas_icon_class} />
+    } else if (tool.icon_url) {
+      return <img className="icon" alt="" src={tool.icon_url} />
+    }
+  }
+
+  onLaunchTrayTool = tool => e => {
+    if (e != null) {
+      e.preventDefault()
+    }
+    this.setExternalToolTray(tool, document.getElementById('course_assignment_settings_link'))
+  }
+
+  setExternalToolTray(tool, returnFocusTo) {
+    const handleDismiss = () => {
+      this.setExternalToolTray(null)
+      returnFocusTo.focus()
+      if (ltiState?.tray?.refreshOnClose) {
+        window.location.reload()
+      }
+    }
+    const groupData = [
+      {
+        course_id: this.props.contextId,
+        type: 'assignment_group'
+      }
+    ]
+    ReactDOM.render(
+      <ContentTypeExternalToolTray
+        tool={tool}
+        placement="assignment_index_menu"
+        acceptedResourceTypes={['assignment']}
+        targetResourceType="assignment"
+        allowItemSelection
+        selectableItems={groupData}
+        onDismiss={handleDismiss}
+        open={tool !== null}
+      />,
+      document.getElementById('external-tool-mount-point')
+    )
+  }
 
   render() {
     return (
@@ -157,19 +218,22 @@ export default class IndexMenu extends React.Component {
           </li>
           {this.renderDisablePostToSis()}
           {this.renderTools()}
+          {this.renderTrayTools()}
         </ul>
-        <ExternalToolModalLauncher
-          tool={this.state.selectedTool}
-          isOpen={this.state.modalIsOpen}
-          onRequestClose={this.closeModal}
-          contextType={this.props.contextType}
-          contextId={this.props.contextId}
-          launchType="course_assignments_menu"
-          title={
-            this.state.selectedTool &&
-            this.state.selectedTool.placements.course_assignments_menu.title
-          }
-        />
+        {this.state.modalIsOpen && (
+          <ExternalToolModalLauncher
+            tool={this.state.selectedTool}
+            isOpen={this.state.modalIsOpen}
+            onRequestClose={this.closeModal}
+            contextType={this.props.contextType}
+            contextId={this.props.contextId}
+            launchType="course_assignments_menu"
+            title={
+              this.state.selectedTool &&
+              this.state.selectedTool.placements.course_assignments_menu.title
+            }
+          />
+        )}
       </div>
     )
   }

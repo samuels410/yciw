@@ -183,6 +183,7 @@ module Api::V1::Assignment
     hash['original_course_id'] = assignment.duplicate_of&.course&.id
     hash['original_assignment_id'] = assignment.duplicate_of&.id
     hash['original_assignment_name'] = assignment.duplicate_of&.name
+    hash['original_quiz_id'] = assignment.migrate_from_id
     hash['workflow_state'] = assignment.workflow_state
 
     if assignment.quiz_lti?
@@ -511,6 +512,7 @@ module Api::V1::Assignment
 
     if @overrides_affected.to_i > 0 || cached_due_dates_changed
       assignment.clear_cache_key(:availability)
+      assignment.quiz.clear_cache_key(:availability) if assignment.quiz?
       DueDateCacher.recompute(prepared_update[:assignment], update_grades: true, executing_user: user)
     end
 
@@ -743,12 +745,30 @@ module Api::V1::Assignment
       end
     end
 
+    if assignment_params.key?('migrated_successfully')
+      if value_to_boolean(assignment_params[:migrated_successfully])
+        assignment.finish_migrating
+      else
+        assignment.fail_to_migrate
+      end
+    end
+
     if assignment_params.key?('cc_imported_successfully')
       if value_to_boolean(assignment_params[:cc_imported_successfully])
         assignment.finish_importing
       else
         assignment.fail_to_import
       end
+    end
+
+    if update_lockdown_browser?(assignment_params)
+      update_lockdown_browser_settings(assignment, assignment_params)
+    end
+
+    if update_params['allowed_attempts'].to_i == -1 && assignment.allowed_attempts.nil?
+      # if allowed_attempts is nil, the api json will replace it with -1 for some reason
+      # so if it's included in the json to update, we should just ignore it
+      update_params.delete('allowed_attempts')
     end
 
     apply_report_visibility_options!(assignment_params, assignment)
@@ -840,6 +860,12 @@ module Api::V1::Assignment
 
   def prepare_assignment_create_or_update(assignment, assignment_params, user, context = assignment.context)
     raise "needs strong params" unless assignment_params.is_a?(ActionController::Parameters)
+
+    if assignment_params[:points_possible].blank?
+      if assignment.new_record? || assignment_params.has_key?(:points_possible) # only change if they're deliberately updating to blank
+        assignment_params[:points_possible] = 0
+      end
+    end
 
     unless assignment.new_record?
       assignment.restore_attributes
@@ -978,5 +1004,43 @@ module Api::V1::Assignment
       'external_tool_tag_attributes' => strong_anything,
       'submission_types' => strong_anything
     ]
+  end
+
+  def update_lockdown_browser?(assignment_params)
+    %i[
+      require_lockdown_browser
+      require_lockdown_browser_for_results
+      require_lockdown_browser_monitor
+      lockdown_browser_monitor_data
+      access_code
+    ].any? {|key| assignment_params.key?(key) }
+  end
+
+  def update_lockdown_browser_settings(assignment, assignment_params)
+    settings = assignment.settings || {}
+    ldb_settings = settings['lockdown_browser'] || {}
+
+    if assignment_params.key?('require_lockdown_browser')
+      ldb_settings[:require_lockdown_browser] = value_to_boolean(assignment_params[:require_lockdown_browser])
+    end
+
+    if assignment_params.key?('require_lockdown_browser_for_results')
+      ldb_settings[:require_lockdown_browser_for_results] = value_to_boolean(assignment_params[:require_lockdown_browser_for_results])
+    end
+
+    if assignment_params.key?('require_lockdown_browser_monitor')
+      ldb_settings[:require_lockdown_browser_monitor] = value_to_boolean(assignment_params[:require_lockdown_browser_monitor])
+    end
+
+    if assignment_params.key?('lockdown_browser_monitor_data')
+      ldb_settings[:lockdown_browser_monitor_data] = assignment_params[:lockdown_browser_monitor_data]
+    end
+
+    if assignment_params.key?('access_code')
+      ldb_settings[:access_code] = assignment_params[:access_code]
+    end
+
+    settings[:lockdown_browser] = ldb_settings
+    assignment.settings = settings
   end
 end

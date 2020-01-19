@@ -1497,6 +1497,30 @@ describe Submission do
         expect(@submission.messages_sent.keys).to eq ['Assignment Submitted']
       end
 
+      it "should not send a message to a TA without grading rights" do
+        limited_role = custom_ta_role("limitedta", :account => @course.account)
+        [:view_all_grades, :manage_grades].each do |permission|
+          @course.account.role_overrides.create!(:permission => permission, :enabled => false, :role => limited_role)
+        end
+
+        limited_ta = user_factory(:active_all => true, :active_cc => true)
+        @course.enroll_user(limited_ta, "TaEnrollment", :role => limited_role, :enrollment_state => "active")
+        normal_ta = user_factory(:active_all => true, :active_cc => true)
+        @course.enroll_user(normal_ta, "TaEnrollment", :enrollment_state => "active")
+
+        n = Notification.where(:name => 'Assignment Submitted').first
+        n.update_attributes(:category => "TestImmediately")
+        [limited_ta, normal_ta].each do |ta|
+          NotificationPolicy.create(:notification => n, :communication_channel => ta.communication_channel, :frequency => "immediately")
+        end
+        @assignment.workflow_state = "published"
+        @assignment.update_attributes(:due_at => Time.now + 1000)
+
+        submission_spec_model(user: @student, submit_homework: true)
+        expect(@submission.messages_sent['Assignment Submitted'].map(&:user)).to eq [normal_ta]
+      end
+
+
       it "should send the correct message when an assignment is turned in late" do
         @assignment.workflow_state = "published"
         @assignment.update_attributes(:due_at => Time.now - 1000)
@@ -3232,6 +3256,50 @@ describe Submission do
     end
   end
 
+  describe "scope: postable" do
+    subject(:submissions) { assignment.submissions.postable }
+
+    let(:assignment) { @course.assignments.create! }
+    let(:submission) { assignment.submissions.find_by(user: @student) }
+
+    it "does not include submissions that neither have grades nor hidden comments" do
+      submission.add_comment(author: @teacher, comment: "good job!", hidden: false)
+      is_expected.not_to include(submission)
+    end
+
+    it "includes submissions with hidden comments" do
+      submission.add_comment(author: @teacher, comment: "good job!", hidden: true)
+      is_expected.to include(submission)
+    end
+
+    it "includes submissions with a grade" do
+      assignment.grade_student(@student, grader: @teacher, grade: 10)
+      is_expected.to include(submission)
+    end
+
+    it "includes submissions that are excused" do
+      assignment.grade_student(@student, grader: @teacher, excused: true)
+      is_expected.to include(submission)
+    end
+  end
+
+  describe "scope: with_hidden_comments" do
+    subject(:submissions) { assignment.submissions.with_hidden_comments }
+
+    let(:assignment) { @course.assignments.create! }
+    let(:submission) { assignment.submissions.find_by(user: @student) }
+
+    it "does not include submissions without a hidden comment" do
+      submission.add_comment(author: @teacher, comment: "good job!", hidden: false)
+      is_expected.not_to include(submission)
+    end
+
+    it "includes submissions with hidden comments" do
+      submission.add_comment(author: @teacher, comment: "good job!", hidden: true)
+      is_expected.to include(submission)
+    end
+  end
+
   describe 'scope: anonymized' do
     subject(:submissions) { assignment.all_submissions.anonymized }
 
@@ -3247,6 +3315,30 @@ describe Submission do
 
     it 'only contains submissions that have anonymous_ids' do
       is_expected.to contain_exactly(submission_with_anonymous_id)
+    end
+  end
+
+  describe "scope: due_in_past" do
+    subject(:submissions) { student.submissions.due_in_past }
+
+    let(:future_assignment) { @course.assignments.create!(due_at: 2.days.from_now) }
+    let(:past_assignment) { @course.assignments.create!(due_at: 2.days.ago) }
+    let(:whenever_assignment) { @course.assignments.create!(due_at: nil) }
+    let(:student) { @student }
+    let(:future_submission) { future_assignment.submission_for_student(student) }
+    let(:past_submission) { past_assignment.submission_for_student(student) }
+    let(:whenever_submission) { whenever_assignment.submission_for_student(student) }
+
+    it "includes submissions with a due date in the past" do
+      is_expected.to include(past_submission)
+    end
+
+    it "excludes submissions with a due date in the future" do
+      is_expected.not_to include(future_submission)
+    end
+
+    it "excludes submissions without a due date" do
+      is_expected.not_to include(whenever_submission)
     end
   end
 
@@ -4823,6 +4915,24 @@ describe Submission do
 
       expect(subject).to eq([other_assessment])
     end
+
+    context "attempt argument" do
+      before(:once) do
+        @submission2 = @assignment.submit_homework(@student, body: 'bar', submitted_at: 1.hour.since)
+      end
+
+      it 'returns an empty list if no rubric assessments exist for the desired attempt' do
+        expect(
+          @submission2.visible_rubric_assessments_for(@viewing_user, attempt: @submission2.attempt)
+        ).to be_empty
+      end
+
+      it 'can find historic rubric assessments of older attempts' do
+        expect(
+          @submission2.visible_rubric_assessments_for(@viewing_user, attempt: @submission.attempt)
+        ).to contain_exactly(@teacher_assessment, @student_assessment)
+      end
+    end
   end
 
   describe '#add_comment' do
@@ -5054,7 +5164,14 @@ describe Submission do
           expect(submission).to be_posted
         end
 
-        it "does not post the submission if the comment is not from an instructor" do
+        it "posts the submission if the comment is from an admin" do
+          admin = User.create!
+          course.root_account.account_users.create!(user: admin)
+          submission.add_comment(comment_params.merge({author: admin}))
+          expect(submission).to be_posted
+        end
+
+        it "does not post the submission if the comment is not from an instructor or admin" do
           submission.add_comment(comment_params.merge({author: student}))
           expect(submission).not_to be_posted
         end
@@ -6714,7 +6831,7 @@ describe Submission do
         it { is_expected.to be_hide_grade_from_student }
         it { is_expected.not_to be_hide_grade_from_student(for_plagiarism: true) }
 
-        context 'when a submissions is posted' do
+        context 'when a submission is posted' do
           before { submission.update!(posted_at: Time.zone.now) }
           it { is_expected.not_to be_hide_grade_from_student }
         end
@@ -6724,9 +6841,37 @@ describe Submission do
         before { assignment.ensure_post_policy(post_manually: false) }
         it { is_expected.not_to be_hide_grade_from_student }
 
-        context 'when submission is posted' do
+        context 'when a submission is posted' do
           before { submission.update!(posted_at: Time.zone.now) }
           it { is_expected.not_to be_hide_grade_from_student }
+        end
+
+        context "when a submission is graded but not posted" do
+          before do
+            assignment.grade_student(student, score: 5, grader: teacher)
+            assignment.hide_submissions
+          end
+          it { is_expected.to be_hide_grade_from_student }
+        end
+
+        context "when homework has been submitted, but the submission is not graded or posted" do
+          before do
+            assignment.update!(submission_types: "online_text_entry")
+            assignment.submit_homework(student, submission_type: "online_text_entry", body: "hi")
+          end
+          it { is_expected.not_to be_hide_grade_from_student }
+        end
+
+        context "when a student re-submits to a previously graded and subsequently hidden submission" do
+          before do
+            assignment.update!(submission_types: "online_text_entry")
+            assignment.submit_homework(student, submission_type: "online_text_entry", body: "hi")
+            assignment.grade_student(student, score: 0, grader: teacher)
+            assignment.hide_submissions
+            assignment.submit_homework(student, submission_type: "online_text_entry", body: "I will never give up")
+          end
+
+          it { is_expected.to be_hide_grade_from_student }
         end
       end
     end

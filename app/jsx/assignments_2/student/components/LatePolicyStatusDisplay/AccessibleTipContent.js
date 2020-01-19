@@ -17,12 +17,12 @@
  */
 
 import React from 'react'
-import I18n from 'i18n!assignments_2_thing'
+import I18n from 'i18n!a2_AccessibleTipContent'
 import {ScreenReaderContent} from '@instructure/ui-a11y'
 import PropTypes from 'prop-types'
 import GradeFormatHelper from '../../../../gradebook/shared/helpers/GradeFormatHelper'
 
-function AccessibleTipContent(props) {
+export default function AccessibleTipContent(props) {
   const {attempt, gradingType, grade, originalGrade, pointsDeducted, pointsPossible} = props
   return (
     <ScreenReaderContent data-testid="late-policy-accessible-tip-content">
@@ -57,5 +57,3 @@ AccessibleTipContent.propTypes = {
   pointsDeducted: PropTypes.number.isRequired,
   pointsPossible: PropTypes.number.isRequired
 }
-
-export default React.memo(AccessibleTipContent)

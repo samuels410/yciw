@@ -19,7 +19,7 @@
 import React from 'react'
 import I18n from 'i18n!IndividiualStudentMasteryAssignmentResult'
 import _ from 'lodash'
-import {Flex, FlexItem, View} from '@instructure/ui-layout'
+import {Flex, View} from '@instructure/ui-layout'
 import {Button} from '@instructure/ui-buttons'
 import {Text} from '@instructure/ui-elements'
 import {IconAssignmentLine, IconQuizLine, IconHighlighterLine} from '@instructure/ui-icons'
@@ -29,8 +29,7 @@ import Ratings from '../../rubrics/Ratings'
 const scoreFromPercent = (percent, outcome) => {
   if (outcome.points_possible > 0) {
     return +(percent * outcome.points_possible).toFixed(2)
-  }
-  else {
+  } else {
     return +(percent * outcome.mastery_points).toFixed(2)
   }
 }
@@ -46,33 +45,37 @@ const renderLinkedResult = (name, url, isQuiz) => (
   </Button>
 )
 
-const renderUnlinkedResult = (name) => (
+const renderUnlinkedResult = name => (
   <Flex alignItems="center">
-    <FlexItem><Text size="medium">
-      <IconHighlighterLine />
-    </Text></FlexItem>
-    <FlexItem padding="0 x-small"><Text weight="bold">{ name }</Text></FlexItem>
+    <Flex.Item>
+      <Text size="medium">
+        <IconHighlighterLine />
+      </Text>
+    </Flex.Item>
+    <Flex.Item padding="0 x-small">
+      <Text weight="bold">{name}</Text>
+    </Flex.Item>
   </Flex>
 )
 
-const AssignmentResult = ({ outcome, result, outcomeProficiency }) => {
-  const { ratings } = outcome
-  const { html_url: url, name, submission_types: types } = result.assignment
+const AssignmentResult = ({outcome, result, outcomeProficiency}) => {
+  const {ratings} = outcome
+  const {html_url: url, name, submission_types: types} = result.assignment
   const isQuiz = types && types.indexOf('online_quiz') >= 0
   const score = result.percent ? scoreFromPercent(result.percent, outcome) : result.score
   return (
     <Flex padding="small" direction="column" alignItems="stretch">
-      <FlexItem>
-        { url.length > 0 ? renderLinkedResult(name, url, isQuiz) : renderUnlinkedResult(name) }
-      </FlexItem>
-      <FlexItem padding="x-small 0">
+      <Flex.Item>
+        {url.length > 0 ? renderLinkedResult(name, url, isQuiz) : renderUnlinkedResult(name)}
+      </Flex.Item>
+      <Flex.Item padding="x-small 0">
         <View padding="x-small 0 0 0">
-          <Text size="small" fontStyle="italic" weight="bold">{
-            result.hide_points ? I18n.t('Your score') : I18n.t('Your score: %{score}', { score })
-          }</Text>
+          <Text size="small" fontStyle="italic" weight="bold">
+            {result.hide_points ? I18n.t('Your score') : I18n.t('Your score: %{score}', {score})}
+          </Text>
         </View>
-      </FlexItem>
-      <FlexItem borderWidth="small">
+      </Flex.Item>
+      <Flex.Item borderWidth="small">
         <div className="react-rubric">
           <div className="ratings">
             <Ratings
@@ -88,7 +91,7 @@ const AssignmentResult = ({ outcome, result, outcomeProficiency }) => {
             />
           </div>
         </div>
-      </FlexItem>
+      </Flex.Item>
     </Flex>
   )
 }

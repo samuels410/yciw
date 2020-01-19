@@ -19,9 +19,9 @@
 import _ from 'underscore'
 import React from 'react'
 import PropTypes from 'prop-types'
-import DueDateTokenWrapper from '../due_dates/DueDateTokenWrapper'
-import DueDateCalendars from '../due_dates/DueDateCalendars'
-import DueDateRemoveRowLink from '../due_dates/DueDateRemoveRowLink'
+import DueDateTokenWrapper from './DueDateTokenWrapper'
+import DueDateCalendars from './DueDateCalendars'
+import DueDateRemoveRowLink from './DueDateRemoveRowLink'
 import I18n from 'i18n!DueDateRow'
 
 class DueDateRow extends React.Component {
@@ -138,7 +138,11 @@ class DueDateRow extends React.Component {
 
   nameOrLoading = (collection, id) => {
     const item = collection[id]
-    return item ? item.name : I18n.t('Loading...')
+    if (item) {
+      return item.pronouns ? `${item.name} (${item.pronouns})` : item.name
+    } else {
+      return I18n.t('Loading...')
+    }
   }
 
   // -------------------

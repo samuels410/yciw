@@ -60,9 +60,8 @@ module LiveEvents
         data: event_json,
         partition_key: partition_key,
         statsd_prefix: "live_events.events",
-        tags: { event: event[:attributes][:event_name] },
-        total_bytes: total_bytes,
-        request_id: event[:attributes][:request_id]
+        tags: { event: event.dig(:attributes, :event_name) || 'event_name_not_found' },
+        total_bytes: total_bytes
       }
       true
     end
@@ -96,7 +95,7 @@ module LiveEvents
         begin
           # r will be nil on first pass
           records = [r].compact
-          total_bytes = r&.fetch(:total_bytes) || 0
+          total_bytes = (r.is_a?(Hash) && r[:total_bytes]) || 0
           while @queue.size > 0 && total_bytes < MAX_BYTE_THRESHOLD
             r = @queue.pop
             break if r == :stop
@@ -148,11 +147,11 @@ module LiveEvents
 
     def process_results(res, records)
       res.records.each_with_index do |r, i|
-        rec = records[i]
+        record = records[i]
         if r.error_code.present?
-          log_unprocessed(rec, r.error_code, r.error_message)
+          log_unprocessed(record, r.error_code, r.error_message)
         else
-          LiveEvents&.statsd&.increment("#{rec[:statsd_prefix]}.sends", tags: rec[:tags])
+          LiveEvents&.statsd&.increment("#{record[:statsd_prefix]}.sends", tags: record[:tags])
           nil
         end
       end.compact
@@ -165,10 +164,9 @@ module LiveEvents
       logger.debug(
         "Failed event data: #{record[:data]}"
       )
-      LiveEvents&.error_reporter&.capture(:dropped_live_event, message: { request_id: record[:request_id], error_code: error_code, error_message: error_message }.to_json)
       LiveEvents&.statsd&.increment(
         "#{record[:statsd_prefix]}.send_errors",
-        tags: rec[:tags].merge(error_code: error_code)
+        tags: record[:tags].merge(error_code: error_code)
       )
     end
   end

@@ -30,12 +30,10 @@ class RoleOverride < ActiveRecord::Base
   after_save :clear_caches
 
   def clear_caches
-    self.class.connection.after_transaction_commit do
-      self.account.send_later_if_production_enqueue_args(:clear_downstream_caches,
-        {:singleton => "clear_downstream_role_caches:#{self.account.global_id}"},
-        :role_overrides)
-      self.role.touch
-    end
+    self.account.send_later_if_production_enqueue_args(:clear_downstream_caches,
+      {:singleton => "clear_downstream_role_caches:#{self.account.global_id}"},
+      :role_overrides)
+    self.role.touch
   end
 
   def must_apply_to_something
@@ -147,9 +145,33 @@ class RoleOverride < ActiveRecord::Base
        :true_for => %w(AccountAdmin),
        :available_to => %w(AccountAdmin AccountMembership),
      },
+    :manage_course_visibility => {
+      :label => lambda { t("Change course visibility") },
+      :label_v2 => lambda { t("Courses - change visibility") },
+      :available_to => [
+        'AccountAdmin',
+        'AccountMembership',
+        'TeacherEnrollment',
+        'TaEnrollment',
+        'DesignerEnrollment'
+      ],
+      :true_for => [
+        'AccountAdmin',
+        'TeacherEnrollment',
+        'TaEnrollment',
+        'DesignerEnrollment'
+      ]
+    },
      :manage_developer_keys => {
        :label => lambda { t('permissions.manage_developer_keys', "Manage developer keys") },
        :label_v2 => lambda { t("Developer Keys - manage ") },
+       :account_only => true,
+       :true_for => %w(AccountAdmin),
+       :available_to => %w(AccountAdmin AccountMembership),
+     },
+     :moderate_user_content => {
+       :label => lambda { t('permissions.moderate_user_content', "Moderate user content") },
+       :label_v2 => lambda { t("Users - moderate content") },
        :account_only => true,
        :true_for => %w(AccountAdmin),
        :available_to => %w(AccountAdmin AccountMembership),
@@ -935,7 +957,13 @@ class RoleOverride < ActiveRecord::Base
        :label_v2 => lambda { t("Users - view login IDs") },
        :available_to => %w(AccountAdmin AccountMembership TeacherEnrollment TaEnrollment),
        :true_for => %w(AccountAdmin TeacherEnrollment TaEnrollment)
-   }
+     },
+     :view_learning_analytics => {
+       :label => lambda { t("View Learning Analytics (Beta)")},
+       :label_v2 => lambda { t('Learning Analytics (Beta) - view')},
+       :available_to => %w(AccountAdmin AccountMembership TeacherEnrollment),
+       :true_for => []
+     }
     })
 
   ACCESS_TOKEN_SCOPE_PREFIX = 'https://api.instructure.com/auth/canvas'.freeze

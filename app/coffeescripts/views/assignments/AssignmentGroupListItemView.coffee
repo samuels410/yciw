@@ -27,6 +27,12 @@ import DeleteGroupView from './DeleteGroupView'
 import preventDefault from '../../fn/preventDefault'
 import template from 'jst/assignments/AssignmentGroupListItem'
 import AssignmentKeyBindingsMixin from './AssignmentKeyBindingsMixin'
+import {shimGetterShorthand} from '../../legacyCoffeesScriptHelpers'
+import React from 'react'
+import ReactDOM from 'react-dom'
+import ContentTypeExternalToolTray from 'jsx/shared/ContentTypeExternalToolTray'
+import {ltiState} from '../../../../public/javascripts/lti/post_message/handleLtiPostMessage'
+
 
 export default class AssignmentGroupListItemView extends DraggableCollectionView
   @mixin AssignmentKeyBindingsMixin
@@ -56,9 +62,10 @@ export default class AssignmentGroupListItemView extends DraggableCollectionView
     'keydown .assignment_group': 'handleKeys'
     'click .move_contents':  'onMoveContents'
     'click .move_group':  'onMoveGroup'
+    'click .ag-header-controls .menu_tool_link': 'openExternalTool'
 
-  messages:
-    toggleMessage: I18n.t('toggle_message', "toggle assignment visibility")
+  messages: shimGetterShorthand {},
+    toggleMessage: -> I18n.t('toggle_message', "toggle assignment visibility")
 
   # call remove on children so that they can clean up old dialogs.
   # this should eventually happen at a higher level (eg for all views), but
@@ -109,6 +116,7 @@ export default class AssignmentGroupListItemView extends DraggableCollectionView
   initialize: ->
     @initializeCollection()
     super
+    @assignment_group_menu_tools = ENV.assignment_group_menu_tools || []
     @initializeChildViews()
 
     # we need the following line in order to access this view later
@@ -179,6 +187,7 @@ export default class AssignmentGroupListItemView extends DraggableCollectionView
       hasFrozenAssignments: @model.hasFrozenAssignments? and @model.hasFrozenAssignments()
       hasIntegrationData: @model.hasIntegrationData? and @model.hasIntegrationData()
       postToSISName: ENV.SIS_NAME
+      assignmentGroupMenuPlacements: @assignment_group_menu_tools
       ENV: ENV
     })
 
@@ -425,3 +434,36 @@ export default class AssignmentGroupListItemView extends DraggableCollectionView
   lastVisibleGroup: =>
     last_group_index = @visibleGroupsInCollection().length - 1
     @visibleGroupsInCollection()[last_group_index]
+
+  openExternalTool: (ev) =>
+    if (ev != null)
+      ev.preventDefault()
+
+    tool = @assignment_group_menu_tools.find((t) => t.id == ev.target.dataset.toolId)
+    @setExternalToolTray(tool, @$el.find('.al-trigger')[0])
+
+  reloadPage: =>
+    window.location.reload()
+
+  setExternalToolTray: (tool, returnFocusTo) =>
+    handleDismiss = () =>
+      @setExternalToolTray(null)
+      returnFocusTo.focus()
+      if ltiState?.tray?.refreshOnClose
+        @reloadPage()
+
+    groupData =
+      id: @model.get('id')
+      name: @model.get('name')
+    props =
+      tool: tool
+      placement: "assignment_group_menu"
+      acceptedResourceTypes: ['assignment']
+      targetResourceType: 'assignment'
+      allowItemSelection: false
+      selectableItems: [groupData]
+      onDismiss: handleDismiss
+      open: tool != null
+
+    component = React.createElement(ContentTypeExternalToolTray, props)
+    ReactDOM.render(component, $('#external-tool-mount-point')[0])

@@ -369,6 +369,9 @@ CanvasRails::Application.routes.draw do
     post 'quizzes/unpublish' => 'quizzes/quizzes#unpublish'
     post 'quizzes/:id/toggle_post_to_sis' => "quizzes/quizzes#toggle_post_to_sis"
 
+    post 'assignments/publish/quiz'   => 'assignments#publish_quizzes'
+    post 'assignments/unpublish/quiz' => 'assignments#unpublish_quizzes'
+
     post 'quizzes/new' => 'quizzes/quizzes#new' # use POST instead of GET (not idempotent)
     resources :quizzes, controller: 'quizzes/quizzes', except: :new do
       get :managed_quiz_data
@@ -485,6 +488,7 @@ CanvasRails::Application.routes.draw do
   get 'media_objects/:id/thumbnail' => 'context#media_object_thumbnail', as: :media_object_thumbnail
   get 'media_objects/:media_object_id/info' => 'media_objects#show', as: :media_object_info
   get 'media_objects_iframe/:media_object_id' => 'media_objects#iframe_media_player', as: :media_object_iframe
+  get 'media_objects_iframe' => 'media_objects#iframe_media_player', as: :media_object_iframe_href
   get 'media_objects/:media_object_id/media_tracks/:id' => 'media_tracks#show', as: :show_media_tracks
   post 'media_objects/:media_object_id/media_tracks' => 'media_tracks#create', as: :create_media_tracks
   delete 'media_objects/:media_object_id/media_tracks/:media_track_id' => 'media_tracks#destroy', as: :delete_media_tracks
@@ -596,6 +600,7 @@ CanvasRails::Application.routes.draw do
     get :reports_tab
     get :settings
     get :admin_tools
+    get :eportfolio_moderation
     get 'search' => 'accounts#course_user_search', :as => :course_user_search
     post 'account_users' => 'accounts#add_account_user', as: :add_account_user
     delete 'account_users/:id' => 'accounts#remove_account_user', as: :remove_account_user
@@ -844,6 +849,7 @@ CanvasRails::Application.routes.draw do
       get :communication
       put :communication_update
       get :settings
+      get :content_shares
       get :observees
     end
   end
@@ -989,6 +995,8 @@ CanvasRails::Application.routes.draw do
       get 'courses/:course_id/folders/by_path', controller: :folders, action: :resolve_path
       get 'courses/:course_id/folders/media', controller: :folders, action: :media_folder
       get 'courses/:course_id/folders/:id', controller: :folders, action: :show, as: 'course_folder'
+      get 'media_objects', controller: 'media_objects', action: :index, as: :media_objects
+      get 'courses/:course_id/media_objects', controller: 'media_objects', action: :index, as: :course_media_objects
       put 'accounts/:account_id/courses', action: :batch_update
       post 'courses/:course_id/ping', action: :ping, as: 'course_ping'
 
@@ -1622,6 +1630,10 @@ CanvasRails::Application.routes.draw do
       post 'image_selection/:id', action: :image_selection
     end
 
+    scope(controller: :immersive_reader) do
+      get 'immersive_reader/authenticate', action: :authenticate
+    end
+
     scope(controller: :search) do
       get 'search/rubrics', action: 'rubrics', as: 'search_rubrics'
       get 'search/recipients', action: 'recipients', as: 'search_recipients'
@@ -1754,6 +1766,10 @@ CanvasRails::Application.routes.draw do
       delete "courses/:course_id/quizzes/:id", action: :destroy, as: 'course_quiz_destroy'
       post "courses/:course_id/quizzes/:id/reorder", action: :reorder, as: 'course_quiz_reorder'
       post "courses/:course_id/quizzes/:id/validate_access_code", action: :validate_access_code, as: 'course_quiz_validate_access_code'
+    end
+
+    scope(controller: 'quizzes_next/quizzes_api') do
+      get "courses/:course_id/all_quizzes", action: :index, as: 'course_all_quizzes'
     end
 
     scope(controller: 'quizzes/quiz_submission_users') do
@@ -2167,6 +2183,7 @@ CanvasRails::Application.routes.draw do
 
     scope(controller: :planner) do
       get 'planner/items', action: :index, as: :planner_items
+      get 'users/:user_id/planner/items', action: :index, as: :user_planner_items
     end
 
     scope(controller: :planner_overrides) do
@@ -2189,6 +2206,7 @@ CanvasRails::Application.routes.draw do
       post 'users/:user_id/content_shares', action: :create
       get 'users/:user_id/content_shares/sent', action: :index, defaults: { list: 'sent' }, as: :user_sent_content_shares
       get 'users/:user_id/content_shares/received', action: :index, defaults: { list: 'received' }, as: :user_received_content_shares
+      get 'users/:user_id/content_shares/unread_count', action: :unread_count
       get 'users/:user_id/content_shares/:id', action: :show
       delete 'users/:user_id/content_shares/:id', action: :destroy
       post 'users/:user_id/content_shares/:id/add_users', action: :add_users
@@ -2210,9 +2228,13 @@ CanvasRails::Application.routes.draw do
     scope(:controller => :context) do
       post 'media_objects', action: 'create_media_object', as: :create_media_object
     end
+
+    scope(:controller => :media_objects) do
+      put 'media_objects/:media_object_id', action: 'update_media_object', as: :update_media_object
+    end
   end
 
-  # this is not a "normal" api endpoint in the sense that it is not documented or
+    # this is not a "normal" api endpoint in the sense that it is not documented or
     # generally available to hosted customers. it also does not respect the normal
     # pagination options; however, jobs_controller already accepts `limit` and `offset`
     # paramaters and defines a sane default limit
@@ -2370,6 +2392,14 @@ CanvasRails::Application.routes.draw do
     # Security
     scope(controller: 'lti/ims/security') do
       get "security/jwks", action: :jwks, as: :jwks_show
+    end
+
+    # Feature Flags
+    scope(controller: 'lti/feature_flags') do
+      %w(course account).each do |context|
+        prefix = "#{context}s/:#{context}_id"
+        get "/#{prefix}/feature_flags/:feature", action: :show
+      end
     end
   end
 

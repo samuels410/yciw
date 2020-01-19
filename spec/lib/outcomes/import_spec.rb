@@ -353,6 +353,12 @@ RSpec.describe Outcomes::Import do
       expect(existing_outcome.reload).to have_attributes outcome_attributes
     end
 
+    it 'restores deleted outcome' do
+      existing_outcome.update!(workflow_state: 'deleted')
+      importer.import_outcome(**outcome_attributes.merge(workflow_state: ''))
+      expect(existing_outcome.reload.workflow_state).to eq 'active'
+    end
+
     it 'fails if outcome has already appeared in import' do
       importer.import_outcome(outcome_attributes)
       expect do
@@ -409,7 +415,15 @@ RSpec.describe Outcomes::Import do
       it 'reassigns parents of existing outcome' do
         parent1.add_outcome(existing_outcome)
         importer.import_outcome(**outcome_attributes, parent_guids: 'parent2')
-          expect(parent1.child_outcome_links.active.map(&:content)).to be_empty
+        expect(parent1.child_outcome_links.active.map(&:content)).to be_empty
+        expect(parent2.child_outcome_links.active.map(&:content)).to include existing_outcome
+      end
+
+      it 'reassigns parents of an aligned outcome' do
+        outcome_with_rubric(outcome: existing_outcome)
+        parent1.add_outcome(existing_outcome)
+        importer.import_outcome(**outcome_attributes, parent_guids: 'parent2')
+        expect(parent1.child_outcome_links.active.map(&:content)).to be_empty
         expect(parent2.child_outcome_links.active.map(&:content)).to include existing_outcome
       end
 

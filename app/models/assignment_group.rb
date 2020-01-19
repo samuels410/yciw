@@ -57,6 +57,7 @@ class AssignmentGroup < ActiveRecord::Base
   after_save :update_student_grades
 
   before_destroy :destroy_scores
+  after_destroy :clear_context_has_assignment_group_cache
 
   def generate_default_values
     if self.name.blank?
@@ -67,6 +68,7 @@ class AssignmentGroup < ActiveRecord::Base
     end
     self.default_assignment_name = self.name
     self.default_assignment_name = self.default_assignment_name.singularize if I18n.locale == :en
+    self.position = self.position_was if self.will_save_change_to_position? && self.position.nil? # don't allow setting to nil
   end
   protected :generate_default_values
 
@@ -161,6 +163,11 @@ class AssignmentGroup < ActiveRecord::Base
   def course_grading_change
     self.context.grade_weight_changed! if saved_change_to_group_weight? && self.context && self.context.group_weighting_scheme == 'percent'
     true
+  end
+
+  # this is just in case we happen to delete the last assignment_group in a course
+  def clear_context_has_assignment_group_cache
+    Rails.cache.delete(['has_assignment_group', global_context_id].cache_key) if context_id
   end
 
   set_broadcast_policy do |p|

@@ -20,17 +20,24 @@ import React from 'react'
 import PropTypes from 'prop-types'
 import ImmutablePropTypes from 'react-immutable-proptypes'
 import I18n from 'i18n!IndividualStudentMasteryOutcomeGroup'
-import {Flex, FlexItem, View} from '@instructure/ui-layout'
+import {Flex, View} from '@instructure/ui-layout'
 import {ToggleGroup} from '@instructure/ui-toggle-details'
-import {List, ListItem, Pill, Text} from '@instructure/ui-elements'
+import {List, Pill, Text} from '@instructure/ui-elements'
 import natcompare from 'compiled/util/natcompare'
+import TruncateWithTooltip from '../../shared/components/TruncateWithTooltip'
 import Outcome from './Outcome'
 import * as shapes from './shapes'
 
 const outcomeGroupHeader = (outcomeGroup, numMastered, numGroup) => (
   <Flex justifyItems="space-between">
-    <FlexItem padding="0 x-small 0 0"><Text size="large" weight="bold">{ outcomeGroup.title }</Text></FlexItem>
-    <FlexItem><Pill text={I18n.t('%{numMastered} of %{numGroup} Mastered', { numMastered, numGroup })} /></FlexItem>
+    <Flex.Item padding="0 x-small 0 0" size="0" grow>
+      <Text size="large" weight="bold">
+        <TruncateWithTooltip>{outcomeGroup.title}</TruncateWithTooltip>
+      </Text>
+    </Flex.Item>
+    <Flex.Item>
+      <Pill text={I18n.t('%{numMastered} of %{numGroup} Mastered', {numMastered, numGroup})} />
+    </Flex.Item>
   </Flex>
 )
 
@@ -52,31 +59,37 @@ export default class OutcomeGroup extends React.Component {
     this.props.onExpansionChange('group', this.props.outcomeGroup.id, expanded)
   }
 
-  render () {
-    const { outcomeGroup, outcomes, expanded, expandedOutcomes, onExpansionChange, outcomeProficiency } = this.props
-    const numMastered = outcomes.filter((o) => o.mastered).length
+  render() {
+    const {
+      outcomeGroup,
+      outcomes,
+      expanded,
+      expandedOutcomes,
+      onExpansionChange,
+      outcomeProficiency
+    } = this.props
+    const numMastered = outcomes.filter(o => o.mastered).length
     const numGroup = outcomes.length
 
     return (
       <View as="div" className="outcomeGroup">
         <ToggleGroup
           summary={outcomeGroupHeader(outcomeGroup, numMastered, numGroup)}
-          toggleLabel={I18n.t('Toggle outcomes for %{title}', { title: outcomeGroup.title })}
+          toggleLabel={I18n.t('Toggle outcomes for %{title}', {title: outcomeGroup.title})}
           expanded={expanded}
           onToggle={this.handleToggle}
         >
           <List variant="unstyled" delimiter="solid">
-            {
-              outcomes.sort(natcompare.byKey('title')).map((outcome) => (
-                <ListItem key={outcome.id} margin="0">
-                  <Outcome
-                    outcome={outcome}
-                    expanded={expandedOutcomes.has(outcome.expansionId)}
-                    onExpansionChange={onExpansionChange}
-                    outcomeProficiency={outcomeProficiency} />
-                </ListItem>
-              ))
-            }
+            {outcomes.sort(natcompare.byKey('title')).map(outcome => (
+              <List.Item key={outcome.id} margin="0">
+                <Outcome
+                  outcome={outcome}
+                  expanded={expandedOutcomes.has(outcome.expansionId)}
+                  onExpansionChange={onExpansionChange}
+                  outcomeProficiency={outcomeProficiency}
+                />
+              </List.Item>
+            ))}
           </List>
         </ToggleGroup>
       </View>

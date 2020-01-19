@@ -24,8 +24,10 @@ import {Submission} from '../../graphqlData/Submission'
 import {Billboard} from '@instructure/ui-billboard'
 import {Button} from '@instructure/ui-buttons'
 import {IconDocumentLine, IconTextLine, IconTrashLine} from '@instructure/ui-icons'
+import LoadingIndicator from '../../../shared/LoadingIndicator'
 import {ScreenReaderContent} from '@instructure/ui-a11y'
 import {View} from '@instructure/ui-layout'
+import {direction} from '../../../../shared/helpers/rtlHelper'
 
 export default class TextEntry extends React.Component {
   static propTypes = {
@@ -36,7 +38,8 @@ export default class TextEntry extends React.Component {
   }
 
   state = {
-    editorLoaded: false
+    editorLoaded: false,
+    renderingEditor: false
   }
 
   _isMounted = false
@@ -58,11 +61,22 @@ export default class TextEntry extends React.Component {
     }
   }
 
-  componentDidUpdate() {
+  componentDidUpdate(prevProps) {
     if (this.getDraftBody() !== null && this.props.editingDraft && !this.state.editorLoaded) {
       this.loadRCE()
     } else if (!this.props.editingDraft && this.state.editorLoaded) {
       this.unloadRCE()
+    }
+
+    if (!this.props.editingDraft) {
+      if (['submitted', 'graded'].includes(this.props.submission.state)) {
+        // TODO: attempting to focus on a View doesn't work, need to revisit this after
+        // we discuss how we want to handle focusable elements for higher-order components
+      } else if (prevProps.editingDraft) {
+        this.editTextEntryButton.focus()
+      } else if (this.getDraftBody() === null) {
+        this.startTextEntryButton.focus()
+      }
     }
   }
 
@@ -90,7 +104,7 @@ export default class TextEntry extends React.Component {
   // Start w/o focus, then give it focus after initialization
   // in this.handleRCEInit
   loadRCE() {
-    this.setState({editorLoaded: true}, () => {
+    this.setState({editorLoaded: true, renderingEditor: true}, () => {
       RichContentEditor.loadNewEditor(this._textareaRef, {
         focus: false,
         manageParent: false,
@@ -105,7 +119,7 @@ export default class TextEntry extends React.Component {
   }
 
   unloadRCE() {
-    this.setState({editorLoaded: false}, () => {
+    this.setState({editorLoaded: false, renderingEditor: false}, () => {
       const documentContent = document.getElementById('content')
       if (documentContent) {
         const editorIframe = documentContent.querySelector('[id^="random_editor"]')
@@ -131,6 +145,7 @@ export default class TextEntry extends React.Component {
         this._tinyeditor.focus()
       }
     }
+    this.setState({renderingEditor: false})
   }
 
   handleEditorIframeFocus = _event => {
@@ -155,6 +170,7 @@ export default class TextEntry extends React.Component {
     await this.props.createSubmissionDraft({
       variables: {
         id: this.props.submission.id,
+        activeSubmissionType: 'online_text_entry',
         attempt: this.props.submission.attempt || 1,
         body: rceText
       }
@@ -175,7 +191,7 @@ export default class TextEntry extends React.Component {
     }
   }
 
-  handleCancelButton = () => {
+  handleDeleteButton = () => {
     if (this._isMounted) {
       this.updateSubmissionDraft(null)
       this.props.updateEditingDraft(false)
@@ -183,14 +199,8 @@ export default class TextEntry extends React.Component {
   }
 
   renderButtons() {
-    const buttonAlign = {
-      margin: '15px 0 0 0',
-      position: 'absolute',
-      right: '35px'
-    }
-
     return (
-      <div style={buttonAlign}>
+      <div style={{textAlign: direction('right')}}>
         <Button
           data-testid="cancel-text-entry"
           margin="0 xx-small 0 0"
@@ -210,6 +220,7 @@ export default class TextEntry extends React.Component {
   renderEditor() {
     return (
       <div data-testid="text-editor">
+        {this.state.renderingEditor && <LoadingIndicator />}
         <span>
           <textarea defaultValue={this.getDraftBody()} ref={this.setTextareaRef} />
         </span>
@@ -221,7 +232,10 @@ export default class TextEntry extends React.Component {
   renderSubmission() {
     return (
       <View as="div" borderWidth="small" padding="xx-small" data-testid="text-submission">
-        <div dangerouslySetInnerHTML={{__html: this.props.submission.body}} />
+        <div
+          style={{wordBreak: 'break-word'}}
+          dangerouslySetInnerHTML={{__html: this.props.submission.body}}
+        />
       </View>
     )
   }
@@ -235,6 +249,9 @@ export default class TextEntry extends React.Component {
           <div>
             <Button
               data-testid="edit-text-draft"
+              ref={el => {
+                this.editTextEntryButton = el
+              }}
               margin="0 x-small 0 0"
               onClick={() => {
                 this.props.updateEditingDraft(true)
@@ -245,7 +262,7 @@ export default class TextEntry extends React.Component {
             <Button
               data-testid="delete-text-draft"
               icon={IconTrashLine}
-              onClick={this.handleCancelButton}
+              onClick={this.handleDeleteButton}
             >
               <ScreenReaderContent>{I18n.t('Remove submission draft')}</ScreenReaderContent>
             </Button>
@@ -262,7 +279,14 @@ export default class TextEntry extends React.Component {
           heading={I18n.t('Text Entry')}
           hero={<IconTextLine color="brand" />}
           message={
-            <Button data-testid="start-text-entry" onClick={this.handleStartButton}>
+            <Button
+              data-testid="start-text-entry"
+              id="start-text-entry"
+              onClick={this.handleStartButton}
+              ref={el => {
+                this.startTextEntryButton = el
+              }}
+            >
               {I18n.t('Start Entry')}
             </Button>
           }

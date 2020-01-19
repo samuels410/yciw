@@ -26,9 +26,9 @@ async function makeProps(opts = {}) {
   const mockedSubmission =
     opts.submission ||
     (await mockSubmission({
-      Submission: () => ({
+      Submission: {
         submissionDraft: {body: 'words'}
-      })
+      }
     }))
 
   return {
@@ -85,6 +85,7 @@ describe('TextEntry', () => {
         expect(props.createSubmissionDraft).toHaveBeenCalledWith({
           variables: {
             id: '1',
+            activeSubmissionType: 'online_text_entry',
             attempt: 1,
             body: null
           }
@@ -99,6 +100,13 @@ describe('TextEntry', () => {
         const {getByTestId} = render(<TextEntry {...props} />)
 
         expect(getByTestId('text-editor')).toBeInTheDocument()
+      })
+
+      it('renders the loading indicator of the RCE', async () => {
+        const props = await makeProps({editingDraft: true})
+        const {getByText} = render(<TextEntry {...props} />)
+
+        expect(getByText('Loading')).toBeInTheDocument()
       })
 
       it('renders the Cancel button when the RCE is loaded', async () => {
@@ -148,10 +156,10 @@ describe('TextEntry', () => {
 
   it('displays the submitted text body when the text has been submitted', async () => {
     const mockedSubmission = await mockSubmission({
-      Submission: () => ({
+      Submission: {
         body: '<p>thundercougarfalconbird</p>',
         state: 'submitted'
-      })
+      }
     })
     const props = await makeProps({submission: mockedSubmission})
     const {getByTestId, getByText} = render(<TextEntry {...props} />)
@@ -162,10 +170,10 @@ describe('TextEntry', () => {
 
   it('displays the submitted text body when the submission has been graded', async () => {
     const mockedSubmission = await mockSubmission({
-      Submission: () => ({
+      Submission: {
         body: '<p>thundercougarfalconbird</p>',
         state: 'graded'
-      })
+      }
     })
     const props = await makeProps({submission: mockedSubmission})
     const {getByTestId, getByText} = render(<TextEntry {...props} />)

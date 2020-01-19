@@ -38,18 +38,43 @@ export default class FakeEditor {
         this._selectedNode = this.$container.appendChild($temp.firstChild)
       },
 
-      collapse: () => this._collapsed = true,
-      isCollapsed: () => this._collapsed
+      collapse: () => (this._collapsed = true),
+      isCollapsed: () => this._collapsed,
+      select: node => (this._selectedNode = node)
     }
 
     this.dom = {
       getParent: (el, selector) => {
-        const parent = el && el.parentElement
-        const grandparent = parent && parent.parentElement
-        if (grandparent && grandparent.querySelector(selector) === parent) {
-          return parent
+        let ancestor = el && el.parentNode
+        while (ancestor) {
+          const candidate = ancestor.querySelector(selector)
+          if (candidate) return candidate
+          ancestor = ancestor.parentNode
         }
         return null
+      },
+      setAttrib: (elem, attr, value) => {
+        elem.setAttribute(attr, value)
+      },
+      getAttrib: (elem, attr) => {
+        return elem.getAttribute(attr)
+      },
+      setAttribs: (elem, hash) => {
+        Object.keys(hash).forEach(k => {
+          if (hash[k] == undefined) {
+            elem.removeAttribute(k)
+          } else {
+            elem.setAttribute(k, hash[k])
+          }
+        })
+      },
+      setStyles: (elem, hash) => {
+        Object.keys(hash).forEach(k => {
+          elem.style[k] = hash[k]
+        })
+      },
+      replace: (newelem, oldelem) => {
+        return oldelem.parentNode.replaceChild(newelem, oldelem)
       }
     }
   }

@@ -81,7 +81,10 @@ class SubmissionsBaseController < ApplicationController
       submission_json_exclusions << :user_id
     end
 
-    if @submission.submission_type == "online_quiz" && @assignment.muted? && !@assignment.grants_right?(@current_user, :grade)
+    if @submission.submission_type == "online_quiz" &&
+        @submission.hide_grade_from_student? &&
+        !@assignment.grants_right?(@current_user, :grade)
+
       submission_json_exclusions << :body
     end
 
@@ -110,6 +113,7 @@ class SubmissionsBaseController < ApplicationController
       unless @submission.grants_right?(@current_user, session, :submit)
         @request = @submission.assessment_requests.where(assessor_id: @current_user).first if @current_user
         params[:submission] = {
+          :attempt => params[:submission][:attempt],
           :comment => params[:submission][:comment],
           :comment_attachments => params[:submission][:comment_attachments],
           :media_comment_id => params[:submission][:media_comment_id],
@@ -122,6 +126,7 @@ class SubmissionsBaseController < ApplicationController
           :final => params[:submission][:final],
           :draft_comment => Canvas::Plugin.value_to_boolean(params[:submission][:draft_comment])
         }
+        params[:submission].delete(:attempt) unless @context.feature_enabled?(:assignments_2_student)
       end
       begin
         @submissions = @assignment.update_submission(@user, params[:submission].to_unsafe_h)

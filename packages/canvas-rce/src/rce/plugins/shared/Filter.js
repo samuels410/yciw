@@ -47,9 +47,9 @@ export function useFilterSettings() {
 }
 
 function fileLabelFromContext(contextType) {
-  switch(contextType) {
+  switch (contextType) {
     case 'user':
-      return formatMessage('My Files')
+      return formatMessage('User Files')
     case 'course':
       return formatMessage('Course Files')
     case 'group':
@@ -74,8 +74,10 @@ function buildContentOptions(userContextType) {
   ]
 
   if (userContextType === 'course') {
-    contentOptions.splice(1, 0,
-      <option value="course_files" icon={IconFolderLine}>
+    contentOptions.splice(
+      1,
+      0,
+      <option key="course_files" value="course_files" icon={IconFolderLine}>
         {fileLabelFromContext('course')}
       </option>
     )
@@ -107,9 +109,7 @@ export default function Filter(props) {
         <Flex margin="small none none none">
           <Flex.Item grow shrink margin="none xx-small none none">
             <Select
-              label={
-                <ScreenReaderContent>{formatMessage('Content Subtype')}</ScreenReaderContent>
-              }
+              label={<ScreenReaderContent>{formatMessage('Content Subtype')}</ScreenReaderContent>}
               onChange={(e, selection) => {
                 onChange({contentSubtype: selection.value})
               }}
@@ -123,31 +123,31 @@ export default function Filter(props) {
                 {formatMessage('Documents')}
               </option>
 
-              {/*
               <option value="media" icon={IconAttachMediaLine}>
                 {formatMessage('Media')}
               </option>
-              */}
 
               <option value="all">{formatMessage('All')}</option>
             </Select>
           </Flex.Item>
 
-          <Flex.Item grow shrink margin="none none none xx-small">
-            <Select
-              label={<ScreenReaderContent>{formatMessage('Sort By')}</ScreenReaderContent>}
-              onChange={(e, selection) => {
-                onChange({sortValue: selection.value})
-              }}
-              selectedOption={sortValue}
-            >
-              <option value="date_added">{formatMessage('Date Added')}</option>
+          {contentSubtype !== 'all' && (
+            <Flex.Item grow shrink margin="none none none xx-small">
+              <Select
+                label={<ScreenReaderContent>{formatMessage('Sort By')}</ScreenReaderContent>}
+                onChange={(e, selection) => {
+                  onChange({sortValue: selection.value})
+                }}
+                selectedOption={sortValue}
+              >
+                <option value="date_added">{formatMessage('Date Added')}</option>
 
-              <option value="alphabetical">{formatMessage('Alphabetical')}</option>
+                <option value="alphabetical">{formatMessage('Alphabetical')}</option>
 
-              <option value="date_published">{formatMessage('Date Published')}</option>
-            </Select>
-          </Flex.Item>
+                <option value="date_published">{formatMessage('Date Published')}</option>
+              </Select>
+            </Flex.Item>
+          )}
         </Flex>
       )}
     </View>
@@ -175,11 +175,6 @@ Filter.propTypes = {
    * `sortValue` defines how items in the CanvasContentTray are sorted
    */
   sortValue: string.isRequired,
-
-  /**
-   * `contextType` is the context in which we are querying for files
-   */
-  contextType: oneOf(['user', 'course']), // 'group' some day
 
   /**
    * The user's context

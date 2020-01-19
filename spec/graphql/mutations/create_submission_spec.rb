@@ -28,13 +28,16 @@ RSpec.describe Mutations::CreateSubmission do
     )
     @attachment1 = attachment_with_context(@student)
     @attachment2 = attachment_with_context(@student)
+    @media_object = factory_with_protected_attributes(MediaObject, :media_id => 'm-123456', title: 'neato-vid')
   end
 
   def mutation_str(
     assignment_id: @assignment.id,
     submission_type: 'online_upload',
     body: nil,
-    file_ids: []
+    file_ids: [],
+    media_id: nil,
+    url: nil
   )
     <<~GQL
       mutation {
@@ -43,6 +46,8 @@ RSpec.describe Mutations::CreateSubmission do
           submissionType: #{submission_type}
           #{"body: \"#{body}\"" if body}
           fileIds: #{file_ids}
+          #{"mediaId: \"#{media_id}\"" if media_id}
+          #{"url: \"#{url}\"" if url}
         }) {
           submission {
             _id
@@ -52,6 +57,11 @@ RSpec.describe Mutations::CreateSubmission do
               displayName
             }
             body
+            mediaObject {
+              _id
+              title
+            }
+            url
           }
           errors {
             attribute
@@ -93,6 +103,31 @@ RSpec.describe Mutations::CreateSubmission do
       @assignment.update!(lock_at: 1.day.ago)
       result = run_mutation
       expect(result.dig(:errors, 0, :message)).to eq 'not found'
+    end
+  end
+
+  context 'when the submission_type is a media_recording' do
+    it 'returns an error if there is no media_id' do
+      @assignment.update(submission_types: 'media_recording')
+      result = run_mutation(submission_type: 'media_recording')
+      expect(result.dig(:data, :createSubmission, :errors, 0, :message)).to eq 'media_recording submissions require a media_id to submit'
+    end
+
+    it 'returns an error if the media_id does not match a media object' do
+      @assignment.update(submission_types: 'media_recording')
+      result = run_mutation(submission_type: 'media_recording', media_id: 'not_a_media_id')
+      expect(result.dig(:data, :createSubmission, :errors, 0, :message)).to eq 'The media_id does not correspond to an existing media object'
+    end
+
+    it 'saves the media_object on the submission' do
+      @assignment.update(submission_types: 'media_recording')
+      result = run_mutation(submission_type: 'media_recording', media_id: @media_object.media_id)
+      submission = Submission.find(result.dig(:data, :createSubmission, :submission, :_id))
+
+      expect(submission.workflow_state).to eq 'submitted'
+      media_object = submission.media_object
+      expect(media_object.title).to eq @media_object.title
+      expect(media_object.media_id).to eq @media_object.media_id
     end
   end
 
@@ -148,6 +183,29 @@ RSpec.describe Mutations::CreateSubmission do
 
       expect(submission.workflow_state).to eq 'submitted'
       expect(result.dig(:data, :createSubmission, :submission, :body)).to eq('thundercougarfalconbird')
+    end
+  end
+
+  context 'when the submission_type is online_url' do
+    it 'returns an error if the url is not provided' do
+      @assignment.update!(submission_types: 'online_url')
+      result = run_mutation(submission_type: 'online_url')
+      expect(result.dig(:data, :createSubmission, :errors, 0, :message)).to eq 'URL entry submission cannot be empty'
+    end
+
+    it 'returns an error if the url is not valid' do
+      @assignment.update!(submission_types: 'online_url')
+      result = run_mutation(submission_type: 'online_url', url: 'not a valid url')
+      expect(result.dig(:data, :createSubmission, :errors, 0, :message)).to eq 'is not a valid URL'
+    end
+
+    it 'saves the url to the submission' do
+      @assignment.update!(submission_types: 'online_url')
+      result = run_mutation(submission_type: 'online_url', url: 'http://www.google.com')
+      submission = Submission.find(result.dig(:data, :createSubmission, :submission, :_id))
+
+      expect(submission.workflow_state).to eq 'submitted'
+      expect(result.dig(:data, :createSubmission, :submission, :url)).to eq 'http://www.google.com'
     end
   end
 

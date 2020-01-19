@@ -22,7 +22,7 @@ import React from 'react'
 
 import {Billboard} from '@instructure/ui-billboard'
 import {Checkbox, TextInput} from '@instructure/ui-forms'
-import {Grid, GridCol, GridRow, View} from '@instructure/ui-layout'
+import {Grid, View} from '@instructure/ui-layout'
 import {IconWarningLine, IconSearchLine} from '@instructure/ui-icons'
 import {ScreenReaderContent} from '@instructure/ui-a11y'
 import {Spinner, Text} from '@instructure/ui-elements'
@@ -30,7 +30,7 @@ import {Spinner, Text} from '@instructure/ui-elements'
 import ScopesList from './ScopesList'
 
 export default class Scopes extends React.Component {
-  state = { filter: '' }
+  state = {filter: ''}
 
   handleFilterChange = e => {
     this.setState({
@@ -38,52 +38,54 @@ export default class Scopes extends React.Component {
     })
   }
 
-  enforceScopesSrText () {
+  enforceScopesSrText() {
     return this.props.requireScopes
       ? I18n.t('Clicking the checkbox will cause scopes table to disappear below')
       : I18n.t('Clicking the checkbox will cause scopes table to appear below')
   }
 
   body() {
-    const { developerKey } = this.props
+    const {developerKey} = this.props
     if (this.props.availableScopesPending) {
       return (
-        <GridRow hAlign="space-around">
-          <GridCol width={2}>
+        <Grid.Row hAlign="space-around">
+          <Grid.Col width={2}>
             <span id="scopes-loading-spinner">
-              <Spinner title={I18n.t('Loading Available Scopes')} />
+              <Spinner renderTitle={I18n.t('Loading Available Scopes')} />
             </span>
-          </GridCol>
-        </GridRow>
+          </Grid.Col>
+        </Grid.Row>
       )
     }
 
     return (
-      <GridRow>
-        <GridCol>
+      <Grid.Row>
+        <Grid.Col>
           <View>
-              {this.props.requireScopes
-                ? <ScopesList
-                    availableScopes={this.props.availableScopes}
-                    selectedScopes={developerKey ? developerKey.scopes : []}
-                    filter={this.state.filter}
-                    listDeveloperKeyScopesSet={this.props.listDeveloperKeyScopesSet}
-                    dispatch={this.props.dispatch}
-                  />
-                : <Billboard
-                    hero={<IconWarningLine />}
-                    size="large"
-                    headingAs="h2"
-                    headingLevel="h2"
-                    margin="xx-large"
-                    readOnly
-                    heading={I18n.t('When scope enforcement is disabled, tokens have access to all endpoints available to the authorizing user.')}
-                  />
-
-              }
+            {this.props.requireScopes ? (
+              <ScopesList
+                availableScopes={this.props.availableScopes}
+                selectedScopes={developerKey ? developerKey.scopes : []}
+                filter={this.state.filter}
+                listDeveloperKeyScopesSet={this.props.listDeveloperKeyScopesSet}
+                dispatch={this.props.dispatch}
+              />
+            ) : (
+              <Billboard
+                hero={<IconWarningLine />}
+                size="large"
+                headingAs="h2"
+                headingLevel="h2"
+                margin="xx-large"
+                readOnly
+                heading={I18n.t(
+                  'When scope enforcement is disabled, tokens have access to all endpoints available to the authorizing user.'
+                )}
+              />
+            )}
           </View>
-        </GridCol>
-      </GridRow>
+        </Grid.Col>
+      </Grid.Row>
     )
   }
 
@@ -91,10 +93,8 @@ export default class Scopes extends React.Component {
     const searchEndpoints = I18n.t('Search endpoints')
     return (
       <Grid>
-        <GridRow rowSpacing="small">
-          <GridCol
-            data-automation="enforce_scopes"
-          >
+        <Grid.Row rowSpacing="small">
+          <Grid.Col data-automation="enforce_scopes">
             <Checkbox
               variant="toggle"
               label={
@@ -106,23 +106,19 @@ export default class Scopes extends React.Component {
               checked={this.props.requireScopes}
               onChange={this.props.onRequireScopesChange}
             />
-          </GridCol>
-          {
-            this.props.requireScopes
-            ? (
-              <GridCol width="auto">
-                <TextInput
-                  label={<ScreenReaderContent>{searchEndpoints}</ScreenReaderContent>}
-                  placeholder={searchEndpoints}
-                  type="search"
-                  icon={() => <IconSearchLine />}
-                  onChange={this.handleFilterChange}
-                />
-              </GridCol>
-            )
-            : null
-          }
-        </GridRow>
+          </Grid.Col>
+          {this.props.requireScopes ? (
+            <Grid.Col width="auto">
+              <TextInput
+                label={<ScreenReaderContent>{searchEndpoints}</ScreenReaderContent>}
+                placeholder={searchEndpoints}
+                type="search"
+                icon={() => <IconSearchLine />}
+                onChange={this.handleFilterChange}
+              />
+            </Grid.Col>
+          ) : null}
+        </Grid.Row>
         {this.body()}
       </Grid>
     )
@@ -130,12 +126,14 @@ export default class Scopes extends React.Component {
 }
 
 Scopes.propTypes = {
-  availableScopes: PropTypes.objectOf(PropTypes.arrayOf(
-    PropTypes.shape({
-      resource: PropTypes.string,
-      scope: PropTypes.string
-    })
-  )).isRequired,
+  availableScopes: PropTypes.objectOf(
+    PropTypes.arrayOf(
+      PropTypes.shape({
+        resource: PropTypes.string,
+        scope: PropTypes.string
+      })
+    )
+  ).isRequired,
   availableScopesPending: PropTypes.bool.isRequired,
   dispatch: PropTypes.func.isRequired,
   listDeveloperKeyScopesSet: PropTypes.func.isRequired,

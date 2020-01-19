@@ -75,7 +75,7 @@ import assignmentHelper from 'jsx/gradezilla/shared/helpers/assignmentHelper'
 import TextMeasure from 'jsx/gradezilla/shared/helpers/TextMeasure'
 import * as GradeInputHelper from 'jsx/grading/helpers/GradeInputHelper'
 import OutlierScoreHelper from 'jsx/grading/helpers/OutlierScoreHelper'
-import {isHidden} from 'jsx/grading/helpers/SubmissionHelper'
+import {isPostable} from 'jsx/grading/helpers/SubmissionHelper'
 import LatePolicyApplicator from 'jsx/grading/LatePolicyApplicator'
 import {Button} from '@instructure/ui-buttons'
 import {IconSettingsSolid} from '@instructure/ui-icons'
@@ -137,6 +137,7 @@ export default do ->
 
   getCourseFeaturesFromOptions = (options) ->
     {
+      additionalSortOptionsEnabled: options.additional_sort_options_enabled,
       finalGradeOverrideEnabled: options.final_grade_override_enabled
     }
 
@@ -741,10 +742,11 @@ export default do ->
     studentsThatCanSeeAssignment: (assignmentId) ->
       @courseContent.assignmentStudentVisibility[assignmentId] ||= (
         assignment = @getAssignment(assignmentId)
+        allStudents = Object.assign({}, @students, @studentViewStudents)
         if assignment.only_visible_to_overrides
-          _.pick @students, assignment.assignment_visibility...
+          _.pick allStudents, assignment.assignment_visibility...
         else
-          @students
+          allStudents
       )
 
     isInvalidSort: =>
@@ -1025,9 +1027,15 @@ export default do ->
       submission.excused = !!submission.excused
       submission.hidden = !!submission.hidden
       submission.rawGrade = submission.grade # save the unformatted version of the grade too
-      submission.grade = GradeFormatHelper.formatGrade(submission.grade, {
-        gradingType: submission.gradingType, delocalize: false
-      })
+
+      if assignment = @assignments[submission.assignment_id]
+        submission.gradingType = assignment.grading_type
+
+        if submission.gradingType != "pass_fail"
+          submission.grade = GradeFormatHelper.formatGrade(submission.grade, {
+            gradingType: submission.gradingType, delocalize: false
+          })
+
       cell = student["assignment_#{submission.assignment_id}"] ||= {}
       _.extend(cell, submission)
 
@@ -1966,7 +1974,11 @@ export default do ->
       else
         return columnId
 
-    localeSort: (a, b, { asc = true } = {}) ->
+    localeSort: (a, b, { asc = true, nullsLast = false } = {}) ->
+      if nullsLast
+        return -1 if a? && !b?
+        return 1 if !a? && b?
+
       [b, a] = [a, b] unless asc
       natcompare.strings(a || '', b || '')
 
@@ -2015,7 +2027,7 @@ export default do ->
     sortByStudentColumn: (settingKey, direction) =>
       @sortRowsBy((a, b) =>
         asc = direction == 'ascending'
-        result = @localeSort(a[settingKey], b[settingKey], { asc })
+        result = @localeSort(a[settingKey], b[settingKey], { asc, nullsLast: true })
         result = @idSort(a, b, { asc }) if result == 0
         result
       )
@@ -2087,7 +2099,7 @@ export default do ->
           # Ignore anonymous assignments when deciding whether to show the
           # "hidden" icon, as including them could reveal which students have
           # and have not been graded
-          submission? && isHidden(submission) && !assignment.anonymize_students
+          submission? && isPostable(submission) && !assignment.anonymize_students
         )
       else
         @filteredContentInfo.mutedAssignments
@@ -2373,6 +2385,7 @@ export default do ->
       selectPreviousAssignment: => @loadTrayAssignment('previous')
       selectNextStudent: => @loadTrayStudent('next')
       selectPreviousStudent: => @loadTrayStudent('previous')
+      showSimilarityScore: @options.show_similarity_score
       speedGraderEnabled: @options.speed_grader_enabled
       student:
         id: student.id

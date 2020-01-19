@@ -68,15 +68,15 @@ function normalizeFileData(file) {
   }
 }
 
-function throwConnectionError (error) {
-    if (error.name === 'TypeError') {
-      //eslint-disable-next-line no-console
-      console.error(`Failed to fetch from the canvas-rce-api.
+function throwConnectionError(error) {
+  if (error.name === 'TypeError') {
+    // eslint-disable-next-line no-console
+    console.error(`Failed to fetch from the canvas-rce-api.
       Did you forget to start it or configure it?
       Details can be found at https://github.com/instructure/canvas-rce-api
     `)
-    }
-    throw error
+  }
+  throw error
 }
 
 class RceApiSource {
@@ -131,6 +131,10 @@ class RceApiSource {
     }
   }
 
+  initializeMedia(props) {
+    return this.initializeDocuments(props)
+  }
+
   initializeFlickr() {
     return {
       searchResults: [],
@@ -150,6 +154,12 @@ class RceApiSource {
     return this.apiFetch(uri, headerFor(this.jwt))
   }
 
+  fetchMedia(props) {
+    const media = props.media[props.contextType]
+    const uri = media.bookmark || this.uriFor('media_objects', props)
+    return this.apiFetch(uri, headerFor(this.jwt))
+  }
+
   fetchFiles(uri) {
     return this.fetchPage(uri).then(({bookmark, files}) => {
       return {
@@ -164,19 +174,30 @@ class RceApiSource {
   }
 
   mediaServerSession() {
-    return this.apiPost(this.baseUri("v1/services/kaltura_session"), headerFor(this.jwt), {})
+    return this.apiPost(this.baseUri('v1/services/kaltura_session'), headerFor(this.jwt), {})
   }
 
   uploadMediaToCanvas(mediaObject) {
     const body = {
       id: mediaObject.entryId,
-      type: { 2: 'image', 5: 'audio' }[mediaObject.mediaType] || mediaObject.type.includes("audio") ? 'audio' : 'video',
+      type:
+        {2: 'image', 5: 'audio'}[mediaObject.mediaType] || mediaObject.type.includes('audio')
+          ? 'audio'
+          : 'video',
       context_code: mediaObject.contextCode,
       title: mediaObject.title,
       user_entered_title: mediaObject.userTitle
     }
 
-    return this.apiPost(this.baseUri("media_objects"), headerFor(this.jwt), body)
+    return this.apiPost(this.baseUri('media_objects'), headerFor(this.jwt), body)
+  }
+
+  updateMediaObject(props, {media_object_id, title}) {
+    const uri = `${this.baseUri(
+      'media_objects',
+      props.host
+    )}/${media_object_id}?user_entered_title=${encodeURIComponent(title)}`
+    return this.apiPost(uri, headerFor(this.jwt), null, 'PUT')
   }
 
   // fetches folders for the given context to upload files to
@@ -201,7 +222,8 @@ class RceApiSource {
   }
 
   fetchImages(props) {
-    const uri = props.bookmark || this.uriFor('images', props)
+    const images = props.images[props.contextType]
+    const uri = images.bookmark || this.uriFor('images', props)
     const headers = headerFor(this.jwt)
     return this.apiFetch(uri, headers)
   }
@@ -236,13 +258,15 @@ class RceApiSource {
         return this.finalizeUpload(preflightProps, uploadResults)
       })
       .then(normalizeFileData)
-      .catch((e) => {
+      .catch(_e => {
         this.alertFunc({
-          text: formatMessage('Something went wrong uploading, check your connection and try again.'),
+          text: formatMessage(
+            'Something went wrong uploading, check your connection and try again.'
+          ),
           variant: 'error'
         })
-        // eslint-disable-next-line no-console
-        console.error(e)
+
+        // console.error(e) // eslint-disable-line no-console
       })
   }
 
@@ -298,7 +322,7 @@ class RceApiSource {
     const headers = headerFor(this.jwt)
     const base = this.baseUri('unsplash/pingback')
     const uri = `${base}?id=${id}`
-    return this.apiFetch(uri, headers, { skipParse: true })
+    return this.apiFetch(uri, headers, {skipParse: true})
   }
 
   getFile(id) {
@@ -332,22 +356,22 @@ class RceApiSource {
       .then(checkStatus)
       .then(options.skipParse ? () => {} : parseResponse)
       .catch(throwConnectionError)
-      .catch((e) => {
+      .catch(e => {
         this.alertFunc({
           text: formatMessage('Something went wrong, try again after refreshing the page'),
           variant: 'error'
         })
-        throw e;
+        throw e
       })
   }
 
   // @private
-  apiPost(uri, headers, body) {
-    headers = { ...headers, 'Content-Type': 'application/json'}
+  apiPost(uri, headers, body, method = 'POST') {
+    headers = {...headers, 'Content-Type': 'application/json'}
     const fetchOptions = {
-      method: 'POST',
+      method,
       headers,
-      body: JSON.stringify(body)
+      body: body ? JSON.stringify(body) : undefined
     }
     uri = this.normalizeUriProtocol(uri)
     return fetch(uri, fetchOptions)
@@ -355,7 +379,7 @@ class RceApiSource {
         if (response.status == 401) {
           // retry once with fresh token
           return this.buildRetryHeaders(fetchOptions.headers).then(newHeaders => {
-            const newOptions = { ...fetchOptions, headers: newHeaders}
+            const newOptions = {...fetchOptions, headers: newHeaders}
             return fetch(uri, newOptions)
           })
         } else {
@@ -365,20 +389,22 @@ class RceApiSource {
       .then(checkStatus)
       .then(parseResponse)
       .catch(throwConnectionError)
-      .catch((e) => {
+      .catch(e => {
         this.alertFunc({
-          text: formatMessage('Something went wrong uploading, check your connection and try again.'),
+          text: formatMessage(
+            'Something went wrong uploading, check your connection and try again.'
+          ),
           variant: 'error'
+        })
+        throw e
+        // console.error(e) // eslint-disable-line no-console
       })
-       // eslint-disable-next-line no-console
-        console.error(e)
-      })
-    }
+  }
 
   // @private
   normalizeUriProtocol(uri, windowOverride) {
     const windowHandle = windowOverride || (typeof window !== 'undefined' ? window : undefined)
-    if (windowHandle && windowHandle.location && windowHandle.location.protocol == 'https:') {
+    if (windowHandle && windowHandle.location && windowHandle.location.protocol === 'https:') {
       return uri.replace('http://', 'https://')
     }
     return uri
@@ -390,7 +416,7 @@ class RceApiSource {
       this.refreshToken(freshToken => {
         this.jwt = freshToken
         const freshHeader = headerFor(freshToken)
-        const mergedHeaders = { ...headers, ...freshHeader}
+        const mergedHeaders = {...headers, ...freshHeader}
         resolve(mergedHeaders)
       })
     })
@@ -427,18 +453,21 @@ class RceApiSource {
   uriFor(endpoint, props) {
     const {host, contextType, contextId} = props
     let extra = ''
-    switch(endpoint) {
+    switch (endpoint) {
       case 'images':
         extra = '&content_types=image'
-        break;
+        break
       case 'media':
         extra = '&content_types=video,audio'
-        break;
+        break
       case 'documents':
         extra = '&exclude_content_types=image,video,audio'
-        break;
+        break
     }
-    return `${this.baseUri(endpoint, host)}?contextType=${contextType}&contextId=${contextId}${extra}`
+    return `${this.baseUri(
+      endpoint,
+      host
+    )}?contextType=${contextType}&contextId=${contextId}${extra}`
   }
 }
 

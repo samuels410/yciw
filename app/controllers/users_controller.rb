@@ -262,20 +262,6 @@ class UsersController < ApplicationController
         :original_host_with_port => request.host_with_port
       )
       redirect_to request_token.authorize_url
-    elsif params[:service] == "linked_in"
-      success_url = oauth_success_url(:service => 'linked_in')
-      request_token = LinkedIn::Connection.request_token(success_url)
-
-      OauthRequest.create(
-        :service => 'linked_in',
-        :token => request_token.token,
-        :secret => request_token.secret,
-        :return_url => return_to_url,
-        :user => @current_user,
-        :original_host_with_port => request.host_with_port
-      )
-
-      redirect_to request_token.authorize_url
     end
   end
 
@@ -340,56 +326,28 @@ class UsersController < ApplicationController
       url = url_for request.parameters.merge(:host => oauth_request.original_host_with_port, :only_path => false)
       redirect_to url
     else
-      if params[:service] == "linked_in"
-        begin
-          raise "No OAuth LinkedIn User" unless oauth_request.user
+      begin
+        raise "No OAuth Twitter User" unless oauth_request.user
 
-          linkedin = LinkedIn::Connection.from_request_token(
-            oauth_request.token,
-            oauth_request.secret,
-            params[:oauth_verifier]
-          )
+        twitter = Twitter::Connection.from_request_token(
+          oauth_request.token,
+          oauth_request.secret,
+          params[:oauth_verifier]
+        )
+        UserService.register(
+          :service => "twitter",
+          :access_token => twitter.access_token,
+          :user => oauth_request.user,
+          :service_domain => "twitter.com",
+          :service_user_id => twitter.service_user_id,
+          :service_user_name => twitter.service_user_name
+        )
+        oauth_request.destroy
 
-          UserService.register(
-            :service => "linked_in",
-            :access_token => linkedin.access_token,
-            :user => oauth_request.user,
-            :service_domain => "linked_in.com",
-            :service_user_id => linkedin.service_user_id,
-            :service_user_name => linkedin.service_user_name,
-            :service_user_url => linkedin.service_user_url
-          )
-          oauth_request.destroy
-
-          flash[:notice] = t('linkedin_added', "LinkedIn account successfully added!")
-        rescue => e
-          Canvas::Errors.capture_exception(:oauth, e)
-          flash[:error] = t('linkedin_fail', "LinkedIn authorization failed. Please try again")
-        end
-      else
-        begin
-          raise "No OAuth Twitter User" unless oauth_request.user
-
-          twitter = Twitter::Connection.from_request_token(
-            oauth_request.token,
-            oauth_request.secret,
-            params[:oauth_verifier]
-          )
-          UserService.register(
-            :service => "twitter",
-            :access_token => twitter.access_token,
-            :user => oauth_request.user,
-            :service_domain => "twitter.com",
-            :service_user_id => twitter.service_user_id,
-            :service_user_name => twitter.service_user_name
-          )
-          oauth_request.destroy
-
-          flash[:notice] = t('twitter_added', "Twitter access authorized!")
-        rescue => e
-          Canvas::Errors.capture_exception(:oauth, e)
-          flash[:error] = t('twitter_fail_whale', "Twitter authorization failed. Please try again")
-        end
+        flash[:notice] = t('twitter_added', "Twitter access authorized!")
+      rescue => e
+        Canvas::Errors.capture_exception(:oauth, e)
+        flash[:error] = t('twitter_fail_whale', "Twitter authorization failed. Please try again")
       end
       return_to(oauth_request.return_url, user_profile_url(@current_user))
     end
@@ -457,8 +415,8 @@ class UsersController < ApplicationController
   #
   # @argument enrollment_type [String]
   #   When set, only return users enrolled with the specified course-level base role.
-  #   This can be a base role type of 'StudentEnrollment', 'TeacherEnrollment',
-  #   'TaEnrollment', 'ObserverEnrollment', or 'DesignerEnrollment'.
+  #   This can be a base role type of 'student', 'teacher',
+  #   'ta', 'observer', or 'designer'.
   #
   # @argument sort [String, "username"|"email"|"sis_id"|"last_login"]
   #   The column to sort results by.
@@ -527,6 +485,7 @@ class UsersController < ApplicationController
       js_env act_as_user_data: {
         user: {
           name: @user.name,
+          pronouns: @user.pronouns,
           short_name: @user.short_name,
           id: @user.id,
           avatar_image_url: @user.avatar_image_url,
@@ -1322,6 +1281,7 @@ class UsersController < ApplicationController
     success_url = user_profile_url(@current_user)
     @return_url = named_context_url(@current_user, :context_external_content_success_url, 'external_tool_redirect', {include_host: true})
     @redirect_return = true
+    @context = @current_user
     js_env(:redirect_return_success_url => success_url,
            :redirect_return_cancel_url => success_url)
 
@@ -1726,16 +1686,19 @@ class UsersController < ApplicationController
       return render(json: { :message => "Invalid Hexcode Provided" }, status: :bad_request)
     end
 
-    unless params[:hexcode].nil?
-      user.custom_colors[params[:asset_string]] = normalize_hexcode(params[:hexcode])
-    end
+    user.shard.activate do
+      # translate asset string to be relative to user's shard
+      unless params[:hexcode].nil?
+        user.custom_colors[context.asset_string] = normalize_hexcode(params[:hexcode])
+      end
 
-    respond_to do |format|
-      format.json do
-        if user.save
-          render(json: { hexcode: user.custom_colors[params[:asset_string]]})
-        else
-          render(json: user.errors, status: :bad_request)
+      respond_to do |format|
+        format.json do
+          if user.save
+            render(json: { hexcode: user.custom_colors[context.asset_string]})
+          else
+            render(json: user.errors, status: :bad_request)
+          end
         end
       end
     end
@@ -2010,7 +1973,7 @@ class UsersController < ApplicationController
     @target_user = User.where(id: params[:new_user_id]).first if params[:new_user_id]
     @target_user ||= @current_user
     if @source_user.grants_right?(@current_user, :merge) && @target_user.grants_right?(@current_user, :merge)
-      UserMerge.from(@source_user).into(@target_user)
+      UserMerge.from(@source_user).into(@target_user, merger: @current_user, source: 'users_controller')
       @target_user.touch
       flash[:notice] = t('user_merge_success', "User merge succeeded! %{first_user} and %{second_user} are now one and the same.", :first_user => @target_user.name, :second_user => @source_user.name)
       if @target_user == @current_user
@@ -2125,6 +2088,7 @@ class UsersController < ApplicationController
 
   def teacher_activity
     @teacher = User.find(params[:user_id])
+
     if @teacher == @current_user || authorized_action(@teacher, @current_user, :read_reports)
       @courses = {}
 
@@ -2133,7 +2097,7 @@ class UsersController < ApplicationController
         enrollments = student.student_enrollments.active.preload(:course).shard(student).to_a
         enrollments.each do |enrollment|
           should_include = enrollment.course.user_has_been_instructor?(@teacher) &&
-                           enrollment.course.grants_right?(@current_user, :read_reports) &&
+                           enrollment.course.grants_all_rights?(@current_user, :read_reports, :view_all_grades) &&
                            enrollment.course.apply_enrollment_visibility(enrollment.course.all_student_enrollments, @teacher).where(id: enrollment).first
           if should_include
             @courses[enrollment.course] = teacher_activity_report(@teacher, enrollment.course, [enrollment])
@@ -2150,12 +2114,11 @@ class UsersController < ApplicationController
         if !course.user_has_been_instructor?(@teacher)
           flash[:error] = t('errors.user_not_teacher', "That user is not a teacher in this course")
           redirect_to_referrer_or_default(root_url)
-        elsif authorized_action(course, @current_user, :read_reports)
+        elsif authorized_action(course, @current_user, :read_reports) && authorized_action(course, @current_user, :view_all_grades)
           enrollments = course.apply_enrollment_visibility(course.all_student_enrollments, @teacher)
           @courses[course] = teacher_activity_report(@teacher, course, enrollments)
         end
       end
-
     end
   end
 
@@ -2498,6 +2461,8 @@ class UsersController < ApplicationController
   #
   # @argument include[] [String, "assignment"]
   #   Associations to include with the group.
+  # @argument only_current_enrollments [boolean]
+  #   Returns submissions for only currently active enrollments
   #
   # @returns [Submission]
   #
@@ -2505,10 +2470,17 @@ class UsersController < ApplicationController
     @user = api_find(User, params[:id])
     if authorized_action(@user, @current_user, :read_grades)
       collections = []
+      only_current_enrollments = value_to_boolean(params[:only_current_enrollments])
+
       # Plannable Bookmarker enables descending order
       bookmarker = Plannable::Bookmarker.new(Submission, true, :graded_at, :id)
       Shard.with_each_shard(@user.associated_shards) do
-        collections << [Shard.current.id, BookmarkedCollection.wrap(bookmarker, Submission.for_user(@user).graded)]
+        submissions = if only_current_enrollments
+          Submission.joins(assignment: { course: :student_enrollments }).merge(Enrollment.current.for_user(@user))
+        else
+          Submission.all
+        end
+        collections << [Shard.current.id, BookmarkedCollection.wrap(bookmarker, submissions.for_user(@user).graded)]
       end
 
       scope = BookmarkedCollection.merge(*collections)

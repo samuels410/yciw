@@ -24,7 +24,7 @@ describe "calendar2" do
 
   before(:each) do
     # or some stuff we need to click is "below the fold"
-    make_full_screen
+
 
     Account.default.tap do |a|
       a.settings[:show_scheduler] = true
@@ -156,7 +156,7 @@ describe "calendar2" do
 
         agenda_item.click
         delete_event_button.click
-        fj('.ui-dialog:visible .btn-primary').click
+        fj('.ui-dialog:visible .btn-danger').click
 
         expect(f("#content")).not_to contain_css('.agenda-event__item-container')
       end
@@ -169,7 +169,7 @@ describe "calendar2" do
 
         agenda_item.click
         delete_event_button.click
-        fj('.ui-dialog:visible .btn-primary').click
+        fj('.ui-dialog:visible .btn-danger').click
 
         expect(f("#content")).not_to contain_css('.agenda-event__item-container')
       end
@@ -274,7 +274,7 @@ describe "calendar2" do
 
           agenda_item.click
           delete_event_button.click
-          fj('.ui-dialog:visible .btn-primary').click
+          fj('.ui-dialog:visible .btn-danger').click
 
           expect(f("#content")).not_to contain_css('.agenda-event__item-container')
         end

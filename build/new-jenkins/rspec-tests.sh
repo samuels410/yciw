@@ -1,8 +1,9 @@
 #!/bin/bash
 
-# Todo: build the spec list similar to how it currently is in rspect
-# spec_files=`find spec {gems,vendor}/plugins/*/spec_canvas -type f -name '*_spec.rb'|grep -v '/selenium/'|tr '\n' ' '`
+set -o errexit -o errtrace -o nounset -o pipefail -o xtrace
 
-# Todo: run the specs in spec_files
-# -O spec/spec.opts runs rspec with our formatters for failure reports
-docker-compose exec -T web bundle exec rspec -O spec/spec.opts spec/lib/*_spec.rb
+if [ "${1-}" = 'only-failures' ]; then
+  docker-compose exec -T web bundle exec rake 'knapsack:rspec[--options spec/spec.opts --failure-exit-code 99 --only-failures]'
+else
+  docker-compose exec -T web bundle exec rake 'knapsack:rspec[--options spec/spec.opts --failure-exit-code 99]'
+fi

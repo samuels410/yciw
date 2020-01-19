@@ -408,7 +408,8 @@ class DiscussionTopicsController < ApplicationController
             publish: user_can_moderate
           },
           discussion_topic_menu_tools: external_tools_display_hashes(:discussion_topic_menu),
-          DIRECT_SHARE_ENABLED: @context.grants_right?(@current_user, session, :manage_content) && @domain_root_account&.feature_enabled?(:direct_share),
+          discussion_topic_index_menu_tools: (@domain_root_account&.feature_enabled?(:commons_favorites) ?
+            external_tools_display_hashes(:discussion_topic_index_menu) : []),
         }
         if @context.is_a?(Course) && @context.grants_right?(@current_user, session, :read) && @js_env&.dig(:COURSE_ID).blank?
           hash[:COURSE_ID] = @context.id.to_s
@@ -416,6 +417,9 @@ class DiscussionTopicsController < ApplicationController
         conditional_release_js_env(includes: :active_rules)
         append_sis_data(hash)
         js_env(hash)
+        js_env({
+          DIRECT_SHARE_ENABLED: @context.grants_right?(@current_user, session, :manage_content) && @domain_root_account&.feature_enabled?(:direct_share)
+        }, true)
         set_tutorial_js_env
 
         if user_can_edit_course_settings?
@@ -557,7 +561,7 @@ class DiscussionTopicsController < ApplicationController
       js_hash[:POST_TO_SIS_DEFAULT] = @context.account.sis_default_grade_export[:value]
     end
     if @context.root_account.feature_enabled?(:student_planner)
-      js_hash[:STUDENT_PLANNER_ENABLED] = @context.grants_any_right?(@current_user, session, :manage)
+      js_hash[:STUDENT_PLANNER_ENABLED] = @context.grants_any_right?(@current_user, session, :manage_content)
     end
 
     if @topic.is_section_specific && @context.is_a?(Course)
@@ -1270,7 +1274,7 @@ class DiscussionTopicsController < ApplicationController
       return
     end
     return unless params[:todo_date]
-    if !authorized_action(@topic.context, @current_user, :manage)
+    if !authorized_action(@topic.context, @current_user, :manage_content)
       @errors[:todo_date] = t(:error_todo_date_unauthorized,
         "You do not have permission to add this topic to the student to-do list.")
     elsif (@topic.assignment || params[:assignment]) && !remove_assign

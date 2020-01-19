@@ -18,10 +18,10 @@
 import I18n from 'i18n!assignments_2'
 import React from 'react'
 import {View} from '@instructure/ui-layout'
-import {Heading} from '@instructure/ui-elements'
+import {Heading} from '@instructure/ui-heading'
 import {string} from 'prop-types'
 
-function ErrorPageHeader(props) {
+export default function ErrorPageHeader(props) {
   return (
     <View display="block">
       <Heading level="h1">{I18n.t('Sorry, Something Broke')}</Heading>
@@ -35,5 +35,3 @@ function ErrorPageHeader(props) {
 ErrorPageHeader.propTypes = {
   imageUrl: string.isRequired
 }
-
-export default React.memo(ErrorPageHeader)

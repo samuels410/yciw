@@ -21,7 +21,7 @@ module Api::V1::Tab
   include Api::V1::ExternalTools::UrlHelpers
 
   def tabs_available_json(context, user, session, includes = [], precalculated_permissions: nil)
-    json = context_tabs(context, user, precalculated_permissions: precalculated_permissions).map { |tab|
+    json = context_tabs(context, user, session: session, precalculated_permissions: precalculated_permissions).map { |tab|
       tab_json(tab.with_indifferent_access, context, user, session) }
     json.sort!{|x,y| x['position'] <=> y['position']}
   end
@@ -51,7 +51,17 @@ module Api::V1::Tab
     end
 
     if tab[:args]
-      send(method, *tab[:args], opts)
+      if tab[:args].is_a?(Hash)
+        # LTI 2 tools have args as a hash rather than an array (see MessageHandler#lti_apps_tabs)
+        send(method, opts.merge(tab[:args].symbolize_keys))
+      elsif tab[:args].last.is_a?(Hash) || tab[:args].last.is_a?(ActionController::Parameters)
+        # If last argument is a hash (of options), we can't add on another options hash;
+        # we need to merge it into the existing options.
+        # can't do tab[:args].last.merge(opts), that may convert :host to 'host'
+        send(method, *tab[:args][0..-2], opts.merge(tab[:args].last))
+      else
+        send(method, *tab[:args], opts)
+      end
     elsif tab[:no_args]
       send(method, opts)
     else
@@ -69,7 +79,7 @@ module Api::V1::Tab
     end
   end
 
-  def context_tabs(context, user, precalculated_permissions: nil)
+  def context_tabs(context, user, precalculated_permissions: nil, session: nil)
     new_collaborations_enabled = context.feature_enabled?(:new_collaborations)
 
     if context.is_a?(User)
@@ -81,7 +91,8 @@ module Api::V1::Tab
       include_external: true,
       api: true,
       precalculated_permissions: precalculated_permissions,
-      root_account: root_account
+      root_account: root_account,
+      session: session
     }
 
     tabs = context.tabs_available(user, opts).select do |tab|

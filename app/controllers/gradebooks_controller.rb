@@ -21,6 +21,7 @@ class GradebooksController < ApplicationController
   include GradebooksHelper
   include KalturaHelper
   include Api::V1::AssignmentGroup
+  include Api::V1::Group
   include Api::V1::GroupCategory
   include Api::V1::Submission
   include Api::V1::CustomGradebookColumn
@@ -67,6 +68,7 @@ class GradebooksController < ApplicationController
     css_bundle :grade_summary
 
     @google_analytics_page_title = t("Grades for Student")
+    load_grade_summary_data
     render stream: can_stream_template?
   end
 
@@ -158,7 +160,6 @@ class GradebooksController < ApplicationController
 
     js_env(js_hash)
   end
-  helper_method :load_grade_summary_data
 
   def save_assignment_order
     if authorized_action(@context, @current_user, :read)
@@ -495,11 +496,16 @@ class GradebooksController < ApplicationController
       assignment_ids = submissions.map { |submission| submission[:assignment_id] }
       users = @context.admin_visible_students.distinct.find(user_ids).index_by(&:id)
       assignments = @context.assignments.active.find(assignment_ids).index_by(&:id)
+      # `submissions` is not a collection of ActiveRecord Submission objects,
+      # so we pull the records here in order to check hide_grade_from_student?
+      # on each submission below.
+      submission_records = Submission.where(assignment_id: assignment_ids, user_id: user_ids)
 
       request_error_status = nil
       error = nil
       @submissions = []
       submissions.each do |submission|
+        submission_record = submission_records.find { |sub| sub.user_id == submission[:user_id].to_i }
         @assignment = assignments[submission[:assignment_id].to_i]
         @user = users[submission[:user_id].to_i]
 
@@ -536,7 +542,7 @@ class GradebooksController < ApplicationController
           end
           if [:comment, :media_comment_id, :comment_attachments].any? { |k| submission.key? k }
             submission[:commenter] = @current_user
-            submission[:hidden] = @assignment.muted?
+            submission[:hidden] = submission_record&.hide_grade_from_student?
 
             subs = @assignment.update_submission(@user, submission)
             apply_provisional_grade_filters!(submissions: subs, final: submission[:final]) if submission[:provisional]
@@ -657,6 +663,7 @@ class GradebooksController < ApplicationController
 
     @can_comment_on_submission = !@context.completed? && !@context_enrollment.try(:completed?)
     @disable_unmute_assignment = @assignment.muted && !@assignment.grades_published?
+
     respond_to do |format|
 
       format.html do
@@ -686,6 +693,7 @@ class GradebooksController < ApplicationController
           rubric: rubric ? rubric_json(rubric, @current_user, session, style: 'full') : nil,
           nonScoringRubrics: @domain_root_account.feature_enabled?(:non_scoring_rubrics),
           outcome_extra_credit_enabled: @context.feature_enabled?(:outcome_extra_credit),
+          group_comments_per_attempt: @assignment.a2_enabled?,
           can_comment_on_submission: @can_comment_on_submission,
           show_help_menu_item: show_help_link?,
           help_url: help_link_url,
@@ -702,7 +710,6 @@ class GradebooksController < ApplicationController
         if new_gradebook_enabled?
           env[:selected_section_id] = gradebook_settings.dig(@context.id, 'filter_rows_by', 'section_id')
           env[:post_policies_enabled] = true if @context.post_policies_enabled?
-          env[:selected_student_group_id] = gradebook_settings.dig(@context.id, 'filter_rows_by', 'student_group_id')
         end
 
         if @assignment.quiz
@@ -710,6 +717,37 @@ class GradebooksController < ApplicationController
                                                             @assignment.quiz.id,
                                                             :user_id => "{{user_id}}"
         end
+
+        if @context.filter_speed_grader_by_student_group?
+          env[:filter_speed_grader_by_student_group] = true
+
+          requested_student_id = if @assignment.anonymize_students? && params[:anonymous_id].present?
+            @assignment.submissions.find_by(anonymous_id: params[:anonymous_id])&.user_id
+          elsif !@assignment.anonymize_students?
+            params[:student_id]
+          end
+
+          group_selection = SpeedGrader::StudentGroupSelection.new(current_user: @current_user, course: @context)
+          updated_group_info = group_selection.select_group(student_id: requested_student_id)
+
+          if updated_group_info.group != group_selection.initial_group
+            new_group_id = updated_group_info.group.present? ? updated_group_info.group.id.to_s : nil
+            gradebook_settings(create_if_missing: true).deep_merge!({
+              context.id => {
+                'filter_rows_by' => {
+                  'student_group_id' => new_group_id
+                }
+              }
+            })
+            @current_user.save!
+          end
+
+          if updated_group_info.group.present?
+            env[:selected_student_group] = group_json(updated_group_info.group, @current_user, session)
+          end
+          env[:student_group_reason_for_change] = updated_group_info.reason_for_change if updated_group_info.reason_for_change.present?
+        end
+
         append_sis_data(env)
         js_env(env)
 
@@ -863,6 +901,7 @@ class GradebooksController < ApplicationController
     visible_sections = @context.sections_visible_to(@current_user)
 
     new_gradebook_options = {
+      additional_sort_options_enabled: @context.feature_enabled?(:new_gradebook_sort_options),
       colors: gradebook_settings.fetch(:colors, {}),
 
       course_settings: {
@@ -877,9 +916,14 @@ class GradebooksController < ApplicationController
       late_policy: @context.late_policy.as_json(include_root: false),
       new_gradebook_development_enabled: new_gradebook_development_enabled?,
       post_policies_enabled: @context.post_policies_enabled?,
-      sections: sections_json(visible_sections, @current_user, session, [], allow_sis_ids: true)
+      sections: sections_json(visible_sections, @current_user, session, [], allow_sis_ids: true),
+      show_similarity_score: @context.root_account.feature_enabled?(:new_gradebook_plagiarism_indicator)
     }
-    new_gradebook_options[:post_manually] = @context.post_manually? if @context.post_policies_enabled?
+
+    if @context.post_policies_enabled?
+      new_gradebook_options[:post_manually] = @context.post_manually?
+      new_gradebook_options[:new_post_policy_icons_enabled] = @context.root_account.feature_enabled?(:new_post_policy_icons)
+    end
 
     {GRADEBOOK_OPTIONS: new_gradebook_options}
   end

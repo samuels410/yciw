@@ -19,42 +19,76 @@
 import I18n from 'i18n!direct_share_course_panel'
 
 import React, {useState} from 'react'
-import {func} from 'prop-types'
+import {func, string} from 'prop-types'
 
-import {Button} from '@instructure/ui-buttons'
-import {Flex} from '@instructure/ui-layout'
-
-import ManagedCourseSelector from '../components/ManagedCourseSelector'
+import doFetchApi from 'jsx/shared/effects/doFetchApi'
+import contentSelectionShape from 'jsx/shared/proptypes/contentSelection'
+import ConfirmActionButtonBar from '../components/ConfirmActionButtonBar'
+import CourseAndModulePicker from './CourseAndModulePicker'
+import DirectShareOperationStatus from './DirectShareOperationStatus'
 
 // eventually this will have options for where to place the item in the new course.
 // for now, it just has the selector plus some buttons
 
 DirectShareCoursePanel.propTypes = {
-  onStart: func, // (course)
+  sourceCourseId: string,
+  contentSelection: contentSelectionShape,
   onCancel: func
 }
 
-export default function DirectShareCoursePanel(props) {
+export default function DirectShareCoursePanel({sourceCourseId, contentSelection, onCancel}) {
   const [selectedCourse, setSelectedCourse] = useState(null)
+  const [startCopyOperationPromise, setStartCopyOperationPromise] = useState(null)
+  const [selectedModule, setSelectedModule] = useState(null)
+  const [selectedPosition, setSelectedPosition] = useState(null)
 
-  function handleStart() {
-    if (props.onStart) props.onStart(selectedCourse)
-    console.log('TODO: start copy on course', selectedCourse)
+  function startCopyOperation() {
+    setStartCopyOperationPromise(
+      doFetchApi({
+        method: 'POST',
+        path: `/api/v1/courses/${selectedCourse.id}/content_migrations`,
+        body: {
+          migration_type: 'course_copy_importer',
+          select: contentSelection,
+          settings: {
+            source_course_id: sourceCourseId,
+            insert_into_module_id: selectedModule?.id || null,
+            insert_into_module_type: contentSelection ? Object.keys(contentSelection)[0] : null,
+            insert_into_module_position: selectedPosition
+          }
+        }
+      })
+    )
+  }
+
+  function handleSelectedCourse(course) {
+    setSelectedModule(null)
+    setSelectedCourse(course)
   }
 
   return (
     <>
-      <ManagedCourseSelector onCourseSelected={setSelectedCourse} />
-      <Flex justifyItems="end" padding="small 0 0 0">
-        <Flex.Item>
-          <Button variant="primary" disabled={selectedCourse === null} onClick={handleStart}>
-            {I18n.t('Copy')}
-          </Button>
-          <Button margin="0 0 0 x-small" onClick={props.onCancel}>
-            {I18n.t('Cancel')}
-          </Button>
-        </Flex.Item>
-      </Flex>
+      <DirectShareOperationStatus
+        promise={startCopyOperationPromise}
+        startingMsg={I18n.t('Starting copy operation')}
+        successMsg={I18n.t('Copy operation started successfully')}
+        errorMsg={I18n.t('There was a problem starting the copy operation')}
+      />
+      <CourseAndModulePicker
+        selectedCourseId={selectedCourse?.id}
+        setSelectedCourse={handleSelectedCourse}
+        selectedModuleId={selectedModule?.id || null}
+        setSelectedModule={setSelectedModule}
+        setModuleItemPosition={setSelectedPosition}
+      />
+      <ConfirmActionButtonBar
+        padding="small 0 0 0"
+        primaryLabel={startCopyOperationPromise ? null : I18n.t('Copy')}
+        primaryDisabled={selectedCourse === null}
+        secondaryLabel={startCopyOperationPromise ? I18n.t('Close') : I18n.t('Cancel')}
+        onPrimaryClick={startCopyOperation}
+        onSecondaryClick={onCancel}
+      />
     </>
   )
 }

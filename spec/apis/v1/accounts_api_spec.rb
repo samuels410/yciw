@@ -69,6 +69,15 @@ describe "Accounts API", type: :request do
       ]
     end
 
+    it "doesn't return duplicates" do
+      role = custom_account_role("some role", :account => @a1)
+      @a1.account_users.create!(user: @user, role: role)
+
+      json = api_call(:get, "/api/v1/accounts.json",
+        { :controller => 'accounts', :action => 'index', :format => 'json' })
+      expect(json.map{|a| a['id']}).to match_array([@a1.id, @a2.id])
+    end
+
     it "doesn't include deleted accounts" do
       @a2.destroy
       json = api_call(:get, "/api/v1/accounts.json",
@@ -1111,17 +1120,15 @@ describe "Accounts API", type: :request do
       expect(response).to eq 400
 
       # search on something that's a course name but looks like an id also
-      one_more = create_courses(
-        [{name: @courses[0].id.to_s, course_code: "name_looks_like_id"}],
-        account: @a1, account_associations: true, return_type: :record
-      )
-      @courses.push(*one_more)
-      search_term = @courses.last.name
+      course_with_long_id = @a1.courses.create!(:id => @courses[0].id + 100, :name => "long id") # make sure id is at least 3 characters long
+      one_more = @a1.courses.create!(:name => course_with_long_id.id.to_s)
+      search_term = one_more.name
       json = api_call(:get, "/api/v1/accounts/#{@a1.id}/courses?search_term=#{search_term}",
         { :controller => 'accounts', :action => 'courses_api', :account_id => @a1.to_param,
           :format => 'json', :search_term => search_term })
       expect(json.length).to be 2
-      expect(json.map{ |c| [c['id'], c['name']] }).to match_array([[@courses.first.id, @courses.first.name], [@courses.last.id, @courses.last.name]])
+      expect(json.map{ |c| [c['id'], c['name']] }).to match_array([
+        [course_with_long_id.id, course_with_long_id.name], [one_more.id, one_more.name]])
     end
 
     context "sharding" do

@@ -22,6 +22,13 @@ import {Submission} from './Submission'
 import {SubmissionComment} from './SubmissionComment'
 import {SubmissionDraft} from './SubmissionDraft'
 
+export const DefaultMocks = {
+  CreateSubmissionCommentPayload: () => ({errors: null}),
+  CreateSubmissionDraftPayload: () => ({errors: null}),
+  CreateSubmissionPayload: () => ({errors: null}),
+  MarkSubmissionCommentsReadPayload: () => ({errors: null})
+}
+
 export const CREATE_SUBMISSION = gql`
   mutation CreateSubmission(
     $assignmentLid: ID!
@@ -29,9 +36,18 @@ export const CREATE_SUBMISSION = gql`
     $type: OnlineSubmissionType!
     $body: String
     $fileIds: [ID!]
+    $mediaId: ID
+    $url: String
   ) {
     createSubmission(
-      input: {assignmentId: $assignmentLid, submissionType: $type, body: $body, fileIds: $fileIds}
+      input: {
+        assignmentId: $assignmentLid
+        submissionType: $type
+        body: $body
+        fileIds: $fileIds
+        mediaId: $mediaId
+        url: $url
+      }
     ) {
       submission {
         ...Submission
@@ -51,9 +67,16 @@ export const CREATE_SUBMISSION_COMMENT = gql`
     $submissionAttempt: Int!
     $comment: String!
     $fileIds: [ID!]
+    $mediaObjectId: ID
   ) {
     createSubmissionComment(
-      input: {submissionId: $id, attempt: $submissionAttempt, comment: $comment, fileIds: $fileIds}
+      input: {
+        submissionId: $id
+        attempt: $submissionAttempt
+        comment: $comment
+        fileIds: $fileIds
+        mediaObjectId: $mediaObjectId
+      }
     ) {
       submissionComment {
         ...SubmissionComment
@@ -68,9 +91,25 @@ export const CREATE_SUBMISSION_COMMENT = gql`
 `
 
 export const CREATE_SUBMISSION_DRAFT = gql`
-  mutation CreateSubmissionDraft($id: ID!, $attempt: Int!, $body: String, $fileIds: [ID!]) {
+  mutation CreateSubmissionDraft(
+    $id: ID!
+    $activeSubmissionType: DraftableSubmissionType!
+    $attempt: Int!
+    $body: String
+    $fileIds: [ID!]
+    $mediaId: ID
+    $url: String
+  ) {
     createSubmissionDraft(
-      input: {submissionId: $id, attempt: $attempt, body: $body, fileIds: $fileIds}
+      input: {
+        submissionId: $id
+        activeSubmissionType: $activeSubmissionType
+        attempt: $attempt
+        body: $body
+        fileIds: $fileIds
+        mediaId: $mediaId
+        url: $url
+      }
     ) {
       submissionDraft {
         ...SubmissionDraft
@@ -84,11 +123,14 @@ export const CREATE_SUBMISSION_DRAFT = gql`
   ${SubmissionDraft.fragment}
 `
 
-export const MARK_SUBMISISON_COMMENT_READ = gql`
+export const MARK_SUBMISSION_COMMENT_READ = gql`
   mutation MarkSubmissionCommentsRead($commentIds: [ID!]!, $submissionId: ID!) {
     markSubmissionCommentsRead(
       input: {submissionCommentIds: $commentIds, submissionId: $submissionId}
     ) {
+      submissionComments {
+        _id
+      }
       errors {
         ...Error
       }

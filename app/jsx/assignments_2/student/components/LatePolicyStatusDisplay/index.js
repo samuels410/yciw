@@ -15,27 +15,27 @@
  * You should have received a copy of the GNU Affero General Public License along
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-import I18n from 'i18n!assignments_2_thing'
+import I18n from 'i18n!a2LatePolicyStatusDisplay'
 import PropTypes from 'prop-types'
 import React from 'react'
 import {Tooltip} from '@instructure/ui-overlays'
 import {Button} from '@instructure/ui-buttons'
-import {Flex, FlexItem} from '@instructure/ui-layout'
+import {Flex} from '@instructure/ui-layout'
 import {Text} from '@instructure/ui-elements'
 import LatePolicyToolTipContent from './LatePolicyToolTipContent'
 import {ScreenReaderContent} from '@instructure/ui-a11y'
 
-function LatePolicyStatusDisplay(props) {
+export default function LatePolicyStatusDisplay(props) {
   // TODO: actually pass the assignment and submission in here instead of all these
   //       separate props
   const {attempt, gradingType, grade, originalGrade, pointsDeducted, pointsPossible} = props
   return (
     <div data-testid="late-policy-container">
       <Flex justifyItems="end">
-        <FlexItem padding="none xxx-small none none">
+        <Flex.Item padding="none xxx-small none none">
           <Text size="medium">{I18n.t('Late Policy:')}</Text>
-        </FlexItem>
-        <FlexItem>
+        </Flex.Item>
+        <Flex.Item>
           <Tooltip
             tip={
               <LatePolicyToolTipContent
@@ -65,7 +65,7 @@ function LatePolicyStatusDisplay(props) {
               </Text>
             </Button>
           </Tooltip>
-        </FlexItem>
+        </Flex.Item>
       </Flex>
     </div>
   )
@@ -80,4 +80,3 @@ LatePolicyStatusDisplay.propTypes = {
   pointsPossible: PropTypes.number.isRequired
 }
 
-export default React.memo(LatePolicyStatusDisplay)

@@ -28,14 +28,13 @@ function Consumer({children, ...props}) {
   return children({
     onLinkClick: bridge.insertLink,
     onImageEmbed: bridge.embedImage,
+    onMediaEmbed: bridge.embedMedia,
+    onFileSelect: bridge.insertFileLink,
     ...props
   })
 }
 
-export const StoreConsumer = connect(
-  propsFromState,
-  sidebarHandlers
-)(Consumer)
+export const StoreConsumer = connect(propsFromState, sidebarHandlers)(Consumer)
 
 export function StoreProvider({children, ...storeProps}) {
   const [store] = useState(() => configureStore(storeProps))

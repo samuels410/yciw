@@ -675,6 +675,43 @@ class ContextModule < ActiveRecord::Base
     end
   end
 
+  # specify a 1-based position to insert the items at; leave nil to append to the end of the module
+  # ignores current module item positions in favor of an objective position
+  def insert_items(items, start_pos = nil)
+    if start_pos
+      start_pos = 1 if start_pos < 1
+      next_pos = start_pos
+      tags = content_tags.not_deleted.select(:id, :position).to_a
+    else
+      next_pos = (content_tags.maximum(:position) || 0) + 1
+    end
+    
+    new_tags = []
+    items.each do |item|
+      next unless item.is_a?(ActiveRecord::Base)
+      next unless %w(Attachment Assignment WikiPage Quizzes::Quiz DiscussionTopic ContextExternalTool).include?(item.class_name)
+      new_tags << self.content_tags.create!(context: self.context, title: Context.asset_name(item), content: item, tag_type: 'context_module', position: next_pos)
+      next_pos += 1
+    end
+
+    return unless start_pos
+
+    tag_ids_to_move = {}
+    tags_before = start_pos < 2 ? [] : tags[0..start_pos - 2]
+    tags_after = start_pos > tags.length ? [] : tags[start_pos - 1..-1]
+    (tags_before + new_tags + tags_after).each_with_index do |item, index|
+      index_change = index + 1 - item.position
+      if index_change != 0
+        tag_ids_to_move[index_change] ||= []
+        tag_ids_to_move[index_change] << item.id
+      end
+    end
+
+    tag_ids_to_move.each do |position_change, ids|
+      content_tags.where(id: ids).update_all(sanitize_sql(['position = position + ?', position_change]))
+    end
+  end
+
   def update_for(user, action, tag, points=nil)
     retry_count = 0
     return nil unless self.context.grants_right?(user, :participate_as_student)

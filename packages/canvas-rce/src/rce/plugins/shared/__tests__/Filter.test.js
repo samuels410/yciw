@@ -29,13 +29,11 @@ describe('RCE Plugins > Filter', () => {
     currentFilterSettings = null
   })
 
-  function FilterWithHooks(props={}) {
+  function FilterWithHooks(props = {}) {
     const [filterSettings, setFilterSettings] = useFilterSettings()
     currentFilterSettings = filterSettings
 
-    return (
-      <Filter {...filterSettings} onChange={setFilterSettings} {...props} />
-    )
+    return <Filter {...filterSettings} onChange={setFilterSettings} {...props} />
   }
 
   function renderComponent(props) {
@@ -89,8 +87,8 @@ describe('RCE Plugins > Filter', () => {
     beforeEach(() => {
       renderComponent({userContextType: 'course'})
     })
-    it('sets content type to "user_files" when "My Files" is selected', () => {
-      selectContentType('My Files')
+    it('sets content type to "user_files" when "User Files" is selected', () => {
+      selectContentType('User Files')
       expect(currentFilterSettings.contentType).toEqual('user_files')
     })
 
@@ -100,20 +98,21 @@ describe('RCE Plugins > Filter', () => {
     })
 
     it('sets content type to "links" when "Links" is selected', () => {
-      selectContentType('My Files')
+      selectContentType('User Files')
       selectContentType('Links')
       expect(currentFilterSettings.contentType).toEqual('links')
     })
 
     it.skip('does not change content subtype when changed', () => {
-      selectContentType('My Files')
+      selectContentType('User Files')
       selectContentSubtype('Media')
       selectContentType('Links')
       expect(currentFilterSettings.contentSubtype).toEqual('media')
     })
 
     it('does not change sort value when changed', () => {
-      selectContentType('My Files')
+      selectContentType('User Files')
+      selectContentSubtype('Documents')
       selectSortBy('Date Published')
       selectContentType('Links')
       expect(currentFilterSettings.sortValue).toEqual('date_published')
@@ -132,9 +131,9 @@ describe('RCE Plugins > Filter', () => {
     it('has "My" options', () => {
       renderComponent({userContextType: 'course'})
 
-      selectContentType('My Files')
+      selectContentType('User Files')
       expect(currentFilterSettings.contentType).toEqual('user_files')
-      expect(component.getByLabelText('Content Type').value).toEqual('My Files')
+      expect(component.getByLabelText('Content Type').value).toEqual('User Files')
     })
 
     it('includes the Course and My options in course context', () => {
@@ -142,7 +141,7 @@ describe('RCE Plugins > Filter', () => {
       const contentTypeField = component.getByLabelText('Content Type')
       fireEvent.click(contentTypeField)
       expect(component.getByText('Links')).toBeInTheDocument()
-      expect(component.getByText('My Files')).toBeInTheDocument()
+      expect(component.getByText('User Files')).toBeInTheDocument()
       expect(component.getByText('Course Files')).toBeInTheDocument()
     })
 
@@ -151,7 +150,7 @@ describe('RCE Plugins > Filter', () => {
       const contentTypeField = component.getByLabelText('Content Type')
       fireEvent.click(contentTypeField)
       expect(component.getByText('Links')).toBeInTheDocument()
-      expect(component.getByText('My Files')).toBeInTheDocument()
+      expect(component.getByText('User Files')).toBeInTheDocument()
       expect(component.queryByText('Course Files')).toBeNull()
     })
   })
@@ -159,10 +158,10 @@ describe('RCE Plugins > Filter', () => {
   describe('"Content Subtype" field', () => {
     beforeEach(() => {
       renderComponent()
-      selectContentType('My Files')
+      selectContentType('User Files')
     })
 
-    it('is visible when the Content Type is "My Files"', () => {
+    it('is visible when the Content Type is "User Files"', () => {
       expect(getContentSubtypeField()).toBeVisible()
     })
 
@@ -181,7 +180,7 @@ describe('RCE Plugins > Filter', () => {
       expect(currentFilterSettings.contentSubtype).toEqual('documents')
     })
 
-    it.skip('sets content subtype to "media" when "Media" is selected', () => {
+    it('sets content subtype to "media" when "Media" is selected', () => {
       selectContentSubtype('Media')
       expect(currentFilterSettings.contentSubtype).toEqual('media')
     })
@@ -192,13 +191,16 @@ describe('RCE Plugins > Filter', () => {
       expect(currentFilterSettings.contentSubtype).toEqual('all')
     })
 
-    it.skip('does not change content type when changed', () => {
+    it('does not change content type when changed', () => {
+      expect(currentFilterSettings.contentType).toEqual('user_files')
       selectContentSubtype('Media')
-      expect(currentFilterSettings.contentType).toEqual('files')
+      expect(currentFilterSettings.contentType).toEqual('user_files')
     })
 
-    it.skip('does not change sort value when changed', () => {
+    it('does not change sort value when changed', () => {
+      selectContentSubtype('Documents')
       selectSortBy('Date Published')
+      expect(currentFilterSettings.sortValue).toEqual('date_published')
       selectContentSubtype('Media')
       expect(currentFilterSettings.sortValue).toEqual('date_published')
     })
@@ -208,6 +210,7 @@ describe('RCE Plugins > Filter', () => {
     beforeEach(() => {
       renderComponent({userContextType: 'course'})
       selectContentType('Course Files')
+      selectContentSubtype('Documents')
     })
 
     it('is visible when the Content Type is "Files"', () => {

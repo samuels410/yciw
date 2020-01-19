@@ -18,20 +18,6 @@
 require "spec_helper"
 
 describe GradebookUserIds do
-  let_once :has_pg_collkey do
-    status = if User.connection.extension_installed?(:pg_collkey)
-      begin
-        Bundler.require 'icu'
-        true
-      rescue LoadError
-        skip 'requires icu locally SD-2747'
-        false
-      end
-    end
-
-    status || false
-  end
-
   before(:once) do
     @course = Course.create!
     @teacher = teacher_in_course(course: @course, active_all: true).user
@@ -45,27 +31,56 @@ describe GradebookUserIds do
       filter_columns_by: {},
       filter_rows_by: {}
     }
+
     @student1 = student_in_course(
       course: @course,
       active_all: true,
       allow_multiple_enrollments: true
     ).user
     @student1.update!(sortable_name: "Bert")
+    @student1.pseudonyms.create!(
+      account: @student1.account,
+      sis_user_id: "Bert_sis",
+      integration_id: "Bert_int",
+      unique_id: "Bert"
+    )
+
     @student2 = student_in_course(
       course: @course,
       active_all: true
     ).user
     @student2.update!(sortable_name: "Ernie")
+    @student2.pseudonyms.create!(
+      account: @student2.account,
+      sis_user_id: "Ernie_sis",
+      integration_id: "Ernie_int",
+      unique_id: "Ernie",
+    )
+
     @student3 = student_in_course(
       course: @course,
       active_all: true
     ).user
     @student3.update!(sortable_name: "Carl")
+    @student3.pseudonyms.create!(
+      account: @student3.account,
+      sis_user_id: "Carl_sis",
+      integration_id: "Carl_int",
+      unique_id: "Carl"
+    )
+
     @student4 = student_in_course(
       course: @course,
       active_all: true
     ).user
     @student4.update!(sortable_name: "carl")
+    @student4.pseudonyms.create!(
+      account: @student4.account,
+      sis_user_id: "carl_sis",
+      integration_id: "carl_int",
+      unique_id: "carl2"
+    )
+
     inactive_enrollment = student_in_course(
       course: @course,
       active_all: true
@@ -73,6 +88,13 @@ describe GradebookUserIds do
     inactive_enrollment.deactivate
     @inactive_student = inactive_enrollment.user
     @inactive_student.update!(sortable_name: "Inactive Student")
+    @inactive_student.pseudonyms.create!(
+      account: @inactive_student.account,
+      sis_user_id: "Inactive_Student_sis",
+      integration_id: "Inactive_Student_int",
+      unique_id: "Inactive_Student"
+    )
+
     concluded_enrollment = student_in_course(
       course: @course,
       active_all: true,
@@ -81,6 +103,13 @@ describe GradebookUserIds do
     concluded_enrollment.conclude
     @concluded_student = concluded_enrollment.user
     @concluded_student.update!(sortable_name: "Concluded Student")
+    @concluded_student.pseudonyms.create!(
+      account: @concluded_student.account,
+      sis_user_id: "Concluded_Student_sis",
+      integration_id: "Concluded_Student_int",
+      unique_id: "Concluded_Student"
+    )
+
     @fake_student_enrollment = course_with_user('StudentViewEnrollment', course: @course, active_all: true)
     @fake_student = @fake_student_enrollment.user
     @fake_student.update!(sortable_name: "Baker")
@@ -208,9 +237,9 @@ describe GradebookUserIds do
     end
   end
 
-  context 'with pg_collkey installed' do
+  context 'given pg_collkey extension is present' do
     before do
-      skip 'requires pg_collkey installed SD-2747' unless has_pg_collkey
+      skip_unless_pg_collkey_present
     end
 
     it "sorts by sortable name ascending if the user does not have any saved sort preferences" do
@@ -239,38 +268,7 @@ describe GradebookUserIds do
     end
   end
 
-  context 'with pg_collkey not installed' do
-    before do
-      skip 'requires pg_collkey to not be installed SD-2747' if has_pg_collkey
-    end
-
-    it "sorts by sortable name ascending if the user does not have any saved sort preferences" do
-      @teacher.preferences[:gradebook_settings] = {}
-      expected_result = [@student1.id, @student3.id, @student4.id, @student2.id, @fake_student.id]
-      expect(gradebook_user_ids.user_ids).to eq(expected_result)
-    end
-
-    it "sorts by sortable name ascending if the user's sort preferences are not supported" do
-      @teacher.preferences[:gradebook_settings][@course.id][:sort_rows_by_column_id] = "some_new_column"
-      expected_user_ids = [@student1.id, @student3.id, @student4.id, @student2.id, @fake_student.id]
-      expect(gradebook_user_ids.user_ids).to eq(expected_user_ids)
-    end
-
-    it "does not return duplicate user ids for students with multiple enrollments" do
-      section = @course.course_sections.create!
-      student_in_course(
-        course: @course,
-        user: @student1,
-        section: section,
-        active_all: true,
-        allow_multiple_enrollments: true
-      )
-      expected_user_ids = [@student1.id, @student3.id, @student4.id, @student2.id, @fake_student.id]
-      expect(gradebook_user_ids.user_ids).to eq(expected_user_ids)
-    end
-  end
-
-  describe "student sortable name sorting" do
+  describe "sorting by student" do
     it "excludes fake students if they are deactivated" do
       @fake_student_enrollment.deactivate
       expect(gradebook_user_ids.user_ids).not_to include @fake_student.id
@@ -291,51 +289,123 @@ describe GradebookUserIds do
       expect(gradebook_user_ids.user_ids).not_to include @concluded_student.id
     end
 
-    context 'with pg_collkey installed' do
-      before do
-        skip 'requires pg_collkey installed SD-2747' unless has_pg_collkey
+    describe "student sortable name sorting" do
+      before(:once) do
+        @teacher.preferences[:gradebook_settings][@course.id][:sort_rows_by_setting_key] = "sortable_name"
       end
 
-      it "sorts by student sortable name ascending" do
-        expected_user_ids = [@student1.id, @student4.id, @student3.id, @student2.id, @fake_student.id]
-        expect(gradebook_user_ids.user_ids).to eq(expected_user_ids)
-      end
+      context 'with pg_collkey installed' do
+        before do
+          skip_unless_pg_collkey_present
+        end
 
-      it "sorts by student sortable name descending" do
-        @teacher.preferences[:gradebook_settings][@course.id][:sort_rows_by_direction] = "descending"
-        expected_user_ids = [@student2.id, @student3.id, @student4.id, @student1.id, @fake_student.id]
-        expect(gradebook_user_ids.user_ids).to eq(expected_user_ids)
-      end
+        it "sorts by student sortable name ascending" do
+          expected_user_ids = [@student1.id, @student4.id, @student3.id, @student2.id, @fake_student.id]
+          expect(gradebook_user_ids.user_ids).to eq(expected_user_ids)
+        end
 
-      it "includes concluded students ids if the course is concluded" do
-        @course.complete!
-        expect(gradebook_user_ids.user_ids).to eq(
-          [@student1.id, @student4.id, @student3.id, @concluded_student.id, @student2.id, @fake_student.id]
-        )
+        it "sorts by student sortable name descending" do
+          @teacher.preferences[:gradebook_settings][@course.id][:sort_rows_by_direction] = "descending"
+          expected_user_ids = [@student2.id, @student3.id, @student4.id, @student1.id, @fake_student.id]
+          expect(gradebook_user_ids.user_ids).to eq(expected_user_ids)
+        end
+
+        it "includes concluded students ids if the course is concluded" do
+          @course.complete!
+          expect(gradebook_user_ids.user_ids).to eq(
+            [@student1.id, @student4.id, @student3.id, @concluded_student.id, @student2.id, @fake_student.id]
+          )
+        end
       end
     end
 
-    context 'with pg_collkey not installed' do
-      before do
-        skip 'requires pg_collkey to not be installed SD-2747' if has_pg_collkey
+    describe "sorting by login ID" do
+      before(:once) do
+        @teacher.preferences[:gradebook_settings][@course.id][:sort_rows_by_setting_key] = "login_id"
       end
 
-      it "sorts by student sortable name ascending" do
-        expected_user_ids = [@student1.id, @student3.id, @student4.id, @student2.id, @fake_student.id]
-        expect(gradebook_user_ids.user_ids).to eq(expected_user_ids)
+      context 'with pg_collkey installed' do
+        before do
+          skip_unless_pg_collkey_present
+        end
+
+        it "sorts by student login ID ascending" do
+          expected_user_ids = [@student1.id, @student3.id, @student4.id, @student2.id, @fake_student.id]
+          expect(gradebook_user_ids.user_ids).to eq(expected_user_ids)
+        end
+
+        it "sorts by student login ID descending" do
+          @teacher.preferences[:gradebook_settings][@course.id][:sort_rows_by_direction] = "descending"
+          expected_user_ids = [@student2.id, @student4.id, @student3.id, @student1.id, @fake_student.id]
+          expect(gradebook_user_ids.user_ids).to eq(expected_user_ids)
+        end
+
+        it "includes concluded students' ids if the course is concluded" do
+          @course.complete!
+          expect(gradebook_user_ids.user_ids).to eq(
+            [@student1.id, @student3.id, @student4.id, @concluded_student.id, @student2.id, @fake_student.id]
+          )
+        end
+      end
+    end
+
+    describe "sorting by SIS ID" do
+      before(:once) do
+        @teacher.preferences[:gradebook_settings][@course.id][:sort_rows_by_setting_key] = "sis_user_id"
       end
 
-      it "sorts by student sortable name descending" do
-        @teacher.preferences[:gradebook_settings][@course.id][:sort_rows_by_direction] = "descending"
-        expected_user_ids = [@student2.id, @student4.id, @student3.id, @student1.id, @fake_student.id]
-        expect(gradebook_user_ids.user_ids).to eq(expected_user_ids)
+      context 'with pg_collkey installed' do
+        before do
+          skip_unless_pg_collkey_present
+        end
+
+        it "sorts by SIS ID ascending" do
+          expected_user_ids = [@student1.id, @student4.id, @student3.id, @student2.id, @fake_student.id]
+          expect(gradebook_user_ids.user_ids).to eq(expected_user_ids)
+        end
+
+        it "sorts by SIS ID descending" do
+          @teacher.preferences[:gradebook_settings][@course.id][:sort_rows_by_direction] = "descending"
+          expected_user_ids = [@student2.id, @student3.id, @student4.id, @student1.id, @fake_student.id]
+          expect(gradebook_user_ids.user_ids).to eq(expected_user_ids)
+        end
+
+        it "includes concluded students ids if the course is concluded" do
+          @course.complete!
+          expect(gradebook_user_ids.user_ids).to eq(
+            [@student1.id, @student4.id, @student3.id, @concluded_student.id, @student2.id, @fake_student.id]
+          )
+        end
+      end
+    end
+
+    describe "sorting by integration ID" do
+      before(:once) do
+        @teacher.preferences[:gradebook_settings][@course.id][:sort_rows_by_setting_key] = "integration_id"
       end
 
-      it "includes concluded students ids if the course is concluded" do
-        @course.complete!
-        expect(gradebook_user_ids.user_ids).to eq(
-          [@student1.id, @student3.id, @student4.id, @concluded_student.id, @student2.id, @fake_student.id]
-        )
+      context 'with pg_collkey installed' do
+        before do
+          skip_unless_pg_collkey_present
+        end
+
+        it "sorts by integration ID ascending" do
+          expected_user_ids = [@student1.id, @student4.id, @student3.id, @student2.id, @fake_student.id]
+          expect(gradebook_user_ids.user_ids).to eq(expected_user_ids)
+        end
+
+        it "sorts by integration ID descending" do
+          @teacher.preferences[:gradebook_settings][@course.id][:sort_rows_by_direction] = "descending"
+          expected_user_ids = [@student2.id, @student3.id, @student4.id, @student1.id, @fake_student.id]
+          expect(gradebook_user_ids.user_ids).to eq(expected_user_ids)
+        end
+
+        it "includes concluded students ids if the course is concluded" do
+          @course.complete!
+          expect(gradebook_user_ids.user_ids).to eq(
+            [@student1.id, @student4.id, @student3.id, @concluded_student.id, @student2.id, @fake_student.id]
+          )
+        end
       end
     end
   end
@@ -397,9 +467,9 @@ describe GradebookUserIds do
         expect(gradebook_user_ids.user_ids).not_to include @concluded_student.id
       end
 
-      context 'when pg_collkey is installed' do
+      context 'given pg_collkey extension is present' do
         before do
-          skip 'requires pg_collkey installed SD-2747' unless has_pg_collkey
+          skip_unless_pg_collkey_present
         end
 
         it "orders the missing user_ids by their sortable_name and user_id" do
@@ -414,26 +484,6 @@ describe GradebookUserIds do
           @assignment.submissions.where(user_id: [@student2]).update_all(late_policy_status: "missing")
           # rubocop:enable Rails/SkipsModelValidations
           expect(gradebook_user_ids.user_ids[1..3]).to eq([@student1.id, @student4.id, @student3.id])
-        end
-      end
-
-      context 'when pg_collkey is not installed' do
-        before do
-          skip 'requires pg_collkey to not be installed SD-2747' if has_pg_collkey
-        end
-
-        it "orders the missing user_ids by their sortable_name and user_id" do
-          # rubocop:disable Rails/SkipsModelValidations
-          @assignment.submissions.where(user: [@student2, @student3, @student4]).update_all(late_policy_status: "missing")
-          # rubocop:enable Rails/SkipsModelValidations
-          expect(gradebook_user_ids.user_ids[0..2]).to eq([@student3.id, @student4.id, @student2.id])
-        end
-
-        it "puts non-missing, real users in the middle, ordered by their sortable_name and user_id" do
-          # rubocop:disable Rails/SkipsModelValidations
-          @assignment.submissions.where(user_id: [@student2]).update_all(late_policy_status: "missing")
-          # rubocop:enable Rails/SkipsModelValidations
-          expect(gradebook_user_ids.user_ids[1..3]).to eq([@student1.id, @student3.id, @student4.id])
         end
       end
     end
@@ -490,9 +540,9 @@ describe GradebookUserIds do
         expect(gradebook_user_ids.user_ids).not_to include @concluded_student.id
       end
 
-      context 'when pg_collkey is installed' do
+      context 'given pg_collkey extension is present' do
         before do
-          skip 'requires pg_collkey installed SD-2747' unless has_pg_collkey
+          skip_unless_pg_collkey_present
         end
 
         it "orders the missing user_ids by their sortable_name and user_id" do
@@ -507,26 +557,6 @@ describe GradebookUserIds do
           @assignment.submissions.where(user_id: [@student2]).update_all(late_policy_status: "late")
           # rubocop:enable Rails/SkipsModelValidations
           expect(gradebook_user_ids.user_ids[1..3]).to eq([@student1.id, @student4.id, @student3.id])
-        end
-      end
-
-      context 'when pg_collkey is not installed' do
-        before do
-          skip 'requires pg_collkey to not be installed SD-2747' if has_pg_collkey
-        end
-
-        it "orders the missing user_ids by their sortable_name and user_id" do
-          # rubocop:disable Rails/SkipsModelValidations
-          @assignment.submissions.where(user: [@student2, @student3, @student4]).update_all(late_policy_status: "late")
-          # rubocop:enable Rails/SkipsModelValidations
-          expect(gradebook_user_ids.user_ids[0..2]).to eq([@student3.id, @student4.id, @student2.id])
-        end
-
-        it "puts non-late, real users in the middle, ordered by their sortable_name and user_id" do
-          # rubocop:disable Rails/SkipsModelValidations
-          @assignment.submissions.where(user_id: [@student2]).update_all(late_policy_status: "late")
-          # rubocop:enable Rails/SkipsModelValidations
-          expect(gradebook_user_ids.user_ids[1..3]).to eq([@student1.id, @student3.id, @student4.id])
         end
       end
     end
@@ -563,9 +593,9 @@ describe GradebookUserIds do
           expect(gradebook_user_ids.user_ids).not_to include @fake_student.id
         end
 
-        context 'when pg_collkey is installed' do
+        context 'given pg_collkey extension is present' do
           before do
-            skip 'requires pg_collkey installed SD-2747' unless has_pg_collkey
+            skip_unless_pg_collkey_present
           end
 
           it "returns user ids sorted by grade on the assignment" do
@@ -605,38 +635,6 @@ describe GradebookUserIds do
             )
           end
         end
-
-        context 'when pg_collkey is not installed' do
-          before do
-            skip 'requires pg_collkey to not be installed SD-2747' if has_pg_collkey
-          end
-
-          it "returns user ids sorted by grade on the assignment" do
-            expected_user_ids = [@student2.id, @student1.id, @student3.id, @student4.id, @fake_student.id]
-            expect(gradebook_user_ids.user_ids).to eq(expected_user_ids)
-          end
-
-          it "places students without submissions at the end, but before fake students" do
-            student5 = student_in_course(course: @course, active_all: true).user
-            expect(gradebook_user_ids.user_ids).to eq(
-              [@student2.id, @student1.id, @student3.id, @student4.id, student5.id, @fake_student.id]
-            )
-          end
-
-          it "places students that have been graded with nil grades at the end, but before fake students" do
-            @assignment.grade_student(@student1, grade: nil, grader: @teacher)
-            expected_user_ids = [@student2.id, @student3.id, @student4.id, @student1.id, @fake_student.id]
-            expect(gradebook_user_ids.user_ids).to eq(expected_user_ids)
-          end
-
-          it "places students that are not assigned at the end, but before fake students" do
-            @assignment.update!(only_visible_to_overrides: true)
-            create_adhoc_override_for_assignment(@assignment, [@student1, @student3, @student2], due_at: nil)
-            expect(gradebook_user_ids.user_ids).to eq(
-              [@student2.id, @student1.id, @student3.id, @student4.id, @fake_student.id]
-            )
-          end
-        end
       end
 
       context "descending" do
@@ -649,9 +647,9 @@ describe GradebookUserIds do
           expect(gradebook_user_ids.user_ids).not_to include @fake_student.id
         end
 
-        context 'when pg_collkey is installed' do
+        context 'given pg_collkey extension is present' do
           before do
-            skip 'requires pg_collkey installed SD-2747' unless has_pg_collkey
+            skip_unless_pg_collkey_present
           end
 
           it "returns user ids sorted by grade on the assignment" do
@@ -671,40 +669,6 @@ describe GradebookUserIds do
             @assignment.grade_student(student3, grade: nil, grader: @teacher)
             expect(gradebook_user_ids.user_ids).to eq(
               [@student3.id, @student4.id, @student1.id, @student2.id, student3.id, @fake_student.id]
-            )
-          end
-
-          it "places students that are not assigned at the end, but before fake students" do
-            @assignment.update!(only_visible_to_overrides: true)
-            create_adhoc_override_for_assignment(@assignment, [@student1, @student3, @student2], due_at: nil)
-            expect(gradebook_user_ids.user_ids).to eq(
-              [@student3.id, @student1.id, @student2.id, @student4.id, @fake_student.id]
-            )
-          end
-        end
-
-        context 'when pg_collkey is not installed' do
-          before do
-            skip 'requires pg_collkey to not be installed SD-2747' if has_pg_collkey
-          end
-
-          it "returns user ids sorted by grade on the assignment" do
-            expected_user_ids = [@student4.id, @student3.id, @student1.id, @student2.id, @fake_student.id]
-            expect(gradebook_user_ids.user_ids).to eq(expected_user_ids)
-          end
-
-          it "places students without submissions at the end, but before fake students" do
-            student4 = student_in_course(course: @course, active_all: true).user
-            expect(gradebook_user_ids.user_ids).to eq(
-              [@student4.id, @student3.id, @student1.id, @student2.id, student4.id, @fake_student.id]
-            )
-          end
-
-          it "places students that have been graded with a nil grade at the end, but before fake students" do
-            student3 = student_in_course(course: @course, active_all: true).user
-            @assignment.grade_student(student3, grade: nil, grader: @teacher)
-            expect(gradebook_user_ids.user_ids).to eq(
-              [@student4.id, @student3.id, @student1.id, @student2.id, student3.id, @fake_student.id]
             )
           end
 
@@ -753,9 +717,9 @@ describe GradebookUserIds do
       @teacher.preferences[:gradebook_settings][@course.id][:sort_rows_by_setting_key] = "grade"
     end
 
-    context 'when pg_collkey is installed' do
+    context 'given pg_collkey extension is present' do
       before do
-        skip 'requires pg_collkey installed SD-2747' unless has_pg_collkey
+        skip_unless_pg_collkey_present
       end
 
       context "with total grade" do
@@ -779,57 +743,6 @@ describe GradebookUserIds do
       end
 
       context "with assignment group" do
-        before(:once) do
-          @teacher.preferences[:gradebook_settings][@course.id][:sort_rows_by_column_id] =
-            "assignment_group_#{@second_assignment_group.id}"
-        end
-
-        it "sorts by assignment group grade ascending" do
-          expected_user_ids = [@student2.id, @student1.id, @student4.id, @student3.id, @fake_student.id]
-          expect(gradebook_user_ids.user_ids).to eq(expected_user_ids)
-        end
-
-        it "sorts by assignment group grade descending" do
-          @teacher.preferences[:gradebook_settings][@course.id][:sort_rows_by_direction] = "descending"
-          expected_user_ids = [@student3.id, @student4.id, @student1.id, @student2.id, @fake_student.id]
-          expect(gradebook_user_ids.user_ids).to eq(expected_user_ids)
-        end
-
-        it "includes concluded students ids if the course is concluded" do
-          @course.complete!
-          all_students = [@student2.id, @student1.id, @student4.id, @student3.id,
-                          @concluded_student.id, @fake_student.id]
-          expect(gradebook_user_ids.user_ids).to eq(all_students)
-        end
-      end
-    end
-
-    context 'when pg_collkey is not installed' do
-      before do
-        skip 'requires no pg_collkey installed SD-2747' if has_pg_collkey
-      end
-
-      context "with total grade" do
-        it "sorts by total grade ascending" do
-          expected_user_ids = [@student1.id, @student2.id, @student3.id, @student4.id, @fake_student.id]
-          expect(gradebook_user_ids.user_ids).to eq(expected_user_ids)
-        end
-
-        it "sorts by total grade descending" do
-          @teacher.preferences[:gradebook_settings][@course.id][:sort_rows_by_direction] = "descending"
-          expected_user_ids = [@student4.id, @student3.id, @student2.id, @student1.id, @fake_student.id]
-          expect(gradebook_user_ids.user_ids).to eq(expected_user_ids)
-        end
-
-        it "includes concluded students ids if the course is concluded" do
-          @course.complete!
-          all_students = [@student1.id, @student2.id, @student3.id, @student4.id,
-                          @concluded_student.id, @fake_student.id]
-          expect(gradebook_user_ids.user_ids).to eq(all_students)
-        end
-      end
-
-      context "with assignment groups" do
         before(:once) do
           @teacher.preferences[:gradebook_settings][@course.id][:sort_rows_by_column_id] =
             "assignment_group_#{@second_assignment_group.id}"
@@ -914,28 +827,15 @@ describe GradebookUserIds do
           expect(gradebook_user_ids.user_ids).to eq(expected_user_ids)
         end
 
-        context 'when pg_collkey is installed' do
+        context 'given pg_collkey extension is present' do
           before do
-            skip 'requires pg_collkey installed SD-2747' unless has_pg_collkey
+            skip_unless_pg_collkey_present
           end
 
           it "sorts by 'All Grading Periods' if a grading period ID of '0' is in user preferences" do
             allow(@course).to receive(:grading_periods?).and_return(true)
             @teacher.preferences[:gradebook_settings][@course.id][:filter_columns_by][:grading_period_id] = "0"
             expected_user_ids = [@student1.id, @student2.id, @student4.id, @student3.id, @fake_student.id]
-            expect(gradebook_user_ids.user_ids).to eq(expected_user_ids)
-          end
-        end
-
-        context 'when pg_collkey is not installed' do
-          before do
-            skip 'requires no pg_collkey installed SD-2747' if has_pg_collkey
-          end
-
-          it "sorts by 'All Grading Periods' if a grading period ID of '0' is in user preferences" do
-            allow(@course).to receive(:grading_periods?).and_return(true)
-            @teacher.preferences[:gradebook_settings][@course.id][:filter_columns_by][:grading_period_id] = "0"
-            expected_user_ids = [@student1.id, @student2.id, @student3.id, @student4.id, @fake_student.id]
             expect(gradebook_user_ids.user_ids).to eq(expected_user_ids)
           end
         end
@@ -967,28 +867,15 @@ describe GradebookUserIds do
           expect(gradebook_user_ids.user_ids).to eq(expected_user_ids)
         end
 
-        context 'when pg_collkey is installed' do
+        context 'given pg_collkey extension is present' do
           before do
-            skip 'requires pg_collkey installed SD-2747' unless has_pg_collkey
+            skip_unless_pg_collkey_present
           end
 
           it "sorts by 'All Grading Periods' if a grading period ID of '0' is in user preferences" do
             allow(@course).to receive(:grading_periods?).and_return(true)
             @teacher.preferences[:gradebook_settings][@course.id][:filter_columns_by][:grading_period_id] = "0"
             expected_user_ids = [@student3.id, @student4.id, @student2.id, @student1.id, @fake_student.id]
-            expect(gradebook_user_ids.user_ids).to eq(expected_user_ids)
-          end
-        end
-
-        context 'when pg_collkey is not installed' do
-          before do
-            skip 'requires no pg_collkey installed SD-2747' if has_pg_collkey
-          end
-
-          it "sorts by 'All Grading Periods' if a grading period ID of '0' is in user preferences" do
-            allow(@course).to receive(:grading_periods?).and_return(true)
-            @teacher.preferences[:gradebook_settings][@course.id][:filter_columns_by][:grading_period_id] = "0"
-            expected_user_ids = [@student4.id, @student3.id, @student2.id, @student1.id, @fake_student.id]
             expect(gradebook_user_ids.user_ids).to eq(expected_user_ids)
           end
         end

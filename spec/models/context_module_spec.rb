@@ -48,7 +48,8 @@ describe ContextModule do
 
     context "with file usage rights required" do
       before :once do
-        @course.enable_feature! :usage_rights_required
+        @course.usage_rights_required = true
+        @course.save!
       end
 
       it "should not publish Attachment module items if usage rights are missing" do
@@ -369,6 +370,70 @@ describe ContextModule do
       @module.save!
 
       expect(@module.content_tags).to be_include(@tag)
+    end
+  end
+
+  describe "insert_items" do
+    before :once do
+      course_module
+      @attach = attachment_model context: @course, display_name: 'attach'
+      @assign = @course.assignments.create! title: 'assign'
+      @page = @course.wiki_pages.create! title: 'page'
+      @quiz = @course.quizzes.create! title: 'quiz'
+      @topic = @course.discussion_topics.create! title: 'topic'
+      @tool = @course.context_external_tools.create! name: 'tool', consumer_key: '1', shared_secret: '1', url: 'http://example.com/'
+      @module.add_item(type: 'context_module_sub_header', title: 'one')
+      @module.add_item(type: 'context_module_sub_header', title: 'two')
+      @module.add_item(type: 'context_module_sub_header', title: 'three')
+    end
+
+    it "appends items to the end of a module" do
+      @module.insert_items([@attach, @assign, @page, @quiz, @topic, @tool])
+      expect(@module.content_tags.order(:position).pluck(:title)).to eq(
+        %w(one two three attach assign page quiz topic tool))
+    end
+
+    it 'appends items to the beginning of a module' do
+      @module.insert_items([@attach, @assign, @page, @quiz, @topic, @tool], 1)
+      expect(@module.content_tags.pluck(:title)).to eq(%w(attach assign page quiz topic tool one two three))
+    end
+
+    it "inserts items into a module" do
+      @module.insert_items([@attach, @assign, @page, @quiz, @topic, @tool], 2)
+      expect(@module.content_tags.order(:position).pluck(:title)).to eq(
+        %w(one attach assign page quiz topic tool two three))
+    end
+
+    it "adds things to an empty module" do
+      empty = @course.context_modules.create! name: 'empty'
+      empty.insert_items([@attach, @assign])
+      expect(empty.content_tags.order(:position).pluck(:title)).to eq(%w(attach assign))
+    end
+
+    it "doesn't add weird things to a module" do
+      @module.insert_items([@attach, user_model, 'foo', @assign])
+      expect(@module.content_tags.order(:position).pluck(:title)).to eq(
+        %w(one two three attach assign))
+    end
+
+    it 'adds the item in the correct position when the existing items do not start at 1' do
+      @module.content_tags.update_all(['position = position + ?', 3])
+      @module.insert_items([@attach, @assign], 3)
+      expect(@module.content_tags.pluck(:title)).to eq(%w(one two attach assign three))
+    end
+
+    it 'adds the item in the correct position when the existing items have duplicate positions' do
+      @module.content_tags.find_by(title: 'two').update_attributes(position: 1)
+      @module.insert_items([@attach, @assign], 2)
+      expect(@module.content_tags.find_by(position: 2).title).to eq @attach.title
+      expect(@module.content_tags.find_by(position: 3).title).to eq @assign.title
+      expect(@module.content_tags.pluck(:title)).to eq(%w(one attach assign two three))
+    end
+
+    it 'ignores deleted items in the position calculation' do
+      @module.content_tags.find_by(title: 'two').destroy
+      @module.insert_items([@attach, @assign], 3)
+      expect(@module.content_tags.not_deleted.pluck(:title)).to eq(%w(one three attach assign))
     end
   end
 

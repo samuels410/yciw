@@ -16,12 +16,10 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-import React, {Component} from 'react'
-
-import {View} from '@instructure/ui-layout'
-import PropTypes from 'prop-types'
-
 import {omitProps, safeCloneElement} from '@instructure/ui-react-utils'
+import PropTypes from 'prop-types'
+import React, {Component} from 'react'
+import {View} from '@instructure/ui-layout'
 
 class Steps extends Component {
   static propTypes = {

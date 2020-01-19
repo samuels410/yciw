@@ -22,6 +22,7 @@ import React from 'react'
 import {bool} from 'prop-types'
 import I18n from 'i18n!terms_of_service_modal'
 import RichContentEditor from './rce/RichContentEditor'
+import {defaultFetchOptions} from '@instructure/js-utils'
 
 const termsOfServiceText = I18n.t('Acceptable Use Policy')
 
@@ -32,7 +33,7 @@ class TermsOfServiceCustomContents extends React.Component {
 
   async componentDidMount() {
     const url = '/api/v1/terms_of_service_custom_content'
-    const TERMS_OF_SERVICE_CUSTOM_CONTENT = await (await fetch(url)).text()
+    const TERMS_OF_SERVICE_CUSTOM_CONTENT = await (await fetch(url, defaultFetchOptions)).text()
 
     this.setState({TERMS_OF_SERVICE_CUSTOM_CONTENT})
   }
@@ -102,7 +103,9 @@ export default class TermsOfServiceModal extends React.Component {
           >
             <Modal.Body>
               {this.props.preview ? (
-                <div dangerouslySetInnerHTML={{__html: this.state.TERMS_OF_SERVICE_CUSTOM_CONTENT}} />
+                <div
+                  dangerouslySetInnerHTML={{__html: this.state.TERMS_OF_SERVICE_CUSTOM_CONTENT}}
+                />
               ) : (
                 <TermsOfServiceCustomContents />
               )}

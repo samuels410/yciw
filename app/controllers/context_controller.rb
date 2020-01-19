@@ -143,7 +143,8 @@ class ContextController < ApplicationController
         :resend_invitations_url => course_re_send_invitations_url(@context),
         :permissions => {
           :read_sis => @context.grants_any_right?(@current_user, session, :read_sis, :manage_sis),
-          :manage_students => (manage_students = @context.grants_right?(@current_user, session, :manage_students)),
+          :view_user_logins => @context.grants_right?(@current_user, session, :view_user_logins),
+          :manage_students => (manage_students = @context.grants_right?(@current_user, session, :manage_students) && !MasterCourses::MasterTemplate.is_master_course?(@context)),
           :manage_admin_users => (manage_admins = @context.grants_right?(@current_user, session, :manage_admin_users)),
           :add_users => manage_students || manage_admins,
           :read_reports => @context.grants_right?(@current_user, session, :read_reports)
@@ -209,10 +210,10 @@ class ContextController < ApplicationController
       @users_order_hash = {}
       @users.each_with_index{|u, i| @users_hash[u.id] = u; @users_order_hash[u.id] = i }
       @current_user_services = {}
-      @current_user.user_services.each{|s| @current_user_services[s.service] = s }
+      @current_user.user_services.select{|s| feature_and_service_enabled?(s.service)}.each{|s| @current_user_services[s.service] = s }
       @services = UserService.for_user(@users.except(:select, :order)).sort_by{|s| @users_order_hash[s.user_id] || CanvasSort::Last}
       @services = @services.select{|service|
-        !UserService.configured_service?(service.service) || feature_and_service_enabled?(service.service.to_sym)
+        feature_and_service_enabled?(service.service.to_sym)
       }
       @services_hash = @services.to_a.inject({}) do |hash, item|
         mapped = item.service

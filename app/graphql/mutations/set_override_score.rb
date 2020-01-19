@@ -27,7 +27,7 @@ class Mutations::SetOverrideScore < Mutations::BaseMutation
 
   # grades is a +Score+ object, but for audit log purposes we want to log these
   # changes to the enrollment instead (Scores are invisible to users of Canvas)
-  def self.grades_log_entry(score)
+  def self.grades_log_entry(score, _context)
     score.enrollment
   end
 
@@ -53,7 +53,12 @@ class Mutations::SetOverrideScore < Mutations::BaseMutation
       raise ActiveRecord::RecordNotFound if score.blank?
       verify_authorized_action!(score.course, :manage_grades)
 
-      score.update(override_score: input[:override_score])
+      old_score = score[:override_score]
+      new_score = input[:override_score]
+      score.update(override_score: new_score)
+
+      Canvas::LiveEvents.grade_override(score, old_score, enrollment, enrollment.course)
+
       next unless enrollment == requested_enrollment
 
       return_value = if score.valid?

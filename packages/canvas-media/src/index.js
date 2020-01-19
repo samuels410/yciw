@@ -15,11 +15,11 @@
  * You should have received a copy of the GNU Affero General Public License along
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-import {arrayOf, bool, func, shape, string} from 'prop-types'
+import {arrayOf, bool, func, instanceOf, shape, string} from 'prop-types'
 import React, {Suspense} from 'react'
 
 import {Button, CloseButton} from '@instructure/ui-buttons'
-import {Heading} from '@instructure/ui-elements'
+import {Heading} from '@instructure/ui-heading'
 import {Modal} from '@instructure/ui-overlays'
 import {Tabs} from '@instructure/ui-tabs'
 
@@ -35,8 +35,7 @@ const MediaRecorder = React.lazy(() => import('./MediaRecorder'))
 export const PANELS = {
   COMPUTER: 0,
   RECORD: 1,
-  EMBED: 2,
-  CLOSED_CAPTIONS: 3
+  EMBED: 2
 }
 
 export default class UploadMedia extends React.Component {
@@ -50,6 +49,9 @@ export default class UploadMedia extends React.Component {
     liveRegion: func,
     contextId: string,
     contextType: string,
+    onStartUpload: func,
+    onUploadComplete: func,
+    onEmbed: func,
     onDismiss: func,
     open: bool,
     tabs: shape({
@@ -57,34 +59,58 @@ export default class UploadMedia extends React.Component {
       record: bool,
       upload: bool
     }),
-    uploadMediaTranslations: translationShape
+    uploadMediaTranslations: translationShape,
+    // for testing
+    computerFile: instanceOf(File),
+    embedCode: string
   }
 
-  state = {
-    embedCode: '',
-    hasUploadedFile: false,
-    selectedPanel: 0,
-    theFile: null
+  constructor(props) {
+    super(props)
+
+    let defaultSelectedPanel = -1
+    if (props.tabs.upload) {
+      defaultSelectedPanel = 0
+    } else if (props.tabs.record) {
+      defaultSelectedPanel = 1
+    } else if (props.tabs.embed) {
+      defaultSelectedPanel = 2
+    }
+
+    this.state = {
+      embedCode: props.embedCode || '',
+      hasUploadedFile: false,
+      selectedPanel: defaultSelectedPanel,
+      computerFile: props.computerFile || null,
+      subtitles: [],
+      recordedFile: null
+    }
   }
 
-  constructor() {
-    super()
-    this.subtitles = []
+  isReady = () => {
+    switch (this.state.selectedPanel) {
+      case PANELS.COMPUTER:
+        return !!this.state.computerFile
+      case PANELS.RECORD:
+        return !!this.state.recordedFile
+      case PANELS.EMBED:
+        return !!this.state.embedCode
+      default:
+        return false
+    }
   }
 
   handleSubmit = () => {
     switch (this.state.selectedPanel) {
-      case PANELS.COMPUTER: {
-        saveMediaRecording(
-          this.state.theFile,
-          this.props.contextId,
-          this.props.contextType,
-          this.saveMediaCallback
-        )
+      case PANELS.COMPUTER:
+        this.uploadFile(this.state.computerFile)
         break
-      }
+      case PANELS.RECORD:
+        this.uploadFile(this.state.recordedFile)
+        break
       case PANELS.EMBED: {
         this.props.onDismiss()
+        this.props.onEmbed(this.state.embedCode)
         break
       }
       default:
@@ -92,17 +118,24 @@ export default class UploadMedia extends React.Component {
     }
   }
 
+  uploadFile(file) {
+    this.props.onStartUpload && this.props.onStartUpload(file)
+    saveMediaRecording(file, this.props.contextId, this.props.contextType, this.saveMediaCallback)
+  }
+
   saveMediaCallback = async (err, data) => {
     if (err) {
       // handle error
     } else {
       try {
-        if (this.subtitles.lenth > 0) {
-          await saveClosedCaptions(data.media_object.media_id, this.subtitles)
+        if (this.state.selectedPanel === PANELS.COMPUTER && this.state.subtitles.length > 0) {
+          await saveClosedCaptions(data.mediaObject.media_object.media_id, this.state.subtitles)
         }
-        this.props.onDismiss(null, data)
-      } catch (_) {
+        this.props.onUploadComplete && this.props.onUploadComplete(null, data)
+        this.props.onDismiss && this.props.onDismiss()
+      } catch (ex) {
         // Handle error
+        console.error(ex) // eslint-disable-line no-console
       }
     }
   }
@@ -115,7 +148,7 @@ export default class UploadMedia extends React.Component {
       EMBED_VIDEO_CODE_TEXT,
       LOADING_MEDIA,
       RECORD_PANEL_TITLE,
-      UPLOADING_ERROR
+      MEDIA_RECORD_NOT_AVAILABLE
     } = this.props.uploadMediaTranslations.UploadMediaStrings
 
     return (
@@ -123,19 +156,19 @@ export default class UploadMedia extends React.Component {
         shouldFocusOnRender
         maxWidth="large"
         onRequestTabChange={(_, {index}) => {
-          this.subtitles = []
           this.setState({selectedPanel: index})
         }}
       >
         {this.props.tabs.upload && (
           <Tabs.Panel
+            key="computer"
             isSelected={this.state.selectedPanel === PANELS.COMPUTER}
             renderTitle={() => COMPUTER_PANEL_TITLE}
           >
             <Suspense fallback={LoadingIndicator(LOADING_MEDIA)}>
               <ComputerPanel
-                theFile={this.state.theFile}
-                setFile={file => this.setState({theFile: file})}
+                theFile={this.state.computerFile}
+                setFile={file => this.setState({computerFile: file})}
                 hasUploadedFile={this.state.hasUploadedFile}
                 setHasUploadedFile={uploadFileState =>
                   this.setState({hasUploadedFile: uploadFileState})
@@ -145,29 +178,31 @@ export default class UploadMedia extends React.Component {
                 accept={ACCEPTED_FILE_TYPES}
                 languages={this.props.languages}
                 liveRegion={this.props.liveRegion}
-                updateSubtitles={subtitles => (this.subtitles = subtitles)}
+                updateSubtitles={subtitles => {
+                  this.setState({subtitles})
+                }}
               />
             </Suspense>
           </Tabs.Panel>
         )}
         {this.props.tabs.record && (
           <Tabs.Panel
+            key="record"
             isSelected={this.state.selectedPanel === PANELS.RECORD}
             renderTitle={() => RECORD_PANEL_TITLE}
           >
             <Suspense fallback={LoadingIndicator(LOADING_MEDIA)}>
               <MediaRecorder
                 MediaCaptureStrings={this.props.uploadMediaTranslations.MediaCaptureStrings}
-                contextType={this.props.contextType}
-                contextId={this.props.contextId}
-                errorMessage={UPLOADING_ERROR}
-                dismiss={this.props.onDismiss}
+                errorMessage={MEDIA_RECORD_NOT_AVAILABLE}
+                onSave={file => this.setState({recordedFile: file}, this.handleSubmit)}
               />
             </Suspense>
           </Tabs.Panel>
         )}
         {this.props.tabs.embed && (
           <Tabs.Panel
+            key="embed"
             isSelected={this.state.selectedPanel === PANELS.EMBED}
             renderTitle={() => EMBED_PANEL_TITLE}
           >
@@ -184,6 +219,16 @@ export default class UploadMedia extends React.Component {
     )
   }
 
+  onModalClose = () => {
+    this.setState({
+      embedCode: '',
+      hasUploadedFile: false,
+      selectedPanel: 0,
+      computerFile: null
+    })
+    this.props.onDismiss()
+  }
+
   renderModalFooter = () => {
     if (this.state.selectedPanel === PANELS.RECORD) {
       return null
@@ -192,7 +237,7 @@ export default class UploadMedia extends React.Component {
     const {CLOSE_TEXT, SUBMIT_TEXT} = this.props.uploadMediaTranslations.UploadMediaStrings
     return (
       <Modal.Footer>
-        <Button onClick={this.props.onDismiss}> {CLOSE_TEXT} </Button>
+        <Button onClick={this.onModalClose}> {CLOSE_TEXT} </Button>
         &nbsp;
         <Button
           onClick={e => {
@@ -201,6 +246,7 @@ export default class UploadMedia extends React.Component {
           }}
           variant="primary"
           type="submit"
+          disabled={!this.isReady()}
         >
           {SUBMIT_TEXT}
         </Button>
@@ -214,13 +260,14 @@ export default class UploadMedia extends React.Component {
     return (
       <Modal
         label={UPLOAD_MEDIA_LABEL}
-        size="medium"
-        onDismiss={this.props.onDismiss}
+        size="large"
+        onDismiss={this.onModalClose}
         open={this.props.open}
         shouldCloseOnDocumentClick={false}
+        liveRegion={this.props.liveRegion}
       >
         <Modal.Header>
-          <CloseButton onClick={this.props.onDismiss} offset="medium" placement="end">
+          <CloseButton onClick={this.onModalClose} offset="medium" placement="end">
             {CLOSE_TEXT}
           </CloseButton>
           <Heading>{UPLOAD_MEDIA_LABEL}</Heading>

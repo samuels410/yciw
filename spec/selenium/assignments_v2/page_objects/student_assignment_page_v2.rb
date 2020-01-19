@@ -77,9 +77,74 @@ class StudentAssignmentPageV2
       f('textarea')
     end
 
+    def url_text_box
+      f("input[type='url']")
+    end
+
+    def url_submission_link
+      f("span[data-testid='url-submission-text")
+    end
+
+    def start_text_entry_button
+      f("button[data-testid='start-text-entry']")
+    end
+
+    def save_text_entry_button
+      f("button[data-testid='save-text-entry']")
+    end
+
+    def edit_text_entry_button
+      f("button[data-testid='edit-text-draft']")
+    end
+
+    def text_display_area
+      f("div[data-testid='attempt-tab']")
+    end
+
+    def text_entry_area
+      f('iframe', f('.ic-RichContentEditor'))
+    end
+
+    def mce_iframe_id
+      f('.mce-container iframe')['id']
+    end
+
+    def text_draft_contents
+      in_frame mce_iframe_id do
+        f('.mce-content-body').text
+      end
+    end
+
+    def record_upload_button
+      f("button[data-testid='media-modal-launch-button']")
+    end
+
+    def media_modal
+      f("span[aria-label='Upload Media']")
+    end
+
+    def submit_button
+      f('#submit-button')
+    end
+
     def leave_a_comment(comment)
       replace_content(comment_text_area, comment)
       send_comment_button.click
+    end
+
+    def create_text_entry_draft(text)
+      start_text_entry_button.click
+      wait_for_tiny(text_entry_area)
+      text_entry_area.send_keys(text)
+      save_text_entry_button.click
+    end
+
+    def create_url_draft(url)
+      url_text_box.send_keys(url)
+    end
+
+    def submit_assignment
+      submit_button.click
     end
   end
 end

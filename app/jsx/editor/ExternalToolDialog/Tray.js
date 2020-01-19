@@ -21,7 +21,7 @@ import PropTypes from 'prop-types'
 import {Tray} from '@instructure/ui-overlays'
 import {Heading} from '@instructure/ui-elements'
 import {Button} from '@instructure/ui-buttons'
-import {Flex, FlexItem} from '@instructure/ui-layout'
+import {Flex} from '@instructure/ui-layout'
 import {IconXLine} from '@instructure/ui-icons'
 import {ScreenReaderContent} from '@instructure/ui-a11y'
 
@@ -37,20 +37,20 @@ export default function ExternalToolDialogTray(props) {
       size="regular"
     >
       <Flex direction="column" height="100vh">
-        <FlexItem padding="small">
+        <Flex.Item padding="small medium">
           <Flex>
-            <FlexItem margin="0 small 0 0">
-              <Button variant="icon" icon={IconXLine} onClick={onCloseButton} size="small">
-                <ScreenReaderContent>{closeLabel}</ScreenReaderContent>
-              </Button>
-            </FlexItem>
-            <FlexItem grow shrink>
+            <Flex.Item grow shrink>
               <Heading ellipsis level="h3" as="h2">
                 {name}
               </Heading>
-            </FlexItem>
+            </Flex.Item>
+            <Flex.Item>
+              <Button variant="icon" icon={IconXLine} onClick={onCloseButton} size="small">
+                <ScreenReaderContent>{closeLabel}</ScreenReaderContent>
+              </Button>
+            </Flex.Item>
           </Flex>
-        </FlexItem>
+        </Flex.Item>
         {children}
       </Flex>
     </Tray>

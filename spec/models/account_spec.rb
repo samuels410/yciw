@@ -56,6 +56,35 @@ describe Account do
     # account_model
     # @a.to_atom.should be_is_a(Atom::Entry)
   # end
+  #
+  context "pronouns" do
+    it "uses an empty array if the setting is not on" do
+      account = Account.create!
+      expect(account.pronouns).to be_empty
+
+      # still returns empty array even if you explicitly set some
+      account.pronouns = ["Dude/Guy", "Dudette/Gal"]
+      expect(account.pronouns).to be_empty
+    end
+
+    it "uses defaults if setting is enabled and nothing is explicitly set" do
+      account = Account.create!
+      account.settings[:can_add_pronouns] = true
+      expect(account.pronouns).to eq ["She/Her", "He/Him", "They/Them"]
+    end
+
+    it "uses custom set things if explicitly provided (and strips whitespace)" do
+      account = Account.create!
+      account.settings[:can_add_pronouns] = true
+      account.pronouns = [" Dude/Guy   ", "She/Her  "]
+
+      # it "untranslates" "she/her" when it serializes it to the db
+      expect(account.settings[:pronouns]).to eq ["Dude/Guy", "she_her"]
+      # it "translates" "she/her" when it reads it
+      expect(account.pronouns).to eq ["Dude/Guy", "She/Her"]
+
+    end
+  end
 
   context "course lists" do
     before :once do
@@ -221,23 +250,20 @@ describe Account do
       @a = Account.new
     end
     it "should be able to specify a list of enabled services" do
-      @a.allowed_services = 'linked_in,twitter'
-      expect(@a.service_enabled?(:linked_in)).to be_truthy
+      @a.allowed_services = 'twitter'
       expect(@a.service_enabled?(:twitter)).to be_truthy
       expect(@a.service_enabled?(:diigo)).to be_falsey
       expect(@a.service_enabled?(:avatars)).to be_falsey
     end
 
     it "should not enable services off by default" do
-      expect(@a.service_enabled?(:linked_in)).to be_truthy
       expect(@a.service_enabled?(:avatars)).to be_falsey
     end
 
     it "should add and remove services from the defaults" do
-      @a.allowed_services = '+avatars,-linked_in'
+      @a.allowed_services = '+avatars,-twitter'
       expect(@a.service_enabled?(:avatars)).to be_truthy
-      expect(@a.service_enabled?(:twitter)).to be_truthy
-      expect(@a.service_enabled?(:linked_in)).to be_falsey
+      expect(@a.service_enabled?(:twitter)).to be_falsey
     end
 
     it "should allow settings services" do
@@ -268,15 +294,11 @@ describe Account do
     end
 
     it "should be able to set service availibity for previously hard-coded values" do
-      @a.allowed_services = 'avatars,linked_in'
+      @a.allowed_services = 'avatars'
 
       @a.enable_service(:twitter)
       expect(@a.service_enabled?(:twitter)).to be_truthy
       expect(@a.allowed_services).to match(/twitter/)
-      expect(@a.allowed_services).not_to match(/[+-]/)
-
-      @a.disable_service(:linked_in)
-      expect(@a.allowed_services).not_to match(/linked_in/)
       expect(@a.allowed_services).not_to match(/[+-]/)
 
       @a.disable_service(:avatars)
@@ -515,10 +537,10 @@ describe Account do
 
     limited_access = [ :read, :read_as_admin, :manage, :update, :delete, :read_outcomes, :read_terms ]
     conditional_access = RoleOverride.permissions.select { |_, v| v[:account_allows] }.map(&:first)
+    disabled_by_default = RoleOverride.permissions.select { |_, v| v[:true_for].empty? }.map(&:first)
     full_access = RoleOverride.permissions.keys +
-                  limited_access - conditional_access +
-                  [:create_courses] +
-                  [:create_tool_manually]
+                  limited_access - disabled_by_default - conditional_access +
+                  [:create_courses, :create_tool_manually]
 
     full_root_access = full_access - RoleOverride.permissions.select { |k, v| v[:account_only] == :site_admin }.map(&:first)
     full_sub_access = full_root_access - RoleOverride.permissions.select { |k, v| v[:account_only] == :root }.map(&:first)
@@ -909,6 +931,30 @@ describe Account do
       account_admin_user_with_role_changes(acccount: @account, role_changes: { manage_assignments: true, manage_grades: false})
       tabs = @account.tabs_available(@admin)
       expect(tabs.map{|t| t[:id] }).to be_include(Account::TAB_QUESTION_BANKS)
+    end
+
+    describe "'ePortfolio Moderation' tab" do
+      let(:tab_ids) { @account.tabs_available(@admin).pluck(:id) }
+
+      it "is shown if the release flag is enabled and the user has the moderate_user_content permission" do
+        account_admin_user_with_role_changes(acccount: @account, role_changes: { moderate_user_content: true })
+        @account.root_account.enable_feature!(:eportfolio_moderation)
+
+        expect(tab_ids).to include(Account::TAB_EPORTFOLIO_MODERATION)
+      end
+
+      it "is not shown if the user has permission but the release flag is not enabled" do
+        account_admin_user_with_role_changes(acccount: @account, role_changes: { moderate_user_content: true })
+
+        expect(tab_ids).not_to include(Account::TAB_EPORTFOLIO_MODERATION)
+      end
+
+      it "is not shown if the release flag is enabled but the user lacks permission" do
+        account_admin_user_with_role_changes(acccount: @account, role_changes: { moderate_user_content: false })
+        @account.root_account.enable_feature!(:eportfolio_moderation)
+
+        expect(tab_ids).not_to include(Account::TAB_EPORTFOLIO_MODERATION)
+      end
     end
   end
 

@@ -20,7 +20,7 @@ import React from 'react'
 import {string, shape, node} from 'prop-types'
 import {View} from '@instructure/ui-layout'
 import {Button} from '@instructure/ui-buttons'
-import {List, ListItem, Text} from '@instructure/ui-elements'
+import {List, Text} from '@instructure/ui-elements'
 import {asJson, defaultFetchOptions} from '@instructure/js-utils'
 import splitAssetString from 'compiled/str/splitAssetString'
 import {
@@ -99,17 +99,13 @@ const getIcon = tab => icons[tab.id] || (tab.type === 'external' ? IconLtiLine :
 function ContextTab({tab, active_context_tab}) {
   const Icon = getIcon(tab)
   return (
-    <ListItem>
+    <List.Item>
       <View display="block" borderWidth="0 0 small 0" padding="x-small 0">
         <Button icon={Icon} variant="link" href={tab.html_url} fluidWidth>
-          {active_context_tab === tab.id ? (
-            <Text weight="bold">{tab.label}</Text>
-          ) : (
-            tab.label
-          )}
+          {active_context_tab === tab.id ? <Text weight="bold">{tab.label}</Text> : tab.label}
         </Button>
       </View>
-    </ListItem>
+    </List.Item>
   )
 }
 ContextTab.propTypes = {
@@ -130,7 +126,7 @@ export default class MobileContextMenu extends React.Component {
   static propTypes = {
     spinner: node.isRequired,
     contextType: string.isRequired,
-    contextId: string.isRequired,
+    contextId: string.isRequired
   }
 
   static defaultProps = {
@@ -148,7 +144,9 @@ export default class MobileContextMenu extends React.Component {
   }
 
   async fetchTabs() {
-    const url = `/api/v1/${encodeURIComponent(this.props.contextType)}/${encodeURIComponent(this.props.contextId)}/tabs`
+    const url = `/api/v1/${encodeURIComponent(this.props.contextType)}/${encodeURIComponent(
+      this.props.contextId
+    )}/tabs`
     const storedTabs = sessionStorage.getItem(url)
     if (storedTabs) {
       this.setState({tabs: JSON.parse(storedTabs), tabsHaveLoaded: true})

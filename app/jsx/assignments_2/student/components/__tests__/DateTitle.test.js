@@ -37,7 +37,7 @@ afterEach(() => {
 
 it('renders title correctly', async () => {
   const assignment = await mockAssignment({
-    Assignment: () => ({name: 'Egypt Economy Research'})
+    Assignment: {name: 'Egypt Economy Research'}
   })
   const {getAllByText} = render(<DateTitle assignment={assignment} isSticky={false} />)
   expect(getAllByText('Egypt Economy Research')).toHaveLength(1)
@@ -45,7 +45,7 @@ it('renders title correctly', async () => {
 
 it('renders title correctly when sticky', async () => {
   const assignment = await mockAssignment({
-    Assignment: () => ({name: 'Egypt Economy Research'})
+    Assignment: {name: 'Egypt Economy Research'}
   })
   const {getAllByText} = render(<DateTitle assignment={assignment} isSticky />)
   expect(getAllByText('Egypt Economy Research')).toHaveLength(1)
@@ -53,30 +53,30 @@ it('renders title correctly when sticky', async () => {
 
 it('does not render AvailabilityDates when sticky', async () => {
   const assignment = await mockAssignment({
-    Assignment: () => ({
+    Assignment: {
       unlockAt: '2016-07-11T18:00:00-01:00',
       lockAt: '2016-11-11T18:00:00-01:00'
-    })
+    }
   })
   const {queryAllByText} = render(<DateTitle assignment={assignment} isSticky />)
-  expect(queryAllByText('Available Jul 11, 2016 7:00pm')).toHaveLength(0)
+  expect(queryAllByText('Available: Jul 11, 2016 7:00pm')).toHaveLength(0)
 })
 
 it('renders AvailabilityDates when not sticky', async () => {
   const assignment = await mockAssignment({
-    Assignment: () => ({
+    Assignment: {
       unlockAt: '2016-07-11T18:00:00-01:00',
       lockAt: '2016-11-11T18:00:00-01:00'
-    })
+    }
   })
   const {queryAllByText} = render(<DateTitle assignment={assignment} isSticky={false} />)
   // Reason why this is showing up twice is once for screenreader content and again for regular content
-  expect(queryAllByText('Available Jul 11, 2016 7:00pm')).toHaveLength(2)
+  expect(queryAllByText('Available: Jul 11, 2016 7:00pm')).toHaveLength(2)
 })
 
 it('renders date correctly', async () => {
   const assignment = await mockAssignment({
-    Assignment: () => ({dueAt: '2016-07-11T18:00:00-01:00'})
+    Assignment: {dueAt: '2016-07-11T18:00:00-01:00'}
   })
 
   const {queryAllByText} = render(<DateTitle assignment={assignment} isSticky={false} />)

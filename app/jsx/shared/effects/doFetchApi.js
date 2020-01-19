@@ -17,7 +17,9 @@
  */
 
 import $ from 'jquery'
-import 'jquery.cookie'
+import getCookie from '../helpers/getCookie'
+import parseLinkHeader from 'parse-link-header'
+import {defaultFetchOptions} from '@instructure/js-utils'
 
 function constructRelativeUrl({path, params}) {
   const queryString = $.param(params)
@@ -25,6 +27,8 @@ function constructRelativeUrl({path, params}) {
   return `${path}?${queryString}`
 }
 
+// NOTE: we do NOT deep-merge customFetchOptions.headers, they should be passed
+// in the headers arg instead.
 export default async function doFetchApi({
   path,
   method = 'GET',
@@ -33,14 +37,18 @@ export default async function doFetchApi({
   body,
   fetchOpts = {}
 }) {
-  const fetchHeaders = {
-    Accept: 'application/json+canvas-string-ids, application/json',
-    'X-CSRF-Token': $.cookie('_csrf_token'),
-    ...headers
+  const finalFetchOptions = {...defaultFetchOptions}
+  finalFetchOptions.headers['X-CSRF-Token'] = getCookie('_csrf_token')
+
+  if (body && typeof body !== 'string') {
+    body = JSON.stringify(body)
+    finalFetchOptions.headers['Content-Type'] = 'application/json'
   }
-  if (body && typeof body !== 'string') body = JSON.stringify(body)
+  Object.assign(finalFetchOptions.headers, headers)
+  Object.assign(finalFetchOptions, fetchOpts)
+
   const url = constructRelativeUrl({path, params})
-  const response = await fetch(url, {headers: fetchHeaders, body, method, ...fetchOpts})
+  const response = await fetch(url, {body, method, ...finalFetchOptions})
   if (!response.ok) {
     const err = new Error(
       `doFetchApi received a bad response: ${response.status} ${response.statusText}`
@@ -48,7 +56,8 @@ export default async function doFetchApi({
     err.response = response // in case anyone wants to check it for something
     throw err
   }
+  const link = parseLinkHeader(response.headers.get('Link'))
   const text = await response.text()
-  const json = text.length > 0 ? JSON.parse(text) : undefined
-  return json
+  const json = text.length > 0 ? JSON.parse(text) : null
+  return {json, response, link}
 }
