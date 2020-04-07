@@ -30,12 +30,29 @@ new_gradebook_sort_options:
   root_opt_in: true
   display_name: Additional Sort Options for New Gradebook
   description: Enables sorting by SIS ID, integration ID and login ID in New Gradebook.
-  environments:
-    production:
-      state: disabled
 eportfolio_moderation:
   state: hidden
   applies_to: RootAccount
   display_name: ePortfolio Moderation
   description: Flags new ePortfolio content matching specific keywords as possible spam, and allows
     administrators to either confirm flagged ePortfolios or mark them as safe.
+analytics2_api_access:
+  state: hidden
+  applies_to: RootAccount
+  display_name: New Analytics API Access
+  description: Enables new API endpoints for the course and user data provided by New Analytics.
+gradebook_export_sort_order_bugfix:
+  state: hidden
+  applies_to: SiteAdmin
+  display_name: Gradebook Export Sort Order Bugfix (Tally-219)
+  description: Changes the sort order of the gradebook export to more closely match the canvas documentation
+submissions_reupload_status_page:
+  state: hidden
+  applies_to: SiteAdmin
+  display_name: Submissions Re-Upload Status Page
+  description: Allows the user to navigate away while submission re-uploads are processing
+include_speed_grader_in_assignment_header_menu:
+  state: hidden
+  applies_to: SiteAdmin
+  display_name: Include SpeedGrader in Assignment Header Menu
+  description: Includes a link to SpeedGrader in the assignment header menu in Gradebook.

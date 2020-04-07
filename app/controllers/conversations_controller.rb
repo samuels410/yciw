@@ -378,7 +378,18 @@ class ConversationsController < ApplicationController
     shard = Shard.current
     if params[:context_code].present?
       context = Context.find_by_asset_string(params[:context_code])
-      return render_error('context_code', 'invalid') unless valid_context?(context)
+
+      recipients_are_instructors = all_recipients_are_instructors?(context, @recipients)
+
+      if context.is_a?(Course) && !recipients_are_instructors && !context.grants_right?(@current_user, session, :send_messages)
+        return render_error("Unable to send messages to users in #{context.name}", '')
+      elsif !valid_context?(context)
+        return render_error('context_code', 'invalid')
+      end
+
+      if context.is_a?(Course) && context.workflow_state == 'completed' && !context.grants_right?(@current_user, session, :read_as_admin)
+        return render_error('Course concluded', 'Unable to send messages')
+      end
 
       shard = context.shard
       context_type = context.class.name
@@ -635,7 +646,7 @@ class ConversationsController < ApplicationController
   #     "participants": [{"id": 1, "name": "Joe", "full_name": "Joe TA"}]
   #   }
   def update
-    if @conversation.update_attributes(params.require(:conversation).permit(*API_ALLOWED_FIELDS))
+    if @conversation.update(params.require(:conversation).permit(*API_ALLOWED_FIELDS))
       render :json => conversation_json(@conversation, @current_user, session)
     else
       render :json => @conversation.errors, :status => :bad_request
@@ -869,6 +880,12 @@ class ConversationsController < ApplicationController
   #
   def add_message
     get_conversation(true)
+
+    context = @conversation.conversation.context
+    if context.is_a?(Course) && context.workflow_state == 'completed' && !context.grants_right?(@current_user, session, :read_as_admin)
+      return render json: {message: "Unable to send messages in a concluded course"}, status: :unauthorized
+    end
+
     if @conversation.conversation.replies_locked_for?(@current_user)
       return render_unauthorized_action
     end
@@ -1125,7 +1142,12 @@ class ConversationsController < ApplicationController
     end
 
     users, contexts = AddressBook.partition_recipients(params[:recipients])
-    known = @current_user.address_book.known_users(users, context: context, conversation_id: params[:from_conversation_id])
+    known = @current_user.address_book.known_users(
+      users,
+      context: context,
+      conversation_id: params[:from_conversation_id],
+      strict_checks: !Account.site_admin.grants_right?(@current_user, session, :send_messages)
+    )
     contexts.each{ |context| known.concat(@current_user.address_book.known_in_context(context)) }
     @recipients = known.uniq(&:id)
     @recipients.reject!{|u| u.id == @current_user.id} unless @recipients == [@current_user] && params[:recipients].count == 1
@@ -1222,4 +1244,15 @@ class ConversationsController < ApplicationController
     false
   end
 
+  def all_recipients_are_instructors?(context, recipients)
+    if context.is_a?(Course)
+      all_recipients_are_instructors = true
+      recipients.each do |recipient|
+        all_recipients_are_instructors = false unless context.user_is_instructor?(recipient)
+      end
+      return all_recipients_are_instructors
+    end
+
+    false
+  end
 end

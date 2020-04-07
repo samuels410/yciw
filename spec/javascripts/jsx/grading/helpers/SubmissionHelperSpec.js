@@ -16,7 +16,11 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-import {isPostable, extractSimilarityInfo} from 'jsx/grading/helpers/SubmissionHelper'
+import {
+  isPostable,
+  extractSimilarityInfo,
+  similarityIcon
+} from 'jsx/grading/helpers/SubmissionHelper'
 
 QUnit.module('SubmissionHelper', suiteHooks => {
   let submission
@@ -261,6 +265,44 @@ QUnit.module('SubmissionHelper', suiteHooks => {
         }
       }
       strictEqual(extractSimilarityInfo(submissionWithNoSubmissions), null)
+    })
+  })
+
+  QUnit.module('.similarityIcon', () => {
+    const domParser = new DOMParser()
+    const icon = iconString =>
+      domParser.parseFromString(similarityIcon(iconString), 'text/xml').documentElement
+
+    const iconClasses = iconString => [...icon(iconString).classList]
+
+    test('returns an <i> element', () => {
+      strictEqual(icon({status: 'scored', similarity_score: 50}).nodeName, 'i')
+    })
+
+    test('returns a warning icon if the passed item has an "error" status', () => {
+      deepEqual(iconClasses({status: 'error'}), ['icon-warning'])
+    })
+
+    test('returns a clock icon if the passed item has an "pending" status', () => {
+      deepEqual(iconClasses({status: 'pending'}), ['icon-clock'])
+    })
+
+    test('returns an empty-but-solid icon if the passed item is scored above 60', () => {
+      deepEqual(iconClasses({status: 'scored', similarity_score: 80}), ['icon-empty', 'icon-Solid'])
+    })
+
+    test('returns a solid half-oval icon if the passed item is scored betwen 20 and 60', () => {
+      deepEqual(iconClasses({status: 'scored', similarity_score: 40}), [
+        'icon-oval-half',
+        'icon-Solid'
+      ])
+    })
+
+    test('returns a solid and certified icon if the passed item is scored up to 20', () => {
+      deepEqual(iconClasses({status: 'scored', similarity_score: 20}), [
+        'icon-certified',
+        'icon-Solid'
+      ])
     })
   })
 })

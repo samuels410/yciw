@@ -16,7 +16,7 @@
 # with this program. If not, see <http://www.gnu.org/licenses/>.
 
 require "fileutils"
-require 'chromedriver-helper'
+require 'webdrivers/chromedriver'
 require_relative "common_helper_methods/custom_alert_actions"
 require_relative 'common_helper_methods/custom_screen_actions'
 
@@ -71,7 +71,7 @@ module SeleniumDriverSetup
 
   # prevents subsequent specs from failing because tooltips are showing etc.
   def move_mouse_to_known_position
-    driver.action.move_to(f("body"), 0, 0) if driver.ready_for_interaction
+    driver.action.move_to(f("body"), 0, 0).perform if driver.ready_for_interaction
   end
 
   class ServerStartupError < RuntimeError; end
@@ -88,6 +88,7 @@ module SeleniumDriverSetup
                   :server_ip,
                   :server_port
 
+    attr_reader :driver
     def reset!
       dump_browser_log if browser_log
       @driver = nil
@@ -330,17 +331,15 @@ module SeleniumDriverSetup
 
     def ruby_chrome_driver
       puts "Thread: provisioning local chrome driver"
-      Chromedriver.set_version(CONFIG[:chromedriver_version] || "74.0.3729.6")
+      Webdrivers::Chromedriver.required_version = (CONFIG[:chromedriver_version] || "80.0.3987.106")
       chrome_options = Selenium::WebDriver::Chrome::Options.new
-      chrome_options.add_argument('--disable-impl-side-painting')
-
       # put `auto_open_devtools: true` in your selenium.yml if you want to have
       # the chrome dev tools open by default by selenium
       if CONFIG[:auto_open_devtools]
         chrome_options.add_argument('--auto-open-devtools-for-tabs')
       end
 
-      Selenium::WebDriver.for :chrome, options: chrome_options
+      Selenium::WebDriver.for :chrome, desired_capabilities: desired_capabilities, options: chrome_options
     end
 
     def ruby_safari_driver
@@ -372,8 +371,7 @@ module SeleniumDriverSetup
       when :chrome
         caps = Selenium::WebDriver::Remote::Capabilities.chrome
         caps['chromeOptions'] = {
-          args: %w[disable-dev-shm-usage no-sandbox start-maximized],
-          w3c: false
+          args: %w[disable-dev-shm-usage no-sandbox start-maximized]
         }
       when :edge
         # TODO: options for edge driver

@@ -17,7 +17,7 @@
  */
 
 import PropTypes from 'prop-types'
-import React from 'react'
+import React, {Suspense} from 'react'
 import {Editor} from '@tinymce/tinymce-react'
 import uniqBy from 'lodash/uniqBy'
 
@@ -25,6 +25,7 @@ import themeable from '@instructure/ui-themeable'
 import {IconKeyboardShortcutsLine} from '@instructure/ui-icons'
 import {ScreenReaderContent} from '@instructure/ui-a11y'
 import {Alert} from '@instructure/ui-alerts'
+import {Spinner} from '@instructure/ui-elements'
 
 import formatMessage from '../format-message'
 import * as contentInsertion from './contentInsertion'
@@ -45,6 +46,8 @@ import {
   VIDEO_SIZE_DEFAULT,
   AUDIO_PLAYER_SIZE
 } from './plugins/instructure_record/VideoOptionsTray/TrayController'
+
+const RestoreAutoSaveModal = React.lazy(() => import('./RestoreAutoSaveModal'))
 
 const ASYNC_FOCUS_TIMEOUT = 250
 
@@ -119,6 +122,39 @@ function isElementWithinTable(node) {
   return false
 }
 
+// determines if localStorage is available for our use.
+// see https://developer.mozilla.org/en-US/docs/Web/API/Web_Storage_API/Using_the_Web_Storage_API
+function storageAvailable() {
+  let storage
+  try {
+    storage = window.localStorage
+    const x = '__storage_test__'
+    storage.setItem(x, x)
+    storage.removeItem(x)
+    return true
+  } catch (e) {
+    return (
+      e instanceof DOMException &&
+      // everything except Firefox
+      (e.code === 22 ||
+        // Firefox
+        e.code === 1014 ||
+        // test name field too, because code might not be present
+        // everything except Firefox
+        e.name === 'QuotaExceededError' ||
+        // Firefox
+        e.name === 'NS_ERROR_DOM_QUOTA_REACHED') &&
+      // acknowledge QuotaExceededError only if there's something already stored
+      storage &&
+      storage.length !== 0
+    )
+  }
+}
+
+function renderLoading() {
+  return formatMessage('Loading')
+}
+
 let alertIdValue = 0
 
 @themeable(theme, styles)
@@ -128,6 +164,10 @@ class RCEWrapper extends React.Component {
   }
 
   static propTypes = {
+    autosave: PropTypes.shape({
+      enabled: PropTypes.bool,
+      rce_auto_save_max_age_ms: PropTypes.number
+    }),
     confirmFunc: PropTypes.func,
     defaultContent: PropTypes.string,
     editorOptions: PropTypes.object,
@@ -150,13 +190,16 @@ class RCEWrapper extends React.Component {
 
   static defaultProps = {
     trayProps: null,
-    languages: [{id: 'en', label: 'English'}]
+    languages: [{id: 'en', label: 'English'}],
+    autosave: {enabled: false}
   }
 
   static skinCssInjected = false
 
   constructor(props) {
     super(props)
+
+    this.editor = null // my tinymce editor instance
 
     // interface consistent with editorBox
     this.get_code = this.getCode
@@ -178,7 +221,9 @@ class RCEWrapper extends React.Component {
       KBShortcutModalOpen: false,
       focused: false,
       messages: [],
-      announcement: null
+      announcement: null,
+      confirmAutoSave: false,
+      autoSavedContent: ''
     }
 
     alertHandler.alertFunc = this.addAlert
@@ -284,12 +329,29 @@ class RCEWrapper extends React.Component {
     this.contentInserted(element)
   }
 
-  // inserting an iframe in tinymce (as is often the case with
-  // embedded content) causes it to wrap it in a span
-  // and it's often inserted into a <p> on top of that.  Find the
-  // iframe and use it to flash the indicator.
   insertEmbedCode(code) {
     const editor = this.mceInstance()
+    // tinymce treats iframes uniquely, and doesn't like adding attributes
+    // once it's in the editor, and I'd rather not parse the incomming html
+    // string with a regex, so let's create a temp copy, then add a title
+    // attribute if one doesn't exist. This will let screenreaders announce
+    // that there's some embedded content helper
+    // From what I've read, "title" is more reliable than "aria-label" for
+    // elements like iframes and embeds.
+    const temp = document.createElement('div')
+    temp.innerHTML = code
+    const code_elem = temp.firstElementChild
+    if (code_elem) {
+      if (!code_elem.hasAttribute('title') && !code_elem.hasAttribute('aria-label')) {
+        code_elem.setAttribute('title', formatMessage('embedded content'))
+      }
+      code = code_elem.outerHTML
+    }
+
+    // inserting an iframe in tinymce (as is often the case with
+    // embedded content) causes it to wrap it in a span
+    // and it's often inserted into a <p> on top of that.  Find the
+    // iframe and use it to flash the indicator.
     const element = contentInsertion.insertContent(editor, code)
     const ifr = element && element.querySelector && element.querySelector('iframe')
     if (ifr) {
@@ -320,7 +382,7 @@ class RCEWrapper extends React.Component {
       if (width > defaultImageSize && image.width > image.height) {
         width = defaultImageSize
         height = (image.height * width) / image.width
-      } else if (height > defaultImageSize && image.height > image.width) {
+      } else if (height > defaultImageSize) {
         height = defaultImageSize
         width = (image.width * height) / image.height
       }
@@ -383,6 +445,9 @@ class RCEWrapper extends React.Component {
   }
 
   mceInstance() {
+    if (this.editor) {
+      return this.editor
+    }
     const editors = this.props.tinymce.editors || []
     return editors.filter(ed => ed.id === this.props.textareaId)[0]
   }
@@ -404,7 +469,7 @@ class RCEWrapper extends React.Component {
     this.props.handleUnmount && this.props.handleUnmount()
   }
 
-  onRemove() {
+  onRemove = () => {
     Bridge.detachEditor(this)
     this.props.onRemove && this.props.onRemove(this)
   }
@@ -458,7 +523,7 @@ class RCEWrapper extends React.Component {
     return this.state.focused
   }
 
-  handleFocus() {
+  handleFocus(_event) {
     if (!this.state.focused) {
       this.setState({focused: true})
       Bridge.focusEditor(this)
@@ -530,6 +595,8 @@ class RCEWrapper extends React.Component {
   }
 
   handleBlurRCE = event => {
+    this._forceCloseFloatingToolbar()
+
     if (event.relatedTarget === null) {
       // focus might be moving to tinymce
       this.handleBlur(event)
@@ -540,17 +607,17 @@ class RCEWrapper extends React.Component {
     }
   }
 
-  handleFocusEditor() {
+  handleFocusEditor = (event, _editor) => {
     // use .active to put a focus ring around the content area
     // when the editor has focus. This isn't perfect, but it's
     // what we've got for now.
     const ifr = this.iframe
     ifr && ifr.parentElement.classList.add('active')
 
-    this.handleFocus()
+    this.handleFocus(event)
   }
 
-  handleBlurEditor(event) {
+  handleBlurEditor = (event, _editor) => {
     const ifr = this.iframe
     ifr && ifr.parentElement.classList.remove('active')
     this.handleBlur(event)
@@ -594,8 +661,10 @@ class RCEWrapper extends React.Component {
     editor.on('keydown', this.handleShortcutKeyShortcut)
   }
 
-  onInit(_e, editor) {
+  onInit = (_event, editor) => {
     editor.rceWrapper = this
+    this.editor = editor
+
     this.initKeyboardShortcuts(this._elementRef, editor)
     if (document.body.classList.contains('Underline-All-Links__enabled')) {
       this.iframe.contentDocument.body.classList.add('Underline-All-Links__enabled')
@@ -610,7 +679,28 @@ class RCEWrapper extends React.Component {
     this.getTextarea().style.resize = 'none'
     editor.on('Change', this.doAutoResize)
 
+    editor.on('blur', this._forceCloseFloatingToolbar)
+    editor.on('ExecCommand', this._forceCloseFloatingToolbar)
+
     this.announceContextToolbars(editor)
+
+    if (this.isAutoSaving) {
+      this.initAutoSave(editor)
+    }
+  }
+
+  _forceCloseFloatingToolbar = () => {
+    if (this._elementRef) {
+      const moreButton = this._elementRef.querySelector(
+        '.tox-toolbar-overlord .tox-toolbar__group:last-child button:last-child'
+      )
+      if (moreButton?.getAttribute('aria-owns')) {
+        // the floating toolbar is open
+        moreButton.click() // close the floating toolbar
+        const editor = this.mceInstance() // return focus to the editor
+        editor?.focus() // eslint-disable-line no-unused-expressions
+      }
+    }
   }
 
   announcing = 0
@@ -663,6 +753,140 @@ class RCEWrapper extends React.Component {
       }
     }
   }
+
+  /* ********** autosave support *************** */
+  initAutoSave = editor => {
+    this.storage = window.localStorage
+    if (this.storage) {
+      editor.on('change', this.doAutoSave)
+      editor.on('blur', this.doAutoSave)
+      window.addEventListener('unload', e => {
+        this.doAutoSave(e)
+      })
+
+      this.cleanupAutoSave()
+
+      try {
+        const autosaved = this.getAutoSaved(this.autoSaveKey)
+        if (autosaved && autosaved.content) {
+          const editorContent = editor.getContent({no_events: true})
+          const autosavedContent = this.patchAutosavedContent(autosaved.content)
+          if (autosaved.content !== editorContent) {
+            this.setState({
+              confirmAutoSave: true,
+              autoSavedContent: autosavedContent
+            })
+          } else {
+            this.storage.removeItem(this.autoSaveKey)
+          }
+        }
+      } catch (ex) {
+        // log and ignore
+        console.error('Failed initializing rce autosave', ex)
+      }
+    }
+  }
+
+  // remove any autosaved value that's too old
+
+  cleanupAutoSave = (deleteAll = false) => {
+    const expiry = deleteAll
+      ? Date.now()
+      : Date.now() - this.props.autosave.rce_auto_save_max_age_ms
+    let i = 0
+    let key
+    while ((key = this.storage.key(i++))) {
+      if (/^rceautosave:/.test(key)) {
+        const autosaved = this.getAutoSaved(key)
+        if (autosaved && autosaved.autosaveTimestamp < expiry) {
+          this.storage.removeItem(key)
+        }
+      }
+    }
+  }
+
+  restoreAutoSave = ans => {
+    this.setState({confirmAutoSave: false}, () => {
+      const editor = this.mceInstance()
+      if (ans) {
+        editor.setContent(this.state.autoSavedContent, {})
+      }
+      this.storage.removeItem(this.autoSaveKey)
+    })
+  }
+
+  // if a placeholder image shows up in autosaved content, we have to remove it
+  // because the data url gets converted to a blob, which is not valid when restored.
+  // besides, the placeholder is intended to be temporary while the file
+  // is being uploaded
+  patchAutosavedContent(content) {
+    const temp = document.createElement('div')
+    temp.innerHTML = content
+    temp.querySelectorAll('img[data-placeholder-for]').forEach(placeholder => {
+      placeholder.parentElement.removeChild(placeholder)
+    })
+    return temp.innerHTML
+  }
+
+  getAutoSaved(key) {
+    let autosaved = null
+    try {
+      autosaved = JSON.parse(this.storage.getItem(key))
+    } catch (_ex) {
+      this.storage.removeItem(this.autoSaveKey)
+    }
+    return autosaved
+  }
+
+  // only autosave if the feature flag is set, and there is only 1 RCE on the page
+  // the latter condition is necessary because the popup RestoreAutoSaveModal
+  // is lousey UX when there are >1
+  get isAutoSaving() {
+    return (
+      this.props.autosave.enabled &&
+      document.querySelectorAll('.rce-wrapper').length === 1 &&
+      storageAvailable()
+    )
+  }
+
+  get autoSaveKey() {
+    return `rceautosave:${window.location.href}:${this._textareaEl.id}`
+  }
+
+  doAutoSave = (e, retry = false) => {
+    const editor = this.mceInstance()
+    // if the editor is empty don't save
+    if (editor.dom.isEmpty(editor.getBody())) {
+      return
+    }
+    // if no changes have been made,
+    // delete and don't save
+    if (!editor.isDirty()) {
+      this.storage.removeItem(this.autoSaveKey)
+      return
+    }
+
+    const content = editor.getContent({no_events: true})
+    try {
+      this.storage.setItem(
+        this.autoSaveKey,
+        JSON.stringify({
+          autosaveTimestamp: Date.now(),
+          content
+        })
+      )
+    } catch (ex) {
+      if (!retry) {
+        // probably failed because there's not enough space
+        // delete up all the other entries and try again
+        this.cleanupAutoSave(true)
+        this.doAutoSave(e, true)
+      } else {
+        console.error('Autosave failed:', ex) // eslint-disable-line no-console
+      }
+    }
+  }
+  /* *********** end autosave support *************** */
 
   onWordCountUpdate = e => {
     this.setState(state => {
@@ -907,7 +1131,6 @@ class RCEWrapper extends React.Component {
 
   render() {
     const {trayProps, ...mceProps} = this.props
-    mceProps.editorOptions.statusbar = false
 
     return (
       <div
@@ -937,13 +1160,13 @@ class RCEWrapper extends React.Component {
           textareaName={mceProps.name}
           init={this.wrapOptions(mceProps.editorOptions)}
           initialValue={mceProps.defaultContent}
-          onInit={this.onInit.bind(this)}
-          onClick={this.handleFocusEditor.bind(this)}
-          onKeypress={this.handleFocusEditor.bind(this)}
-          onActivate={this.handleFocusEditor.bind(this)}
-          onRemove={this.onRemove.bind(this)}
-          onFocus={this.handleFocusEditor.bind(this)}
-          onBlur={this.handleBlurEditor.bind(this)}
+          onInit={this.onInit}
+          onClick={this.handleFocusEditor}
+          onKeypress={this.handleFocusEditor}
+          onActivate={this.handleFocusEditor}
+          onRemove={this.onRemove}
+          onFocus={this.handleFocusEditor}
+          onBlur={this.handleBlurEditor}
           onNodeChange={this.onNodeChange}
         />
         <StatusBar
@@ -965,6 +1188,16 @@ class RCEWrapper extends React.Component {
           onDismiss={this.closeKBShortcutModal}
           open={this.state.KBShortcutModalOpen}
         />
+        {this.state.confirmAutoSave ? (
+          <Suspense fallback={<Spinner renderTitle={renderLoading} size="small" />}>
+            <RestoreAutoSaveModal
+              savedContent={this.state.autoSavedContent}
+              open={this.state.confirmAutoSave}
+              onNo={() => this.restoreAutoSave(false)}
+              onYes={() => this.restoreAutoSave(true)}
+            />
+          </Suspense>
+        ) : null}
         <Alert
           screenReaderOnly
           liveRegion={() => document.getElementById('flash_screenreader_holder')}

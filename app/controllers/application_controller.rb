@@ -57,6 +57,7 @@ class ApplicationController < ActionController::Base
   skip_before_action :activate_authlogic
   prepend_before_action :activate_authlogic
 
+  before_action :annotate_apm
   before_action :check_pending_otp
   before_action :set_user_id_header
   before_action :set_time_zone
@@ -155,11 +156,13 @@ class ApplicationController < ActionController::Base
           DOMAIN_ROOT_ACCOUNT_ID: @domain_root_account.try(:global_id),
           k12: k12?,
           use_responsive_layout: use_responsive_layout?,
-          use_rce_enhancements: @context.try(:feature_enabled?, :rce_enhancements),
-          DIRECT_SHARE_ENABLED: @domain_root_account.try(:feature_enabled?, :direct_share),
+          use_rce_enhancements: (@context.is_a?(User) ? @domain_root_account : @context).try(:feature_enabled?, :rce_enhancements),
+          rce_auto_save: @context.try(:feature_enabled?, :rce_auto_save),
+          DIRECT_SHARE_ENABLED: !@context.is_a?(Group) && @domain_root_account.try(:feature_enabled?, :direct_share),
           help_link_name: help_link_name,
           help_link_icon: help_link_icon,
           use_high_contrast: @current_user.try(:prefers_high_contrast?),
+          disable_celebrations: @current_user.try(:prefers_no_celebrations?),
           LTI_LAUNCH_FRAME_ALLOWANCES: Lti::Launch.iframe_allowances(request.user_agent),
           DEEP_LINKING_POST_MESSAGE_ORIGIN: request.base_url,
           DEEP_LINKING_LOGGING: Setting.get('deep_linking_logging', nil),
@@ -168,6 +171,15 @@ class ApplicationController < ActionController::Base
             collapse_global_nav: @current_user.try(:collapse_global_nav?),
             show_feedback_link: show_feedback_link?
           },
+          FEATURES: {
+            assignment_bulk_edit: Account.site_admin.feature_enabled?(:assignment_bulk_edit),
+            la_620_old_rce_init_fix: Account.site_admin.feature_enabled?(:la_620_old_rce_init_fix),
+            cc_in_rce_video_tray: Account.site_admin.feature_enabled?(:cc_in_rce_video_tray),
+            show_qr_login: Object.const_defined?("InstructureMiscPlugin") && !!@domain_root_account&.feature_enabled?(:mobile_qr_login),
+            responsive_2020_03: !!@domain_root_account&.feature_enabled?(:responsive_2020_03),
+            featured_help_links: Account.site_admin.feature_enabled?(:featured_help_links),
+            product_tours: !!@domain_root_account&.feature_enabled?(:product_tours)
+          }
         }
         @js_env[:current_user] = @current_user ? Rails.cache.fetch(['user_display_json', @current_user].cache_key, :expires_in => 1.hour) { user_display_json(@current_user, :profile, [:avatar_is_fallback]) } : {}
         @js_env[:page_view_update_url] = page_view_path(@page_view.id, page_view_token: @page_view.token) if @page_view
@@ -185,6 +197,7 @@ class ApplicationController < ActionController::Base
         end
 
         @js_env[:lolcalize] = true if ENV['LOLCALIZE']
+        @js_env[:rce_auto_save_max_age_ms] = Setting.get('rce_auto_save_max_age_ms', 1.hour.to_i * 1000).to_i if @js_env[:rce_auto_save]
       end
     end
 
@@ -358,10 +371,12 @@ class ApplicationController < ActionController::Base
       course: @context.slice(:id, :name, :enrollment_term_id),
     }
     if is_master
+      can_manage = @context.account.grants_right?(@current_user, :manage_master_courses)
       bc_data.merge!(
         subAccounts: @context.account.sub_accounts.pluck(:id, :name).map{|id, name| {id: id, name: name}},
         terms: @context.account.root_account.enrollment_terms.active.to_a.map{|term| {id: term.id, name: term.name}},
-        canManageCourse: @context.account.grants_right?(@current_user, :manage_master_courses)
+        canManageCourse: can_manage,
+        canAutoPublishCourses: can_manage && @domain_root_account.feature_enabled?(:uxs_4_omg_a_scary_blueprint_checkbox)
       )
     end
     js_env :BLUEPRINT_COURSES_DATA => bc_data
@@ -401,8 +416,10 @@ class ApplicationController < ActionController::Base
   def tool_dimensions
     tool_dimensions = {selection_width: '100%', selection_height: '100%'}
 
+    link_settings = @tag&.link_settings || {}
+
     tool_dimensions.each do |k, v|
-      tool_dimensions[k] = @tool.settings[k] || v
+      tool_dimensions[k] = link_settings[k.to_s] || @tool.settings[k] || v
       tool_dimensions[k] = tool_dimensions[k].to_s << 'px' unless tool_dimensions[k].to_s =~ /%|px/
     end
 
@@ -452,8 +469,10 @@ class ApplicationController < ActionController::Base
     end
     opts.push({}) unless opts[-1].is_a?(Hash)
     include_host = opts[-1].delete(:include_host)
-    if !include_host
+    unless include_host
+      # rubocop:disable Style/RescueModifier
       opts[-1][:host] = context.host_name rescue nil
+      # rubocop:enable Style/RescueModifier
       opts[-1][:only_path] = true unless name.end_with?("_path")
     end
     self.send name, *opts
@@ -518,8 +537,17 @@ class ApplicationController < ActionController::Base
     end
   end
 
+  def annotate_apm
+    Canvas::Apm.annotate_trace(
+      Shard.current,
+      @domain_root_account,
+      RequestContextGenerator.request_id,
+      @current_user
+    )
+  end
+
   def store_session_locale
-    return unless locale = params[:session_locale]
+    return unless (locale = params[:session_locale])
     supported_locales = I18n.available_locales.map(&:to_s)
     session[:locale] = locale if supported_locales.include? locale
   end
@@ -1758,8 +1786,12 @@ class ApplicationController < ActionController::Base
     # but we still use the assignment#new page to create the quiz.
     # also handles launch from existing quiz on quizzes page.
     if ref.present? && @assignment&.quiz_lti?
-      if (ref.include?('assignments/new') || ref =~ /courses\/*.\/quizzes/i) && @context.root_account.feature_enabled?(:newquizzes_on_quiz_page)
+      if (ref.include?('assignments/new') || ref =~ /courses\/[0-9]+\/quizzes/i) && @context.root_account.feature_enabled?(:newquizzes_on_quiz_page)
         return polymorphic_url([@context, :quizzes])
+      end
+
+      if ref =~ /courses\/[0-9]+\/gradebook/i
+        return polymorphic_url([@context, :gradebook])
       end
     end
     named_context_url(@context, :context_external_content_success_url, 'external_tool_redirect', include_host: true)

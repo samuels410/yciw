@@ -17,48 +17,60 @@
  */
 
 import $ from 'jquery'
-import I18n from 'i18n!gradebook'
-import {Alert} from '@instructure/ui-alerts'
 import Backbone from 'Backbone'
-import {Link, Text} from '@instructure/ui-elements'
 import React from 'react'
 import ReactDOM from 'react-dom'
 import Paginator from '../shared/components/Paginator'
-import userSettings from 'compiled/userSettings'
+import UserSettings from 'compiled/userSettings'
 import Gradebook from 'compiled/gradebook/Gradebook'
-import NavigationPillView from 'compiled/views/gradebook/NavigationPillView'
 import OutcomeGradebookView from 'compiled/views/gradebook/OutcomeGradebookView'
 
-const GradebookRouter = Backbone.Router.extend({
-  routes: {
-    '': 'tab',
-    'tab-:viewName': 'tab'
-  },
+const getGradebookTab = () => UserSettings.contextGet('gradebook_tab')
+
+const setGradebookTab = view => UserSettings.contextSet('gradebook_tab', view)
+
+class GradebookRouter extends Backbone.Router {
+  static initClass() {
+    this.prototype.routes = {
+      '': 'tab',
+      'tab-assignment': 'tabAssignment',
+      'tab-outcome': 'tabOutcome',
+      '*path': 'tab'
+    }
+  }
 
   initialize() {
     this.isLoaded = false
     this.views = {}
-    this.views.assignment = new Gradebook(ENV.GRADEBOOK_OPTIONS)
-
-    this.renderOldGradebookReplacementNotice()
-
+    ENV.GRADEBOOK_OPTIONS.assignmentOrOutcome = getGradebookTab()
+    ENV.GRADEBOOK_OPTIONS.navigate = this.navigate.bind(this)
+    this.views.assignment = new Gradebook(this.gradebookOptions())
+    this.views.assignment.initialize()
     if (ENV.GRADEBOOK_OPTIONS.outcome_gradebook_enabled) {
       this.views.outcome = this.initOutcomes()
       this.renderPagination(0, 0)
     }
-  },
+
+    return this
+  }
+
+  gradebookOptions() {
+    return {
+      ...ENV.GRADEBOOK_OPTIONS,
+      locale: ENV.LOCALE,
+      currentUserId: ENV.current_user_id
+    }
+  }
 
   initOutcomes() {
     const book = new OutcomeGradebookView({
-      el: $('.outcome-gradebook-container'),
+      el: $('.outcome-gradebook'),
       gradebook: this.views.assignment,
       router: this
     })
     book.render()
-    this.navigation = new NavigationPillView({el: $('.gradebook-navigation')})
-    this.navigation.on('pillchange', this.handlePillChange.bind(this))
     return book
-  },
+  }
 
   renderPagination(page, pageCount) {
     ReactDOM.render(
@@ -69,45 +81,38 @@ const GradebookRouter = Backbone.Router.extend({
       />,
       document.getElementById('outcome-gradebook-paginator')
     )
-  },
-
-  renderOldGradebookReplacementNotice() {
-    const newGradebookInfoURL = 'https://s.tiled.co/2bcKFN5/2019-canvas-gradebook-release'
-    ReactDOM.render(
-      <Alert variant="warning">
-        <Text>
-          {I18n.t(
-            'This version of Gradebook is being replaced by an updated Gradebook on or before January 18, 2020.'
-          )}
-          <Link href={newGradebookInfoURL} margin="0 xx-small">
-            {I18n.t('Learn More')}
-          </Link>
-        </Text>
-      </Alert>,
-      document.getElementById('replacement_notice_mount_point')
-    )
-  },
-
-  handlePillChange(viewname) {
-    if (viewname) this.navigate(`tab-${viewname}`, {trigger: true})
-  },
-
-  tab(viewName) {
-    if (!viewName) viewName = userSettings.contextGet('gradebook_tab')
-    window.tab = viewName
-    if (viewName !== 'outcome' || !this.views.outcome) {
-      viewName = 'assignment'
-    }
-    if (this.navigation) {
-      this.navigation.setActiveView(viewName)
-    }
-    $('.assignment-gradebook-container, .outcome-gradebook-container').addClass('hidden')
-    $(`.${viewName}-gradebook-container`).removeClass('hidden')
-    $('#outcome-gradebook-paginator').toggleClass('hidden', viewName !== 'outcome')
-    this.views[viewName].onShow()
-    userSettings.contextSet('gradebook_tab', viewName)
   }
-})
 
-const router = new GradebookRouter()
+  tabOutcome() {
+    window.tab = 'outcome'
+    $('.assignment-gradebook-container').addClass('hidden')
+    $('.outcome-gradebook-container > div').removeClass('hidden')
+    this.views.outcome.onShow()
+    return setGradebookTab('outcome')
+  }
+
+  tabAssignment() {
+    window.tab = 'assignment'
+    $('.outcome-gradebook-container > div').addClass('hidden')
+    $('.assignment-gradebook-container').removeClass('hidden')
+    this.views.assignment.onShow()
+    return setGradebookTab('assignment')
+  }
+
+  tab() {
+    let view = getGradebookTab()
+    window.tab = view
+    if (view !== 'outcome' || !this.views.outcome) {
+      view = 'assignment'
+    }
+    $('.assignment-gradebook-container, .outcome-gradebook-container > div').addClass('hidden')
+    $(`.${view}-gradebook-container, .${view}-gradebook-container div`).removeClass('hidden')
+    $('#outcome-gradebook-paginator').toggleClass('hidden', view !== 'outcome')
+    this.views[view].onShow()
+    return setGradebookTab(view)
+  }
+}
+GradebookRouter.initClass()
+
+new GradebookRouter()
 Backbone.history.start()

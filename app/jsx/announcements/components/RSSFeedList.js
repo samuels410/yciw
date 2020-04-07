@@ -24,7 +24,8 @@ import {bindActionCreators} from 'redux'
 
 import {Button} from '@instructure/ui-buttons'
 import {View, Grid} from '@instructure/ui-layout'
-import {Spinner, Text} from '@instructure/ui-elements'
+import {Text} from '@instructure/ui-elements'
+import {Spinner} from '@instructure/ui-spinner'
 import {IconXLine} from '@instructure/ui-icons'
 
 import actions from '../actions'

@@ -277,6 +277,7 @@ class AssignmentOverride < ActiveRecord::Base
   end
 
   def due_at=(new_due_at)
+    new_due_at = self.class.type_for_attribute(:due_at).cast(new_due_at) if new_due_at.is_a?(String)
     new_due_at = CanvasTime.fancy_midnight(new_due_at)
     new_all_day, new_all_day_date = Assignment.all_day_interpretation(
       :due_at => new_due_at,
@@ -290,6 +291,7 @@ class AssignmentOverride < ActiveRecord::Base
   end
 
   def lock_at=(new_lock_at)
+    new_lock_at = self.class.type_for_attribute(:lock_at).cast(new_lock_at) if new_lock_at.is_a?(String)
     write_attribute(:lock_at, CanvasTime.fancy_midnight(new_lock_at))
   end
 
@@ -372,6 +374,11 @@ class AssignmentOverride < ActiveRecord::Base
   end
 
   has_a_broadcast_policy
+
+  def course_broadcast_data
+    assignment.context&.broadcast_data
+  end
+
   set_broadcast_policy do |p|
     p.dispatch :assignment_due_date_changed
     p.to { applies_to_students }
@@ -380,9 +387,11 @@ class AssignmentOverride < ActiveRecord::Base
       # note that our asset for this message is an Assignment, not an AssignmentOverride
       record.assignment.overridden_for(user)
     }
+    p.data { course_broadcast_data }
 
     p.dispatch :assignment_due_date_override_changed
     p.to { applies_to_admins }
     p.whenever { |record| record.notify_change? }
+    p.data { course_broadcast_data }
   end
 end

@@ -212,7 +212,7 @@ $icon-size: 1.4rem;
   display: block;
 }
 
-#settings_link, #mute_link {
+#settings_link {
   position: relative;
   .ui-icon {
     display: inline-block;
@@ -898,5 +898,27 @@ body .ui-selectmenu-dropdown:hover .ui-selectmenu-icon, body .ui-state-active .u
 #grading_details_container {
   button {
     padding: 0;
+  }
+}
+
+.similarity_score_container {
+  i {
+    &.icon-empty,
+    &.icon-oval-half {
+      color: $ic-color-danger;
+    }
+
+    &.icon-certified {
+      color: $ic-color-success;
+    }
+
+    &.icon-warning,
+    &.icon-clock {
+      cursor: pointer;
+    }
+  }
+
+  .turnitin_similarity_score {
+    color: $ic-color-dark;
   }
 }

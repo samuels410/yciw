@@ -65,7 +65,7 @@ module Context
       user = entry.user || feed.user
       # If already existed and has been updated
       if entry.entry_changed? && entry.asset
-        entry.asset.update_attributes(
+        entry.asset.update(
           :title => entry.title,
           :message => entry.message
         )
@@ -77,7 +77,7 @@ module Context
         announcement.external_feed_id = feed.id
         announcement.user = user
         announcement.save
-        entry.update_attributes(:asset => announcement)
+        entry.update(:asset => announcement)
       end
     end
   end
@@ -122,7 +122,8 @@ module Context
     possible_types = {
       files: -> { self.respond_to?(:attachments) && self.attachments.active.exists? },
       modules: -> { self.respond_to?(:context_modules) && self.context_modules.active.exists? },
-      quizzes: -> { self.respond_to?(:quizzes) && self.quizzes.active.exists? },
+      quizzes: -> { (self.respond_to?(:quizzes) && self.quizzes.active.exists?) ||
+        (self.respond_to?(:assignments) && self.assignments.active.quiz_lti.exists?) },
       assignments: -> { self.respond_to?(:assignments) && self.assignments.active.exists? },
       pages: -> { self.respond_to?(:wiki_pages) && self.wiki_pages.active.exists? },
       conferences: -> { self.respond_to?(:web_conferences) && self.web_conferences.active.exists? },
@@ -238,6 +239,18 @@ module Context
     nil
   end
 
+  def self.get_front_wiki_page_for_course_from_url(url)
+    params = Rails.application.routes.recognize_path(url)
+    if params[:controller] == "courses" && params[:action] == "show"
+      course = Course.find(params[:id])
+      if course.default_view == "wiki"
+        course.wiki.front_page
+      end
+    end
+  rescue
+    nil
+  end
+
   def self.find_asset_by_url(url)
     object = nil
     params = Rails.application.routes.recognize_path(url)
@@ -245,6 +258,7 @@ module Context
     group = Group.find(params[:group_id]) if params[:group_id]
     user = User.find(params[:user_id]) if params[:user_id]
     context = course || group || user
+
     return nil unless context
     case params[:controller]
     when 'files'

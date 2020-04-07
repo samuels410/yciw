@@ -76,8 +76,11 @@ export default class CourseSelectionView extends View {
       defaultOption: this.options.defaultOption,
       favorites: this.options.courses.favorites.toJSON(),
       more,
-      concluded,
       groups: group_json
+    }
+
+    if (!this.options.excludeConcluded) {
+      data.concluded = concluded
     }
 
     this.truncate_course_name_data(data)

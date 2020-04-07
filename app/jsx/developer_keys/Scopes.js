@@ -21,11 +21,13 @@ import PropTypes from 'prop-types'
 import React from 'react'
 
 import {Billboard} from '@instructure/ui-billboard'
-import {Checkbox, TextInput} from '@instructure/ui-forms'
+import {Checkbox} from '@instructure/ui-checkbox'
+import {TextInput} from '@instructure/ui-text-input'
 import {Grid, View} from '@instructure/ui-layout'
-import {IconWarningLine, IconSearchLine} from '@instructure/ui-icons'
+import {IconWarningLine, IconSearchLine, IconInfoLine} from '@instructure/ui-icons'
 import {ScreenReaderContent} from '@instructure/ui-a11y'
 import {Spinner, Text} from '@instructure/ui-elements'
+import {Tooltip} from '@instructure/ui-tooltip'
 
 import ScopesList from './ScopesList'
 
@@ -91,6 +93,12 @@ export default class Scopes extends React.Component {
 
   render() {
     const searchEndpoints = I18n.t('Search endpoints')
+    const {developerKey, updateDeveloperKey} = this.props
+    const includeTooltip = I18n.t(
+      'Permit usage of all “includes” parameters for this developer key. "Includes"' +
+        ' parameters may grant access to additional data not included in the scopes selected below.'
+    )
+
     return (
       <Grid>
         <Grid.Row rowSpacing="small">
@@ -119,6 +127,28 @@ export default class Scopes extends React.Component {
             </Grid.Col>
           ) : null}
         </Grid.Row>
+        {this.props.requireScopes && ENV.includesFeatureFlagEnabled && (
+          <Grid.Row>
+            <Grid.Col>
+              <Checkbox
+                inline
+                label={<Text>{I18n.t('Allow Include Parameters ')}</Text>}
+                checked={developerKey.allow_includes}
+                onChange={e => {
+                  updateDeveloperKey('allow_includes', e.currentTarget.checked)
+                }}
+                data-automation="includes-checkbox"
+              />
+              &nbsp;
+              <Tooltip renderTip={includeTooltip} on={['hover', 'focus']} variant="inverse">
+                <span tabIndex="0">
+                  <IconInfoLine />
+                  <ScreenReaderContent>{includeTooltip}</ScreenReaderContent>
+                </span>
+              </Tooltip>
+            </Grid.Col>
+          </Grid.Row>
+        )}
         {this.body()}
       </Grid>
     )
@@ -144,10 +174,12 @@ Scopes.propTypes = {
     redirect_uris: PropTypes.string,
     email: PropTypes.string,
     name: PropTypes.string,
-    scopes: PropTypes.arrayOf(PropTypes.string)
+    scopes: PropTypes.arrayOf(PropTypes.string),
+    allow_includes: PropTypes.bool
   }),
   requireScopes: PropTypes.bool,
-  onRequireScopesChange: PropTypes.func.isRequired
+  onRequireScopesChange: PropTypes.func.isRequired,
+  updateDeveloperKey: PropTypes.func.isRequired
 }
 
 Scopes.defaultProps = {

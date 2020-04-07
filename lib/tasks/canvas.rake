@@ -117,6 +117,17 @@ namespace :canvas do
 
     load_tree(nil, ConfigFile.load('dynamic_settings'))
   end
+
+  desc "Initialize vault"
+  task :seed_vault => [:environment] do
+    Canvas::Vault.api_client.sys.mount(Canvas::Vault.kv_mount, 'kv', 'Application secrets for canvas', {
+      options: { version: 1 },
+      config: {
+        # In prod this is higher, but for dev, a low ttl is more useful
+        default_lease_ttl: '10s'
+      }
+    })
+  end
 end
 
 namespace :lint do
@@ -137,7 +148,11 @@ namespace :db do
   desc "Shows pending db migrations."
   task :pending_migrations => :environment do
     migrations = ActiveRecord::Base.connection.migration_context.migrations
-    pending_migrations = ActiveRecord::Migrator.new(:up, migrations).pending_migrations
+    if CANVAS_RAILS5_2
+      pending_migrations = ActiveRecord::Migrator.new(:up, migrations).pending_migrations
+    else
+      pending_migrations = ActiveRecord::Migrator.new(:up, migrations, ActiveRecord::Base.connection.schema_migration).pending_migrations
+    end
     pending_migrations.each do |pending_migration|
       tags = pending_migration.tags
       tags = " (#{tags.join(', ')})" unless tags.empty?
@@ -148,7 +163,11 @@ namespace :db do
   desc "Shows skipped db migrations."
   task :skipped_migrations => :environment do
     migrations = ActiveRecord::Base.connection.migration_context.migrations
-    skipped_migrations = ActiveRecord::Migrator.new(:up, migrations).skipped_migrations
+    if CANVAS_RAILS5_2
+      skipped_migrations = ActiveRecord::Migrator.new(:up, migrations).skipped_migrations
+    else
+      skipped_migrations = ActiveRecord::Migrator.new(:up, migrations, ActiveRecord::Base.connection.schema_migration).skipped_migrations
+    end
     skipped_migrations.each do |skipped_migration|
       tags = skipped_migration.tags
       tags = " (#{tags.join(', ')})" unless tags.empty?
@@ -161,7 +180,11 @@ namespace :db do
     task :predeploy => [:environment, :load_config] do
       migrations = ActiveRecord::Base.connection.migration_context.migrations
       migrations = migrations.select { |m| m.tags.include?(:predeploy) }
-      ActiveRecord::Migrator.new(:up, migrations).migrate
+      if CANVAS_RAILS5_2
+        ActiveRecord::Migrator.new(:up, migrations).migrate
+      else
+        ActiveRecord::Migrator.new(:up, migrations, ActiveRecord::Base.connection.schema_migration).migrate
+      end
     end
   end
 
@@ -184,6 +207,20 @@ namespace :db do
       ::ActiveRecord::Base.connection.schema_cache.clear!
       ::ActiveRecord::Base.descendants.each(&:reset_column_information)
       Rake::Task['db:migrate'].invoke
+    end
+
+    desc "Auto-generate models in all tables for triggering CDC events"
+    task :fill_tables => [:environment] do
+      raise "Run with RAILS_ENV=test" unless Rails.env.test?
+      require "#{Rails.root}/lib/cdc_migration_testing/model_generator"
+      model_generator = ModelGenerator.new
+      puts "Attempting to create #{model_generator.queue_length} models"
+      model_generator.run
+      puts "Results:\n"
+      puts "#{model_generator.fixture_count} models created from fixtures"
+      puts "#{model_generator.generated_count} models generated automatically"
+      puts "#{model_generator.skipped_count} models skipped (already existed or have no table)"
+      puts "Took #{model_generator.iteration_count} iterations to satisfy foreign key constraints"
     end
   end
 end

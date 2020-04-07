@@ -28,6 +28,8 @@ describe Api::V1::PlannerItem do
   end
 
   before :once do
+    PostPolicy.enable_feature!
+
     course_factory active_all: true
     @course.root_account.enable_feature!(:student_planner)
 
@@ -367,11 +369,12 @@ describe Api::V1::PlannerItem do
     it 'should return true for assignments with new grades' do
       group_discussion_assignment
       graded_submission(@quiz, @student)
-      graded_submission_model(assignment: @assignment, user: @student).update_attributes(score: 5)
-      graded_submission_model(assignment: @topic.assignment, user: @student).update_attributes(score: 5)
-      expect(api.planner_item_json(@quiz, @student, session)[:new_activity]).to be true
-      expect(api.planner_item_json(@assignment, @student, session)[:new_activity]).to be true
-      expect(api.planner_item_json(@topic, @student, session)[:new_activity]).to be true
+      graded_submission_model(assignment: @assignment, user: @student).update(score: 5)
+      graded_submission_model(assignment: @topic.assignment, user: @student).update(score: 5)
+      Assignment.active.update_all(muted: false)
+      expect(api.planner_item_json(@quiz.reload, @student, session)[:new_activity]).to be true
+      expect(api.planner_item_json(@assignment.reload, @student, session)[:new_activity]).to be true
+      expect(api.planner_item_json(@topic.reload, @student, session)[:new_activity]).to be true
     end
 
     it 'should return true for assignments with new feedback' do
@@ -379,9 +382,10 @@ describe Api::V1::PlannerItem do
       submission_model(assignment: @quiz.assignment, user: @student).add_comment(author: @teacher, comment: 'hi')
       submission_model(assignment: @assignment, user: @student).add_comment(author: @teacher, comment: 'hi')
       submission_model(assignment: @topic.assignment, user: @student).add_comment(author: @teacher, comment: 'hi')
-      expect(api.planner_item_json(@quiz, @student, session)[:new_activity]).to be true
-      expect(api.planner_item_json(@assignment, @student, session)[:new_activity]).to be true
-      expect(api.planner_item_json(@topic, @student, session)[:new_activity]).to be true
+      Assignment.active.update_all(muted: false)
+      expect(api.planner_item_json(@quiz.reload, @student, session)[:new_activity]).to be true
+      expect(api.planner_item_json(@assignment.reload, @student, session)[:new_activity]).to be true
+      expect(api.planner_item_json(@topic.reload, @student, session)[:new_activity]).to be true
     end
 
     it 'should return true for unread discussions' do
@@ -433,7 +437,7 @@ describe Api::V1::PlannerItem do
     it "links to a graded discussion topic's submission if appropriate" do
       group_discussion_assignment
       expect(api.planner_item_json(@topic.assignment, @student, session)[:html_url]).to eq 'named_context_url'
-      graded_submission_model(assignment: @topic.assignment, user: @student).update_attributes(score: 5)
+      graded_submission_model(assignment: @topic.assignment, user: @student).update(score: 5)
       expect(api.planner_item_json(@topic.assignment, @student, session)[:html_url]).to eq 'course_assignment_submission_url'
     end
   end

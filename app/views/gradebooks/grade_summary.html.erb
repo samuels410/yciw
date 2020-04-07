@@ -124,11 +124,7 @@
       <tr>
         <th scope="col"><%= t('headers.name', "Name") %></th>
         <th scope="col"><%= t('headers.due', "Due") %></th>
-
-        <% if @context.feature_enabled?(:new_gradebook) %>
-          <th scope="col" class="status"><%= t('Status') %></th>
-        <% end %>
-
+        <th scope="col" class="status"><%= t('Status') %></th>
         <th scope="col" class="assignment_score"><%= t('headers.score', "Score") %></th>
         <th scope="col" class="possible"><%= t('headers.out_of', "Out of") %></th>
         <th scope="col"><span class="screenreader-only"><%= t('headers.details', "Details") %></span></th>
@@ -170,15 +166,14 @@
           <% end %>
         </td>
 
-        <% if @context.feature_enabled?(:new_gradebook) %>
-          <td class="status" scope="row">
-            <% if assignment_presenter.missing? %>
-              <span class="submission-missing-pill"></span>
-            <% elsif assignment_presenter.late? %>
-              <span class="submission-late-pill"></span>
-            <% end %>
-          </td>
-        <% end %>
+        <td class="status" scope="row">
+          <% if assignment_presenter.missing? %>
+            <span class="submission-missing-pill"></span>
+          <% elsif assignment_presenter.late? %>
+            <span class="submission-late-pill"></span>
+          <% end %>
+        </td>
+
         <td class="assignment_score" title="<%= t(:click_to_change, "Click to test a different score") unless assignment_presenter.unchangeable? %>">
           <div style="position: relative; height: 100%;" class="score_holder">
             <% if !assignment_presenter.upload_status.present?  %>
@@ -340,7 +335,7 @@
                     url = context_url(@context, :context_assignment_submission_turnitin_report_url, assignment.id, @presenter.student_id, submission.asset_string)
                   elsif assignment_presenter.originality_report? && turnitin
                     asset_string = assignment_presenter.file&.asset_string || assignment_presenter.submission&.asset_string
-                    url = polymorphic_url([@context, assignment, submission, :originality_report], asset_string: asset_string)
+                    url = polymorphic_url([ @context, assignment, submission, :originality_report], asset_string: asset_string, attempt: submission.attempt)
                     anchor_title = turnitin[:error_message] ? turnitin[:error_message] : t('Originality Report')
                     alt_text = turnitin[:error_message] ? turnitin[:error_message] : t('Originality Report')
                   elsif assignment_presenter.is_online_upload? && assignment_presenter.file
@@ -350,9 +345,20 @@
                 end
               %>
               <% if url && url != '#' %>
-                <a title="<%= anchor_title %>" href="<%= url %>" style="<%= 'visibility: hidden;' if !turnitin %>" target="_blank" data-tooltip="left">
-                  <%= turnitin ? image_tag("turnitin_#{turnitin && turnitin[:state]}_score.png", :alt => alt_text) : image_tag("blank.png", :alt => '') %>
-                </a>
+                <% if @presenter.show_updated_plagiarism_icons?(turnitin) %>
+                  <%=
+                    render partial: "shared/originality_score_icon", locals: {
+                      hide_score: false,
+                      plagiarism_data: turnitin,
+                      report_title: anchor_title,
+                      report_url: url
+                    }
+                  %>
+                <% else %>
+                  <a title="<%= anchor_title %>" href="<%= url %>" style="<%= 'visibility: hidden;' if !turnitin %>" target="_blank" data-tooltip="left">
+                    <%= turnitin ? image_tag("turnitin_#{turnitin && turnitin[:state]}_score.png", :alt => alt_text) : image_tag("blank.png", :alt => '') %>
+                  </a>
+                <% end %>
               <% end %>
             <% end %>
             <% if @presenter.vericite_enabled? && !assignment_presenter.originality_report? %>
@@ -370,15 +376,27 @@
                 end
               %>
 
-              <span class="turnitin_score_container" style="<%= 'visibility: hidden;' if !vericite %>">
-                <span class="vericite_score_container_caret <%= vericite && vericite[:state] %>_score"></span>
-                <a title="<%= t('titles.vericite_score', "VeriCite similarity score -- more information") %>" href="<%= url %>" target="_blank" class="tooltip not_external turnitin_similarity_score <%= vericite && vericite[:state] %>_score">
-                  <%= vericite && vericite[:similarity_score] %>%
-                  <span class="tooltip_wrap right">
-                    <span class="tooltip_text"><%= t(:see_vericite_results, "See VeriCite results") %></span>
-                  </span>
-                </a>
-              </span>
+              <% if @presenter.show_updated_plagiarism_icons?(vericite) %>
+                <%=
+                  render partial: "shared/originality_score_icon", locals: {
+                    hide_score: false,
+                    plagiarism_data: vericite,
+                    report_title: t("VeriCite similarity score -- more information"),
+                    report_url: url,
+                    tooltip_text: t("See VeriCite results")
+                  }
+                %>
+              <% else %>
+                <span class="turnitin_score_container" style="<%= 'visibility: hidden;' if !vericite %>">
+                  <span class="vericite_score_container_caret <%= vericite && vericite[:state] %>_score"></span>
+                  <a title="<%= t('titles.vericite_score', "VeriCite similarity score -- more information") %>" href="<%= url %>" target="_blank" class="tooltip not_external turnitin_similarity_score <%= vericite && vericite[:state] %>_score">
+                    <%= vericite && vericite[:similarity_score] %>%
+                    <span class="tooltip_wrap right">
+                      <span class="tooltip_text"><%= t(:see_vericite_results, "See VeriCite results") %></span>
+                    </span>
+                  </a>
+                </span>
+              <% end %>
             <% end %>
           <% end %>
         <% end %>

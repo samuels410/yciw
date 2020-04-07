@@ -17,7 +17,35 @@
  */
 
 import _ from 'underscore'
-import I18n from 'i18n!sharedMessageStudentsWhoHelper'
+import I18n from 'i18n!gradebooksharedMessageStudentsWhoHelper'
+
+export function hasSubmitted(submission) {
+  if (submission.excused) {
+    return true
+  } else if (submission.latePolicyStatus) {
+    return submission.latePolicyStatus !== 'missing'
+  }
+
+  return !!(submission.submittedAt || submission.submitted_at)
+}
+
+export function hasSubmission(assignment) {
+  const submissionTypes = getSubmissionTypes(assignment)
+  if (submissionTypes.length === 0) return false
+
+  return _.some(
+    submissionTypes,
+    submissionType => submissionType !== 'none' && submissionType !== 'on_paper'
+  )
+}
+
+function getSubmissionTypes(assignment) {
+  return assignment.submissionTypes || assignment.submission_types
+}
+
+function getCourseId(assignment) {
+  return assignment.courseId || assignment.course_id
+}
 
 const MessageStudentsWhoHelper = {
   settings(assignment, students) {
@@ -26,7 +54,7 @@ const MessageStudentsWhoHelper = {
       title: assignment.name,
       points_possible: assignment.points_possible,
       students,
-      context_code: `course_${assignment.course_id}`,
+      context_code: `course_${getCourseId(assignment)}`,
       callback: this.callbackFn.bind(this),
       subjectCallback: this.generateSubjectCallbackFn(assignment)
     }
@@ -44,17 +72,13 @@ const MessageStudentsWhoHelper = {
       {
         text: I18n.t("Haven't submitted yet"),
         subjectFn: assignment =>
-          I18n.t('No submission for %{assignment}', {
-            assignment: assignment.name
-          }),
-        criteriaFn: student => !student.submitted_at
+          I18n.t('No submission for %{assignment}', {assignment: assignment.name}),
+        criteriaFn: student => !hasSubmitted(student)
       },
       {
         text: I18n.t("Haven't been graded"),
         subjectFn: assignment =>
-          I18n.t('No grade for %{assignment}', {
-            assignment: assignment.name
-          }),
+          I18n.t('No grade for %{assignment}', {assignment: assignment.name}),
         criteriaFn: student => !this.exists(student.score)
       },
       {
@@ -82,14 +106,9 @@ const MessageStudentsWhoHelper = {
     ]
   },
 
+  // implement this so it can be stubbed in tests
   hasSubmission(assignment) {
-    const submissionTypes = assignment.submission_types
-    if (submissionTypes.length === 0) return false
-
-    return _.some(
-      submissionTypes,
-      submissionType => submissionType !== 'none' && submissionType !== 'on_paper'
-    )
+    return hasSubmission(assignment)
   },
 
   exists(value) {
@@ -102,8 +121,10 @@ const MessageStudentsWhoHelper = {
 
   callbackFn(selected, cutoff, students) {
     const criteriaFn = this.findOptionByText(selected).criteriaFn
-    const filteredStudents = _.filter(students, student => criteriaFn(student.user_data, cutoff))
-    return _.map(filteredStudents, student => student.user_data.id)
+    const studentsMatchingCriteria = _.filter(students, student =>
+      criteriaFn(student.user_data, cutoff)
+    )
+    return _.map(studentsMatchingCriteria, student => student.user_data.id)
   },
 
   findOptionByText(text) {

@@ -961,7 +961,7 @@ describe Account do
   describe "fast_all_users" do
     it "should preserve sortable_name" do
       user_with_pseudonym(:active_all => 1)
-      @user.update_attributes(:name => "John St. Clair", :sortable_name => "St. Clair, John")
+      @user.update(:name => "John St. Clair", :sortable_name => "St. Clair, John")
       @johnstclair = @user
       user_with_pseudonym(:active_all => 1, :username => 'jt@instructure.com', :name => 'JT Olds')
       @jtolds = @user
@@ -1827,6 +1827,58 @@ describe Account do
         account2.update_attribute(:parent_account, account1)
         expect(Account.account_chain_ids(account2.id)).to eq [account2.id, account1.id, Account.default.id]
       end
+    end
+  end
+
+  context '#destroy on sub accounts' do
+    before :once do
+      @root_account = Account.create!
+      @sub_account = @root_account.sub_accounts.create!
+    end
+
+    it 'wont let you destroy if there are active sub accounts' do
+      @sub_account.sub_accounts.create!
+      expect { @sub_account.destroy! }.to raise_error ActiveRecord::RecordInvalid
+    end
+
+    it 'wont let you destroy if there are active courses' do
+      @sub_account.courses.create!
+      expect { @sub_account.destroy! }.to raise_error ActiveRecord::RecordInvalid
+    end
+
+    it 'destroys associated account users' do
+      account_user1 = @sub_account.account_users.create!(user: User.create!)
+      account_user2 = @sub_account.account_users.create!(user: User.create!)
+      @sub_account.destroy!
+      expect(account_user1.reload.workflow_state).to eq 'deleted'
+      expect(account_user2.reload.workflow_state).to eq 'deleted'
+    end
+  end
+
+  context 'custom help link validation' do
+    before do
+      account_model
+    end
+
+    it 'should be valid if custom help links are not present' do
+      @account.settings[:foo] = 'bar'
+      expect(@account.valid?).to be true
+    end
+
+    it 'should be valid if custom help links are valid' do
+      @account.settings[:custom_help_links] = [{ is_new: true, is_featured: false }, { is_new: false, is_featured: true }]
+      expect(@account.valid?).to be true
+    end
+
+    it 'should not be valid if custom help links are invalid' do
+      @account.settings[:custom_help_links] = [{ is_new: true, is_featured: true }]
+      expect(@account.valid?).to be false
+    end
+
+    it 'should not check custom help links if not changed' do
+      @account.update_attribute(:settings, [{ is_new: true, is_featured: true }]) # skips validation
+      @account.name = 'foo'
+      expect(@account.valid?).to be true
     end
   end
 end

@@ -787,7 +787,11 @@ describe "Users API", type: :request do
          'integration_id' => nil,
          'login_id' => @other_user.pseudonym.unique_id,
          'locale' => nil,
-         'permissions' => {'can_update_name' => true, 'can_update_avatar' => false},
+         'permissions' => {
+           'can_update_name' => true,
+           'can_update_avatar' => false,
+           'limit_parent_app_web_access' => false,
+         },
          'email' => @other_user.email
       })
     end
@@ -804,7 +808,11 @@ describe "Users API", type: :request do
          'short_name' => @other_user.short_name,
          'locale' => nil,
          'effective_locale' => 'en',
-         'permissions' => {'can_update_name' => true, 'can_update_avatar' => false}
+         'permissions' => {
+           'can_update_name' => true,
+           'can_update_avatar' => false,
+           'limit_parent_app_web_access' => false,
+         },
       })
     end
 
@@ -813,12 +821,29 @@ describe "Users API", type: :request do
       Account.default.tap { |a| a.settings[:users_can_edit_name] = false }.save
       json = api_call(:get, "/api/v1/users/self",
                       { :controller => 'users', :action => 'api_show', :id => 'self', :format => 'json' })
-      expect(json['permissions']).to eq({'can_update_name' => false, 'can_update_avatar' => false})
+      expect(json['permissions']).to eq({
+        'can_update_name' => false,
+        'can_update_avatar' => false,
+        'limit_parent_app_web_access' => false,
+      })
 
       Account.default.tap { |a| a.enable_service(:avatars) }.save
       json = api_call(:get, "/api/v1/users/self",
                       { :controller => 'users', :action => 'api_show', :id => 'self', :format => 'json' })
-      expect(json['permissions']).to eq({'can_update_name' => false, 'can_update_avatar' => true})
+      expect(json['permissions']).to eq({
+        'can_update_name' => false,
+        'can_update_avatar' => true,
+        'limit_parent_app_web_access' => false,
+      })
+
+      Account.default.tap { |a| a.settings[:limit_parent_app_web_access] = true }.save
+      json = api_call(:get, "/api/v1/users/self",
+                      { :controller => 'users', :action => 'api_show', :id => 'self', :format => 'json' })
+      expect(json['permissions']).to eq({
+        'can_update_name' => false,
+        'can_update_avatar' => true,
+        'limit_parent_app_web_access' => true,
+      })
     end
 
     it "should retrieve the right avatar permissions" do
@@ -1692,13 +1717,13 @@ describe "Users API", type: :request do
 
       it "should be able to update a name without changing sortable name if sent together" do
         sortable = "Name, Sortable"
-        @student.update_attributes(:name => "Sortable Name", :sortable_name => sortable)
+        @student.update(:name => "Sortable Name", :sortable_name => sortable)
         api_call(:put, @path, @path_options, {
           :user => {:name => "Other Name", :sortable_name => sortable}
         })
         expect(@student.reload.sortable_name).to eq sortable
 
-        @student.update_attributes(:name => "Sortable Name", :sortable_name => sortable) # reset
+        @student.update(:name => "Sortable Name", :sortable_name => sortable) # reset
         api_call(:put, @path, @path_options, {:user => {:name => "Other Name"}}) # only send in the name
         expect(@student.reload.sortable_name).to eq "Name, Other" # should auto sync
       end
@@ -2066,16 +2091,14 @@ describe "Users API", type: :request do
 
     describe 'GET custom colors' do
       before :each do
-        @user.preferences[:custom_colors] = {
+        @user.set_preference(:custom_colors, {
           "user_#{@user.id}" => "efefef",
           "course_3" => "ababab"
-        }
-        @user.save!
+        })
       end
 
       it "should return an empty object if nothing is stored" do
-        @user.preferences.delete(:custom_colors)
-        @user.save!
+        @user.set_preference(:custom_colors, nil)
 
         json = api_call(
           :get,
@@ -2207,12 +2230,11 @@ describe "Users API", type: :request do
           }, {}, {}, {:expected_status => 200}
         )
         expect(json['hexcode']).to eq '#ababab'
-        expect(@user.reload.preferences[:custom_colors]["course_#{@course.global_id}"]).to eq '#ababab'
+        expect(@user.reload.get_preference(:custom_colors)["course_#{@course.global_id}"]).to eq '#ababab'
       end
 
       it "should retrieve colors relative to user's shard" do
-        @user.preferences[:custom_colors] = {"course_#{@course.global_id}" => '#ababab'}
-        @user.save!
+        @user.set_preference(:custom_colors, {"course_#{@course.global_id}" => '#ababab'})
         json = api_call(:get, "/api/v1/users/#{@user.id}/colors",
           { controller: 'users', action: 'get_custom_colors', format: 'json', id: @user.id.to_s
           }, {}, {}, {:expected_status => 200}
@@ -2224,11 +2246,10 @@ describe "Users API", type: :request do
         @shard1.activate do
           @cs_course = Course.create!(:account => Account.first)
           @cs_course.enroll_student(@user, :enrollment_state => "active")
-          @user.preferences[:custom_colors] = {
+          @user.set_preference(:custom_colors, {
             "course_#{@cs_course.global_id}" => '#ffffff', # old data plz ignore
             "course_#{@cs_course.local_id}" => '#ababab' # new data
-          }
-          @user.save!
+          })
         end
         json = api_call(:get, "/api/v1/users/#{@user.id}/colors",
           { controller: 'users', action: 'get_custom_colors', format: 'json', id: @user.id.to_s
@@ -2248,12 +2269,11 @@ describe "Users API", type: :request do
 
     describe "GET dashboard positions" do
       before :each do
-        @user.preferences[:dashboard_positions] = {
+        @user.set_preference(:dashboard_positions, {
           "course_1" => 3,
           "course_2" => 1,
           "course_3" => 2
-        }
-        @user.save!
+        })
       end
 
       it "should return dashboard postions for a user" do
@@ -2269,8 +2289,7 @@ describe "Users API", type: :request do
       end
 
       it "should return an empty if the user has no ordering set" do
-        @user.preferences.delete(:dashboard_positions)
-        @user.save!
+        @user.set_preference(:dashboard_positions, nil)
 
         json = api_call(
           :get,
@@ -2285,6 +2304,28 @@ describe "Users API", type: :request do
     end
 
     describe "PUT dashboard positions" do
+      it "should error when trying to use a large number" do
+        course1 = course_factory(active_all: true)
+        course2 = course_factory(active_all: true)
+
+        json = api_call(
+          :put,
+          "/api/v1/users/#{@user.id}/dashboard_positions",
+          { controller: "users", action: "set_dashboard_positions", format: "json",
+            id: @user.to_param
+          },
+          {
+            dashboard_positions: {
+              "course_#{course1.id}" => 2000,
+              "course_#{course2.id}" => 13,
+            }
+          },
+          {},
+          { expected_status: 400 }
+        )
+        expect(json['message']).to eq 'Position 2000 is too high. Your dashboard cards can probably be sorted with numbers 1-5, you could even use a 0.'
+      end
+
       it "should allow setting dashboard positions" do
         course1 = course_factory(active_all: true)
         course2 = course_factory(active_all: true)
@@ -2385,11 +2426,10 @@ describe "Users API", type: :request do
 
     describe "GET new user tutorial statuses" do
       before :once do
-        @user.preferences[:new_user_tutorial_statuses] = {
+        @user.set_preference(:new_user_tutorial_statuses, {
           "home" => true,
           "modules" => false,
-        }
-        @user.save!
+        })
       end
 
       it "should return new user tutorial collapsed statuses for a user" do
@@ -2403,8 +2443,7 @@ describe "Users API", type: :request do
       end
 
       it "should return empty if the user has no preference set" do
-        @user.preferences.delete(:new_user_tutorial_statuses)
-        @user.save!
+        @user.set_preference(:new_user_tutorial_statuses, nil)
 
         json = api_call(
           :get,
@@ -2625,8 +2664,8 @@ PUBLIC
         course2 = @course
         @course2_enrollment = course2.enroll_student(@student1)
         @course2_enrollment.accept!
-        assignment = assignment_model(course: course2, submission_types: 'online_text_entry')
-        @most_recent_submission = assignment.grade_student(@student1, grader: teacher2, score: 10).first
+        @assignment1 = assignment_model(course: course2, submission_types: 'online_text_entry')
+        @most_recent_submission = @assignment1.grade_student(@student1, grader: teacher2, score: 10).first
         @most_recent_submission.graded_at = 1.day.ago
         @most_recent_submission.save!
       end
@@ -2684,6 +2723,22 @@ PUBLIC
         action: 'user_graded_submissions',
         format: 'json',
         only_current_enrollments: true
+      })
+      expect(json.count).to eq 2
+      expect(json.map { |s| s['id'] }).to eq [@next_submission.id, @last_submission.id]
+    end
+
+    it 'only gets the users submissions for published assignments when only_published_assignments=true' do
+      # normally there should not be submissions for unpublished assignments
+      # but there's an edge case with late policies
+      # using update_column because we can't unpublish an assignment with submissions
+      @assignment1.update_column(:workflow_state, 'unpublished')
+      json = api_call_as_user(@student1, :get, "/api/v1/users/#{@student1.id}/graded_submissions?only_published_assignments=true", {
+        id: @student1.to_param,
+        controller: 'users',
+        action: 'user_graded_submissions',
+        format: 'json',
+        only_published_assignments: true,
       })
       expect(json.count).to eq 2
       expect(json.map { |s| s['id'] }).to eq [@next_submission.id, @last_submission.id]

@@ -16,7 +16,7 @@
 # with this program. If not, see <http://www.gnu.org/licenses/>.
 
 require_relative '../../common'
-require_relative '../../grades/pages/gradezilla_page'
+require_relative '../../grades/pages/gradebook_page'
 require_relative '../../grades/pages/speedgrader_page'
 
 student_assignments = [
@@ -35,7 +35,6 @@ describe 'Gradebook performance' do
     @courses = []
     (1..4).each do |i|
       course = course_factory(course_name: "My Course #{i}", active_course: true)
-      course.enable_feature!(:new_gradebook)
       @courses.push course
     end
     @course1 = @courses[0]
@@ -100,12 +99,14 @@ describe 'Gradebook performance' do
   end
 
   context '200,000 submissions' do
-    it 'gradezilla loads in less than 25 seconds' do
+    it 'gradebook loads in less than 25 seconds' do
       page_load_start_time = Time.zone.now
-      Gradezilla.visit(@course1)
+      Gradebook.visit(@course1)
       wait_for_ajaximations
       page_load_end_time = Time.zone.now
-      expect(page_load_end_time - page_load_start_time).to be < 25
+      load_time = page_load_end_time - page_load_start_time
+      puts "200,000 submissions, gradebook loads in less than 25 seconds.  Load time: #{load_time}"
+      expect(load_time).to be < 25
     end
 
     it 'speedgrader loads in less than 100 seconds' do
@@ -114,17 +115,21 @@ describe 'Gradebook performance' do
       Speedgrader.visit(@course1.id, @assignments1[0], 60)
       wait_for_ajaximations
       page_load_end_time = Time.zone.now
-      expect(page_load_end_time - page_load_start_time).to be < 100
+      load_time = page_load_end_time - page_load_start_time
+      puts "200,000 submissions, speedgrader loads in less than 100 seconds.  Load time: #{load_time}"
+      expect(load_time).to be < 100
     end
   end
 
   context '100,000 submissions 2000x50' do
-    it 'gradezilla loads in less than 25 seconds' do
+    it 'gradebook loads in less than 25 seconds' do
       page_load_start_time = Time.zone.now
-      Gradezilla.visit(@course2)
+      Gradebook.visit(@course2)
       wait_for_ajaximations
       page_load_end_time = Time.zone.now
-      expect(page_load_end_time - page_load_start_time).to be < 25
+      load_time = page_load_end_time - page_load_start_time
+      puts "100,000 submissions 2000x50, gradebook loads in less than 25 seconds.  Load time: #{load_time}"
+      expect(load_time).to be < 25
     end
 
     it 'speedgrader loads in less than 45 seconds' do
@@ -132,18 +137,22 @@ describe 'Gradebook performance' do
       Speedgrader.visit(@course2.id, @assignments2[0], 60)
       wait_for_ajaximations
       page_load_end_time = Time.zone.now
-      expect(page_load_end_time - page_load_start_time).to be < 45
+      load_time = page_load_end_time - page_load_start_time
+      puts "100,000 submissions 2000x50, speedgrader loads in less than 45 seconds.  Load time: #{load_time}"
+      expect(load_time).to be < 45
     end
   end
 
   context '100,000 submissions 1000x100' do
-    it 'gradezilla loads in less than 25 seconds' do
+    it 'gradebook loads in less than 25 seconds' do
       page_load_start_time = Time.zone.now
-      Gradezilla.visit(@course3)
+      Gradebook.visit(@course3)
       wait_for_ajaximations
       wait_for_ajaximations
       page_load_end_time = Time.zone.now
-      expect(page_load_end_time - page_load_start_time).to be < 25
+      load_time = page_load_end_time - page_load_start_time
+      puts "100,000 submissions 1000x100, gradebook loads in less than 25 seconds.  Load time: #{load_time}"
+      expect(load_time).to be < 25
     end
 
     it 'speedgrader loads in less than 19 seconds' do
@@ -151,17 +160,21 @@ describe 'Gradebook performance' do
       Speedgrader.visit(@course3.id, @assignments3[0], 60)
       wait_for_ajaximations
       page_load_end_time = Time.zone.now
-      expect(page_load_end_time - page_load_start_time).to be < 19
+      load_time = page_load_end_time - page_load_start_time
+      puts "100,000 submissions 2000x50, speedgrader loads in less than 19 seconds.  Load time: #{load_time}"
+      expect(load_time).to be < 19
     end
   end
 
   context '10,000 submissions' do
-    it 'gradezilla loads in less than 18 seconds' do
+    it 'gradebook loads in less than 18 seconds' do
       page_load_start_time = Time.zone.now
-      Gradezilla.visit(@course4)
+      Gradebook.visit(@course4)
       wait_for_ajaximations
       page_load_end_time = Time.zone.now
-      expect(page_load_end_time - page_load_start_time).to be < 18
+      load_time = page_load_end_time - page_load_start_time
+      puts "10,000 submissions, gradebook loads in less than 18 seconds.  Load time: #{load_time}"
+      expect(load_time).to be < 18
     end
 
     it 'speedgrader loads in less than 10 seconds' do
@@ -169,7 +182,9 @@ describe 'Gradebook performance' do
       Speedgrader.visit(@course4.id, @assignments4[0], 60)
       wait_for_ajaximations
       page_load_end_time = Time.zone.now
-      expect(page_load_end_time - page_load_start_time).to be < 10
+      load_time = page_load_end_time - page_load_start_time
+      puts "10,000 submissions, speedgrader loads in less than 10 seconds.  Load time: #{load_time}"
+      expect(load_time).to be < 10
     end
   end
 end

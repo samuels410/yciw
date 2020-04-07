@@ -38,8 +38,10 @@
   "generating_preview_45b53be0": { "message": "מכין תצוגה מקדימה..." },
   "grades_a61eba0a": { "message": "הערכות" },
   "group_navigation_99f191a": { "message": "ניווט בקבוצה" },
+  "image_8ad06": { "message": "תמונה" },
   "images_7ce26570": { "message": "תמונות" },
   "increase_indent_6d550a4a": { "message": "הרחבת עימוד" },
+  "insert_593145ef": { "message": "הוספה" },
   "insert_equella_links_49a8dacd": { "message": "הוספת קישורי Equella " },
   "insert_link_6dc23cae": { "message": "הוספת קישור" },
   "insert_math_equation_57c6e767": { "message": "הוספת נוסחה מתימטית" },
@@ -59,6 +61,7 @@
   "loading_failed_b3524381": { "message": "טעינה נכשלה..." },
   "media_af190855": { "message": "מדיה" },
   "modules_c4325335": { "message": "מודולים" },
+  "no_e16d9132": { "message": "לא" },
   "no_results_940393cf": { "message": "אין תוצאות" },
   "open_this_keyboard_shortcuts_dialog_9658b83a": {
     "message": "פתיחת חלון דיאלוג של מקשי קיצור"
@@ -66,6 +69,7 @@
   "options_3ab0ea65": { "message": "אפשרויות" },
   "pages_e5414c2c": { "message": "דפים" },
   "people_b4ebb13c": { "message": "אנשים " },
+  "preview_53003fd2": { "message": "תצוגה מקדימה" },
   "published_c944a23d": { "message": "פורסם" },
   "quizzes_7e598f57": { "message": "בחנים" },
   "record_7c9448b": { "message": "הקלטה" },
@@ -84,5 +88,6 @@
   "upload_media_ce31135a": { "message": "העלאת מדיה" },
   "url_22a5f3b8": { "message": "כתובת דף אינטרנט" },
   "video_player_b371005": { "message": "נגן הוידאו" },
-  "wiki_home_9cd54d0": { "message": "דף הבית של וויקי" }
+  "wiki_home_9cd54d0": { "message": "דף הבית של וויקי" },
+  "yes_dde87d5": { "message": "כן" }
 }

@@ -170,6 +170,7 @@ class AssignmentsController < ApplicationController
         log_asset_access(@assignment, "assignments", @assignment.assignment_group)
 
         if render_a2_student_view?
+          rce_js_env
           render_a2_student_view
           return
         end
@@ -182,7 +183,7 @@ class AssignmentsController < ApplicationController
           eligible_categories = eligible_categories.where(id: @assignment.group_category) if @assignment.group_category.present?
           env[:group_categories] = group_categories_json(eligible_categories, @current_user, session, {include: ['groups']})
 
-          selected_group_id = @current_user.preferences.dig(:gradebook_settings, @context.id, 'filter_rows_by', 'student_group_id')
+          selected_group_id = @current_user.get_preference(:gradebook_settings, @context.global_id)&.dig('filter_rows_by', 'student_group_id')
           # If this is a group assignment and we had previously filtered by a
           # group that isn't part of this assignment's group set, behave as if
           # no group is selected.
@@ -293,7 +294,8 @@ class AssignmentsController < ApplicationController
 
         render locals: {
           eula_url: tool_eula_url,
-          show_moderation_link: @assignment.moderated_grading? && @assignment.permits_moderation?(@current_user)
+          show_moderation_link: @assignment.moderated_grading? && @assignment.permits_moderation?(@current_user),
+          show_confetti: params[:confetti] == "true" && @domain_root_account&.feature_enabled?(:confetti_for_assignments)
         }, stream: can_stream_template?
       end
     end
@@ -592,6 +594,7 @@ class AssignmentsController < ApplicationController
 
       post_to_sis = Assignment.sis_grade_export_enabled?(@context)
       hash = {
+        ROOT_OUTCOME_GROUP: outcome_group_json(@context.root_outcome_group, @current_user, session),
         ASSIGNMENT_GROUPS: json_for_assignment_groups,
         ASSIGNMENT_INDEX_URL: polymorphic_url([@context, :assignments]),
         ASSIGNMENT_OVERRIDES: assignment_overrides_json(

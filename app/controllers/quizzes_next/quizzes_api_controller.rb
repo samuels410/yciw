@@ -43,7 +43,7 @@ class QuizzesNext::QuizzesApiController < ApplicationController
       ].cache_key
 
       value = Rails.cache.fetch(cache_key) do
-        api_route = api_v1_course_quizzes_url(@context)
+        api_route = api_v1_course_all_quizzes_url(@context)
         @quizzes = Api.paginate(all_quizzes, self, api_route)
 
         {
@@ -64,7 +64,7 @@ class QuizzesNext::QuizzesApiController < ApplicationController
 
       scope = Assignments::ScopedToUser.new(@context, @current_user).scope
       new_quizzes = Assignment.search_by_attribute(scope, :title, params[:search_term])
-      new_quizzes = new_quizzes.select(&:quiz_lti?)
+      new_quizzes = new_quizzes.type_quiz_lti
 
       old_quizzes + new_quizzes
     end

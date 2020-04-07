@@ -19,9 +19,7 @@
 import React from 'react'
 import ReactDOM from 'react-dom'
 import TestUtils from 'react-dom/test-utils'
-import _ from 'lodash'
 import MoveToDialog from 'jsx/eportfolios/MoveToDialog'
-import assertions from 'helpers/assertions'
 
 let root
 let appRoot
@@ -39,6 +37,7 @@ const mountDialog = (opts = {}) => {
   }
 
   const element = <MoveToDialog {...opts} />
+  // eslint-disable-next-line react/no-render-return-value
   const dialog = ReactDOM.render(element, root)
   return dialog
 }
@@ -63,9 +62,9 @@ QUnit.module('MoveToDialog', {
 
 test('calls onMove with a destination id when selected', assert => {
   const done = assert.async()
-  const dialog = mountDialog({
+  mountDialog({
     onMove: val => {
-      ok(val === '1')
+      strictEqual(val, '1')
       done()
     }
   })
@@ -74,12 +73,13 @@ test('calls onMove with a destination id when selected', assert => {
 })
 
 test('does not call onMove when cancelled via close button', assert => {
-  const done = assert.async()
-  const dialog = mountDialog({
-    onMove: val => {
+  const done = assert.async(2)
+  mountDialog({
+    onMove: _val => {
       ok(false)
     },
     onClose: () => {
+      // eslint-disable-next-line jest/valid-expect, qunit/no-global-expect
       expect(0)
       done()
     }
@@ -89,9 +89,10 @@ test('does not call onMove when cancelled via close button', assert => {
 })
 
 test('does not fail when no onMove is specified', assert => {
-  const done = assert.async()
-  const dialog = mountDialog({
+  const done = assert.async(2)
+  mountDialog({
     onClose: () => {
+      // eslint-disable-next-line jest/valid-expect, qunit/no-global-expect
       expect(0)
       done()
     }

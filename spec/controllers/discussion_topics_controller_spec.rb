@@ -238,6 +238,14 @@ describe DiscussionTopicsController do
       expect(assigns[:js_env][:DIRECT_SHARE_ENABLED]).to be(false)
     end
 
+    it "does not set DIRECT_SHARE_ENABLED when viewing a group" do
+      @course.account.enable_feature!(:direct_share)
+      user_session(@teacher)
+      group = @course.groups.create!
+      get 'index', params: {group_id: group.id}
+      expect(response).to be_successful
+      expect(assigns[:js_env][:DIRECT_SHARE_ENABLED]).to be(false)
+    end
   end
 
   describe "GET 'show'" do
@@ -1006,7 +1014,7 @@ describe DiscussionTopicsController do
 
     it 'should remove a todo date from a topic' do
       user_session(@teacher)
-      @topic.update_attributes(todo_date: 1.day.from_now.in_time_zone('America/New_York'))
+      @topic.update(todo_date: 1.day.from_now.in_time_zone('America/New_York'))
       put 'update', params: {course_id: @course.id, topic_id: @topic.id, todo_date: nil}, format: 'json'
       expect(@topic.reload.todo_date).to be nil
     end
@@ -1046,7 +1054,7 @@ describe DiscussionTopicsController do
 
     it 'should remove an existing todo date when changing a topic from ungraded to graded' do
       user_session(@teacher)
-      @topic.update_attributes(todo_date: 1.day.from_now)
+      @topic.update(todo_date: 1.day.from_now)
       put 'update', params: {course_id: @course.id, topic_id: @topic.id,
         assignment: {submission_types: ['discussion_topic'], name: 'Graded Topic 1'}}, format: 'json'
       expect(response.code).to eq '200'

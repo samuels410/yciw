@@ -21,12 +21,13 @@ require 'csv'
 
 describe GradebookExporter do
   before(:once) do
+    PostPolicy.enable_feature!
+
     @course = course_model(grading_standard_id: 0)
     course_with_teacher(course: @course, active_all: true)
   end
 
   def enable_final_grade_override!
-    @course.enable_feature!(:new_gradebook)
     @course.enable_feature!(:final_grades_override)
     @course.update!(allow_final_grade_override: true)
   end
@@ -34,6 +35,37 @@ describe GradebookExporter do
   describe "#to_csv" do
     def exporter(opts = {})
       GradebookExporter.new(@course, @teacher, opts)
+    end
+
+    describe "assignment group order" do
+      before(:once) do
+        Account.site_admin.enable_feature!(:gradebook_export_sort_order_bugfix)
+
+        student_in_course(course: @course, active_all: true)
+
+        # The assignment groups are created out of order on purpose. The old code would order by assignment_group.id, so
+        # by creating the assignment groups out of order, we should get ids that are out of order. The new code orders
+        # using assignment_group.position which is guaranteed to be there in the model.
+        @first_group = @course.assignment_groups.create!(name: "first group", position: 1)
+        @last_group = @course.assignment_groups.create!(name: "last group", position: 3)
+        @second_group = @course.assignment_groups.create!(name: "second group", position: 2)
+
+        @assignments = []
+        @assignments[0] = @course.assignments.create!(name: "First group assignment", assignment_group: @first_group)
+        @assignments[2] = @course.assignments.create!(name: "last group assignment", assignment_group: @last_group)
+        @assignments[1] = @course.assignments.create!(name: "second group assignment", assignment_group: @second_group)
+      end
+
+      it "returns assignments ordered first by assignment group position" do
+        csv = GradebookExporter.new(@course, @teacher).to_csv
+        rows = CSV.parse(csv, headers: true)
+
+        # Our assignments should be columns 4, 5, and 6
+        assignment_headers = rows.headers[4,3]
+        expected_headers = @assignments.map { |a| "#{a.name} (#{a.id})" }
+
+        expect(assignment_headers).to eq(expected_headers)
+      end
     end
 
     describe "custom columns" do
@@ -118,7 +150,6 @@ describe GradebookExporter do
 
       context "when Final Grade Override is not enabled" do
         before(:once) do
-          @course.enable_feature!(:new_gradebook)
           @course.enable_feature!(:final_grades_override)
           @course.update!(allow_final_grade_override: false)
         end
@@ -198,49 +229,45 @@ describe GradebookExporter do
         end
       end
 
-      context "when post policies are enabled" do
-        before(:once) do
-          @course.enable_feature!(:new_gradebook)
-          PostPolicy.enable_feature!
-        end
+      context "when at least one assignment is manually-posted" do
+        let_once(:manual_assignment) { @course.assignments.create!(title: "manual") }
+        let_once(:manual_header) { "manual (#{manual_assignment.id})" }
+        let_once(:auto_assignment) { @course.assignments.create!(title: "auto") }
+        let_once(:auto_header) { "auto (#{auto_assignment.id})" }
 
         let(:csv) do
           unparsed_csv = GradebookExporter.new(@course, @teacher, {}).to_csv
           CSV.parse(unparsed_csv, headers: true)
         end
 
-        context "when at least one assignment is manually-posted" do
-          let_once(:manual_assignment) { @course.assignments.create!(title: "manual") }
-          let_once(:manual_header) { "manual (#{manual_assignment.id})" }
-          let_once(:auto_assignment) { @course.assignments.create!(title: "auto") }
-          let_once(:auto_header) { "auto (#{auto_assignment.id})" }
-
-          before(:once) do
-            manual_assignment.ensure_post_policy(post_manually: true)
-            auto_assignment.ensure_post_policy(post_manually: false)
-          end
-
-          let(:manual_posting_row) { csv[0] }
-
-          it "includes a line consisting entirely of 'Manual Posting' or empty values" do
-            expect(manual_posting_row.fields.uniq).to contain_exactly(nil, "Manual Posting")
-          end
-
-          it "designates manually-posted assignments as 'Manual Posting'" do
-            expect(manual_posting_row[manual_header]).to eq "Manual Posting"
-          end
-
-          it "emits an empty value for auto-posted assignments" do
-            expect(manual_posting_row[auto_header]).to be nil
-          end
-        end
-
-        it "omits the 'Manual Posting' row if no assignments are manually-posted" do
-          auto_assignment = @course.assignments.create!(title: "auto")
+        before(:once) do
+          manual_assignment.ensure_post_policy(post_manually: true)
           auto_assignment.ensure_post_policy(post_manually: false)
-
-          expect(csv[0].fields).not_to include("Manual Posting")
         end
+
+        let(:manual_posting_row) { csv[0] }
+
+        it "includes a line consisting entirely of 'Manual Posting' or empty values" do
+          expect(manual_posting_row.fields.uniq).to contain_exactly(nil, "Manual Posting")
+        end
+
+        it "designates manually-posted assignments as 'Manual Posting'" do
+          expect(manual_posting_row[manual_header]).to eq "Manual Posting"
+        end
+
+        it "emits an empty value for auto-posted assignments" do
+          expect(manual_posting_row[auto_header]).to be nil
+        end
+      end
+
+      it "omits the 'Manual Posting' row if no assignments are manually-posted" do
+        unparsed_csv = GradebookExporter.new(@course, @teacher, {}).to_csv
+        csv = CSV.parse(unparsed_csv, headers: true)
+
+        auto_assignment = @course.assignments.create!(title: "auto")
+        auto_assignment.ensure_post_policy(post_manually: false)
+
+        expect(csv[0].fields).not_to include("Manual Posting")
       end
     end
 
@@ -469,13 +496,10 @@ describe GradebookExporter do
         student1_enrollment.deactivate
         student2_enrollment.deactivate
 
-        @teacher.preferences[:gradebook_settings] = {
-          @course.id => {
-            'show_inactive_enrollments' => 'true',
-            'show_concluded_enrollments' => 'false'
-          }
-        }
-        @teacher.save!
+        @teacher.set_preference(:gradebook_settings, @course.global_id, {
+          'show_inactive_enrollments' => 'true',
+          'show_concluded_enrollments' => 'false'
+        })
       end
 
       it "includes inactive students" do
@@ -493,13 +517,10 @@ describe GradebookExporter do
       end
 
       it "does not include inactive students if show inactive enrollments is set to false" do
-        @teacher.preferences[:gradebook_settings] = {
-          @course.id => {
-            'show_inactive_enrollments' => 'false',
-            'show_concluded_enrollments' => 'false'
-          }
-        }
-        @teacher.save!
+        @teacher.set_preference(:gradebook_settings, @course.global_id, {
+          'show_inactive_enrollments' => 'false',
+          'show_concluded_enrollments' => 'false'
+        })
         csv = exporter.to_csv
         rows = CSV.parse(csv, headers: true)
         expect([rows[1], rows[2]]).to match_array([nil, nil])
@@ -535,15 +556,20 @@ describe GradebookExporter do
 
   context "when a course has unposted assignments" do
     let(:posted_assignment) { @course.assignments.create!(title: "Posted", points_possible: 10) }
-    let(:unposted_assignment) { @course.assignments.create!(title: "Unposted", points_possible: 10, muted: true) }
+    let(:unposted_assignment) { @course.assignments.create!(title: "Unposted", points_possible: 10) }
 
     before(:each) do
       @course.assignments.create!(title: "Ungraded", points_possible: 10)
+
+      posted_assignment.ensure_post_policy(post_manually: true)
+      unposted_assignment.ensure_post_policy(post_manually: true)
 
       student_in_course active_all: true
 
       posted_assignment.grade_student @student, grade: 9, grader: @teacher
       unposted_assignment.grade_student @student, grade: 3, grader: @teacher
+
+      posted_assignment.post_submissions
     end
 
     it "calculates assignment group scores correctly" do
@@ -570,7 +596,7 @@ describe GradebookExporter do
   context "with weighted assignment groups" do
     before(:once) do
       student_in_course active_all: true
-      @course.update_attributes(group_weighting_scheme: 'percent')
+      @course.update(group_weighting_scheme: 'percent')
 
       first_group = @course.assignment_groups.create!(name: "First Group", group_weight: 0.5)
       @course.assignment_groups.create!(name: "Second Group", group_weight: 0.5)
@@ -696,7 +722,6 @@ describe GradebookExporter do
 
       context "when final grade override is not allowed for the course" do
         before(:each) do
-          @course.enable_feature!(:new_gradebook)
           @course.enable_feature!(:final_grades_override)
           @course.update!(allow_final_grade_override: false)
         end
@@ -814,7 +839,6 @@ describe GradebookExporter do
 
       context "when final grade override is not allowed for the course" do
         before(:each) do
-          @course.enable_feature!(:new_gradebook)
           @course.enable_feature!(:final_grades_override)
           @course.update!(allow_final_grade_override: false)
         end

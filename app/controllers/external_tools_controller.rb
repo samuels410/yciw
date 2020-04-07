@@ -459,7 +459,7 @@ class ExternalToolsController < ApplicationController
       jwt_body = Canvas::Security.decode_jwt(secure_params)
       link_params[:ext][:lti_assignment_id] = jwt_body[:lti_assignment_id] if jwt_body[:lti_assignment_id]
     end
-    opts = {launch_url: launch_url, link_params: link_params, launch_token: launch_token}
+    opts = {launch_url: launch_url, link_params: link_params, launch_token: launch_token, context_module_id: params[:context_module_id]}
     @return_url ||= url_for(@context)
     message_type = tool.extension_setting(selection_type, 'message_type') if selection_type
     log_asset_access(@tool, "external_tools", "external_tools") if post_live_event
@@ -725,9 +725,14 @@ class ExternalToolsController < ApplicationController
   #   "_blank"	Launches the external tool in a new window or tab.
   #   "_self"	(Default) Launches the external tool in an iframe inside of Canvas.
   #
-  # @argument course_navigation[default] [Boolean]
-  #   Whether the navigation option will show in the course by default or
-  #   whether the teacher will have to explicitly enable it
+  # @argument course_navigation[default] [String, "disabled"|"enabled"]
+  #   If set to "disabled" the tool will not appear in the course navigation
+  #   until a teacher explicitly enables it.
+  #
+  #   If set to "enabled" the tool will appear in the course navigation
+  #   without requiring a teacher to explicitly enable it.
+  #
+  #   defaults to "enabled"
   #
   # @argument course_navigation[display_type] [String]
   #   The layout type to use when launching the tool. Must be
@@ -806,7 +811,9 @@ class ExternalToolsController < ApplicationController
   #   The url of the external tool
   #
   # @argument resource_selection[enabled] [Boolean]
-  #   Set this to enable this feature
+  #   Set this to enable this feature. If set to false,
+  #   not_selectable must also be set to true in order to hide this tool
+  #   from the selection UI in modules and assignments.
   #
   # @argument resource_selection[icon_url] [String]
   #   The url of the icon to show in the module external tool list
@@ -834,7 +841,8 @@ class ExternalToolsController < ApplicationController
   #   "by_url"
   #
   # @argument not_selectable [Boolean]
-  #   Default: false, if set to true the tool won't show up in the external tool
+  #   Default: false. If set to true, and if resource_selection is set to false,
+  #   the tool won't show up in the external tool
   #   selection UI in modules and assignments
   #
   # @argument oauth_compliant [Boolean]
@@ -854,7 +862,6 @@ class ExternalToolsController < ApplicationController
   #        -F 'custom_fields[key1]=value1' \
   #        -F 'custom_fields[key2]=value2' \
   #        -F 'course_navigation[text]=Course Materials' \
-  #        -F 'course_navigation[default]=false'
   #        -F 'course_navigation[enabled]=true'
   #
   # @example_request

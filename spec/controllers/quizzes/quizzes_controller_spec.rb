@@ -19,10 +19,10 @@
 require File.expand_path(File.dirname(__FILE__) + '/../../spec_helper')
 
 describe Quizzes::QuizzesController do
-
-  def course_quiz(active=false)
+  def course_quiz(active=false, title=nil)
     @quiz = @course.quizzes.create
     @quiz.workflow_state = "available" if active
+    @quiz.title = title if title
     @quiz.save!
     @quiz
   end
@@ -66,6 +66,8 @@ describe Quizzes::QuizzesController do
   end
 
   before :once do
+    PostPolicy.enable_feature!
+
     course_with_teacher(:active_all => true)
     student_in_course(:active_all => true)
     @student2 = @student
@@ -274,13 +276,14 @@ describe Quizzes::QuizzesController do
     end
 
     context 'when newquizzes_on_quiz_page FF is enabled' do
+      let_once(:due_at) { Time.zone.now + 1.week }
       let_once(:course_assignments) do
         group = @course.assignment_groups.create(:name => "some group")
         (0..3).map do |i|
           @course.assignments.create(
             title: "some assignment #{i}",
             assignment_group: group,
-            due_at: Time.zone.now + 1.week,
+            due_at: due_at,
             external_tool_tag_attributes: { content: tool },
             workflow_state: workflow_states[i]
           )
@@ -288,7 +291,7 @@ describe Quizzes::QuizzesController do
       end
 
       let_once(:course_quizzes) do
-        [course_quiz, course_quiz(true)]
+        [course_quiz(false, 'quiz 1'), course_quiz(true, 'quiz 2')]
       end
 
       let_once(:workflow_states) do
@@ -317,19 +320,20 @@ describe Quizzes::QuizzesController do
       end
 
       context "teacher interface" do
-        it "includes all old quizzes and new quizzes" do
+        it "includes all old quizzes and new quizzes, sorted by [due_date, title]" do
           user_session(@teacher)
           get 'index', params: { course_id: @course.id }
           expect(controller.js_env[:QUIZZES][:assignment]).not_to be_nil
           expect(controller.js_env[:QUIZZES][:assignment].count).to eq(4)
+
           expect(
-            controller.js_env[:QUIZZES][:assignment].map{ |x| x[:id] }
-          ).to contain_exactly(
-            course_quizzes[0].id,
-            course_quizzes[1].id,
-            course_assignments[2].id,
-            course_assignments[3].id
-          )
+            controller.js_env[:QUIZZES][:assignment].map{ |x| [x[:id], x[:due_at], x[:title]] }
+          ).to eq([
+            [course_assignments[2].id, due_at, 'some assignment 2'],
+            [course_assignments[3].id, due_at, 'some assignment 3'],
+            [course_quizzes[0].id, nil, 'quiz 1'],
+            [course_quizzes[1].id, nil, 'quiz 2']
+          ])
         end
       end
 
@@ -535,7 +539,6 @@ describe Quizzes::QuizzesController do
     end
 
     it "assigns js_env for attachments if submission is present" do
-      require 'action_controller_test_process'
       user_session(@student)
       course_quiz !!:active
       submission = @quiz.generate_submission @student
@@ -550,12 +553,8 @@ describe Quizzes::QuizzesController do
 
     describe "js_env SUBMISSION_VERSIONS_URL" do
       before(:each) do
-        require 'action_controller_test_process'
         user_session(@student)
         course_quiz(true)
-
-        @quiz.assignment.course.enable_feature!(:new_gradebook)
-        PostPolicy.enable_feature!
       end
 
       let(:submission) { @quiz.generate_submission(@student) }
@@ -1158,6 +1157,7 @@ describe Quizzes::QuizzesController do
   describe "GET 'history'" do
     before :once do
       course_quiz
+      @quiz.assignment.unmute!
     end
 
     it "should require authorization" do
@@ -1314,31 +1314,24 @@ describe Quizzes::QuizzesController do
       end
     end
 
-    context "when post policies is enabled" do
-      before(:each) do
-        @course.enable_feature!(:new_gradebook)
-        PostPolicy.enable_feature!
+    it "allows a student to view their own history if the submission is posted" do
+      user_session(@student)
+      quiz_submission = @quiz.generate_submission(@student)
+      Quizzes::SubmissionGrader.new(quiz_submission).grade_submission
+      get 'history', params: {:course_id => @course.id, :quiz_id => @quiz.id, :user_id => @student.id}
+      expect(response).to be_successful
+    end
 
-        user_session(@student)
-      end
+    it "does not allow a student to view their own history if the submission is not posted" do
+      user_session(@student)
+      quiz_submission = @quiz.generate_submission(@student)
+      Quizzes::SubmissionGrader.new(quiz_submission).grade_submission
+      quiz_submission.submission.update!(posted_at: nil)
+      get 'history', params: {:course_id => @course.id, :quiz_id => @quiz.id, :user_id => @student.id}
 
-      let(:quiz_submission) { @quiz.generate_submission(@student) }
-
-      it "allows a student to view their own history if the submission is posted" do
-        Quizzes::SubmissionGrader.new(quiz_submission).grade_submission
-        get 'history', params: {:course_id => @course.id, :quiz_id => @quiz.id, :user_id => @student.id}
-        expect(response).to be_successful
-      end
-
-      it "does not allow a student to view their own history if the submission is not posted" do
-        Quizzes::SubmissionGrader.new(quiz_submission).grade_submission
-        quiz_submission.submission.update!(posted_at: nil)
-        get 'history', params: {:course_id => @course.id, :quiz_id => @quiz.id, :user_id => @student.id}
-
-        aggregate_failures do
-          expect(response).to redirect_to("/courses/#{@course.id}/quizzes/#{@quiz.id}")
-          expect(flash[:notice]).to match(/You cannot view the quiz history while the quiz is muted/)
-        end
+      aggregate_failures do
+        expect(response).to redirect_to("/courses/#{@course.id}/quizzes/#{@quiz.id}")
+        expect(flash[:notice]).to match(/You cannot view the quiz history while the quiz is muted/)
       end
     end
 
@@ -1698,7 +1691,7 @@ describe Quizzes::QuizzesController do
       # aka should handle the case where the quiz's assignment is nil/not present.
       user_session(@teacher)
       course_quiz
-      @quiz.update_attributes(quiz_type: 'survey')
+      @quiz.update(quiz_type: 'survey')
       # make sure the assignment doesn't exist
       @quiz.assignment = nil
       expect(@quiz.assignment).not_to be_present
@@ -2576,30 +2569,21 @@ describe Quizzes::QuizzesController do
       expect(response.body).to match(/^\s?$/)
     end
 
-    context "when post policies are enabled" do
-      let(:assignment) do
-        @course.assignments.create!(
-          title: "my humdrum quiz",
-          workflow_state: "available",
-          submission_types: "online_quiz"
-        )
-      end
+    it "renders nothing when the submission is not posted" do
+      assignment = @course.assignments.create!(
+        title: "my humdrum quiz",
+        workflow_state: "available",
+        submission_types: "online_quiz"
+      )
 
-      before(:each) do
-        @course.enable_feature!(:new_gradebook)
-        PostPolicy.enable_feature!
+      @quiz.assignment = assignment
+      user_session(@teacher)
 
-        @quiz.assignment = assignment
-        user_session(@teacher)
-      end
+      assignment.post_policy.update!(post_manually: true)
+      @quiz.generate_submission(@teacher)
 
-      it "renders nothing when the submission is not posted" do
-        assignment.post_policy.update!(post_manually: true)
-        @quiz.generate_submission(@teacher)
-
-        get 'submission_versions', params: {:course_id => @course.id, :quiz_id => @quiz.id}
-        expect(response.body).to match(/^\s?$/)
-      end
+      get 'submission_versions', params: {:course_id => @course.id, :quiz_id => @quiz.id}
+      expect(response.body).to match(/^\s?$/)
     end
   end
 

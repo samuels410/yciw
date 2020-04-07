@@ -137,11 +137,17 @@
     "group_navigation_99f191a": {
         "message": "Πλοήγηση στην Ομάδα"
     },
+    "image_8ad06": {
+        "message": "Εικόνα"
+    },
     "images_7ce26570": {
         "message": "Εικόνες"
     },
     "increase_indent_6d550a4a": {
         "message": "Αύξηση Εσοχής Κειμένου"
+    },
+    "insert_593145ef": {
+        "message": "Εισαγωγή"
     },
     "insert_equella_links_49a8dacd": {
         "message": "Εισαγωγή Συνδέσμων τύπου Equella"
@@ -206,6 +212,9 @@
     "new_13daf639": {
         "message": "Νέο"
     },
+    "no_e16d9132": {
+        "message": "μη δημοσιευμένο"
+    },
     "no_results_940393cf": {
         "message": "Δεν υπάρχουν Αποτελέσματα"
     },
@@ -229,6 +238,9 @@
     },
     "points_bceb5005": {
         "message": "Μόρια"
+    },
+    "preview_53003fd2": {
+        "message": "Προεπισκόπηση"
     },
     "pts_699bd9aa": {
         "message": "pts"
@@ -307,6 +319,9 @@
     },
     "wiki_home_9cd54d0": {
         "message": "Αρχική Σελίδα Wiki"
+    },
+    "yes_dde87d5": {
+        "message": "Ναι"
     },
     "yesterday_c6bd6abf": {
         "message": "Χτες"

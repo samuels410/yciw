@@ -329,7 +329,7 @@ class Attachment < ActiveRecord::Base
       context.log_merge_result("File \"#{dup.folder && dup.folder.full_name}/#{dup.display_name}\" created")
     end
     dup.shard.activate do
-      if Attachment.s3_storage? && context.respond_to?(:root_account_id) && self.namespace != context.root_account.file_namespace
+      if Attachment.s3_storage? && !instfs_hosted? && context.respond_to?(:root_account_id) && self.namespace != context.root_account.file_namespace
         dup.save_without_broadcasting!
         dup.make_rootless
         dup.change_namespace(context.root_account.file_namespace)
@@ -788,6 +788,11 @@ class Attachment < ActiveRecord::Base
     self.uuid ||= CanvasSlug.generate_securish_uuid
   end
   protected :assign_uuid
+
+  def reset_uuid!
+    self.uuid = CanvasSlug.generate_securish_uuid
+    self.save!
+  end
 
   def inline_content?
     self.content_type.match(/\Atext/) || self.extension == '.html' || self.extension == '.htm' || self.extension == '.swf'
@@ -1413,6 +1418,7 @@ class Attachment < ActiveRecord::Base
       CrocodocDocument.where(attachment_id: att.children_and_self.select(:id)).delete_all
       canvadoc_scope = Canvadoc.where(attachment_id: att.children_and_self.select(:id))
       CanvadocsSubmission.where(:canvadoc_id => canvadoc_scope.select(:id)).delete_all
+      AnonymousOrModerationEvent.where(:canvadoc_id => canvadoc_scope.select(:id)).delete_all
       canvadoc_scope.delete_all
       att.save!
     end
@@ -1651,9 +1657,7 @@ class Attachment < ActiveRecord::Base
       doc = canvadoc || create_canvadoc
       doc.upload({
         annotatable: opts[:wants_annotation],
-        preferred_plugins: opts[:preferred_plugins],
-        # TODO: Remove the next line after the DocViewer Data Migration project RD-4702
-        region: doc.shard.database_server.config[:region] || "none"
+        preferred_plugins: opts[:preferred_plugins]
       })
       update_attribute(:workflow_state, 'processing')
     end

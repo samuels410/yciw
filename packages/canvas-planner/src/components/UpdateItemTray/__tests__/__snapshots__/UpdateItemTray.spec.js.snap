@@ -38,13 +38,13 @@ exports[`renders the item to update if provided 1`] = `
         display="block"
         inputContainerRef={[Function]}
         inputRef={[Function]}
-        interaction="enabled"
         isRequired={false}
         messages={Array []}
         onBlur={[Function]}
         onChange={[Function]}
         onFocus={[Function]}
         renderLabel={[Function]}
+        shouldNotWrap={false}
         size="medium"
         textAlign="start"
         type="text"
@@ -75,46 +75,28 @@ exports[`renders the item to update if provided 1`] = `
         timezone="Asia/Tokyo"
         value="2017-04-25T08:49:00.000Z"
       />
-      <Select
-        allowCustom={false}
-        allowEmpty={true}
-        closeOnSelect={true}
-        constrain="window"
-        disabled={false}
-        editable={false}
-        emptyOption="---"
-        filter={[Function]}
-        formatSelectedOption={[Function]}
+      <CanvasSelect
         id="to-do-item-course-select"
-        inputRef={[Function]}
         label="Course"
-        loadingText={null}
-        multiple={false}
+        noOptionsLabel="---"
         onChange={[Function]}
-        optionsMaxWidth={null}
-        readOnly={false}
-        selectedOption={
-          Object {
-            "label": "a course",
-            "value": "1",
-          }
-        }
-        size="medium"
-        visibleOptionsCount={8}
+        value="1"
       >
-        <option
+        <CanvasSelectOption
+          id="none"
           key="none"
           value="none"
         >
           Optional: Add Course
-        </option>
-        <option
+        </CanvasSelectOption>
+        <CanvasSelectOption
+          id="1"
           key="1"
           value="1"
         >
           a course
-        </option>
-      </Select>
+        </CanvasSelectOption>
+      </CanvasSelect>
       <TextArea
         autoGrow={false}
         disabled={false}
@@ -149,28 +131,32 @@ exports[`renders the item to update if provided 1`] = `
     >
       <Button
         as="button"
-        buttonRef={[Function]}
         cursor="pointer"
-        fluidWidth={false}
+        display="inline-block"
+        elementRef={[Function]}
         margin="0 x-small 0 0"
         onClick={[Function]}
         size="medium"
+        textAlign="center"
         type="button"
         variant="light"
+        withBackground={true}
       >
         Delete
       </Button>
       <Button
         as="button"
-        buttonRef={[Function]}
         cursor="pointer"
         disabled={false}
-        fluidWidth={false}
+        display="inline-block"
+        elementRef={[Function]}
         margin="0 0 0 x-small"
         onClick={[Function]}
         size="medium"
+        textAlign="center"
         type="button"
         variant="primary"
+        withBackground={true}
       >
         Save
       </Button>
@@ -217,13 +203,13 @@ exports[`updates state when new note is passed in 1`] = `
         display="block"
         inputContainerRef={[Function]}
         inputRef={[Function]}
-        interaction="enabled"
         isRequired={false}
         messages={Array []}
         onBlur={[Function]}
         onChange={[Function]}
         onFocus={[Function]}
         renderLabel={[Function]}
+        shouldNotWrap={false}
         size="medium"
         textAlign="start"
         type="text"
@@ -254,52 +240,35 @@ exports[`updates state when new note is passed in 1`] = `
         timezone="Asia/Tokyo"
         value="2017-04-28T11:00:00.000Z"
       />
-      <Select
-        allowCustom={false}
-        allowEmpty={true}
-        closeOnSelect={true}
-        constrain="window"
-        disabled={false}
-        editable={false}
-        emptyOption="---"
-        filter={[Function]}
-        formatSelectedOption={[Function]}
+      <CanvasSelect
         id="to-do-item-course-select"
-        inputRef={[Function]}
         label="Course"
-        loadingText={null}
-        multiple={false}
+        noOptionsLabel="---"
         onChange={[Function]}
-        optionsMaxWidth={null}
-        readOnly={false}
-        selectedOption={
-          Object {
-            "label": "first course",
-            "value": "1",
-          }
-        }
-        size="medium"
-        visibleOptionsCount={8}
+        value="1"
       >
-        <option
+        <CanvasSelectOption
+          id="none"
           key="none"
           value="none"
         >
           Optional: Add Course
-        </option>
-        <option
+        </CanvasSelectOption>
+        <CanvasSelectOption
+          id="1"
           key="1"
           value="1"
         >
           first course
-        </option>
-        <option
+        </CanvasSelectOption>
+        <CanvasSelectOption
+          id="2"
           key="2"
           value="2"
         >
           second course
-        </option>
-      </Select>
+        </CanvasSelectOption>
+      </CanvasSelect>
       <TextArea
         autoGrow={false}
         disabled={false}
@@ -334,28 +303,32 @@ exports[`updates state when new note is passed in 1`] = `
     >
       <Button
         as="button"
-        buttonRef={[Function]}
         cursor="pointer"
-        fluidWidth={false}
+        display="inline-block"
+        elementRef={[Function]}
         margin="0 x-small 0 0"
         onClick={[Function]}
         size="medium"
+        textAlign="center"
         type="button"
         variant="light"
+        withBackground={true}
       >
         Delete
       </Button>
       <Button
         as="button"
-        buttonRef={[Function]}
         cursor="pointer"
         disabled={false}
-        fluidWidth={false}
+        display="inline-block"
+        elementRef={[Function]}
         margin="0 0 0 x-small"
         onClick={[Function]}
         size="medium"
+        textAlign="center"
         type="button"
         variant="primary"
+        withBackground={true}
       >
         Save
       </Button>
@@ -402,13 +375,13 @@ exports[`updates state when new note is passed in 2`] = `
         display="block"
         inputContainerRef={[Function]}
         inputRef={[Function]}
-        interaction="enabled"
         isRequired={false}
         messages={Array []}
         onBlur={[Function]}
         onChange={[Function]}
         onFocus={[Function]}
         renderLabel={[Function]}
+        shouldNotWrap={false}
         size="medium"
         textAlign="start"
         type="text"
@@ -439,52 +412,35 @@ exports[`updates state when new note is passed in 2`] = `
         timezone="Asia/Tokyo"
         value="2017-04-28T11:00:00.000Z"
       />
-      <Select
-        allowCustom={false}
-        allowEmpty={true}
-        closeOnSelect={true}
-        constrain="window"
-        disabled={false}
-        editable={false}
-        emptyOption="---"
-        filter={[Function]}
-        formatSelectedOption={[Function]}
+      <CanvasSelect
         id="to-do-item-course-select"
-        inputRef={[Function]}
         label="Course"
-        loadingText={null}
-        multiple={false}
+        noOptionsLabel="---"
         onChange={[Function]}
-        optionsMaxWidth={null}
-        readOnly={false}
-        selectedOption={
-          Object {
-            "label": "second course",
-            "value": "2",
-          }
-        }
-        size="medium"
-        visibleOptionsCount={8}
+        value="2"
       >
-        <option
+        <CanvasSelectOption
+          id="none"
           key="none"
           value="none"
         >
           Optional: Add Course
-        </option>
-        <option
+        </CanvasSelectOption>
+        <CanvasSelectOption
+          id="1"
           key="1"
           value="1"
         >
           first course
-        </option>
-        <option
+        </CanvasSelectOption>
+        <CanvasSelectOption
+          id="2"
           key="2"
           value="2"
         >
           second course
-        </option>
-      </Select>
+        </CanvasSelectOption>
+      </CanvasSelect>
       <TextArea
         autoGrow={false}
         disabled={false}
@@ -519,28 +475,32 @@ exports[`updates state when new note is passed in 2`] = `
     >
       <Button
         as="button"
-        buttonRef={[Function]}
         cursor="pointer"
-        fluidWidth={false}
+        display="inline-block"
+        elementRef={[Function]}
         margin="0 x-small 0 0"
         onClick={[Function]}
         size="medium"
+        textAlign="center"
         type="button"
         variant="light"
+        withBackground={true}
       >
         Delete
       </Button>
       <Button
         as="button"
-        buttonRef={[Function]}
         cursor="pointer"
         disabled={false}
-        fluidWidth={false}
+        display="inline-block"
+        elementRef={[Function]}
         margin="0 0 0 x-small"
         onClick={[Function]}
         size="medium"
+        textAlign="center"
         type="button"
         variant="primary"
+        withBackground={true}
       >
         Save
       </Button>

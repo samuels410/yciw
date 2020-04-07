@@ -143,11 +143,17 @@
     "group_navigation_99f191a": {
         "message": "پیمایش گروه"
     },
+    "image_8ad06": {
+        "message": "تصویر"
+    },
     "images_7ce26570": {
         "message": "تصاویر"
     },
     "increase_indent_6d550a4a": {
         "message": "افزایش تورفتگی"
+    },
+    "insert_593145ef": {
+        "message": "درج"
     },
     "insert_equella_links_49a8dacd": {
         "message": "Insert Equella Links"
@@ -218,6 +224,9 @@
     "next_page_d2a39853": {
         "message": "صفحه بعد"
     },
+    "no_e16d9132": {
+        "message": "خیر"
+    },
     "no_results_940393cf": {
         "message": "No results."
     },
@@ -244,6 +253,9 @@
     },
     "points_bceb5005": {
         "message": "امتیازها"
+    },
+    "preview_53003fd2": {
+        "message": "پیش‌نمایش"
     },
     "previous_month_bb1e3c84": {
         "message": "ماه قبل"
@@ -337,6 +349,9 @@
     },
     "wiki_home_9cd54d0": {
         "message": "صفحه اصلی ویکی"
+    },
+    "yes_dde87d5": {
+        "message": "بله"
     },
     "yesterday_c6bd6abf": {
         "message": "دیروز"

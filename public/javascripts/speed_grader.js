@@ -23,6 +23,7 @@ import {Alert} from '@instructure/ui-alerts'
 import {Button} from '@instructure/ui-buttons'
 import {ScreenReaderContent} from '@instructure/ui-a11y'
 import {TextArea} from '@instructure/ui-forms'
+import iframeAllowances from 'jsx/external_apps/lib/iframeAllowances'
 import OutlierScoreHelper from 'jsx/grading/helpers/OutlierScoreHelper'
 import quizzesNextSpeedGrading from 'jsx/grading/quizzesNextSpeedGrading'
 import StatusPill from 'jsx/grading/StatusPill'
@@ -36,7 +37,7 @@ import PostPolicies from 'jsx/speed_grader/PostPolicies'
 import SpeedGraderProvisionalGradeSelector from 'jsx/speed_grader/SpeedGraderProvisionalGradeSelector'
 import SpeedGraderPostGradesMenu from 'jsx/speed_grader/SpeedGraderPostGradesMenu'
 import SpeedGraderSettingsMenu from 'jsx/speed_grader/SpeedGraderSettingsMenu'
-import {isGraded, isPostable} from 'jsx/grading/helpers/SubmissionHelper'
+import {isGraded, isPostable, similarityIcon} from 'jsx/grading/helpers/SubmissionHelper'
 import studentViewedAtTemplate from 'jst/speed_grader/student_viewed_at'
 import submissionsDropdownTemplate from 'jst/speed_grader/submissions_dropdown'
 import speechRecognitionTemplate from 'jst/speed_grader/speech_recognition'
@@ -79,6 +80,7 @@ import './jquery.instructure_forms' /* ajaxJSONFiles */
 import './jquery.doc_previews' /* loadDocPreview */
 import './jquery.instructure_date_and_time' /* datetimeString */
 import 'jqueryui/dialog'
+import 'jqueryui/menu'
 import './jquery.instructure_misc_helpers' /* replaceTags */
 import './jquery.instructure_misc_plugins' /* confirmDelete, showIf, hasScrollbar */
 import './jquery.keycodes'
@@ -183,7 +185,7 @@ let provisionalGraderDisplayNames
 let EG
 const customProvisionalGraderLabel = I18n.t('Custom')
 const anonymousAssignmentDetailedReportTooltip = I18n.t(
-  'Cannot view detailed reports for anonymous assignments until grades are unmuted.'
+  'Cannot view detailed reports for anonymous assignments until grades are posted.'
 )
 
 const HISTORY_PUSH = 'push'
@@ -313,17 +315,12 @@ function mergeStudentsAndSubmission() {
 
   // handle showing students only in a certain section.
   if (!jsonData.GROUP_GRADING_MODE) {
-    if (ENV.new_gradebook_enabled) {
-      sectionToShow = ENV.selected_section_id
-    } else {
-      sectionToShow = userSettings.contextGet('grading_show_only_section')
-    }
+    sectionToShow = ENV.selected_section_id
   }
 
-  // If we're using New Gradebook, we'll already have done the filtering by
-  // section on the server, so this is redundant (but not the worst thing in
-  // the world since we still need to send the user away if there are no
-  // students in the section). With Old Gradebook we still need to do it here.
+  // We have already have done the filtering by section on the server, so this
+  // is redundant (but not the worst thing in the world since we still need to
+  // send the user away if there are no students in the section).
   if (sectionToShow) {
     sectionToShow = sectionToShow.toString()
 
@@ -501,7 +498,6 @@ function initDropdown() {
 }
 
 function setupPostPolicies() {
-  if (!ENV.post_policies_enabled) return
   const {jsonData} = window
   const gradesPublished = !jsonData.moderated_grading || jsonData.grades_published_at != null
 
@@ -522,22 +518,10 @@ function setupPostPolicies() {
   renderPostGradesMenu()
 }
 
-function setupHeader({showMuteButton = true}) {
+function setupHeader() {
   const elements = {
     nav: $gradebook_header.find('#prev-student-button, #next-student-button'),
     settings: {form: $('#settings_form')}
-  }
-
-  if (showMuteButton) {
-    Object.assign(elements, {
-      mute: {
-        icon: $('#mute_link i'),
-        label: $('#mute_link .mute_label'),
-        link: $('#mute_link'),
-        modal: $('#mute_dialog')
-      },
-      unmute: {modal: $('#unmute_dialog')}
-    })
   }
 
   return {
@@ -545,20 +529,12 @@ function setupHeader({showMuteButton = true}) {
     courseId: utils.getParam('courses'),
     assignmentId: utils.getParam('assignment_id'),
     init() {
-      if (showMuteButton) {
-        this.muted = this.elements.mute.link.data('muted')
-      }
-
       this.addEvents()
       this.createModals()
       return this
     },
     addEvents() {
       this.elements.nav.click($.proxy(this.toAssignment, this))
-      if (showMuteButton) {
-        this.elements.mute.link.click($.proxy(this.onMuteClick, this))
-      }
-
       this.elements.settings.form.submit(this.submitSettingsForm.bind(this))
     },
     createModals() {
@@ -573,55 +549,6 @@ function setupHeader({showMuteButton = true}) {
       // FF hack - when reloading the page, firefox seems to "remember" the disabled state of this
       // button. So here we'll manually re-enable it.
       this.elements.settings.form.find('.submit_button').removeAttr('disabled')
-
-      if (showMuteButton) {
-        this.elements.mute.modal.dialog({
-          autoOpen: false,
-          buttons: [
-            {
-              text: I18n.t('cancel_button', 'Cancel'),
-              click: $.proxy(function() {
-                this.elements.mute.modal.dialog('close')
-              }, this)
-            },
-            {
-              text: I18n.t('mute_assignment', 'Mute Assignment'),
-              class: 'btn-primary btn-mute',
-              click: $.proxy(function() {
-                this.toggleMute()
-                this.elements.mute.modal.dialog('close')
-              }, this)
-            }
-          ],
-          modal: true,
-          resizable: false,
-          title: this.elements.mute.modal.data('title'),
-          width: 400
-        })
-        this.elements.unmute.modal.dialog({
-          autoOpen: false,
-          buttons: [
-            {
-              text: I18n.t('Cancel'),
-              click: $.proxy(function() {
-                this.elements.unmute.modal.dialog('close')
-              }, this)
-            },
-            {
-              text: I18n.t('Unmute Assignment'),
-              class: 'btn-primary btn-unmute',
-              click: $.proxy(function() {
-                this.toggleMute()
-                this.elements.unmute.modal.dialog('close')
-              }, this)
-            }
-          ],
-          modal: true,
-          resizable: false,
-          title: this.elements.unmute.modal.data('title'),
-          width: 400
-        })
-      }
     },
 
     toAssignment(e) {
@@ -664,56 +591,6 @@ function setupHeader({showMuteButton = true}) {
         event.preventDefault()
       }
       this.elements.settings.form.dialog('open')
-    },
-
-    onMuteClick(e) {
-      e.preventDefault()
-      if (this.muted) {
-        this.elements.unmute.modal.dialog('open')
-      } else {
-        this.elements.mute.modal.dialog('open')
-      }
-    },
-
-    muteUrl() {
-      return `/courses/${this.courseId}/assignments/${this.assignmentId}/mute`
-    },
-
-    toggleMute() {
-      this.muted = !this.muted
-      const label = this.muted
-          ? I18n.t('unmute_assignment', 'Unmute Assignment')
-          : I18n.t('mute_assignment', 'Mute Assignment'),
-        action = this.muted ? 'mute' : 'unmute',
-        actions = {
-          /* Mute action */
-          mute() {
-            this.elements.mute.icon.removeClass('icon-unmuted').addClass('icon-muted')
-            $.ajaxJSON(
-              this.muteUrl(),
-              'put',
-              {status: true},
-              $.proxy(function() {
-                this.elements.mute.label.text(label)
-              }, this)
-            )
-          },
-
-          /* Unmute action */
-          unmute() {
-            this.elements.mute.icon.removeClass('icon-muted').addClass('icon-unmuted')
-            $.ajaxJSON(
-              this.muteUrl(),
-              'put',
-              {status: false},
-              $.proxy(function() {
-                this.elements.mute.label.text(label)
-              }, this)
-            )
-          }
-        }
-
-      actions[action].apply(this)
     }
   }
 }
@@ -1779,6 +1656,25 @@ EG = {
     }
   },
 
+  plagiarismIndicator({plagiarismAsset, reportUrl = null, tooltip} = {}) {
+    const {status, similarity_score} = plagiarismAsset
+
+    const $indicator = reportUrl != null ? $('<a />').attr('href', reportUrl) : $('<span />')
+    $indicator
+      .attr('title', tooltip)
+      .addClass('similarity_score_container')
+      .append($(similarityIcon(plagiarismAsset)))
+
+    if (status === 'scored') {
+      const $similarityScore = $('<span />')
+        .addClass('turnitin_similarity_score')
+        .html(htmlEscape(`${similarity_score}%`))
+      $indicator.append($similarityScore)
+    }
+
+    return $indicator
+  },
+
   populateTurnitin(
     submission,
     assetString,
@@ -1801,20 +1697,30 @@ EG = {
         $assignment_submission_turnitin_report_url,
         $assignment_submission_originality_report_url
       )
-      const reportUrl = $.replaceTags(urlContainer.attr('href'), {
+      const tooltip = I18n.t('Similarity Score - See detailed report')
+      let reportUrl = $.replaceTags(urlContainer.attr('href'), {
         [anonymizableUserId]: submission[anonymizableUserId],
         asset_string: assetString
       })
-      const tooltip = I18n.t('Similarity Score - See detailed report')
+      reportUrl += (reportUrl.includes('?') ? '&' : '?') + 'attempt=' + submission.attempt
 
-      $turnitinScoreContainer.html(
-        turnitinScoreTemplate({
-          state: `${turnitinAsset.state || 'no'}_score`,
+      if (ENV.new_gradebook_plagiarism_icons_enabled) {
+        const $indicator = this.plagiarismIndicator({
+          plagiarismAsset: turnitinAsset,
           reportUrl,
-          tooltip,
-          score: `${turnitinAsset.similarity_score}%`
+          tooltip
         })
-      )
+        $turnitinScoreContainer.empty().append($indicator)
+      } else {
+        $turnitinScoreContainer.html(
+          turnitinScoreTemplate({
+            state: `${turnitinAsset.state || 'no'}_score`,
+            reportUrl,
+            tooltip,
+            score: `${turnitinAsset.similarity_score}%`
+          })
+        )
+      }
     } else if (turnitinAsset.status) {
       // status == 'error' or status == 'pending'
       const pendingTooltip = I18n.t(
@@ -1825,14 +1731,23 @@ EG = {
           'turnitin.tooltip.error',
           'Similarity Score - See submission error details'
         )
-      $turnitinSimilarityScore = $(
-        turnitinScoreTemplate({
-          state: `submission_${turnitinAsset.status}`,
-          reportUrl: '#',
-          tooltip: turnitinAsset.status == 'error' ? errorTooltip : pendingTooltip,
-          icon: `/images/turnitin_submission_${turnitinAsset.status}.png`
+      const tooltip = turnitinAsset.status === 'error' ? errorTooltip : pendingTooltip
+
+      if (ENV.new_gradebook_plagiarism_icons_enabled) {
+        $turnitinSimilarityScore = this.plagiarismIndicator({
+          plagiarismAsset: turnitinAsset,
+          tooltip
         })
-      )
+      } else {
+        $turnitinSimilarityScore = $(
+          turnitinScoreTemplate({
+            icon: `/images/turnitin_submission_${turnitinAsset.status}.png`,
+            reportUrl: '#',
+            state: `submission_${turnitinAsset.status}`,
+            tooltip
+          })
+        )
+      }
       $turnitinScoreContainer.append($turnitinSimilarityScore)
       $turnitinSimilarityScore.click(event => {
         event.preventDefault()
@@ -1891,14 +1806,23 @@ EG = {
         tooltip = anonymousAssignmentDetailedReportTooltip
       }
 
-      $vericiteScoreContainer.html(
-        vericiteScoreTemplate({
-          state: `${vericiteAsset.state || 'no'}_score`,
+      if (ENV.new_gradebook_plagiarism_icons_enabled) {
+        const $indicator = this.plagiarismIndicator({
+          plagiarismAsset: vericiteAsset,
           reportUrl,
-          tooltip,
-          score: `${vericiteAsset.similarity_score}%`
+          tooltip
         })
-      )
+        $vericiteScoreContainer.empty().append($indicator)
+      } else {
+        $vericiteScoreContainer.html(
+          vericiteScoreTemplate({
+            state: `${vericiteAsset.state || 'no'}_score`,
+            reportUrl,
+            tooltip,
+            score: `${vericiteAsset.similarity_score}%`
+          })
+        )
+      }
     } else if (vericiteAsset.status) {
       // status == 'error' or status == 'pending'
       const pendingTooltip = I18n.t(
@@ -1909,14 +1833,22 @@ EG = {
           'vericite.tooltip.error',
           'VeriCite Similarity Score - See submission error details'
         )
-      $vericiteSimilarityScore = $(
-        vericiteScoreTemplate({
-          state: `submission_${vericiteAsset.status}`,
-          reportUrl: '#',
-          tooltip: vericiteAsset.status == 'error' ? errorTooltip : pendingTooltip,
-          icon: `/images/turnitin_submission_${vericiteAsset.status}.png`
+      const tooltip = vericiteAsset.status === 'error' ? errorTooltip : pendingTooltip
+      if (ENV.new_gradebook_plagiarism_icons_enabled) {
+        $vericiteSimilarityScore = this.plagiarismIndicator({
+          plagiarismAsset: vericiteAsset,
+          tooltip
         })
-      )
+      } else {
+        $vericiteSimilarityScore = $(
+          vericiteScoreTemplate({
+            icon: `/images/turnitin_submission_${vericiteAsset.status}.png`,
+            reportUrl: '#',
+            state: `submission_${vericiteAsset.status}`,
+            tooltip
+          })
+        )
+      }
       $vericiteScoreContainer.append($vericiteSimilarityScore)
       $vericiteSimilarityScore.click(event => {
         event.preventDefault()
@@ -2459,6 +2391,7 @@ EG = {
     const launchUrl = `${urlBase}&url=${encodeURIComponent(externalToolUrl)}`
     const iframe = SpeedgraderHelpers.buildIframe(htmlEscape(launchUrl), {
       className: 'tool_launch',
+      allow: iframeAllowances(),
       allowfullscreen: true
     })
     $div.html($.raw(iframe)).show()
@@ -3048,9 +2981,7 @@ EG = {
       }
     }
 
-    if (ENV.post_policies_enabled) {
-      renderPostGradesMenu()
-    }
+    renderPostGradesMenu()
 
     return student
   },
@@ -3198,10 +3129,8 @@ EG = {
       $score.text('')
     }
 
-    if (ENV.post_policies_enabled) {
-      if (ENV.MANAGE_GRADES || (jsonData.context.concluded && ENV.READ_AS_ADMIN)) {
-        renderHiddenSubmissionPill(submission)
-      }
+    if (ENV.MANAGE_GRADES || (jsonData.context.concluded && ENV.READ_AS_ADMIN)) {
+      renderHiddenSubmissionPill(submission)
     }
     EG.updateStatsInHeader()
   },
@@ -3569,15 +3498,6 @@ EG = {
   },
 
   changeToSection(sectionId) {
-    // Update the selected section in old gradebook
-    if (sectionId === 'all') {
-      // We're removing all filters and resetting to default
-      userSettings.contextRemove('grading_show_only_section')
-    } else {
-      userSettings.contextSet('grading_show_only_section', sectionId)
-    }
-
-    // ...and in new gradebook
     if (ENV.settings_url) {
       $.post(ENV.settings_url, {selected_section_id: sectionId}, () => {
         SpeedgraderHelpers.reloadPage()
@@ -3617,11 +3537,19 @@ function setupSpeedGrader(gradingPeriods, speedGraderJsonResponse) {
 }
 
 function buildAlertMessage() {
-  const alertMessage = I18n.t(
-    'Something went wrong. Please try refreshing the page. If the problem persists, you can try loading a single student group in SpeedGrader by using the *Large Course setting*.',
-    {wrappers: [`<a href="/courses/${ENV.course_id}/settings#course_large_course">$1</a>`]}
-  )
-  return {__html: alertMessage.string}
+  let alertMessage
+  if (
+    ENV.filter_speed_grader_by_student_group_feature_enabled &&
+    !ENV.filter_speed_grader_by_student_group
+  ) {
+    alertMessage = I18n.t(
+      'Something went wrong. Please try refreshing the page. If the problem persists, you can try loading a single student group in SpeedGrader by using the *Large Course setting*.',
+      {wrappers: [`<a href="/courses/${ENV.course_id}/settings#course_large_course">$1</a>`]}
+    ).string
+  } else {
+    alertMessage = I18n.t('Something went wrong. Please try refreshing the page.')
+  }
+  return {__html: alertMessage}
 }
 
 function speedGraderJSONErrorFn(_data, xhr, _textStatus, _errorThrown) {
@@ -3715,7 +3643,7 @@ function setupSelectors() {
   isAdmin = _.includes(ENV.current_user_roles, 'admin')
   snapshotCache = {}
   studentLabel = I18n.t('student', 'Student')
-  header = setupHeader({showMuteButton: !ENV.post_policies_enabled})
+  header = setupHeader()
 }
 
 function renderSettingsMenu() {

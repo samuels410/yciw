@@ -82,20 +82,11 @@ describe "Api::V1::Assignment" do
     end
 
     it "includes the assignment's post policy when feature enabled" do
-      assignment.course.enable_feature!(:new_gradebook)
       PostPolicy.enable_feature!
       assignment.post_policy.update!(post_manually: true)
 
       json = api.assignment_json(assignment, user, session)
       expect(json["post_manually"]).to be true
-    end
-
-    it "does not include the assignment's post policy when feature disabled" do
-      PostPolicy.disable_feature!
-      assignment.post_policy.update!(post_manually: true)
-
-      json = api.assignment_json(assignment, user, session)
-      expect(json).not_to have_key "post_manually"
     end
 
     it "returns nil for planner override when flag is passed and there is no override" do
@@ -197,7 +188,6 @@ describe "Api::V1::Assignment" do
       expect(json).not_to have_key "needs_grading_count"
     end
 
-
     context 'rubrics' do
       before do
         rubric_model({
@@ -245,6 +235,50 @@ describe "Api::V1::Assignment" do
         ra.save!
         json = api.assignment_json(assignment, user, session)
         expect(json['rubric_settings']['hide_points']).to eq true
+      end
+    end
+
+    describe 'N.Q respondus setting' do
+      context 'when N.Q respondus setting is on' do
+        before do
+          assignment.settings = {
+            'lockdown_browser' => {
+              'require_lockdown_browser' => true
+            }
+          }
+          assignment.save!
+        end
+
+        it 'serializes require_lockdown_browser to be true' do
+          json = api.assignment_json(assignment, user, session, {})
+          expect(json.key?('require_lockdown_browser')).to be_present
+          expect(json['require_lockdown_browser']).to be_truthy
+        end
+      end
+
+      context 'when N.Q respondus setting is off' do
+        before do
+          assignment.settings = {
+            'lockdown_browser' => {
+              'require_lockdown_browser' => false
+            }
+          }
+          assignment.save!
+        end
+
+        it 'serializes require_lockdown_browser to be false' do
+          json = api.assignment_json(assignment, user, session, {})
+          expect(json.key?('require_lockdown_browser')).to be_present
+          expect(json['require_lockdown_browser']).to be_falsy
+        end
+      end
+
+      context 'when N.Q respondus setting is off (default)' do
+        it 'serializes require_lockdown_browser to be false' do
+          json = api.assignment_json(assignment, user, session, {})
+          expect(json.key?('require_lockdown_browser')).to be_present
+          expect(json['require_lockdown_browser']).to be_falsy
+        end
       end
     end
   end
@@ -389,56 +423,6 @@ describe "Api::V1::Assignment" do
           assignment.allowed_extensions = ["docx"]
           expect(api).to be_assignment_editable_fields_valid(assignment, user)
         end
-      end
-    end
-  end
-
-  describe "muting and unmuting assignments" do
-    let(:course) { Course.create! }
-    let(:teacher) { course.enroll_teacher(User.create!, enrollment_state: 'active').user }
-
-    let(:mute_params) { ActionController::Parameters.new({"muted" => "true"}) }
-    let(:unmute_params) { ActionController::Parameters.new({"muted" => "false"}) }
-
-    before(:each) do
-      allow(course).to receive(:account_membership_allows).and_return(false)
-    end
-
-    context "with a moderated assignment" do
-      let(:assignment) do
-        course.assignments.create!(
-          title: 'hi',
-          moderated_grading: true,
-          grader_count: 1,
-          final_grader: teacher
-        )
-      end
-
-      it "allows the assignment to be unmuted when grades are published" do
-        assignment.update!(grades_published_at: Time.zone.now)
-        expect(api.update_api_assignment(assignment, unmute_params, teacher)).to be :ok
-      end
-
-      it "does not allow the assignment to be unmuted when grades are not published" do
-        expect(api.update_api_assignment(assignment, unmute_params, teacher)).to be false
-      end
-
-      it "allows the assignment to be muted when grades are not published" do
-        assignment.unmute!
-        expect(api.update_api_assignment(assignment, mute_params, teacher)).to be :ok
-      end
-    end
-
-    context "with a non-moderated assignment" do
-      let(:assignment) { course.assignments.create!(title: 'hi2') }
-
-      it "always allows a non-moderated assignment to be unmuted" do
-        assignment.mute!
-        expect(api.update_api_assignment(assignment, unmute_params, teacher)).to be :ok
-      end
-
-      it "always allows a non-moderated assignment to be muted" do
-        expect(api.update_api_assignment(assignment, mute_params, teacher)).to be :ok
       end
     end
   end

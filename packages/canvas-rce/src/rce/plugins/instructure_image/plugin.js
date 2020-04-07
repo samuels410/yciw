@@ -33,6 +33,40 @@ tinymce.create('tinymce.plugins.InstructureImagePlugin', {
 
     // Register commands
     editor.addCommand('mceInstructureImage', clickCallback.bind(this, editor, document))
+    editor.addCommand('instructureTrayForImages', (ui, plugin_key) => {
+      bridge.showTrayForPlugin(plugin_key)
+    })
+
+    // Register menu items
+    editor.ui.registry.addNestedMenuItem('instructure_image', {
+      text: formatMessage('Image'),
+      icon: 'image',
+      getSubmenuItems: () => [
+        'instructure_upload_image',
+        'instructure_course_image',
+        'instructure_user_image'
+      ]
+    })
+    editor.ui.registry.addMenuItem('instructure_upload_image', {
+      text: formatMessage('Upload Image'),
+      onAction: () => editor.execCommand('mceInstructureImage')
+    })
+    if (contextType === 'course') {
+      editor.ui.registry.addMenuItem('instructure_course_image', {
+        text: formatMessage('Course Images'),
+        onAction: () => {
+          editor.focus(true)
+          editor.execCommand('instructureTrayForImages', false, COURSE_PLUGIN_KEY)
+        }
+      })
+    }
+    editor.ui.registry.addMenuItem('instructure_user_image', {
+      text: formatMessage('User Images'),
+      onAction: () => {
+        editor.focus(true)
+        editor.execCommand('instructureTrayForImages', false, USER_PLUGIN_KEY)
+      }
+    })
 
     // Register buttons
     editor.ui.registry.addMenuButton('instructure_image', {
@@ -51,7 +85,7 @@ tinymce.create('tinymce.plugins.InstructureImagePlugin', {
             text: formatMessage('User Images'),
             onAction() {
               editor.focus(true)
-              bridge.showTrayForPlugin(USER_PLUGIN_KEY)
+              editor.execCommand('instructureTrayForImages', false, USER_PLUGIN_KEY)
             }
           }
         ]
@@ -62,7 +96,7 @@ tinymce.create('tinymce.plugins.InstructureImagePlugin', {
             text: formatMessage('Course Images'),
             onAction() {
               editor.focus(true) // activate the editor without changing focus
-              bridge.showTrayForPlugin(COURSE_PLUGIN_KEY)
+              editor.execCommand('instructureTrayForImages', false, COURSE_PLUGIN_KEY)
             }
           })
         }

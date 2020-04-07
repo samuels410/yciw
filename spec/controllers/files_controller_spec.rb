@@ -524,6 +524,13 @@ describe FilesController do
         get 'show', params: {:user_id => @student.id, :id => @attachment.id, :inline => 1}
         expect(response).to be_successful
       end
+
+      it "is successful when viewing as an admin even if locked" do
+        @file.locked = true
+        @file.save!
+        get 'show', params: {:course_id => @course.id, :id => @file.id}
+        expect(response).to be_successful
+      end
     end
 
     describe "canvadoc_session_url" do
@@ -1240,6 +1247,12 @@ describe FilesController do
         expect(folder.attachments.first).not_to be_nil
       end
 
+      it "should populate the md5 column with the instfs sha512" do
+        post "api_capture", params: params.merge(sha512: 'deadbeef')
+        assert_status(201)
+        expect(folder.attachments.first.md5).to eq 'deadbeef'
+      end
+
       it "should include the attachment json in the response" do
         post "api_capture", params: params
         assert_status(201)
@@ -1352,10 +1365,12 @@ describe FilesController do
           let(:progress_params) do
             assignment_params.merge(
               progress_id: progress.id,
+              comment: comment,
               eula_agreement_timestamp: eula_agreement_timestamp
             )
           end
           let(:eula_agreement_timestamp) { '1522419910' }
+          let(:comment) { 'my assignment comment' }
           let(:request) { post "api_capture", params: progress_params }
 
           before do
@@ -1363,12 +1378,12 @@ describe FilesController do
           end
 
           it 'should submit the attachment if the submit_assignment flag is not provided' do
-            expect(homework_service).to receive(:submit).with(eula_agreement_timestamp)
+            expect(homework_service).to receive(:submit).with(eula_agreement_timestamp, comment)
             request
           end
 
           it 'should submit the attachment if the submit_assignment param is set to true' do
-            expect(homework_service).to receive(:submit).with(eula_agreement_timestamp)
+            expect(homework_service).to receive(:submit).with(eula_agreement_timestamp, comment)
             post "api_capture", params: progress_params.merge(submit_assignment: true)
           end
 
@@ -1381,6 +1396,12 @@ describe FilesController do
             request
             submission = Submission.where(assignment_id: assignment.id)
             expect(submission.first.turnitin_data[:eula_agreement_timestamp]).to eq(eula_agreement_timestamp)
+          end
+
+          it 'should save the comment' do
+            request
+            submission = Submission.where(assignment_id: assignment.id)
+            expect(submission.first.submission_comments.first.comment).to eq(comment)
           end
 
           it "returns a 201 http status" do

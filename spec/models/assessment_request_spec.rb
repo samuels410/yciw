@@ -40,6 +40,40 @@ describe AssessmentRequest do
     end
   end
 
+  describe 'peer review invitations' do
+    before :once do
+      @student.communication_channels.create!(:path => 'test@example.com').confirm!
+      @notification_name = "Peer Review Invitation"
+      notification = Notification.create!(:name => @notification_name, :category => 'Invitation')
+      NotificationPolicy.create!(:notification => notification, :communication_channel => @student.communication_channel, :frequency => 'immediately')
+    end
+
+    it 'should send a notification if the course and assignment are published' do
+      @request.send_reminder!
+      expect(@request.messages_sent.keys).to include(@notification_name)
+    end
+
+    it 'should not send a notification if the course is unpublished' do
+      submission = @assignment.find_or_create_submission(@user)
+      assessor_submission = @assignment.find_or_create_submission(@review_student)
+      @course.update!(workflow_state: 'created')
+      peer_review_request = AssessmentRequest.create!(user: @submission_student, asset: submission, assessor_asset: assessor_submission, assessor: @review_student)
+      peer_review_request.send_reminder!
+
+      expect(peer_review_request.messages_sent.keys).to be_empty
+    end
+
+    it 'should not send a notification if the assignment is unpublished' do
+      @assignment.update!(workflow_state: 'unpublished')
+      submission = @assignment.find_or_create_submission(@user)
+      assessor_submission = @assignment.find_or_create_submission(@review_student)
+      peer_review_request = AssessmentRequest.create!(user: @submission_student, asset: submission, assessor_asset: assessor_submission, assessor: @review_student)
+      peer_review_request.send_reminder!
+
+      expect(peer_review_request.messages_sent.keys).to be_empty
+    end
+  end
+
   describe "notifications" do
 
     let(:notification_name) { 'Rubric Assessment Submission Reminder' }
@@ -61,6 +95,24 @@ describe AssessmentRequest do
       expect(@request.messages_sent.keys).to include(notification_name)
       message = @request.messages_sent[notification_name].first
       expect(message.body).to include(@assignment.title)
+    end
+
+    it "should send to the correct url if anonymous" do
+      @student.communication_channels.create!(:path => 'test@example.com').confirm!
+      NotificationPolicy.create!(:notification => notification,
+        :communication_channel => @student.communication_channel, :frequency => 'immediately')
+
+      rubric_model
+      @association = @rubric.associate_with(@assignment, @course, :purpose => 'grading', :use_for_grading => true)
+      @assignment.update_attributes(:anonymous_peer_reviews => true)
+
+      @request.rubric_association = @association
+      @request.save!
+      @request.send_reminder!
+
+      expect(@request.messages_sent.keys).to include(notification_name)
+      message = @request.messages_sent[notification_name].first
+      expect(message.body).to include("/courses/#{@course.id}/assignments/#{@assignment.id}/anonymous_submissions/#{@request.asset.anonymous_id}")
     end
   end
 

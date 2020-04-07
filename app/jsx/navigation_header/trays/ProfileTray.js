@@ -20,10 +20,11 @@ import I18n from 'i18n!ProfileTray'
 import React from 'react'
 import {arrayOf, bool, object, shape, string} from 'prop-types'
 import {Avatar, Badge, Heading, List, Text, Spinner} from '@instructure/ui-elements'
-import {Button} from '@instructure/ui-buttons'
+import {Link} from '@instructure/ui-link'
 import {View} from '@instructure/ui-layout'
 import LogoutButton from '../LogoutButton'
 import {AccessibleContent} from '@instructure/ui-a11y'
+import {showQRLoginModal} from './QRLoginModal'
 
 // Trying to keep this as generalized as possible, but it's still a bit
 // gross matching on the id of the tray tabs given to us by Rails
@@ -44,10 +45,12 @@ function ProfileTab({id, html_url, label, counts}) {
 
   return (
     <List.Item key={id}>
-      <Button variant="link" margin="none" href={html_url}>
-        {label}
-        {renderCountBadge()}
-      </Button>
+      <View className={`profile-tab-${id}`} as="div" margin="small 0">
+        <Link isWithinText={false} href={html_url}>
+          {label}
+          {renderCountBadge()}
+        </Link>
+      </View>
     </List.Item>
   )
 }
@@ -60,7 +63,20 @@ ProfileTab.propTypes = {
 }
 
 export default function ProfileTray(props) {
-  const {userDisplayName, userAvatarURL, loaded, userPronouns, tabs, counts} = props
+  const {
+    userDisplayName,
+    userAvatarURL,
+    loaded,
+    userPronouns,
+    tabs,
+    counts,
+    showQRLoginLink
+  } = props
+
+  function onOpenQRLoginModal() {
+    showQRLoginModal()
+  }
+
   return (
     <View as="div" padding="medium">
       <View textAlign="center">
@@ -71,6 +87,7 @@ export default function ProfileTray(props) {
           size="x-large"
           inline={false}
           margin="auto"
+          data-fs-exclude
         />
         <div style={{wordBreak: 'break-word'}}>
           <Heading level="h3" as="h2">
@@ -85,14 +102,24 @@ export default function ProfileTray(props) {
         <LogoutButton size="small" margin="medium 0 x-small 0" />
       </View>
       <hr role="presentation" />
-      <List variant="unstyled" margin="0" itemSpacing="small">
+      <List variant="unstyled" margin="none" itemSpacing="small">
         {loaded ? (
           tabs.map(tab => <ProfileTab key={tab.id} {...tab} counts={counts} />)
         ) : (
-          <List.Item key="loading">
+          <List.Item>
             <div style={{textAlign: 'center'}}>
               <Spinner margin="medium" renderTitle="Loading" />
             </div>
+          </List.Item>
+        )}
+
+        {showQRLoginLink && loaded && (
+          <List.Item>
+            <View as="div" margin="small 0">
+              <Link isWithinText={false} onClick={onOpenQRLoginModal}>
+                {I18n.t('QR for Mobile Login')}
+              </Link>
+            </View>
           </List.Item>
         )}
       </List>
@@ -106,5 +133,6 @@ ProfileTray.propTypes = {
   loaded: bool.isRequired,
   userPronouns: string,
   tabs: arrayOf(shape(ProfileTab.propTypes)).isRequired,
-  counts: object.isRequired
+  counts: object.isRequired,
+  showQRLoginLink: bool.isRequired
 }

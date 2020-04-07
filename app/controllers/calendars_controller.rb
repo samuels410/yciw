@@ -28,8 +28,8 @@ class CalendarsController < ApplicationController
     @feed_url = feeds_calendar_url((@context_enrollment || @context).feed_code)
     if params[:include_contexts]
       @selected_contexts = params[:include_contexts].split(",")
-    elsif @current_user.preferences[:selected_calendar_contexts]
-      @selected_contexts = @current_user.preferences[:selected_calendar_contexts]
+    else
+      @selected_contexts = @current_user.get_preference(:selected_calendar_contexts)
     end
     @wrap_titles = @domain_root_account && @domain_root_account.feature_enabled?(:wrap_calendar_event_titles)
     # somewhere there's a bad link that doesn't separate parameters properly.
@@ -71,7 +71,7 @@ class CalendarsController < ApplicationController
         :can_make_reservation => context.grants_right?(@current_user, :participate_as_student),
         :can_update_todo_date => context.grants_right?(@current_user, session, :manage_content),
         :can_update_discussion_topic => context.grants_right?(@current_user, session, :moderate_forum),
-        :can_update_wiki_page => context.grants_right?(@current_user, session, :manage_wiki),
+        :can_update_wiki_page => context.grants_right?(@current_user, session, :update),
         :concluded => (context.is_a? Course) ? context.concluded? : false
       }
       if context.respond_to?("course_sections")

@@ -20,6 +20,10 @@ require_relative 'helpers/wiki_and_tiny_common'
 require_relative 'helpers/public_courses_context'
 require_relative 'helpers/files_common'
 
+# We have the funky indenting here because we will remove this once the granular
+# permission stuff is released, and I don't want to complicate the git history
+# for this file
+RSpec.shared_examples "wiki_pages" do
 describe "Wiki Pages" do
   include_context "in-process server selenium tests"
   include FilesCommon
@@ -35,6 +39,7 @@ describe "Wiki Pages" do
     before do
       account_model
       course_with_teacher_logged_in :account => @account
+      set_granular_permission
     end
 
     it "should navigate to pages tab with no front page set", priority: "1", test_id: 126843 do
@@ -81,9 +86,9 @@ describe "Wiki Pages" do
     end
 
     it "navigates to the wiki pages edit page from the show page" do
-      wikiPage = @course.wiki_pages.create!(:title => "Foo")
-      edit_url = edit_course_wiki_page_url(@course, wikiPage)
-      get course_wiki_page_path(@course, wikiPage)
+      wiki_page = @course.wiki_pages.create!(:title => "Foo")
+      edit_url = edit_course_wiki_page_url(@course, wiki_page)
+      get course_wiki_page_path(@course, wiki_page)
 
       f(".edit-wiki").click
 
@@ -128,6 +133,7 @@ describe "Wiki Pages" do
     before do
       account_model
       course_with_teacher_logged_in
+      set_granular_permission
     end
 
     it "should edit page title from pages index", priority: "1", test_id: 126849 do
@@ -157,6 +163,7 @@ describe "Wiki Pages" do
   context "Index Page as a student" do
     before do
       course_with_student_logged_in
+      set_granular_permission
     end
 
     it "should display a warning alert to a student when accessing a deleted page", priority: "1", test_id: 126839 do
@@ -169,304 +176,19 @@ describe "Wiki Pages" do
     end
 
     it "should display a warning alert when accessing a non-existant page", priority: "1", test_id: 126841 do
-      skip('LA-373')
       get "/courses/#{@course.id}/pages/non-existant"
       expect_flash_message :warning
     end
   end
 
-  context "Accessibility" do
-
-    def check_header_focus(attribute)
-      f("[data-sort-field='#{attribute}']").click
-      wait_for_ajaximations
-      check_element_has_focus(f("[data-sort-field='#{attribute}']"))
-    end
-
-    before :once do
-      account_model
-      course_with_teacher :account => @account
-      @course.wiki_pages.create!(:title => "Foo")
-      @course.wiki_pages.create!(:title => "Bar")
-      @course.wiki_pages.create!(:title => "Baz")
-    end
-
-    before :each do
-      user_session(@user)
-    end
-
-    it "returns focus to the header item clicked while sorting" do
-      get "/courses/#{@course.id}/pages"
-
-      check_header_focus('title')
-      check_header_focus('created_at')
-      check_header_focus('updated_at')
-    end
-
-    describe "Add Page Button" do
-      before :each do
-        get "/courses/#{@course.id}/pages"
-
-        driver.execute_script("$('.new_page').focus()")
-        @active_element = driver.execute_script('return document.activeElement')
-      end
-
-      it "navigates to the add page view when enter is pressed" do
-        skip('see CNVS-39931')
-        @active_element.send_keys(:enter)
-        wait_for_ajaximations
-        check_element_has_focus(f('.edit-header #title'))
-      end
-
-      it "navigates to the add page view when spacebar is pressed" do
-        skip('see CNVS-39931')
-        @active_element.send_keys(:space)
-        wait_for_ajaximations
-        check_element_has_focus(f('.edit-header #title'))
-      end
-    end
-
-    context "Publish Cloud" do
-
-      it "should set focus back to the publish cloud after unpublish" do
-        get "/courses/#{@course.id}/pages"
-        f('.publish-icon').click
-        wait_for_ajaximations
-        check_element_has_focus(f('.publish-icon'))
-      end
-
-      it "should set focus back to the publish cloud after publish" do
-        get "/courses/#{@course.id}/pages"
-        f('.publish-icon').click # unpublish it.
-        wait_for_ajaximations
-        f('.publish-icon').click # publish it.
-        check_element_has_focus(f('.publish-icon'))
-      end
-    end
-
-    context "Delete Page" do
-
-      before do
-        get "/courses/#{@course.id}/pages"
-      end
-
-      it "returns focus back to the item cog if the item was not deleted" do
-        f('.al-trigger').click
-        f('.delete-menu-item').click
-        f('.ui-dialog-buttonset .btn').click
-        wait_for_ajaximations
-        check_element_has_focus(f('.al-trigger'))
-      end
-
-      it "returns focus back to the item cog if escape was pressed" do
-        f('.al-trigger').click
-        f('.delete-menu-item').click
-        f('.ui-dialog-buttonset .btn').send_keys(:escape)
-        wait_for_ajaximations
-        check_element_has_focus(f('.al-trigger'))
-      end
-
-      it "returns focus back to the item cog if the dialog close was pressed" do
-        f('.al-trigger').click
-        f('.delete-menu-item').click
-        f('.ui-dialog-titlebar-close').click
-        wait_for_ajaximations
-        check_element_has_focus(f('.al-trigger'))
-      end
-
-      it "returns focus to the previous item title if it was deleted" do
-        triggers = ff('.al-trigger')
-        titles = ff('.wiki-page-link')
-        triggers.last.click
-        ff('.delete-menu-item').last.click
-        f('.ui-dialog-buttonset .btn-danger').click
-        wait_for_ajaximations
-        check_element_has_focus(titles[-2])
-      end
-
-      it "returns focus to the + Page button if there are no previous item cogs" do
-        f('.al-trigger').click
-        f('.delete-menu-item').click
-        f('.ui-dialog-buttonset .btn-danger').click
-        wait_for_ajaximations
-        check_element_has_focus(f('.new_page'))
-      end
-    end
-
-    context "Use as Front Page Link" do
-      before :each do
-        get "/courses/#{@course.id}/pages"
-        f('.al-trigger').click
-      end
-
-      it "should set focus back to the cog after setting" do
-        f('.use-as-front-page-menu-item').click
-        wait_for_ajaximations
-        check_element_has_focus(f('.al-trigger'))
-      end
-
-      it "should set focus to the next focusable item if you press Tab" do
-        f('.use-as-front-page-menu-item').send_keys(:tab)
-        check_element_has_focus(ff('.wiki-page-link')[1])
-      end
-    end
-
-    context "Cog menu" do
-      before :each do
-        get "/courses/#{@course.id}/pages"
-        f('.al-trigger').click
-        f('.edit-menu-item').click
-      end
-
-      it "should set focus back to the cog menu if you cancel the dialog" do
-        f('.ui-dialog-buttonset .btn').click
-        check_element_has_focus(f('.al-trigger'))
-      end
-
-      it "sets focus back to the cog if you press escape" do
-        f('.ui-dialog-buttonset .btn').send_keys(:escape)
-        check_element_has_focus(f('.al-trigger'))
-      end
-
-      it "sets focus back to the cog if you click the dialog close button" do
-        f('.ui-dialog-titlebar-close').click
-        check_element_has_focus(f('.al-trigger'))
-      end
-
-      it "should return focus to the dialog if you cancel, then reopen the dialog" do
-        f('.ui-dialog-titlebar-close').click
-        check_element_has_focus(f('.al-trigger'))
-        f('.al-trigger').click
-        f('.edit-menu-item').click
-        wait_for_ajaximations
-        check_element_has_focus(ff('.page-edit-dialog .edit-control-text').last)
-      end
-
-      it "should set focus back to the cog menu if you edit the title and save" do
-        f('.ui-dialog-buttonset .btn-primary').click
-        wait_for_ajaximations
-        check_element_has_focus(f('.al-trigger'))
-      end
-    end
-
-    context "Revisions Page" do
-      before :once do
-        account_model
-        course_with_teacher :account => @account, :active_all => true
-        @timestamps = %w(2015-01-01 2015-01-02 2015-01-03).map { |d| Time.zone.parse(d) }
-
-        Timecop.freeze(@timestamps[0]) do      # rev 1
-          @vpage = @course.wiki_pages.build :title => 'bar'
-          @vpage.workflow_state = 'unpublished'
-          @vpage.body = 'draft'
-          @vpage.save!
-        end
-
-        Timecop.freeze(@timestamps[1]) do      # rev 2
-          @vpage.workflow_state = 'active'
-          @vpage.body = 'published by teacher'
-          @vpage.user = @teacher
-          @vpage.save!
-        end
-
-        Timecop.freeze(@timestamps[2]) do      # rev 3
-          @vpage.body = 'revised by teacher'
-          @vpage.user = @teacher
-          @vpage.save!
-        end
-        @user = @teacher
-      end
-
-      before :each do
-        user_session(@user)
-        get "/courses/#{@course.id}/pages/#{@vpage.url}/revisions"
-      end
-
-      it "should focus the revision buttons" do
-        driver.execute_script("$('.close-button').focus();")
-        f('.close-button').send_keys(:tab)
-        all_revisions = ff('.revision-details')
-        all_revisions.each do |revision|
-          check_element_has_focus(revision)
-          revision.send_keys(:tab)
-        end
-      end
-
-      it "should validate that revision restored is displayed", priority: "1", test_id: 126832 do
-        get "/courses/#{@course.id}/pages/#{@vpage.url}"
-        f('.al-trigger').click
-        expect(f('.icon-clock')).to be_present
-        f('.view_page_history').click
-        wait_for_ajaximations
-        ff(".revision-details")[1].click
-        expect(f('.restore-link')).to be_present
-        expect_new_page_load do
-          f('.restore-link').click
-        end
-        f('.close-button').click
-        wait_for_ajaximations
-        f('.icon-edit').click
-        expect_new_page_load { f('.btn-primary').click }
-        expect(f('.show-content.user_content.clearfix.enhanced')).to include_text 'published by teacher'
-      end
-
-      it "keeps focus on clicked revision button" do
-        driver.execute_script("$('button.revision-details')[1].focus();")
-        ff('button.revision-details')[1].click
-        wait_for_ajaximations
-        check_element_has_focus(ff('button.revision-details')[1])
-      end
-    end
-
-    context "Edit Page", ignore_js_errors: true do
-      before :each do
-        get "/courses/#{@course.id}/pages/bar/edit"
-        wait_for_ajaximations
-      end
-
-      it "should alert user if navigating away from page with unsaved RCE changes", priority: "1", test_id: 267612 do
-        add_text_to_tiny("derp")
-        fln('Home').click
-        expect(driver.switch_to.alert).to be_present
-        driver.switch_to.alert.accept
-      end
-
-      it "should alert user if navigating away from page with unsaved html changes", priority: "1", test_id: 126838 do
-        skip_if_safari(:alert)
-        switch_editor_views(wiki_page_body)
-        wiki_page_body.send_keys("derp")
-        fln('Home').click
-        expect(driver.switch_to.alert).to be_present
-        driver.switch_to.alert.accept
-      end
-
-      it "should not save changes when navigating away and not saving", priority: "1", test_id: 267613 do
-        skip_if_safari(:alert)
-        switch_editor_views(wiki_page_body)
-        wiki_page_body.send_keys('derp')
-        fln('Home').click
-        expect(driver.switch_to.alert).to be_present
-        driver.switch_to.alert.accept
-        get "/courses/#{@course.id}/pages/bar/edit"
-        expect(f('textarea')).not_to include_text('derp')
-      end
-
-      it "should alert user if navigating away from page after title change", priority: "1", test_id: 267832 do
-        skip_if_safari(:alert)
-        switch_editor_views(wiki_page_body)
-        f('.title').clear()
-        f('.title').send_keys("derpy-title")
-        fln('Home').click
-        expect(driver.switch_to.alert).to be_present
-        driver.switch_to.alert.accept
-      end
-    end
-  end
-
   context "Insert RCE File" do
+    before do
+      course_with_teacher(user: @teacher, active_course: true, active_enrollment: true)
+      set_granular_permission
+    end
+
     it "should insert a file using RCE in the wiki page", priority: "1", test_id: 126673 do
       stub_rcs_config
-      course_with_teacher(user: @teacher, active_course: true, active_enrollment: true)
       @course.wiki_pages.create!(:title => "Bar")
       user_session(@user)
       file = @course.attachments.create!(display_name: 'some test file', uploaded_data: default_uploaded_data)
@@ -481,6 +203,7 @@ describe "Wiki Pages" do
     before do
       account_model
       course_with_student_logged_in account: @account
+      set_granular_permission
     end
 
     it "should lock page based on module date", priority: "1", test_id: 126845 do
@@ -529,6 +252,7 @@ describe "Wiki Pages" do
   context "Permissions" do
     before do
       course_with_teacher
+      set_granular_permission
     end
 
     it "displays public content to unregistered users", priority: "1", test_id: 270035 do
@@ -539,7 +263,7 @@ describe "Wiki Pages" do
       @course.save!
 
       title = "foo"
-      wikiPage = @course.wiki_pages.create!(:title => title, :body => "bar")
+      wiki_page = @course.wiki_pages.create!(:title => title, :body => "bar")
 
       get "/courses/#{@course.id}/pages/#{title}"
       expect(f('#wiki_page_show')).not_to be_nil
@@ -549,13 +273,15 @@ describe "Wiki Pages" do
   context "menu tools" do
     before do
       course_with_teacher_logged_in
+      set_granular_permission
       @tool = Account.default.context_external_tools.new(:name => "a", :domain => "google.com", :consumer_key => '12345', :shared_secret => 'secret')
       @tool.wiki_page_menu = {:url => "http://www.example.com", :text => "Export Wiki Page"}
       @tool.save!
 
       @course.wiki.set_front_page_url!('front-page')
       @wiki_page = @course.wiki.front_page
-      @wiki_page.workflow_state = 'active'; @wiki_page.save!
+      @wiki_page.workflow_state = 'active'
+      @wiki_page.save!
     end
 
     it "should show tool launch links in the gear for items on the index" do
@@ -587,6 +313,8 @@ describe "Wiki Pages" do
     include_context "public course as a logged out user"
 
     it "should display wiki content", priority: "1", test_id: 270035 do
+      @coures = public_course
+      set_granular_permission
       title = "foo"
       public_course.wiki_pages.create!(:title => title, :body => "bar")
 
@@ -598,6 +326,7 @@ describe "Wiki Pages" do
   context "embed video in a Page" do
     before :each do
       course_with_teacher_logged_in :account => @account, :active_all => true
+      set_granular_permission
       @course.wiki_pages.create!(title: 'Page1')
     end
 
@@ -619,8 +348,7 @@ describe "Wiki Pages" do
         </p>
       )
       element.send_keys(html_contents)
-      f(".btn-primary").click
-      wait_for_ajaximations
+      wait_for_new_page_load { f(".btn-primary").click }
       expect(f("iframe")).to be_present
     end
   end
@@ -631,6 +359,8 @@ describe "Wiki Pages" do
     it "should load mathjax in a page with <math>" do
       skip('Unskip in ADMIN-2684')
       title = "mathML"
+      @course = public_course
+      set_granular_permission
       public_course.wiki_pages.create!(
         :title => title,
         :body => "<math><mi>&#x3C0;</mi> <msup> <mi>r</mi> <mn>2</mn> </msup></math>"
@@ -642,11 +372,27 @@ describe "Wiki Pages" do
 
     it "should not load mathjax without <math>" do
       title = "not_mathML"
+      @course = public_course
+      set_granular_permission
       public_course.wiki_pages.create!(:title => title, :body => "not mathML")
       get "/courses/#{public_course.id}/wiki/#{title}"
       is_mathjax_loaded = driver.execute_script("return (typeof MathJax == 'object')")
       expect(is_mathjax_loaded).not_to match(true)
 
     end
+  end
+end
+end
+# End shared_example block
+
+RSpec.describe 'With granular permission on' do
+  it_behaves_like "wiki_pages" do
+    let(:set_granular_permission) { @course.root_account.enable_feature!(:granular_permissions_wiki_pages) }
+  end
+end
+
+RSpec.describe 'With granular permission off' do
+  it_behaves_like "wiki_pages" do
+    let(:set_granular_permission) { @course.root_account.disable_feature!(:granular_permissions_wiki_pages) }
   end
 end

@@ -16,6 +16,8 @@
 # with this program. If not, see <http://www.gnu.org/licenses/>.
 
 module Login::Shared
+  include FullStoryHelper
+
   def reset_session_for_login
     reset_session_saving_keys(:return_to,
                               :oauth,
@@ -28,7 +30,7 @@ module Login::Shared
   end
 
   def successful_login(user, pseudonym, otp_passed = false)
-    CanvasBreachMitigation::MaskingSecrets.reset_authenticity_token!(cookies)
+    reset_authenticity_token!
     Auditors::Authentication.record(pseudonym, 'login')
 
     # Since the user just logged in, we'll reset the context to include their info.
@@ -68,6 +70,8 @@ module Login::Shared
     session[:require_terms] = true if @domain_root_account.require_acceptance_of_terms?(user)
     @current_user = user
 
+    fullstory_init(Account.site_admin, session)
+
     respond_to do |format|
       if (oauth = session[:oauth2])
         provider = Canvas::Oauth::Provider.new(oauth[:client_id], oauth[:redirect_uri], oauth[:scopes], oauth[:purpose])
@@ -95,7 +99,7 @@ module Login::Shared
   end
 
   def logout_current_user
-    CanvasBreachMitigation::MaskingSecrets.reset_authenticity_token!(cookies)
+    reset_authenticity_token!
     Auditors::Authentication.record(@current_pseudonym, 'logout')
     Canvas::LiveEvents.logged_out
     Lti::LogoutService.queue_callbacks(@current_pseudonym)

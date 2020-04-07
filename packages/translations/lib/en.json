@@ -5,6 +5,9 @@
   "add_8523c19b": {
     "message": "Add"
   },
+  "add_another_f4e50d57": {
+    "message": "Add another"
+  },
   "add_cc_subtitles_55f0394e": {
     "message": "Add CC/Subtitles"
   },
@@ -115,6 +118,9 @@
   "audio_player_for_title_20cc70d": {
     "message": "Audio player for { title }"
   },
+  "auto_saved_content_exists_would_you_like_to_load_t_fee528f2": {
+    "message": "Auto-saved content exists. Would you like to load the auto-saved content instead?"
+  },
   "automatically_open_an_in_line_preview_preview_disp_ed784ffe": {
     "message": "Automatically open an in-line preview. (Preview displays only after saving)"
   },
@@ -145,14 +151,23 @@
   "clear_selected_file_82388e50": {
     "message": "Clear selected file"
   },
+  "clear_selected_file_filename_2fe8a58e": {
+    "message": "Clear selected file: { filename }"
+  },
   "click_any_page_to_insert_a_link_to_that_page_ac920c02": {
     "message": "Click any page to insert a link to that page."
   },
   "click_to_embed_imagename_c41ea8df": {
     "message": "Click to embed { imageName }"
   },
+  "click_to_hide_preview_3c707763": {
+    "message": "Click to hide preview"
+  },
   "click_to_insert_a_link_into_the_editor_c19613aa": {
     "message": "Click to insert a link into the editor."
+  },
+  "click_to_show_preview_faa27051": {
+    "message": "Click to show preview"
   },
   "close_a_menu_or_dialog_also_returns_you_to_the_edi_739079e6": {
     "message": "Close a menu or dialog. Also returns you to the editor area"
@@ -239,9 +254,6 @@
   "date_is_required_8660ec22": {
     "message": "Date is required"
   },
-  "date_published_371c4ad0": {
-    "message": "Date Published"
-  },
   "date_time_d9fbf2d7": {
     "message": "Date & Time:"
   },
@@ -305,6 +317,9 @@
   },
   "display_text_link_opens_in_a_new_tab_75e9afc9": {
     "message": "Display Text Link (Opens in a new tab)"
+  },
+  "document_678cd7bf": {
+    "message": "Document"
   },
   "documents_81393201": {
     "message": "Documents"
@@ -371,6 +386,12 @@
   },
   "embed_video_code_703e10f2": {
     "message": "Embed Video Code"
+  },
+  "embedded_content_aaeb4d3d": {
+    "message": "embedded content"
+  },
+  "equation_1c5ac93c": {
+    "message": "Equation"
   },
   "error_loading_grades_e0b38f4d": {
     "message": "Error loading grades"
@@ -441,6 +462,9 @@
   "formatting_5b143aa8": {
     "message": "Formatting"
   },
+  "found_auto_saved_content_3f6e4ca5": {
+    "message": "Found auto-saved content"
+  },
   "found_count_plural_0_results_one_result_other_resu_46aeaa01": {
     "message": "Found { count, plural,\n     =0 {# results}\n    one {# result}\n  other {# results}\n}"
   },
@@ -487,6 +511,9 @@
   "height_69b03e15": {
     "message": "Height"
   },
+  "image_8ad06": {
+    "message": "Image"
+  },
   "image_options_5412d02c": {
     "message": "Image Options"
   },
@@ -498,6 +525,9 @@
   },
   "increase_indent_6d550a4a": {
     "message": "Increase indent"
+  },
+  "insert_593145ef": {
+    "message": "Insert"
   },
   "insert_equella_links_49a8dacd": {
     "description": "Title for RCE button to insert links to Equella content",
@@ -545,6 +575,15 @@
   },
   "links_14b70841": {
     "message": "Links"
+  },
+  "list_collapsed_9ac35920": {
+    "message": "List collapsed."
+  },
+  "list_collapsed_dde87718": {
+    "message": "List collapsed"
+  },
+  "list_expanded_efec2d0": {
+    "message": "List expanded."
   },
   "load_more_35d33c7": {
     "message": "Load More"
@@ -649,6 +688,12 @@
   "no_due_dates_assigned_e8f5bac8": {
     "message": "No Due Dates Assigned"
   },
+  "no_e16d9132": {
+    "message": "No"
+  },
+  "no_file_chosen_9a880793": {
+    "message": "No file chosen"
+  },
   "no_grade_3b4d7f3e": {
     "message": "No Grade"
   },
@@ -696,6 +741,9 @@
   },
   "opportunities_popup_f6703842": {
     "message": "opportunities popup"
+  },
+  "option_selected_list_collapsed_e00180ff": {
+    "message": "{ option } selected. List collapsed."
   },
   "optional_add_course_ef0d70fc": {
     "message": "Optional: Add Course"
@@ -749,6 +797,9 @@
   "preformatted_d0670862": {
     "message": "Preformatted"
   },
+  "preview_53003fd2": {
+    "message": "Preview"
+  },
   "preview_a3f8f854": {
     "message": "PREVIEW"
   },
@@ -791,6 +842,9 @@
   },
   "replies_4a8577c8": {
     "message": "Replies"
+  },
+  "restore_auto_save_deccd84b": {
+    "message": "Restore auto-save?"
   },
   "rich_content_editor_2708ef21": {
     "message": "Rich Content Editor"
@@ -902,6 +956,9 @@
   },
   "superscript_8cb349a2": {
     "message": "Superscript"
+  },
+  "supported_file_types_srt_or_webvtt_7d827ed": {
+    "message": "Supported file types: SRT or WebVTT"
   },
   "switch_to_raw_html_editor_4c9ac7de": {
     "message": "Switch to raw html editor"
@@ -1017,6 +1074,9 @@
   "url_22a5f3b8": {
     "message": "URL"
   },
+  "use_arrow_keys_to_navigate_options_2021cc50": {
+    "message": "Use arrow keys to navigate options."
+  },
   "used_by_screen_readers_to_describe_the_content_of__b1e76d9e": {
     "message": "Used by screen readers to describe the content of an image"
   },
@@ -1070,6 +1130,9 @@
   },
   "wiki_home_9cd54d0": {
     "message": "Wiki Home"
+  },
+  "yes_dde87d5": {
+    "message": "Yes"
   },
   "yesterday_at_date_1aa6d18e": {
     "message": "Yesterday at { date }"

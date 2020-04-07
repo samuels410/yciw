@@ -46,6 +46,7 @@ class Notification < ActiveRecord::Base
 
   has_many :messages
   has_many :notification_policies, :dependent => :destroy
+  has_many :notification_policy_overrides, inverse_of: :notification, :dependent => :destroy
   before_save :infer_default_content
 
   scope :to_show_in_feed, -> { where("messages.category='TestImmediately' OR messages.notification_name IN (?)", TYPES_TO_SHOW_IN_FEED) }
@@ -76,6 +77,10 @@ class Notification < ActiveRecord::Base
   def self.reset_cache!
     @all = nil
     @all_by_id = nil
+    if ::Rails.env.test? && !@checked_partition && !ActiveRecord::Base.in_migration
+      Messages::Partitioner.process # might have fallen out of date - but we should only check if we're actually running notification specs
+      @checked_partition = true
+    end
   end
 
   def duplicate
@@ -91,7 +96,7 @@ class Notification < ActiveRecord::Base
   protected :infer_default_content
 
   # Public: create (and dispatch, and queue delayed) a message
-  #  for this notication, associated with the given asset, sent to the given recipients
+  #  for this notification, associated with the given asset, sent to the given recipients
   #
   # asset - what the message applies to. An assignment, a discussion, etc.
   # to_list - a list of who to send the message to. the list can contain Users, User ids, or communication channels
@@ -144,6 +149,10 @@ class Notification < ActiveRecord::Base
 
   def self.types_to_show_in_feed
      TYPES_TO_SHOW_IN_FEED
+  end
+
+  def self.categories_to_send_in_sms
+    Setting.get('allowed_sms_notification_categories', 'announcement,grading').split(',')
   end
 
   def show_in_feed?
@@ -279,6 +288,7 @@ class Notification < ActiveRecord::Base
   # wherever), even if we continue to store the english string in the db
   # (it's actually just the titleized message template filename)
   def names
+    t 'names.manually_created_access_token_created', 'Manually Created Access Token Created'
     t 'names.account_user_notification', 'Account User Notification'
     t 'names.account_user_registration', 'Account User Registration'
     t 'names.assignment_changed', 'Assignment Changed'
@@ -481,7 +491,6 @@ EOS
 Includes:
 
 * Assignment/submission grade entered/changed
-* Un-muted assignment grade
 * Grade weight changed
 EOS
     when 'Late Grading'

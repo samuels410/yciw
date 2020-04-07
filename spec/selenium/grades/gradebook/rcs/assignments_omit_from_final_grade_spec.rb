@@ -17,8 +17,9 @@
 
 require_relative '../../../common'
 require_relative '../../../helpers/assignments_common'
+require_relative '../../pages/gradebook_page'
 
-describe 'omit from final grade assignments' do
+describe 'Gradebook omit from final grade assignments' do
   include_context "in-process server selenium tests"
   include AssignmentsCommon
 

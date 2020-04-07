@@ -354,6 +354,14 @@ class Group < ActiveRecord::Base
     memberships
   end
 
+  def broadcast_data
+    if context_type == 'Course'
+      { course_id: context_id, root_account_id: root_account_id }
+    else
+      {}
+    end
+  end
+
   def bulk_add_users_to_group(users, options = {})
     return if users.empty?
     user_ids = users.map(&:id)
@@ -372,11 +380,12 @@ class Group < ActiveRecord::Base
 
       users.each_with_index do |user, index|
         BroadcastPolicy.notifier.send_later_enqueue_args(:send_notification,
-                                                           {:priority => Delayed::LOW_PRIORITY},
-                                                           new_group_memberships[index],
-                                                           notification_name.parameterize.underscore.to_sym,
-                                                           notification,
-                                                           [user])
+                                                         { :priority => Delayed::LOW_PRIORITY },
+                                                         new_group_memberships[index],
+                                                         notification_name.parameterize.underscore.to_sym,
+                                                         notification,
+                                                         [user],
+                                                         broadcast_data)
       end
     end
     new_group_memberships
@@ -485,6 +494,9 @@ class Group < ActiveRecord::Base
     can :manage_content and
     can :manage_files and
     can :manage_wiki and
+    can :manage_wiki_create and
+    can :manage_wiki_delete and
+    can :manage_wiki_update and
     can :post_to_forum and
     can :create_collaborations and
     can :create_forum
@@ -543,6 +555,9 @@ class Group < ActiveRecord::Base
       can :manage_files and
       can :manage_students and
       can :manage_wiki and
+      can :manage_wiki_create and
+      can :manage_wiki_delete and
+      can :manage_wiki_update and
       can :moderate_forum and
       can :post_to_forum and
       can :create_forum and
@@ -588,8 +603,10 @@ class Group < ActiveRecord::Base
     end
   end
 
-  def users_visible_to(user)
-    grants_right?(user, :read) ? users : users.none
+  def users_visible_to(user, opts={})
+    return users.none unless grants_right?(user, :read)
+
+    opts[:include_inactive] ? users : participating_users_in_context
   end
 
   # Helper needed by several permissions, use grants_right?(user, :participate)

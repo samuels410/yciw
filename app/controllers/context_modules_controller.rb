@@ -89,7 +89,8 @@ class ContextModulesController < ApplicationController
            usage_rights_required: @context.usage_rights_required?,
            manage_files: @context.grants_right?(@current_user, session, :manage_files)
         },
-        :MODULE_TRAY_TOOLS => {:module_index_menu => @module_index_tools, :module_group_menu => @module_group_tools}
+        :MODULE_TRAY_TOOLS => {:module_index_menu => @module_index_tools, :module_group_menu => @module_group_tools},
+        :DEFAULT_POST_TO_SIS => @context.account.sis_default_grade_export[:value] && !AssignmentUtil.due_date_required_for_account?(@context.account)
 
       is_master_course = MasterCourses::MasterTemplate.is_master_course?(@context)
       is_child_course = MasterCourses::ChildSubscription.is_child_course?(@context)
@@ -120,7 +121,10 @@ class ContextModulesController < ApplicationController
       end
       add_body_class('padless-content')
       js_bundle :context_modules
-      js_env(CONTEXT_MODULE_ASSIGNMENT_INFO_URL: context_url(@context, :context_context_modules_assignment_info_url))
+      js_env(
+        CONTEXT_MODULE_ASSIGNMENT_INFO_URL: context_url(@context, :context_context_modules_assignment_info_url),
+        PROCESS_MULTIPLE_CONTENT_ITEMS: Account.site_admin.feature_enabled?(:process_multiple_content_items_modules_index)
+      )
       css_bundle :content_next, :context_modules2
       render stream: can_stream_template?
     end
@@ -198,7 +202,8 @@ class ContextModulesController < ApplicationController
     type_controllers = {
       assignment: 'assignments',
       quiz: 'quizzes/quizzes',
-      discussion_topic: 'discussion_topics'
+      discussion_topic: 'discussion_topics',
+      :'lti-quiz' => 'assignments'
     }
 
     if @tag
@@ -647,7 +652,7 @@ class ContextModulesController < ApplicationController
       elsif params[:unpublish]
         @module.unpublish
       end
-      if @module.update_attributes(context_module_params)
+      if @module.update(context_module_params)
         json = @module.as_json(:include => :content_tags, :methods => :workflow_state, :permissions => {:user => @current_user, :session => session})
         json['context_module']['relock_warning'] = true if @module.relock_warning?
         render :json => json

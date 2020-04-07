@@ -208,12 +208,12 @@ module BroadcastPolicies
 
       before(:once) do
         course.enroll_student(student)
-        course.enable_feature!(:new_gradebook)
         PostPolicy.enable_feature!
       end
 
       before(:each) do
         assignment.ensure_post_policy(post_manually: true)
+        course.update!(workflow_state: "available")
       end
 
       it "returns true when the submission is being posted and the assignment posts manually" do
@@ -229,15 +229,22 @@ module BroadcastPolicies
         expect(policy.should_dispatch_submission_posted?).to be true
       end
 
-      it "returns false when Post Policies are not enabled" do
-        course.disable_feature!(:new_gradebook)
+      it "returns false when the submission was posted longer than an hour ago" do
+        submission.update!(posted_at: 2.hours.ago)
+        submission.grade_posting_in_progress = true
+        expect(policy.should_dispatch_submission_posted?).to be false
+      end
+
+      it "returns false when the course is not available" do
+        course.update!(workflow_state: "created")
         submission.update!(posted_at: Time.zone.now)
         submission.grade_posting_in_progress = true
         expect(policy.should_dispatch_submission_posted?).to be false
       end
 
-      it "returns false when the submission was posted longer than an hour ago" do
-        submission.update!(posted_at: 2.hours.ago)
+      it "returns false when the course is concluded" do
+        course.update!(workflow_state: "completed")
+        submission.update!(posted_at: Time.zone.now)
         submission.grade_posting_in_progress = true
         expect(policy.should_dispatch_submission_posted?).to be false
       end

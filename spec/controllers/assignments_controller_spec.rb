@@ -22,6 +22,8 @@ require File.expand_path(File.dirname(__FILE__) + '/../lti2_spec_helper')
 
 describe AssignmentsController do
   before :once do
+    PostPolicy.enable_feature!
+
     course_with_teacher(active_all: true)
     student_in_course(active_all: true)
     course_assignment
@@ -390,7 +392,7 @@ describe AssignmentsController do
       end
 
       before :each do
-        @assignment.update_attributes(
+        @assignment.update(
           moderated_grading: true,
           final_grader: @other_teacher,
           grader_count: 2
@@ -592,7 +594,7 @@ describe AssignmentsController do
 
       it "should assign 'similarity_pledge'" do
         pledge = 'I made this'
-        @course.account.update_attributes(turnitin_pledge: pledge)
+        @course.account.update(turnitin_pledge: pledge)
         get 'show', params: {:course_id => @course.id, :id => assignment.id}
         expect(assigns[:similarity_pledge]).to eq pledge
       end
@@ -621,7 +623,7 @@ describe AssignmentsController do
       a = @course.assignments.create(:title => "some assignment")
       pledge = 'tii pledge'
       allow_any_instance_of(Assignment).to receive(:turnitin_enabled?).and_return(true)
-      @course.account.update_attributes(turnitin_pledge: pledge)
+      @course.account.update(turnitin_pledge: pledge)
       get 'show', params: {:course_id => @course.id, :id => a.id}
       expect(assigns[:similarity_pledge]).to eq pledge
     end
@@ -795,7 +797,6 @@ describe AssignmentsController do
           context "when the course has the 'Filter SpeedGrader by Student Group' setting enabled" do
             before(:once) do
               @course.root_account.enable_feature!(:filter_speed_grader_by_student_group)
-              @course.enable_feature!(:new_gradebook)
               @course.update!(filter_speed_grader_by_student_group: true)
 
               category = @course.group_categories.create!(name: "category")
@@ -833,7 +834,6 @@ describe AssignmentsController do
         context "when filter_speed_grader_by_student_group? is true" do
           before :once do
             @course.root_account.enable_feature!(:filter_speed_grader_by_student_group)
-            @course.enable_feature!(:new_gradebook)
             @course.update!(filter_speed_grader_by_student_group: true)
 
             category = @course.group_categories.create!(name: "category")
@@ -1042,7 +1042,7 @@ describe AssignmentsController do
 
       describe 'anonymize_students' do
         it "is included in the response" do
-          put 'toggle_mute', params: { course_id: @course.id, assignment_id: @assignment.id, status: true }, format: 'json'
+          put 'toggle_mute', params: { course_id: @course.id, assignment_id: @assignment.id, status: !@assignment.muted }, format: 'json'
           assignment_json = json_parse(response.body)['assignment']
           expect(assignment_json).to have_key('anonymize_students')
         end
@@ -1050,20 +1050,20 @@ describe AssignmentsController do
         it "is true if the assignment is anonymous and muted" do
           @assignment.update!(anonymous_grading: true)
           @assignment.unmute!
-          put 'toggle_mute', params: { course_id: @course.id, assignment_id: @assignment.id, status: true }, format: 'json'
+          put 'toggle_mute', params: { course_id: @course.id, assignment_id: @assignment.id, status: !@assignment.muted }, format: 'json'
           assignment_json = json_parse(response.body)['assignment']
           expect(assignment_json.fetch('anonymize_students')).to be true
         end
 
         it "is false if the assignment is anonymous and unmuted" do
           @assignment.update!(anonymous_grading: true)
-          put 'toggle_mute', params: { course_id: @course.id, assignment_id: @assignment.id, status: false }, format: 'json'
+          put 'toggle_mute', params: { course_id: @course.id, assignment_id: @assignment.id, status: !@assignment.muted }, format: 'json'
           assignment_json = json_parse(response.body)['assignment']
           expect(assignment_json.fetch('anonymize_students')).to be false
         end
 
         it "is false if the assignment is not anonymous" do
-          put 'toggle_mute', params: { course_id: @course.id, assignment_id: @assignment.id, status: true }, format: 'json'
+          put 'toggle_mute', params: { course_id: @course.id, assignment_id: @assignment.id, status: !@assignment.muted }, format: 'json'
           assignment_json = json_parse(response.body)['assignment']
           expect(assignment_json.fetch('anonymize_students')).to be false
         end
@@ -1333,6 +1333,13 @@ describe AssignmentsController do
       expect(assigns[:assignment]).to eql(@assignment)
     end
 
+    it "should set 'ROOT_OUTCOME_GROUP' in js_env" do
+      user_session @teacher
+      get 'edit', params: {:course_id => @course.id, :id => @assignment.id}
+
+      expect(assigns[:js_env][:ROOT_OUTCOME_GROUP]).not_to be_nil
+    end
+
     it "bootstraps the correct assignment info to js_env" do
       user_session(@teacher)
       tool = @course.context_external_tools.create!(name: "a", url: "http://www.google.com", consumer_key: '12345', shared_secret: 'secret')
@@ -1492,7 +1499,7 @@ describe AssignmentsController do
         allow_any_instance_of(AssignmentConfigurationToolLookup).to receive(:create_subscription).and_return true
         allow(Lti::ToolProxy).to receive(:find_active_proxies_for_context).with(@course) { Lti::ToolProxy.where(id: tool_proxy.id) }
         tool_proxy.resources << resource_handler
-        tool_proxy.update_attributes!(context: @course)
+        tool_proxy.update!(context: @course)
 
         AssignmentConfigurationToolLookup.create!(
           assignment: @assignment,

@@ -15,14 +15,11 @@
 # You should have received a copy of the GNU Affero General Public License along
 # with this program. If not, see <http://www.gnu.org/licenses/>.
 
-import i18nObj from 'i18nObj'
 import I18n from 'i18n!gradebookOutcomeGradebookGrid'
 import $ from 'jquery'
 import _ from 'underscore'
-import natcompare from '../util/natcompare'
 import HeaderFilterView from '../views/gradebook/HeaderFilterView'
 import OutcomeColumnView from '../views/gradebook/OutcomeColumnView'
-import numberCompare from '../util/NumberCompare'
 import cellTemplate from 'jst/gradebook/outcome_gradebook_cell'
 import studentCellTemplate from 'jst/gradebook/outcome_gradebook_student_cell'
 import 'jsx/context_cards/StudentContextCardTrigger'
@@ -314,7 +311,7 @@ export default Grid =
 
       _aggregateUrl: (stat) ->
         course = ENV.context_asset_string.split('_')[1]
-        sectionParam = if Grid.section then "&section_id=#{Grid.section}" else ""
+        sectionParam = if Grid.section and Grid.section != "0" then "&section_id=#{Grid.section}" else ""
         "/api/v1/courses/#{course}/outcome_rollups?aggregate=course&aggregate_stat=#{stat}#{sectionParam}"
 
       redrawHeader: (grid, fn = Grid.averageFn) ->

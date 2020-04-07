@@ -42,6 +42,8 @@ module Canvas::LiveEventsCallbacks
       Canvas::LiveEvents.assignment_created(obj)
     when AssignmentGroup
       Canvas::LiveEvents.assignment_group_created(obj)
+    when AssignmentOverride
+      Canvas::LiveEvents.assignment_override_created(obj)
     when Submission
       Canvas::LiveEvents.submission_created(obj)
     when SubmissionComment
@@ -118,6 +120,8 @@ module Canvas::LiveEventsCallbacks
       Canvas::LiveEvents.assignment_updated(obj)
     when AssignmentGroup
       Canvas::LiveEvents.assignment_group_updated(obj)
+    when AssignmentOverride
+      Canvas::LiveEvents.assignment_override_updated(obj)
     when Attachment
       if attachment_eligible?(obj)
         if changes["display_name"]
@@ -141,7 +145,12 @@ module Canvas::LiveEventsCallbacks
       Canvas::LiveEvents.module_updated(obj)
     when ContextModuleProgression
       if changes["completed_at"]
-        if CourseProgress.new(obj.context_module.course, obj.user, read_only: true).completed?
+        # it's possible that some terrible thing unset the requirements_met in the db after the "completed_at" was set
+        # but before this event fired off so here's a terrible hack to stuff it back in for the purposes of
+        # calculating completion
+        overridden_requirements_met = changes["requirements_met"] && {obj.id => changes["requirements_met"].last&.map(&:symbolize_keys)}
+        if CourseProgress.new(obj.context_module.course, obj.user, read_only: true,
+            overridden_requirements_met: overridden_requirements_met).completed?
           Canvas::LiveEvents.course_completed(obj)
         else
           Canvas::LiveEvents.course_progress(obj)

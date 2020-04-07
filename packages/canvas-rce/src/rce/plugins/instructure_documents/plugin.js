@@ -29,6 +29,40 @@ tinymce.create('tinymce.plugins.InstructureDocumentsPlugin', {
 
     // Register commands
     ed.addCommand('mceInstructureDocuments', clickCallback.bind(this, ed, document))
+    ed.addCommand('instructureTrayForDocuments', (ui, plugin_key) => {
+      bridge.showTrayForPlugin(plugin_key)
+    })
+
+    // Register menu items
+    ed.ui.registry.addNestedMenuItem('instructure_document', {
+      text: formatMessage('Document'),
+      icon: 'document',
+      getSubmenuItems: () => [
+        'instructure_upload_document',
+        'instructure_course_document',
+        'instructure_user_document'
+      ]
+    })
+    ed.ui.registry.addMenuItem('instructure_upload_document', {
+      text: formatMessage('Upload Document'),
+      onAction: () => ed.execCommand('mceInstructureDocuments')
+    })
+    if (contextType === 'course') {
+      ed.ui.registry.addMenuItem('instructure_course_document', {
+        text: formatMessage('Course Documents'),
+        onAction: () => {
+          ed.focus(true)
+          ed.execCommand('instructureTrayForDocuments', false, COURSE_PLUGIN_KEY)
+        }
+      })
+    }
+    ed.ui.registry.addMenuItem('instructure_user_document', {
+      text: formatMessage('User Documents'),
+      onAction: () => {
+        ed.focus(true)
+        ed.execCommand('instructureTrayForDocuments', false, USER_PLUGIN_KEY)
+      }
+    })
 
     const menuItems = [
       {
@@ -43,7 +77,7 @@ tinymce.create('tinymce.plugins.InstructureDocumentsPlugin', {
         text: formatMessage('User Documents'),
         onAction() {
           ed.focus(true) // activate the editor without changing focus
-          bridge.showTrayForPlugin(USER_PLUGIN_KEY)
+          ed.execCommand('instructureTrayForDocuments', false, USER_PLUGIN_KEY)
         }
       }
     ]
@@ -53,7 +87,7 @@ tinymce.create('tinymce.plugins.InstructureDocumentsPlugin', {
         text: formatMessage('Course Documents'),
         onAction() {
           ed.focus(true) // activate the editor without changing focus
-          bridge.showTrayForPlugin(COURSE_PLUGIN_KEY)
+          ed.execCommand('instructureTrayForDocuments', false, COURSE_PLUGIN_KEY)
         }
       })
     }

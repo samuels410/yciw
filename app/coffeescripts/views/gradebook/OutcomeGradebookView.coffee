@@ -14,16 +14,20 @@
 #
 # You should have received a copy of the GNU Affero General Public License along
 # with this program. If not, see <http://www.gnu.org/licenses/>.
+#
 
 import I18n from 'i18n!gradebookOutcomeGradebookView'
 import $ from 'jquery'
 import _ from 'underscore'
+import React from 'react'
+import ReactDOM from 'react-dom'
 import {View} from 'Backbone'
 import Slick from 'vendor/slickgrid'
 import Grid from '../../gradebook/OutcomeGradebookGrid'
 import userSettings from '../../userSettings'
 import CheckboxView from './CheckboxView'
-import SectionMenuView from './SectionMenuView'
+import SectionMenuView from '../gradebook/SectionMenuView'
+import SectionFilter from 'jsx/gradebook/default_gradebook/components/content-filters/SectionFilter'
 import template from 'jst/gradebook/outcome_gradebook'
 import 'vendor/jquery.ba-tinypubsub'
 import '../../jquery.rails_flash_notifications'
@@ -47,7 +51,7 @@ export default class OutcomeGradebookView extends View
 
     tagName: 'div'
 
-    className: 'outcome-gradebook-container'
+    className: 'outcome-gradebook'
 
     template: template
 
@@ -136,12 +140,7 @@ export default class OutcomeGradebookView extends View
     _attachEvents: ->
       _this = @
       view.on('togglestate', @_createFilter("rating_#{i}")) for view, i in @checkboxes
-      $.subscribe('currentSection/change', (section) ->
-        Grid.section = section
-        _this._rerender()
-      )
-      $.subscribe('currentSection/change', @updateExportLink)
-      @updateExportLink(@gradebook.sectionToShow)
+      @updateExportLink(@gradebook.getFilterRowsBySetting('sectionId'))
       @$('#no_results_outcomes').change(() -> _this._toggleOutcomesWithNoResults(this.checked))
       @$('#no_results_students').change(() -> _this._toggleStudentsWithNoResults(this.checked))
 
@@ -209,7 +208,7 @@ export default class OutcomeGradebookView extends View
     render: ->
       $.when(@gradebook.hasSections)
         .then(=> super)
-        .then(@_drawSectionMenu)
+        .then(@renderSectionMenu)
       $.when(@hasOutcomes).then(@renderGrid)
       this
 
@@ -243,6 +242,7 @@ export default class OutcomeGradebookView extends View
         @grid.init()
         Grid.Events.init(@grid)
         @_attachEvents()
+        Grid.section = @gradebook.getFilterRowsBySetting('sectionId')
         Grid.View.redrawHeader(@grid,  Grid.averageFn)
 
     isLoaded: false
@@ -255,7 +255,6 @@ export default class OutcomeGradebookView extends View
       })
       $(".post-grades-button-placeholder").hide();
 
-
     # Public: Load a specific result page
     #
     # Returns nothing.
@@ -263,6 +262,30 @@ export default class OutcomeGradebookView extends View
       @hasOutcomes = $.Deferred()
       $.when(@hasOutcomes).then(@renderGrid)
       @_loadOutcomes(page)
+
+    # Internal: Render Section selector.
+    # Returns nothing.
+    renderSectionMenu: =>
+      sectionList = @gradebook.sectionList()
+      mountPoint = document.querySelector('[data-component="SectionFilter"]')
+      if sectionList.length > 1
+        selectedSectionId = @gradebook.getFilterRowsBySetting('sectionId') || '0'
+        Grid.section = selectedSectionId
+        props =
+          sections: sectionList
+          onSelect: @updateCurrentSection
+          selectedSectionId: selectedSectionId
+          disabled: false
+
+        component = React.createElement(SectionFilter, props)
+        @sectionFilterMenu = ReactDOM.render(component, mountPoint)
+
+    updateCurrentSection: (sectionId) =>
+      @gradebook.updateCurrentSection(sectionId)
+      Grid.section = sectionId
+      @_rerender()
+      @updateExportLink(sectionId)
+      @renderSectionMenu()
 
     # Public: Load all outcome results from API.
     #
@@ -278,7 +301,7 @@ export default class OutcomeGradebookView extends View
       sortParams = "&sort_by=#{sortField}"
       sortParams = "#{sortParams}&sort_outcome_id=#{sortOutcomeId}" if sortOutcomeId
       sortParams = "#{sortParams}&sort_order=desc" if !@sortOrderAsc
-      sectionParam = if Grid.section then "&section_id=#{Grid.section}" else ""
+      sectionParam = if Grid.section and Grid.section != "0" then "&section_id=#{Grid.section}" else ""
       "/api/v1/courses/#{course}/outcome_rollups?rating_percents=true&per_page=20&include[]=outcomes&include[]=users&include[]=outcome_paths#{excluding}&page=#{page}#{sortParams}#{sectionParam}"
 
     _loadOutcomes: (page = 1) =>
@@ -323,19 +346,6 @@ export default class OutcomeGradebookView extends View
       response.rollups = a.rollups.concat(b.rollups)
       response
 
-    # Internal: Initialize the child SectionMenuView. This happens here because
-    #   the menu needs to wait for relevant course sections to load.
-    #
-    # Returns nothing.
-    _drawSectionMenu: =>
-      @menu = new SectionMenuView(
-        sections: @gradebook.sectionList()
-        currentSection: @gradebook.sectionToShow
-        el: $('.section-button-placeholder'),
-      )
-      @menu.render()
-      Grid.section = @menu.currentSection
-
     # Internal: Create an event listener function used to filter SlickGrid results.
     #
     # name - The class name to toggle on/off (e.g. 'mastery', 'remedial').
@@ -351,5 +361,5 @@ export default class OutcomeGradebookView extends View
 
     updateExportLink: (section) =>
       url = "#{ENV.GRADEBOOK_OPTIONS.context_url}/outcome_rollups.csv"
-      url += "?section_id=#{section}" if section
+      url += "?section_id=#{section}" if section and section != '0'
       $('.export-content').attr('href', url)

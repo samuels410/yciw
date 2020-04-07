@@ -242,6 +242,8 @@ class ProfileController < ApplicationController
       :channels => @user.communication_channels.all_ordered_for_display(@user).map { |c| communication_channel_json(c, @user, session) },
       :policies => NotificationPolicy.setup_with_default_policies(@user, full_category_list).map { |p| notification_policy_json(p, @user, session).tap { |json| json[:communication_channel_id] = p.communication_channel_id } },
       :categories => categories,
+      :deprecate_sms_enabled => @domain_root_account.feature_enabled?(:deprecate_sms),
+      :allowed_sms_categories => Notification.categories_to_send_in_sms,
       :update_url => communication_update_profile_path,
       :show_observed_names => @user.observer_enrollments.any? || @user.as_observer_observation_links.any? ? @user.send_observed_names_in_notifications? : nil
       },
@@ -343,7 +345,10 @@ class ProfileController < ApplicationController
         user_params.delete(:short_name)
         user_params.delete(:sortable_name)
       end
-      if @user.update_attributes(user_params)
+      if user_params[:pronouns].present? && @domain_root_account.pronouns.exclude?(user_params[:pronouns].strip)
+        user_params.delete(:pronouns)
+      end
+      if @user.update(user_params)
         pseudonymed = false
         if params[:default_email_id].present?
           @email_channel = @user.communication_channels.email.active.where(id: params[:default_email_id]).first
@@ -373,7 +378,7 @@ class ProfileController < ApplicationController
             pseudonym_params.delete :password_confirmation
           end
           params[:pseudonym].delete :password_id
-          if !pseudonym_params.empty? && pseudonym_to_update && !pseudonym_to_update.update_attributes(pseudonym_params)
+          if !pseudonym_params.empty? && pseudonym_to_update && !pseudonym_to_update.update(pseudonym_params)
             pseudonymed = true
             flash[:error] = t('errors.profile_update_failed', "Login failed to update")
             format.html { redirect_to user_profile_url(@current_user) }
