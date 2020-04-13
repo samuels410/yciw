@@ -217,11 +217,13 @@ export default class ItemView extends Backbone.View {
 
   renderSendToTray(open) {
     const quizId = this.model.get('id')
+    const isOldQuiz = this.model.get('quiz_type') !== 'quizzes.next'
+    const contentType = isOldQuiz ? 'quiz' : 'assignment'
     ReactDOM.render(
       <DirectShareUserModal
         open={open}
         sourceCourseId={ENV.COURSE_ID}
-        contentShare={{content_type: 'quiz', content_id: quizId}}
+        contentShare={{content_type: contentType, content_id: quizId}}
         onDismiss={() => {
           this.renderSendToTray(false)
           return setTimeout(() => this.$settingsButton.focus(), 100)
@@ -248,6 +250,10 @@ export default class ItemView extends Backbone.View {
 
   canManage() {
     return ENV.PERMISSIONS.manage
+  }
+
+  isStudent() {
+    return ENV.current_user_roles && ENV.current_user_roles.includes('student')
   }
 
   canDuplicate() {
@@ -339,6 +345,12 @@ export default class ItemView extends Backbone.View {
     base.showDueDate = this.model.multipleDueDates() || this.model.singleSectionDueDate()
     base.name = this.model.name()
     base.isQuizzesNext = this.model.isQuizzesNext()
+    base.useQuizzesNextIcon = this.model.isQuizzesNext() || this.isStudent()
+    base.isQuizzesNextAndNotStudent = this.model.isQuizzesNext() && !this.isStudent()
+    base.quizzesRespondusEnabled =
+      this.isStudent() &&
+      this.model.get('require_lockdown_browser') &&
+      this.model.get('quiz_type') === 'quizzes.next'
 
     base.is_locked =
       this.model.get('is_master_course_child_content') &&

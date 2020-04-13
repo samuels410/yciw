@@ -19,6 +19,10 @@ require File.expand_path(File.dirname(__FILE__) + '/course_copy_helper.rb')
 require File.expand_path(File.dirname(__FILE__) + '/../../lti2_spec_helper')
 
 describe ContentMigration do
+  before :once do
+    PostPolicy.enable_feature!
+  end
+
   context "course copy assignments" do
     include_examples "course copy"
 
@@ -208,7 +212,7 @@ describe ContentMigration do
           expect(@assignment[attr]).to eq new_assignment[attr]
         end
       end
-      expect(new_assignment.muted).to be_falsey
+      expect(new_assignment.muted).to eq true
       expect(new_assignment.only_visible_to_overrides).to be_falsey
     end
 
@@ -749,11 +753,11 @@ describe ContentMigration do
         allow(Lti::ToolProxy).to receive(:find_active_proxies_for_context_by_vendor_code_and_product_code) do
           Lti::ToolProxy.where(id: tool_proxy.id)
         end
-        product_family.update_attributes!(
+        product_family.update!(
           product_code: 'product_code',
           vendor_code: 'vendor_code'
         )
-        tool_proxy.update_attributes!(
+        tool_proxy.update!(
           resources: [resource_handler],
           context: @copy_to
         )

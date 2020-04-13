@@ -17,7 +17,7 @@
 
 require_relative '../../helpers/gradebook_common'
 require_relative '../pages/srgb_page'
-require_relative '../pages/gradebook_page'
+require_relative '../pages/gradebook_cells_page'
 
 describe 'Screenreader Gradebook Student Information' do
   include_context 'in-process server selenium tests'
@@ -54,8 +54,8 @@ describe 'Screenreader Gradebook Student Information' do
       srgb_page.select_student(student)
       expect(srgb_page.final_grade.text).to eq("30% (3 / 10 points)")
       expect(srgb_page.assign_subtotal_grade.text).to eq("30% (3 / 10)")
-      expect_new_page_load { srgb_page.switch_to_default_gradebook_link.click }
-      expect(Gradebook.cell_graded?("30%", 4, 0)).to be true
+      expect_new_page_load { srgb_page.switch_to_default_gradebook }
+      expect(Gradebook::Cells.get_total_grade(student)).to eq('30%')
     end
 
     context 'displays no points possible warning' do

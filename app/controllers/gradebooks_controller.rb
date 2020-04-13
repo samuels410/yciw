@@ -168,10 +168,8 @@ class GradebooksController < ApplicationController
         'module' => :module, 'assignment_group' => :assignment_group
       }
       assignment_order = whitelisted_orders.fetch(params.fetch(:assignment_order), :due_at)
-      @current_user.preferences[:course_grades_assignment_order] ||= {}
-      @current_user.preferences[:course_grades_assignment_order][@context.id] = assignment_order
-      @current_user.save!
-        redirect_back(fallback_location: course_grades_url(@context))
+      @current_user.set_preference(:course_grades_assignment_order, @context.id, assignment_order)
+      redirect_back(fallback_location: course_grades_url(@context))
     end
   end
 
@@ -419,15 +417,15 @@ class GradebooksController < ApplicationController
         sis_app_url: Setting.get('sis_app_url', nil),
         sis_app_token: Setting.get('sis_app_token', nil),
         list_students_by_sortable_name_enabled: @context.list_students_by_sortable_name?,
-        gradebook_column_size_settings: @current_user.preferences[:gradebook_column_size],
+        gradebook_column_size_settings: gradebook_column_size_preferences,
         gradebook_column_size_settings_url: change_gradebook_column_size_course_gradebook_url,
-        gradebook_column_order_settings: @current_user.preferences[:gradebook_column_order].try(:[], @context.id),
+        gradebook_column_order_settings: @current_user.get_preference(:gradebook_column_order, @context.global_id),
         gradebook_column_order_settings_url: save_gradebook_column_order_course_gradebook_url,
         post_grades_ltis: post_grades_ltis,
         post_grades_feature: post_grades_feature?,
         sections: sections_json(@context.active_course_sections, @current_user, session, [], allow_sis_ids: true),
         settings_update_url: api_v1_course_gradebook_settings_update_url(@context),
-        settings: gradebook_settings.fetch(@context.id, {}),
+        settings: gradebook_settings(@context.global_id),
         student_groups: group_categories_json(@context.group_categories.active, @current_user, session, {include: ['groups']}),
         login_handle_name: @context.root_account.settings[:login_handle_name],
         sis_name: @context.root_account.settings[:sis_name],
@@ -439,12 +437,7 @@ class GradebooksController < ApplicationController
 
   def set_gradebook_env
     set_student_context_cards_js_env
-    env = old_gradebook_env
-
-    if new_gradebook_enabled?
-      env = env.deep_merge(new_gradebook_env)
-    end
-
+    env = old_gradebook_env.deep_merge(new_gradebook_env)
     js_env(env)
   end
 
@@ -623,22 +616,54 @@ class GradebooksController < ApplicationController
 
   def submissions_zip_upload
     return unless authorized_action(@context, @current_user, :manage_grades)
+
+    assignment = @context.assignments.active.find(params[:assignment_id])
+
     unless @context.allows_gradebook_uploads?
-      flash[:error] = t('errors.not_allowed', "This course does not allow score uploads.")
-      redirect_to named_context_url(@context, :context_assignment_url, @assignment.id)
+      flash[:error] = t("This course does not allow score uploads.")
+      redirect_to named_context_url(@context, :context_assignment_url, assignment.id)
       return
     end
-    @assignment = @context.assignments.active.find(params[:assignment_id])
+
     if !params[:submissions_zip] || params[:submissions_zip].is_a?(String)
-      flash[:error] = t('errors.missing_file', "Could not find file to upload")
-      redirect_to named_context_url(@context, :context_assignment_url, @assignment.id)
+      flash[:error] = t("Could not find file to upload")
+      redirect_to named_context_url(@context, :context_assignment_url, assignment.id)
       return
     end
-    @comments, @failures = @assignment.generate_comments_from_files(params[:submissions_zip].path, @current_user)
+
+    if Account.site_admin.feature_enabled?(:submissions_reupload_status_page)
+      submission_zip_params = {uploaded_data: params[:submissions_zip]}
+      assignment.generate_comments_from_files_later(submission_zip_params, @current_user)
+
+      redirect_to named_context_url(@context, :submissions_upload_context_gradebook_url, assignment.id)
+      return
+    end
+
+    @assignment = assignment
+    @comments, @failures = @assignment.generate_comments_from_files_legacy(params[:submissions_zip].path, @current_user)
     flash[:notice] = t('notices.uploaded',
                        { :one => "Files and comments created for 1 submission",
                          :other => "Files and comments created for %{count} submissions" },
                        :count => @comments.length)
+  end
+
+  def show_submissions_upload
+    return render status: :not_found unless Account.site_admin.feature_enabled?(:submissions_reupload_status_page)
+
+    return unless authorized_action(@context, @current_user, :manage_grades)
+
+    @assignment = @context.assignments.active.find(params[:assignment_id])
+
+    unless @context.allows_gradebook_uploads?
+      flash[:error] = t("This course does not allow score uploads.")
+      redirect_to named_context_url(@context, :context_assignment_url, @assignment.id)
+      return
+    end
+
+    @progress = @assignment.submission_reupload_progress
+
+    css_bundle :show_submissions_upload
+    render :show_submissions_upload
   end
 
   def speed_grader
@@ -662,7 +687,6 @@ class GradebooksController < ApplicationController
     end
 
     @can_comment_on_submission = !@context.completed? && !@context_enrollment.try(:completed?)
-    @disable_unmute_assignment = @assignment.muted && !@assignment.grades_published?
 
     respond_to do |format|
 
@@ -678,7 +702,6 @@ class GradebooksController < ApplicationController
           CONTEXT_ACTION_SOURCE: :speed_grader,
           can_view_audit_trail: @assignment.can_view_audit_trail?(@current_user),
           settings_url: speed_grader_settings_course_gradebook_path,
-          new_gradebook_enabled: new_gradebook_enabled?,
           force_anonymous_grading: force_anonymous_grading?(@assignment),
           anonymous_identities: @assignment.anonymous_grader_identities_by_anonymous_id,
           final_grader_id: @assignment.final_grader_id,
@@ -707,9 +730,9 @@ class GradebooksController < ApplicationController
           env[:current_anonymous_id] = @assignment.moderation_graders.find_by!(user_id: @current_user.id).anonymous_id
         end
 
-        if new_gradebook_enabled?
-          env[:selected_section_id] = gradebook_settings.dig(@context.id, 'filter_rows_by', 'section_id')
-          env[:post_policies_enabled] = true if @context.post_policies_enabled?
+        env[:selected_section_id] = gradebook_settings(@context.global_id)&.dig('filter_rows_by', 'section_id')
+        if @context.root_account.feature_enabled?(:new_gradebook_plagiarism_indicator)
+          env[:new_gradebook_plagiarism_icons_enabled] = true
         end
 
         if @assignment.quiz
@@ -717,6 +740,9 @@ class GradebooksController < ApplicationController
                                                             @assignment.quiz.id,
                                                             :user_id => "{{user_id}}"
         end
+
+        env[:filter_speed_grader_by_student_group_feature_enabled] =
+          @context.root_account.feature_enabled?(:filter_speed_grader_by_student_group)
 
         if @context.filter_speed_grader_by_student_group?
           env[:filter_speed_grader_by_student_group] = true
@@ -732,14 +758,13 @@ class GradebooksController < ApplicationController
 
           if updated_group_info.group != group_selection.initial_group
             new_group_id = updated_group_info.group.present? ? updated_group_info.group.id.to_s : nil
-            gradebook_settings(create_if_missing: true).deep_merge!({
-              context.id => {
-                'filter_rows_by' => {
-                  'student_group_id' => new_group_id
-                }
+            context_settings = gradebook_settings(context.global_id)
+            context_settings.deep_merge!({
+              'filter_rows_by' => {
+                'student_group_id' => new_group_id
               }
             })
-            @current_user.save!
+            @current_user.set_preference(:gradebook_settings, context.global_id, context_settings)
           end
 
           if updated_group_info.group.present?
@@ -752,8 +777,7 @@ class GradebooksController < ApplicationController
         js_env(env)
 
         render :speed_grader, locals: {
-          anonymize_students: @assignment.anonymize_students?,
-          post_policies_enabled: env[:post_policies_enabled]
+          anonymize_students: @assignment.anonymize_students?
         }
       end
 
@@ -782,19 +806,15 @@ class GradebooksController < ApplicationController
         params[:selected_section_id]
       end
 
-      settings = gradebook_settings(create_if_missing: true)
-      settings.deep_merge!({
-        @context.id => {
-          'filter_rows_by' => {
-            'section_id' => section_to_show
-          }
+      context_settings = gradebook_settings(@context.global_id)
+      context_settings.deep_merge!({
+        'filter_rows_by' => {
+          'section_id' => section_to_show
         }
       })
-
       # Showing a specific section should always display the "Sections" filter
-      # in New Gradebook
-      ensure_section_view_filter_enabled if section_to_show.present?
-      @current_user.save!
+      ensure_section_view_filter_enabled(context_settings) if section_to_show.present?
+      @current_user.set_preference(:gradebook_settings, @context.global_id, context_settings)
     end
 
     head :ok
@@ -806,24 +826,18 @@ class GradebooksController < ApplicationController
 
   def change_gradebook_column_size
     if authorized_action(@context, @current_user, [:manage_grades, :view_all_grades])
-      unless @current_user.preferences.key?(:gradebook_column_size)
-        @current_user.preferences[:gradebook_column_size] = {}
-      end
-
-      @current_user.preferences[:gradebook_column_size][params[:column_id]] = params[:column_size]
-      @current_user.save!
+      @current_user.migrate_preferences_if_needed
+      sub_key = @current_user.shared_gradebook_column?(params[:column_id]) ? "shared" : @context.global_id
+      size_hash = @current_user.get_preference(:gradebook_column_size, sub_key) || {}
+      size_hash[params[:column_id]] = params[:column_size]
+      @current_user.set_preference(:gradebook_column_size, sub_key, size_hash)
       render json: nil
     end
   end
 
   def save_gradebook_column_order
     if authorized_action(@context, @current_user, [:manage_grades, :view_all_grades])
-      unless @current_user.preferences.key?(:gradebook_column_order)
-        @current_user.preferences[:gradebook_column_order] = {}
-      end
-
-      @current_user.preferences[:gradebook_column_order][@context.id] = params[:column_order].to_unsafe_h
-      @current_user.save!
+      @current_user.set_preference(:gradebook_column_order, @context.global_id, params[:column_order].to_unsafe_h)
       render json: nil
     end
   end
@@ -845,7 +859,7 @@ class GradebooksController < ApplicationController
   def grading_period_assignments
     return unless authorized_action(@context, @current_user, [:manage_grades, :view_all_grades])
 
-    grading_period_assignments = GradebookGradingPeriodAssignments.new(@context, gradebook_settings)
+    grading_period_assignments = GradebookGradingPeriodAssignments.new(@context, gradebook_settings(@context.global_id))
     render json: { grading_period_assignments: grading_period_assignments.to_h }
   end
 
@@ -888,31 +902,21 @@ class GradebooksController < ApplicationController
   def new_gradebook_env
     graded_late_submissions_exist = @context.submissions.graded.late.exists?
 
-    # Prefer the course setting, but check the user's preferences if the
-    # course setting doesn't exist
-    # TODO: remove the fallback to user preferences (GRADE-2124)
-    allow_final_grade_override = if @context.settings.include?(:allow_final_grade_override)
-      @context.allow_final_grade_override?
-    else
-      user_preference = @current_user.preferences.dig(:gradebook_settings, @context.id, "show_final_grade_overrides")
-      value_to_boolean(user_preference)
-    end
-
     visible_sections = @context.sections_visible_to(@current_user)
 
-    new_gradebook_options = {
+    gradebook_options = {
       additional_sort_options_enabled: @context.feature_enabled?(:new_gradebook_sort_options),
-      colors: gradebook_settings.fetch(:colors, {}),
+      colors: gradebook_settings(:colors),
 
       course_settings: {
-        allow_final_grade_override: allow_final_grade_override,
+        allow_final_grade_override: @context.allow_final_grade_override?,
         filter_speed_grader_by_student_group: @context.filter_speed_grader_by_student_group?
       },
 
       final_grade_override_enabled: @context.feature_enabled?(:final_grades_override),
       graded_late_submissions_exist: graded_late_submissions_exist,
-      gradezilla: true,
       grading_schemes: GradingStandard.for(@context).as_json(include_root: false),
+      include_speed_grader_in_assignment_header_menu: Account.site_admin.feature_enabled?(:include_speed_grader_in_assignment_header_menu),
       late_policy: @context.late_policy.as_json(include_root: false),
       new_gradebook_development_enabled: new_gradebook_development_enabled?,
       post_policies_enabled: @context.post_policies_enabled?,
@@ -921,11 +925,11 @@ class GradebooksController < ApplicationController
     }
 
     if @context.post_policies_enabled?
-      new_gradebook_options[:post_manually] = @context.post_manually?
-      new_gradebook_options[:new_post_policy_icons_enabled] = @context.root_account.feature_enabled?(:new_post_policy_icons)
+      gradebook_options[:post_manually] = @context.post_manually?
+      gradebook_options[:new_post_policy_icons_enabled] = @context.root_account.feature_enabled?(:new_post_policy_icons)
     end
 
-    {GRADEBOOK_OPTIONS: new_gradebook_options}
+    {GRADEBOOK_OPTIONS: gradebook_options}
   end
 
   def gradebook_version
@@ -935,16 +939,6 @@ class GradebooksController < ApplicationController
       params[:version]
     else
       @current_user.preferred_gradebook_version
-    end
-  end
-
-  def new_gradebook_enabled?
-    # params[:new_gradebook] is a development-only convenience for engineers.
-    # This param should never be used outside of development.
-    if Rails.env.development? && params.include?(:new_gradebook)
-      params[:new_gradebook] == "true"
-    else
-      @context.feature_enabled?(:new_gradebook)
     end
   end
 
@@ -967,19 +961,11 @@ class GradebooksController < ApplicationController
   end
 
   def render_default_gradebook
-    if new_gradebook_enabled?
-      render "gradebooks/gradezilla/gradebook"
-    else
-      render :gradebook
-    end
+    render "gradebooks/gradebook"
   end
 
   def render_individual_gradebook
-    if new_gradebook_enabled?
-      render "gradebooks/gradezilla/individual"
-    else
-      render :screenreader
-    end
+    render "gradebooks/individual"
   end
 
   def percentage(weight)
@@ -1095,8 +1081,7 @@ class GradebooksController < ApplicationController
 
     return options unless @current_user.present?
 
-    order_preferences = @current_user.preferences[:course_grades_assignment_order]
-    saved_order = order_preferences && order_preferences[@context.id]
+    saved_order = @current_user.get_preference(:course_grades_assignment_order, @context.id)
     options[:assignment_order] = saved_order if saved_order.present?
     options
   end
@@ -1129,17 +1114,11 @@ class GradebooksController < ApplicationController
     )
   end
 
-  def gradebook_settings(create_if_missing: false)
-    preferences = @current_user.preferences
-    if !preferences.include?(:gradebook_settings) && create_if_missing
-      preferences[:gradebook_settings] = {}
-    end
-
-    preferences.fetch(:gradebook_settings, {})
+  def gradebook_settings(key)
+    @current_user.get_preference(:gradebook_settings, key) || {}
   end
 
-  def ensure_section_view_filter_enabled
-    context_settings = gradebook_settings.fetch(@context.id)
+  def ensure_section_view_filter_enabled(context_settings)
     filter_settings = context_settings.fetch('selected_view_options_filters', [])
     return if filter_settings&.include?('sections')
 
@@ -1200,5 +1179,13 @@ class GradebooksController < ApplicationController
     else
       :grader
     end
+  end
+
+  def gradebook_column_size_preferences
+    @current_user.migrate_preferences_if_needed
+    @current_user.save if @current_user.changed?
+    shared_settings = @current_user.get_preference(:gradebook_column_size, "shared") || {}
+    course_settings = @current_user.get_preference(:gradebook_column_size, @context.global_id) || {}
+    shared_settings.merge(course_settings)
   end
 end

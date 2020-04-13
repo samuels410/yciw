@@ -136,6 +136,17 @@ module Types
       scope
     end
 
+    field :enrollments_connection, EnrollmentType.connection_type, null: true
+    def enrollments_connection
+      return nil unless course.grants_any_right?(
+        current_user, session,
+        :read_roster, :view_all_grades, :manage_grades
+      )
+
+      course.apply_enrollment_visibility(course.all_enrollments,
+                                         current_user).active
+    end
+
     field :grading_periods_connection, GradingPeriodType.connection_type, null: true
     def grading_periods_connection
       GradingPeriod.for(course).order(:start_date)
@@ -265,6 +276,11 @@ module Types
           attachment&.public_download_url(1.week)
         }
       end
+    end
+
+    field :notification_preferences_enabled, Boolean, null: false
+    def notification_preferences_enabled
+      NotificationPolicyOverride.enabled_for(current_user, course)
     end
   end
 end

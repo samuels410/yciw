@@ -372,6 +372,8 @@ module Api::V1::Assignment
 
     hash['anonymous_grading'] = value_to_boolean(assignment.anonymous_grading)
     hash['anonymize_students'] = assignment.anonymize_students?
+
+    hash['require_lockdown_browser'] = assignment.settings&.dig('lockdown_browser', 'require_lockdown_browser') || false
     hash
   end
 
@@ -615,19 +617,18 @@ module Api::V1::Assignment
     false
   end
 
-  def assignment_mute_status_valid?(assignment, assignment_params)
-    return true unless assignment_params.include?("muted") && assignment.moderated_grading?
-
-    # A moderated assignment may not be unmuted until grades have been published
-    assignment.grades_published? || value_to_boolean(assignment_params["muted"])
-  end
-
   def update_from_params(assignment, assignment_params, user, context = assignment.context)
     update_params = assignment_params.permit(allowed_assignment_input_fields)
 
     if update_params.key?('peer_reviews_assign_at')
       update_params['peer_reviews_due_at'] = update_params['peer_reviews_assign_at']
       update_params.delete('peer_reviews_assign_at')
+    end
+
+    if update_params.key?("anonymous_peer_reviews")
+      if Canvas::Plugin.value_to_boolean(update_params["anonymous_peer_reviews"]) != assignment.anonymous_peer_reviews
+        ::AssessmentRequest.where(asset: assignment.submissions).update_all(updated_at: Time.now.utc)
+      end
     end
 
     if update_params["submission_types"].is_a? Array
@@ -655,15 +656,6 @@ module Api::V1::Assignment
         assignment.grading_standard = grading_standard if grading_standard
       else
         assignment.grading_standard = nil
-      end
-    end
-
-    if assignment_params.key? "muted"
-      muted = value_to_boolean(assignment_params.delete("muted"))
-      if muted
-        assignment.mute!
-      else
-        assignment.unmute!
       end
     end
 
@@ -944,7 +936,6 @@ module Api::V1::Assignment
     return false unless assignment_group_id_valid?(assignment, assignment_params)
     return false unless assignment_dates_valid?(assignment, assignment_params)
     return false unless submission_types_valid?(assignment, assignment_params)
-    return false unless assignment_mute_status_valid?(assignment, assignment_params)
     true
   end
 

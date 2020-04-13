@@ -326,11 +326,17 @@
     "group_navigation_99f191a": {
         "message": "Навігація групи"
     },
+    "image_8ad06": {
+        "message": "Зображення"
+    },
     "images_7ce26570": {
         "message": "Зображення"
     },
     "increase_indent_6d550a4a": {
         "message": "Збільшити відступ"
+    },
+    "insert_593145ef": {
+        "message": "Вставка"
     },
     "insert_equella_links_49a8dacd": {
         "message": "Вставити посилання Equella"
@@ -440,6 +446,9 @@
     "no_due_dates_assigned_e8f5bac8": {
         "message": "Термін виконання не призначено"
     },
+    "no_e16d9132": {
+        "message": "Ні"
+    },
     "no_grade_3b4d7f3e": {
         "message": "Оцінка відсутня"
     },
@@ -502,6 +511,9 @@
     },
     "points_points_63e59cce": {
         "message": "{ points } балів"
+    },
+    "preview_53003fd2": {
+        "message": "Попередній перегляд"
     },
     "previous_month_bb1e3c84": {
         "message": "Попередній місяць"
@@ -646,6 +658,9 @@
     },
     "wiki_home_9cd54d0": {
         "message": "Домашня сторінка Wiki"
+    },
+    "yes_dde87d5": {
+        "message": "Так"
     },
     "yesterday_at_date_1aa6d18e": {
         "message": "Вчора в { date }"

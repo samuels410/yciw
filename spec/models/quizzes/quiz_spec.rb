@@ -20,8 +20,9 @@ require File.expand_path(File.dirname(__FILE__) + '/../../spec_helper.rb')
 require File.expand_path(File.dirname(__FILE__) + '/../../lib/canvas/draft_state_validations_spec.rb')
 
 describe Quizzes::Quiz do
-
   before :once do
+    PostPolicy.enable_feature!
+
     course_factory
   end
 
@@ -169,28 +170,16 @@ describe Quizzes::Quiz do
       expect(@quiz).not_to be_anonymize_students
     end
 
-    it 'returns true if the assignment is anonymous and muted' do
+    it 'returns true if the assignment anonymizes students' do
       @quiz.assignment = @assignment
-      @assignment.anonymous_grading = true
-      @assignment.muted = true
+      allow(@assignment).to receive(:anonymize_students?).and_return(true)
       expect(@quiz).to be_anonymize_students
     end
 
-    it 'returns false if the assignment is anonymous and unmuted' do
+    it 'returns false if the assignment does not anonymize students' do
       @quiz.assignment = @assignment
-      @assignment.anonymous_grading = true
+      allow(@assignment).to receive(:anonymize_students?).and_return(false)
       expect(@quiz).not_to be_anonymize_students
-    end
-
-    it 'returns false if the assignment is not anonymous' do
-      @quiz.assignment = @assignment
-      expect(@quiz).not_to be_anonymize_students
-    end
-
-    it 'calls Assignment#anonymize_students if an assignment is present' do
-      @quiz.assignment = @assignment
-      expect(@assignment).to receive(:anonymize_students?).once
-      @quiz.anonymize_students?
     end
   end
 
@@ -430,11 +419,12 @@ describe Quizzes::Quiz do
     expect(q.assignment.messages_sent).to be_empty
   end
 
-  it "should send a message if notify_of_update is set" do
+  it "should send a message if notify_of_update is set and grades are posted" do
     Notification.create!(:name => 'Assignment Changed')
     @course.offer
     student_in_course(active_all: true)
     a = @course.assignments.create!(:title => "some assignment", :points_possible => 5)
+    a.unmute!
     expect(a.points_possible).to eql(5.0)
     expect(a.submission_types).not_to eql("online_quiz")
     a.update_attribute(:created_at, Time.now - (40 * 60))
@@ -1786,7 +1776,7 @@ describe Quizzes::Quiz do
       expect(quiz.show_correct_answers_at).to be_nil
       expect(quiz.hide_correct_answers_at).to be_nil
 
-      quiz.update_attributes({
+      quiz.update({
         show_correct_answers: true,
         show_correct_answers_at: 2.days.from_now,
         hide_correct_answers_at: 5.days.from_now
@@ -1795,7 +1785,7 @@ describe Quizzes::Quiz do
       expect(quiz.show_correct_answers_at).not_to be_nil
       expect(quiz.hide_correct_answers_at).not_to be_nil
 
-      quiz.update_attributes({
+      quiz.update({
         show_correct_answers: false
       })
 
@@ -1817,7 +1807,7 @@ describe Quizzes::Quiz do
 
       expect(quiz.show_correct_answers?(@user, submission)).to be_falsey
 
-      quiz.update_attributes({ one_time_results: true })
+      quiz.update({ one_time_results: true })
       expect(quiz.show_correct_answers?(@user, submission)).to be_truthy
     end
 
@@ -1938,7 +1928,7 @@ describe Quizzes::Quiz do
 
       context "when the quiz is due in a closed grading period" do
         before(:once) do
-          @quiz.update_attributes(due_at: 4.weeks.ago)
+          @quiz.update(due_at: 4.weeks.ago)
         end
 
         it "is true for admins" do
@@ -1952,7 +1942,7 @@ describe Quizzes::Quiz do
 
       context "when the quiz is due in an open grading period" do
         before(:once) do
-          @quiz.update_attributes(due_at: 2.weeks.ago)
+          @quiz.update(due_at: 2.weeks.ago)
         end
 
         it "is true for admins" do
@@ -1966,7 +1956,7 @@ describe Quizzes::Quiz do
 
       context "when the quiz is due after all grading periods" do
         before(:once) do
-          @quiz.update_attributes(due_at: 1.day.from_now)
+          @quiz.update(due_at: 1.day.from_now)
         end
 
         it "is true for admins" do
@@ -1980,7 +1970,7 @@ describe Quizzes::Quiz do
 
       context "when the quiz is due before all grading periods" do
         before(:once) do
-          @quiz.update_attributes(due_at: 6.weeks.ago)
+          @quiz.update(due_at: 6.weeks.ago)
         end
 
         it "is true for admins" do
@@ -1994,7 +1984,7 @@ describe Quizzes::Quiz do
 
       context "when the quiz has no due date" do
         before(:once) do
-          @quiz.update_attributes(due_at: nil)
+          @quiz.update(due_at: nil)
         end
 
         it "is true for admins" do
@@ -2008,7 +1998,7 @@ describe Quizzes::Quiz do
 
       context "when the quiz is due in a closed grading period for a student" do
         before(:once) do
-          @quiz.update_attributes(due_at: 2.days.from_now)
+          @quiz.update(due_at: 2.days.from_now)
           override = @quiz.assignment_overrides.build
           override.set = @course.default_section
           override.override_due_at(4.weeks.ago)
@@ -2026,7 +2016,7 @@ describe Quizzes::Quiz do
 
       context "when the quiz is overridden with no due date for a student" do
         before(:once) do
-          @quiz.update_attributes(due_at: nil)
+          @quiz.update(due_at: nil)
           override = @quiz.assignment_overrides.build
           override.set = @course.default_section
           override.save!
@@ -2043,7 +2033,7 @@ describe Quizzes::Quiz do
 
       context "when the quiz has a deleted override in a closed grading period for a student" do
         before(:once) do
-          @quiz.update_attributes(due_at: 2.days.from_now)
+          @quiz.update(due_at: 2.days.from_now)
           override = @quiz.assignment_overrides.build
           override.set = @course.default_section
           override.override_due_at(4.weeks.ago)
@@ -2062,7 +2052,7 @@ describe Quizzes::Quiz do
 
       context "when the quiz is overridden with no due date and is only visible to overrides" do
         before(:once) do
-          @quiz.update_attributes(due_at: 4.weeks.ago, only_visible_to_overrides: true)
+          @quiz.update(due_at: 4.weeks.ago, only_visible_to_overrides: true)
           override = @quiz.assignment_overrides.build
           override.set = @course.default_section
           override.save!

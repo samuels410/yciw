@@ -77,12 +77,17 @@ class RubricAssociation < ActiveRecord::Base
     klass.where(id: a_id).first if a_id.present? # authorization is checked in the calling method
   end
 
+  def course_broadcast_data
+    context.broadcast_data if context.is_a?(Course)
+  end
+
   set_broadcast_policy do |p|
     p.dispatch :rubric_association_created
     p.to { self.context.students rescue [] }
     p.whenever {|record|
       record.just_created && !record.context.is_a?(Course)
     }
+    p.data { course_broadcast_data }
   end
 
   scope :bookmarked, -> { where(:bookmarked => true) }
@@ -245,7 +250,7 @@ class RubricAssociation < ActiveRecord::Base
     end
     association.context = context
     association.skip_updating_points_possible = params.delete :skip_updating_points_possible
-    association.update_attributes(params)
+    association.update(params)
     association.association_object = association_object
     association
   end

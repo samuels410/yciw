@@ -92,7 +92,7 @@ class SubmissionComment < ActiveRecord::Base
   def publish_other_comments_in_this_group
     return unless saved_change_to_draft?
     update_other_comments_in_this_group do |comment|
-      comment.update_attributes(draft: draft)
+      comment.update(draft: draft)
     end
   end
 
@@ -170,6 +170,10 @@ class SubmissionComment < ActiveRecord::Base
     can :read_author
   end
 
+  def course_broadcast_data
+    submission.context&.broadcast_data
+  end
+
   set_broadcast_policy do |p|
     p.dispatch :submission_comment
     p.to do
@@ -191,6 +195,7 @@ class SubmissionComment < ActiveRecord::Base
       record.submission.assignment.context.grants_right?(record.submission.user, :read) &&
       (!record.submission.assignment.context.instructors.include?(author) || record.submission.assignment.published?)
     }
+    p.data { course_broadcast_data }
 
     p.dispatch :submission_comment_for_teacher
     p.to { submission.assignment.context.instructors_in_charge_of(author_id) - [author] }
@@ -199,6 +204,7 @@ class SubmissionComment < ActiveRecord::Base
       record.provisional_grade_id.nil? &&
       record.submission.user_id == record.author_id
     }
+    p.data { course_broadcast_data }
   end
 
   def can_view_comment?(user, session)
@@ -216,7 +222,22 @@ class SubmissionComment < ActiveRecord::Base
     end
 
     # Students on the receiving end of an assessment can view assessors' comments
-    return true if assessment_request.present? && assessment_request.user_id == user.id
+    if assessment_request.present?
+      peer_review_comment = assessment_request.user_id == user.id
+      # For group assignments, peer-review comments left for another user in
+      # this student's group (and were "copied" to this student) should be
+      # visible. If this comment is a copy (as evinced by the group comment ID)
+      # of one left for the group member associated with this comment's
+      # assessment request, treat it as viewable.
+      if group_comment_id.present?
+        peer_review_comment ||= SubmissionComment.exists?(
+          assessment_request_id: assessment_request_id,
+          group_comment_id: group_comment_id,
+          author_id: assessment_request.user_id
+        )
+      end
+      return true if peer_review_comment
+    end
 
     # The student who owns the submission can't see drafts or hidden comments (or,
     # generally, any instructor comments if the assignment is muted)

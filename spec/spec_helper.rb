@@ -208,7 +208,6 @@ module RenderWithHelpers
 end
 RSpec::Rails::ViewExampleGroup::ExampleMethods.prepend(RenderWithHelpers)
 
-require 'action_controller_test_process'
 require_relative 'rspec_mock_extensions'
 require File.expand_path(File.dirname(__FILE__) + '/ams_spec_helper')
 
@@ -906,7 +905,8 @@ RSpec.configure do |config|
       '2.5.1',
       '2.5.3',
       '2.6.0',
-      '2.6.2'
+      '2.6.2',
+      '2.6.5'
     ]
     skip("stubbing prepended class methods is broken in this version of ruby") if versions.include?(RUBY_VERSION)
   end

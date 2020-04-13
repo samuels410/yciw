@@ -16,8 +16,9 @@
 # with this program. If not, see <http://www.gnu.org/licenses/>.
 
 require_relative '../../helpers/gradebook_common'
+require_relative '../pages/gradebook_page'
 
-describe "gradebook" do
+describe "Gradebook" do
   include_context "in-process server selenium tests"
   include GradebookCommon
 
@@ -33,7 +34,7 @@ describe "gradebook" do
 
   def test_n_students(n)
     create_users_in_course @course, n
-    get "/courses/#{@course.id}/gradebook"
+    Gradebook.visit(@course)
     f('.gradebook_filter input').send_keys n
     expect(ff('.student-name')).to have_size 1
     expect(f('.student-name')).to include_text "user #{n}"

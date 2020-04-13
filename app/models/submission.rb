@@ -122,6 +122,7 @@ class Submission < ActiveRecord::Base
   validates :seconds_late_override, numericality: { greater_than_or_equal_to: 0 }, allow_nil: true
   validates :extra_attempts, numericality: { greater_than_or_equal_to: 0 }, allow_nil: true
   validates :late_policy_status, inclusion: ['none', 'missing', 'late'], allow_nil: true
+  validates :cached_tardiness, inclusion: ['missing', 'late'], allow_nil: true
   validate :ensure_grader_can_grade
   validate :extra_attempts_can_only_be_set_on_online_uploads
   validate :ensure_attempts_are_in_range
@@ -143,7 +144,11 @@ class Submission < ActiveRecord::Base
 
   scope :for_context_codes, lambda { |context_codes| where(:context_code => context_codes) }
 
-  scope :postable, -> { graded.union(with_hidden_comments) }
+  scope :postable, -> {
+    all.primary_shard.activate do
+      graded.union(with_hidden_comments)
+    end
+  }
   scope :with_hidden_comments, -> {
     where("EXISTS (?)", SubmissionComment.where("submission_id = submissions.id AND hidden = true"))
   }
@@ -776,8 +781,13 @@ class Submission < ActiveRecord::Base
   end
 
   # Preload OriginalityReport before using this method
-  def originality_report_url(asset_string, user)
-    if asset_string == self.asset_string
+  def originality_report_url(asset_string, user, attempt=nil)
+    if attempt
+      version = versions.find{ |v| v.model&.attempt&.to_s == attempt.to_s }
+      return nil unless version
+      report = originality_reports.find_by(submission_time: version.model.submitted_at)
+      report&.report_launch_path
+    elsif asset_string == self.asset_string
       originality_reports.where(attachment_id: nil).first&.report_launch_path
     elsif self.grants_right?(user, :view_turnitin_report)
       requested_attachment = all_versioned_attachments.find_by_asset_string(asset_string)
@@ -1307,8 +1317,6 @@ class Submission < ActiveRecord::Base
           opts = {
             preferred_plugins: [Canvadocs::RENDER_PDFJS, Canvadocs::RENDER_BOX, Canvadocs::RENDER_CROCODOC],
             wants_annotation: true,
-            # TODO: Remove the next line after the DocViewer Data Migration project RD-4702
-            region: a.shard.database_server.config[:region] || "none"
           }
 
           if context.root_account.settings[:canvadocs_prefer_office_online]
@@ -1473,6 +1481,7 @@ class Submission < ActiveRecord::Base
 
     if late_policy&.missing_submission_deduction_enabled?
       if score.nil?
+        self.grade_matches_current_submission = true
         self.score = late_policy.points_for_missing(points_possible, grading_type)
         self.workflow_state = "graded"
       end
@@ -1748,6 +1757,10 @@ class Submission < ActiveRecord::Base
     self.updated_at <=> other.updated_at
   end
 
+  def course_broadcast_data
+    context&.broadcast_data
+  end
+
   # Submission:
   #   Online submission submitted AFTER the due date (notify the teacher) - "Grade Changes"
   #   Submission graded (or published) - "Grade Changes"
@@ -1760,6 +1773,7 @@ class Submission < ActiveRecord::Base
       BroadcastPolicies::SubmissionPolicy.new(submission).
         should_dispatch_assignment_submitted_late?
     }
+    p.data { course_broadcast_data }
 
     p.dispatch :assignment_submitted
     p.to { assignment.context.instructors_in_charge_of(user_id) }
@@ -1767,6 +1781,7 @@ class Submission < ActiveRecord::Base
       BroadcastPolicies::SubmissionPolicy.new(submission).
         should_dispatch_assignment_submitted?
     }
+    p.data { course_broadcast_data }
 
     p.dispatch :assignment_resubmitted
     p.to { assignment.context.instructors_in_charge_of(user_id) }
@@ -1774,6 +1789,7 @@ class Submission < ActiveRecord::Base
       BroadcastPolicies::SubmissionPolicy.new(submission).
         should_dispatch_assignment_resubmitted?
     }
+    p.data { course_broadcast_data }
 
     p.dispatch :group_assignment_submitted_late
     p.to { assignment.context.instructors_in_charge_of(user_id) }
@@ -1781,6 +1797,7 @@ class Submission < ActiveRecord::Base
       BroadcastPolicies::SubmissionPolicy.new(submission).
         should_dispatch_group_assignment_submitted_late?
     }
+    p.data { course_broadcast_data }
 
     p.dispatch :submission_graded
     p.to { [student] + User.observing_students_in_course(student, assignment.context) }
@@ -1788,6 +1805,7 @@ class Submission < ActiveRecord::Base
       BroadcastPolicies::SubmissionPolicy.new(submission).
         should_dispatch_submission_graded?
     }
+    p.data { course_broadcast_data }
 
     p.dispatch :submission_grade_changed
     p.to { [student] + User.observing_students_in_course(student, assignment.context) }
@@ -1795,6 +1813,7 @@ class Submission < ActiveRecord::Base
       BroadcastPolicies::SubmissionPolicy.new(submission).
         should_dispatch_submission_grade_changed?
     }
+    p.data { course_broadcast_data }
 
     p.dispatch :submission_posted
     p.to { [student] + User.observing_students_in_course(student, assignment.context) }
@@ -1802,6 +1821,7 @@ class Submission < ActiveRecord::Base
       BroadcastPolicies::SubmissionPolicy.new(submission).
         should_dispatch_submission_posted?
     }
+    p.data { course_broadcast_data }
 
   end
 

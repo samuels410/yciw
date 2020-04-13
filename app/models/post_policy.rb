@@ -30,15 +30,11 @@ class PostPolicy < ActiveRecord::Base
   # addition to the setting, a course must also have New Gradebook enabled to
   # have post policies be active.
   def self.feature_enabled?
-    Setting.get("post_policies_enabled", false) == "true"
+    true
   end
 
   def self.enable_feature!
     Setting.set("post_policies_enabled", true)
-  end
-
-  def self.disable_feature!
-    Setting.set("post_policies_enabled", false)
   end
 
   private

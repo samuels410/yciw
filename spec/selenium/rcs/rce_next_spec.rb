@@ -491,13 +491,54 @@ describe "RCE next tests" do
     end
 
     it "should open upload document modal when clicking upload option" do
-      skip('Causing flakiness - CORE-3186')
       visit_front_page_edit(@course)
 
       click_document_toolbar_button
       click_upload_document
 
       expect(upload_document_modal).to be_displayed
+    end
+
+    it "should include media upload option if kaltura is enabled" do
+      double('CanvasKaltura::ClientV3')
+      allow(CanvasKaltura::ClientV3).to receive(:config).and_return({})
+      visit_front_page_edit(@course)
+      media_button = media_toolbar_button
+      media_button.click
+      wait_for_animations
+      menu_id = media_button.attribute('aria-owns')
+      expect(menu_item_by_menu_id(menu_id, "Upload/Record Media")).to be_displayed
+      expect(menu_item_by_menu_id(menu_id, "Course Media")).to be_displayed
+      expect(menu_item_by_menu_id(menu_id, "User Media")).to be_displayed
+      expect(menu_items_by_menu_id(menu_id).length).to be(3)
+    end
+
+    it "should not include media upload option if kaltura is disabled" do
+      double('CanvasKaltura::ClientV3')
+      allow(CanvasKaltura::ClientV3).to receive(:config).and_return(nil)
+      visit_front_page_edit(@course)
+      media_button = media_toolbar_button
+      media_button.click
+      wait_for_animations
+      menu_id = media_button.attribute('aria-owns')
+      expect(menu_item_by_menu_id(menu_id, "Course Media")).to be_displayed
+      expect(menu_item_by_menu_id(menu_id, "User Media")).to be_displayed
+      expect(menu_items_by_menu_id(menu_id).length).to be(2)
+    end
+
+    it "should not include media upload option if button is disabled" do
+      double('CanvasKaltura::ClientV3')
+      allow(CanvasKaltura::ClientV3).to receive(:config).and_return({
+        'hide_rte_button' => true
+      })
+      visit_front_page_edit(@course)
+      media_button = media_toolbar_button
+      media_button.click
+      wait_for_animations
+      menu_id = media_button.attribute('aria-owns')
+      expect(menu_item_by_menu_id(menu_id, "Course Media")).to be_displayed
+      expect(menu_item_by_menu_id(menu_id, "User Media")).to be_displayed
+      expect(menu_items_by_menu_id(menu_id).length).to be(2)
     end
 
     it "should close sidebar after drag and drop" do
@@ -518,6 +559,27 @@ describe "RCE next tests" do
       expect(f('body')).not_to contain_css('[data-testid="CanvasContentTray"]')
     end
 
+    it "should add a title attribute to an inserted iframe" do
+      # as typically happens when embedding media, like a youtube video
+      double('CanvasKaltura::ClientV3')
+      allow(CanvasKaltura::ClientV3).to receive(:config).and_return({})
+      visit_front_page_edit(@course)
+
+      click_media_toolbar_button
+      click_upload_media
+      click_embed_media_tab
+      code_box = embed_code_textarea
+      code_box.click
+      code_box.send_keys('<iframe src="https://example.com/"></iframe>')
+      click_upload_media_submit_button
+      wait_for_animations
+
+      fj('button:contains("Save")').click # save the page
+      wait_for_ajaximations
+
+      expect(f('iframe[title="embedded content"][src="https://example.com/"]')).to be_displayed
+    end
+
     describe "keyboard shortcuts" do
       it "should open keyboard shortcut modal with alt-f8" do
         visit_front_page_edit(@course)
@@ -534,7 +596,7 @@ describe "RCE next tests" do
         rce.send_keys [:alt, :f9]
 
         expect(f('.tox-menubar')).to be_displayed
-        expect(fj('.tox-menubar button:contains("File")')).to eq(driver.switch_to.active_element)
+        expect(fj('.tox-menubar button:contains("Edit")')).to eq(driver.switch_to.active_element)
       end
 
       it "should focus the toolbar with alt-f10" do
@@ -552,7 +614,7 @@ describe "RCE next tests" do
         visit_existing_wiki_edit(@course, page_title)
         driver.switch_to.frame('wiki_page_body_ifr')
         f('table td').click # put the cursor in the table
-        f('body').send_keys [:control, :f9]
+        driver.action.key_down(:control).send_keys(:f9).key_up(:control).perform
 
         driver.switch_to.default_content
         expect(f('.tox-pop__dialog button[title="Table properties"]')).to eq(driver.switch_to.active_element)
@@ -565,7 +627,7 @@ describe "RCE next tests" do
         visit_existing_wiki_edit(@course, page_title)
         driver.switch_to.frame('wiki_page_body_ifr')
         f('a').click # put the cursor in the table
-        f('body').send_keys [:control, :f9]
+        driver.action.key_down(:control).send_keys(:f9).key_up(:control).perform
 
         driver.switch_to.default_content
         expect(f('.tox-pop__dialog button[title="Show link options"]')).to eq(driver.switch_to.active_element)

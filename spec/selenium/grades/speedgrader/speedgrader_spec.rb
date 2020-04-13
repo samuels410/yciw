@@ -61,6 +61,8 @@ describe 'Speedgrader' do
   end
 
   before :once do
+    PostPolicy.enable_feature!
+
     course_factory(active_all: true)
     @students = create_users_in_course(@course, 5, return_type: :record, name_prefix: "Student_")
   end
@@ -160,7 +162,7 @@ describe 'Speedgrader' do
       end
 
       it 'should display pass/fail correctly when total points possible is changed', priority: "1", test_id: 419289 do
-        @assignment.update_attributes(points_possible: 1)
+        @assignment.update(points_possible: 1)
         refresh_page
         expect(Speedgrader.grade_input).to have_value('complete')
         expect(Speedgrader.points_possible_label).to include_text('(1 / 1)')
@@ -675,7 +677,7 @@ describe 'Speedgrader' do
     it 'navigates to gradebook via link' do
       # make sure gradebook link works
       expect_new_page_load {Speedgrader.gradebook_link.click}
-      expect(Gradebook.grade_grid).to be_displayed
+      expect(Gradebook.grid).to be_displayed
     end
   end
 
@@ -704,43 +706,6 @@ describe 'Speedgrader' do
       expect(f("#grade_container input")["readonly"]).to eq "true"
       expect(f("#closed_gp_notice")).to be_displayed
     end
-  end
-
-  context "mute/unmute dialogs" do
-    before(:once) do
-      @assignment = @course.assignments.create!(
-        grading_type: 'points',
-        points_possible: 10
-      )
-    end
-
-    before(:each) do
-      user_session(@teacher)
-    end
-
-    it "shows dialog when attempting to mute and mutes" do
-      @assignment.update_attributes(muted: false)
-
-      Speedgrader.visit(@course.id, @assignment.id)
-      f('#mute_link').click
-      expect(f('#mute_dialog').attribute('style')).not_to include('display: none')
-      f('button.btn-mute').click
-      @assignment.reload
-      expect(@assignment.muted?).to be true
-    end
-
-    it "shows dialog when attempting to unmute and unmutes" do
-      @assignment.update_attributes(muted: true)
-
-      get "/courses/#{@course.id}/gradebook/speed_grader?assignment_id=#{@assignment.id}#"
-      f('#mute_link').click
-      expect(f('#unmute_dialog').attribute('style')).not_to include('display: none')
-      f('button.btn-unmute').click
-      expect(f('#unmute_dialog')).not_to contain_css('button.btn-unmute')
-      @assignment.reload
-      expect(@assignment.muted?).to be false
-    end
-
   end
 
   private

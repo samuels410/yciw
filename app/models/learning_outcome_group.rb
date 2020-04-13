@@ -18,9 +18,9 @@
 
 class LearningOutcomeGroup < ActiveRecord::Base
   include Workflow
-  include OutcomeAttributes
   include MasterCourses::Restrictor
   restrict_columns :state, [:workflow_state]
+  self.ignored_columns = %i[migration_id_2 vendor_guid_2]
 
   belongs_to :learning_outcome_group
   has_many :child_outcome_groups, :class_name => 'LearningOutcomeGroup', :foreign_key => "learning_outcome_group_id"
@@ -59,7 +59,7 @@ class LearningOutcomeGroup < ActiveRecord::Base
   # adds a new link to an outcome to this group. does nothing if a link already
   # exists (an outcome can be linked into a context multiple times by multiple
   # groups, but only once per group).
-  def add_outcome(outcome, skip_touch: false)
+  def add_outcome(outcome, skip_touch: false, migration_id: nil)
     # no-op if the outcome is already linked under this group
     outcome_link = child_outcome_links.active.where(content_id: outcome).first
     return outcome_link if outcome_link
@@ -69,7 +69,8 @@ class LearningOutcomeGroup < ActiveRecord::Base
     child_outcome_links.create(
       content: outcome,
       context: self.context || self,
-      skip_touch: skip_touch
+      skip_touch: skip_touch,
+      migration_id: migration_id
     )
   end
 
@@ -182,7 +183,11 @@ class LearningOutcomeGroup < ActiveRecord::Base
         group = scope.build :title => context.try(:name) || 'ROOT'
         group.building_default = true
         Shackles.activate(:master) do
-          group.save!
+          # during course copies/imports, observe may be disabled but import job will
+          # not be aware of this lazy object creation
+          ActiveRecord::Base.observers.enable LiveEventsObserver do
+            group.save!
+          end
         end
       end
       group

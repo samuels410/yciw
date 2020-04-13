@@ -276,7 +276,7 @@ describe "scheduler" do
         load_month_view
 
         scheduler_event.click
-        move_to_click('.event-details .unreserve_event_link')
+        f('.event-details .unreserve_event_link').click
         wait_for_ajaximations
         f('#delete_event_dialog~.ui-dialog-buttonpane .btn-primary').click
 
@@ -287,7 +287,7 @@ describe "scheduler" do
         load_week_view
 
         scheduler_event.click
-        move_to_click('.event-details .unreserve_event_link')
+        f('.event-details .unreserve_event_link').click
         wait_for_ajaximations
         f('#delete_event_dialog~.ui-dialog-buttonpane .btn-primary').click
 
@@ -298,7 +298,7 @@ describe "scheduler" do
         load_agenda_view
 
         agenda_item.click
-        move_to_click('.event-details .unreserve_event_link')
+        f('.event-details .unreserve_event_link').click
         wait_for_ajaximations
         f('#delete_event_dialog~.ui-dialog-buttonpane .btn-primary').click
 

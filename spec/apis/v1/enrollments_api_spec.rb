@@ -736,7 +736,7 @@ describe EnrollmentsApiController, type: :request do
       end
 
       it "should not allow self-enrollment in a concluded course" do
-        @course.update_attributes(:start_at => 2.days.ago, :conclude_at => 1.day.ago,
+        @course.update(:start_at => 2.days.ago, :conclude_at => 1.day.ago,
           :restrict_enrollments_to_course_dates => true)
         json = raw_api_call :post, @path, @path_options,
           {enrollment: {user_id: 'self', self_enrollment_code: @course.self_enrollment_code}}
@@ -786,7 +786,7 @@ describe EnrollmentsApiController, type: :request do
     end
 
     it "should deterministically order enrollments for pagination" do
-      Account.site_admin.enable_feature!(:bookmarking_for_enrollments_index)
+      Account.default.enable_feature!(:bookmarking_for_enrollments_index)
       enrollment_num = 10
       enrollment_num.times do
         u = user_with_pseudonym(name: "John Smith", sortable_name: "Smith, John")
@@ -2098,7 +2098,7 @@ describe EnrollmentsApiController, type: :request do
 
     describe "pagination" do
       it "should properly paginate" do
-        Account.site_admin.enable_feature!(:bookmarking_for_enrollments_index)
+        Account.default.enable_feature!(:bookmarking_for_enrollments_index)
         json = api_call(:get, "#{@path}?page=1&per_page=1", @params.merge(:page => 1.to_param, :per_page => 1.to_param))
         enrollments = %w{observer student ta teacher}.inject([]) { |res, type|
           res = res + @course.send("#{type}_enrollments").preload(:user)

@@ -43,9 +43,7 @@ class NotificationPolicy < ActiveRecord::Base
     end
   }
 
-  # TODO: the scope name should be self-explanatory... change this to
-  # by_frequency or something This is for choosing a policy by frequency
-  scope :by, lambda { |freq| where(:frequency => Array(freq).map(&:to_s)) }
+  scope :by_frequency, lambda { |freq| where(:frequency => Array(freq).map(&:to_s)) }
 
   scope :in_state, lambda { |state| where(:workflow_state => state.to_s) }
 
@@ -59,13 +57,13 @@ class NotificationPolicy < ActiveRecord::Base
         bool_val = (value == 'true')
         # save the preference as a symbol (convert from string)
         case key.to_sym
-          when :send_scores_in_emails, :send_observed_names_in_notifications
+          when :send_scores_in_emails
             # Only set if a root account and the root account allows the setting.
             if params[:root_account].settings[:allow_sending_scores_in_emails] != false
               user.preferences[key.to_sym] = bool_val
             end
-          when :no_submission_comments_inbox
-            user.preferences[:no_submission_comments_inbox] = bool_val
+          when :no_submission_comments_inbox, :send_observed_names_in_notifications
+            user.preferences[key.to_sym] = bool_val
         end
       end
       user.save!

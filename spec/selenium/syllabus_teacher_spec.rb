@@ -24,7 +24,7 @@ describe "course syllabus" do
   include FilesCommon
 
   def add_assignment(title, points)
-    #assignment data
+    # assignment data
     assignment = assignment_model({
                                       :course => @course,
                                       :title => title,
@@ -85,7 +85,7 @@ describe "course syllabus" do
     it "should validate Jump to Today works on the mini calendar", priority:"1", test_id: 237017 do
       2.times { f('.next_month_link').click }
       f('.jump_to_today_link').click
-      expect(f('.mini_month .today')).to have_attribute('id', "mini_day_#{Time.now.strftime('%Y_%m_%d')}")
+      expect(f('.mini_month .today')).to have_attribute('id', "mini_day_#{Time.zone.now.strftime('%Y_%m_%d')}")
     end
 
     describe "Accessibility" do

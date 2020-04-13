@@ -29,15 +29,25 @@ def hasFlag(name) {
       echo "found"
     fi
   """
-  return sh(
+  def result = sh(
     script: script,
     returnStdout: true
   ).trim() == 'found'
+  echo "hasFlag($name) => $result"
+  return result
 }
 
 def getImageTagVersion() {
   // 'refs/changes/63/181863/8' -> '63.181863.8'
-  return hasFlag('skip-docker-build') ? 'master' : "${env.GERRIT_REFSPEC}".minus('refs/changes/').replaceAll('/','.')
+  return "${env.GERRIT_REFSPEC}".minus('refs/changes/').replaceAll('/','.')
+}
+
+def forceRunCoverage() {
+  return hasFlag('force-run-coverage')
+}
+
+def isForceFailure() {
+  return hasFlag('force-failure')
 }
 
 return this

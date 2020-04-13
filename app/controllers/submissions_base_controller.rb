@@ -57,15 +57,28 @@ class SubmissionsBaseController < ApplicationController
 
         render 'submissions/show', stream: can_stream_template?
       end
+
       format.json do
+        submission_json_exclusions = []
+
+        if @submission.submission_type == "online_quiz" &&
+            @submission.hide_grade_from_student? &&
+            !@assignment.grants_right?(@current_user, :grade)
+          submission_json_exclusions << :body
+        end
+
         @submission.limit_comments(@current_user, session)
+
         render :json => @submission.as_json(
           Submission.json_serialization_full_parameters(
             except: %i(quiz_submission submission_history)
-          ).merge(permissions: {
-            user: @current_user,
-            session: session,
-            include_permissions: false
+          ).merge({
+            except: submission_json_exclusions,
+            permissions: {
+              user: @current_user,
+              session: session,
+              include_permissions: false
+            }
           })
         )
       end
@@ -244,7 +257,7 @@ class SubmissionsBaseController < ApplicationController
     @asset_string = params[:asset_string]
     if authorized_action(@submission, @current_user, :read)
       url = if type == 'originality_report'
-        @submission.originality_report_url(@asset_string, @current_user)
+        @submission.originality_report_url(@asset_string, @current_user, params[:attempt])
       else
         legacy_plagiarism_report(@submission, @asset_string, type)
       end

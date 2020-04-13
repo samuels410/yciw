@@ -31,6 +31,8 @@ describe Assignment do
   end
 
   before :once do
+    PostPolicy.enable_feature!
+
     course_with_teacher(active_all: true)
     @initial_student = student_in_course(active_all: true, user_name: 'a student').user
   end
@@ -289,6 +291,7 @@ describe Assignment do
       context "when muting an assignment" do
         it "sets the post policy of the assignment to manual" do
           assignment = @course.assignments.create!
+          assignment.update!(muted: false)
           assignment.mute!
 
           expect(assignment.post_policy).to be_post_manually
@@ -303,8 +306,15 @@ describe Assignment do
           expect(assignment.post_policy).to be_post_manually
         end
 
-        it "sets the post policy of non-anonymous assignments to automatic" do
+        it "sets the post policy of non-anonymous moderated assignments to automatic" do
           assignment = @course.assignments.create!(final_grader: teacher, grader_count: 2, moderated_grading: true)
+          assignment.unmute!
+
+          expect(assignment.post_policy).not_to be_post_manually
+        end
+
+        it "sets the post policy of non-anonymous non-moderated assignments to automatic" do
+          assignment = @course.assignments.create!
           assignment.unmute!
 
           expect(assignment.post_policy).not_to be_post_manually
@@ -329,17 +339,10 @@ describe Assignment do
           }.to change { quiz.reload.updated_at }
         end
 
-        context "when post policies are enabled" do
-          before(:each) do
-            @course.enable_feature!(:new_gradebook)
-            PostPolicy.enable_feature!
-          end
-
-          it "does not attempt to update the quiz when posting/hiding changes the assignment's muted status" do
-            expect {
-              assignment.hide_submissions(submission_ids: assignment.submissions.pluck(:id))
-            }.not_to change { quiz.reload.updated_at }
-          end
+        it "does not attempt to update the quiz when posting/hiding changes the assignment's muted status" do
+          expect {
+            assignment.hide_submissions(submission_ids: assignment.submissions.pluck(:id))
+          }.not_to change { quiz.reload.updated_at }
         end
       end
     end
@@ -900,49 +903,32 @@ describe Assignment do
       end
 
       context "when the assignment is unmoderated" do
-        context "when Post Policies is not enabled" do
-          it 'returns true when the assignment is muted' do
-            @assignment.mute!
-            expect(@assignment).to be_anonymize_students
-          end
+        let(:course) { @assignment.course }
+        let(:active_student) { User.create! }
+        let(:student2) { User.create! }
+        let(:student3) { User.create! }
 
-          it 'returns false when the assignment is unmuted' do
-            @assignment.unmute!
-            expect(@assignment).not_to be_anonymize_students
-          end
+        before(:each) do
+          course.enroll_student(active_student, workflow_state: :active)
+          course.enroll_student(student2, workflow_state: :active)
+          course.enroll_student(student3, workflow_state: :active)
         end
 
-        context "when Post Policies is enabled" do
-          let(:course) { @assignment.course }
-          let(:active_student) { User.create! }
-          let(:student2) { User.create! }
-          let(:student3) { User.create! }
+        it "returns true when at least one active student has an unposted submission" do
+          expect(@assignment).to be_anonymize_students
+        end
 
-          before(:each) do
-            course.enable_feature!(:new_gradebook)
-            PostPolicy.enable_feature!
+        it "returns false when all active submissions are posted" do
+          student2.enrollments.find_by(course: course).conclude
+          student3.enrollments.find_by(course: course).deactivate
 
-            course.enroll_student(active_student, workflow_state: :active)
-            course.enroll_student(student2, workflow_state: :active)
-            course.enroll_student(student3, workflow_state: :active)
-          end
+          @assignment.post_submissions
+          expect(@assignment).not_to be_anonymize_students
+        end
 
-          it "returns true when at least one active student has an unposted submission" do
-            expect(@assignment).to be_anonymize_students
-          end
-
-          it "returns false when all active submissions are posted" do
-            student2.enrollments.find_by(course: course).conclude
-            student3.enrollments.find_by(course: course).deactivate
-
-            @assignment.post_submissions
-            expect(@assignment).not_to be_anonymize_students
-          end
-
-          it "returns false when all submissions are posted" do
-            @assignment.post_submissions
-            expect(@assignment).not_to be_anonymize_students
-          end
+        it "returns false when all submissions are posted" do
+          @assignment.post_submissions
+          expect(@assignment).not_to be_anonymize_students
         end
       end
     end
@@ -990,17 +976,38 @@ describe Assignment do
     end
 
     context 'when the assignment is anonymously graded' do
-      it 'returns false when the user is not an admin' do
-        expect(assignment.can_view_student_names?(@teacher)).to be false
-      end
+      context "when the assignment is unmoderated" do
+        let(:course) { assignment.course }
+        let(:active_student) { User.create! }
+        let(:student2) { User.create! }
+        let(:student3) { User.create! }
 
-      it 'returns false when the user is an admin and the assignment is muted' do
-        expect(assignment.can_view_student_names?(admin)).to be false
-      end
+        before(:each) do
+          course.enroll_student(active_student, workflow_state: :active)
+          course.enroll_student(student2, workflow_state: :active)
+          course.enroll_student(student3, workflow_state: :active)
+        end
 
-      it 'returns true when the user is an admin and the assignment is unmuted' do
-        assignment.muted = false
-        expect(assignment.can_view_student_names?(admin)).to be true
+        it "returns false for a teacher when at least one active student has an unposted submission" do
+          expect(assignment.can_view_student_names?(@teacher)).to be false
+        end
+
+        it "returns false for an admin when at least one active student has an unposted submission" do
+          expect(assignment.can_view_student_names?(admin)).to be false
+        end
+
+        it "returns true when all active submissions are posted" do
+          student2.enrollments.find_by(course: course).conclude
+          student3.enrollments.find_by(course: course).deactivate
+
+          assignment.post_submissions
+          expect(assignment.can_view_student_names?(admin)).to be true
+        end
+
+        it "returns true when all submissions are posted" do
+          assignment.post_submissions
+          expect(assignment.can_view_student_names?(admin)).to be true
+        end
       end
 
       context 'when the assignment is moderated' do
@@ -1057,7 +1064,7 @@ describe Assignment do
 
     it 'returns the name of the tool proxy' do
       expected_name = 'test name'
-      message_handler.tool_proxy.update_attributes!(name: expected_name)
+      message_handler.tool_proxy.update!(name: expected_name)
       setup_assignment_with_homework
       course.assignments << @assignment
       @assignment.tool_settings_tool = message_handler
@@ -2155,17 +2162,8 @@ describe Assignment do
           expect(submission).to be_posted
         end
 
-        it "does not post the submission for a manually-posted assignment when post policies are enabled" do
-          course.enable_feature!(:new_gradebook)
-          PostPolicy.enable_feature!
-
+        it "does not post the submission for a manually-posted assignment" do
           assignment.post_policy.update!(post_manually: true)
-          submission, * = assignment.grade_student(student, grader: teacher, score: 50)
-          expect(submission).not_to be_posted
-        end
-
-        it "does not post the submission for a muted assignment when post policies are not enabled" do
-          assignment.mute!
           submission, * = assignment.grade_student(student, grader: teacher, score: 50)
           expect(submission).not_to be_posted
         end
@@ -2195,60 +2193,25 @@ describe Assignment do
     end
 
     describe "grade change audit records" do
-      context "when post policies are enabled" do
-        before(:once) do
-          PostPolicy.enable_feature!
-          course.enable_feature!(:new_gradebook)
+      context "when assignment posts manually" do
+        before(:each) do
+          assignment.ensure_post_policy(post_manually: true)
         end
 
-        context "when assignment posts manually" do
-          before(:each) do
-            assignment.ensure_post_policy(post_manually: true)
-          end
-
-          it "inserts a record" do
-            expect(Auditors::GradeChange::Stream).to receive(:insert).once
-            assignment.grade_student(student, grade: 10, grader: teacher)
-          end
-        end
-
-        context "when assignment posts automatically" do
-          before(:each) do
-            assignment.ensure_post_policy(post_manually: false)
-          end
-
-          it "inserts a record" do
-            expect(Auditors::GradeChange::Stream).to receive(:insert).once
-            assignment.grade_student(student, grade: 10, grader: teacher)
-          end
+        it "inserts a record" do
+          expect(Auditors::GradeChange::Stream).to receive(:insert).once
+          assignment.grade_student(student, grade: 10, grader: teacher)
         end
       end
 
-      context "when post policies are not enabled" do
-        before(:once) do
-          PostPolicy.disable_feature!
+      context "when assignment posts automatically" do
+        before(:each) do
+          assignment.ensure_post_policy(post_manually: false)
         end
 
-        context "when assignment is muted" do
-          before(:each) do
-            assignment.mute!
-          end
-
-          it "inserts a record" do
-            expect(Auditors::GradeChange::Stream).to receive(:insert).once
-            assignment.grade_student(student, grade: 10, grader: teacher)
-          end
-        end
-
-        context "when assignment is unmuted" do
-          before(:each) do
-            assignment.unmute!
-          end
-
-          it "inserts a record" do
-            expect(Auditors::GradeChange::Stream).to receive(:insert).once
-            assignment.grade_student(student, grade: 10, grader: teacher)
-          end
+        it "inserts a record" do
+          expect(Auditors::GradeChange::Stream).to receive(:insert).once
+          assignment.grade_student(student, grade: 10, grader: teacher)
         end
       end
     end
@@ -2257,60 +2220,25 @@ describe Assignment do
       let(:student) { course.enroll_student(User.create!, enrollment_state: :active).user }
       let(:teacher) { course.enroll_teacher(User.create!, enrollment_state: :active).user }
 
-      context "when post policies are enabled" do
-        before(:once) do
-          PostPolicy.enable_feature!
-          course.enable_feature!(:new_gradebook)
+      context "when assignment posts manually" do
+        before(:each) do
+          assignment.ensure_post_policy(post_manually: true)
         end
 
-        context "when assignment posts manually" do
-          before(:each) do
-            assignment.ensure_post_policy(post_manually: true)
-          end
-
-          it "emits an event" do
-            expect(Canvas::LiveEvents).to receive(:grade_changed).once
-            assignment.grade_student(student, grade: 10, grader: teacher)
-          end
-        end
-
-        context "when assignment posts automatically" do
-          before(:each) do
-            assignment.ensure_post_policy(post_manually: false)
-          end
-
-          it "emits two events when grading: one for grading and one for posting" do
-            expect(Canvas::LiveEvents).to receive(:grade_changed).twice
-            assignment.grade_student(student, grade: 10, grader: teacher)
-          end
+        it "emits an event" do
+          expect(Canvas::LiveEvents).to receive(:grade_changed).once
+          assignment.grade_student(student, grade: 10, grader: teacher)
         end
       end
 
-      context "when post policies are not enabled" do
-        before(:once) do
-          PostPolicy.disable_feature!
+      context "when assignment posts automatically" do
+        before(:each) do
+          assignment.ensure_post_policy(post_manually: false)
         end
 
-        context "when assignment is muted" do
-          before(:each) do
-            assignment.mute!
-          end
-
-          it "emits an event" do
-            expect(Canvas::LiveEvents).to receive(:grade_changed).once
-            assignment.grade_student(student, grade: 10, grader: teacher)
-          end
-        end
-
-        context "when assignment is unmuted" do
-          before(:each) do
-            assignment.unmute!
-          end
-
-          it "emits an event" do
-            expect(Canvas::LiveEvents).to receive(:grade_changed).once
-            assignment.grade_student(student, grade: 10, grader: teacher)
-          end
+        it "emits two events when grading: one for grading and one for posting" do
+          expect(Canvas::LiveEvents).to receive(:grade_changed).twice
+          assignment.grade_student(student, grade: 10, grader: teacher)
         end
       end
     end
@@ -2411,6 +2339,7 @@ describe Assignment do
   describe "#update_submission" do
     before :once do
       setup_assignment_with_homework
+      @assignment.unmute!
     end
 
     it "should hide grading comments if assignment is muted and commenter is teacher" do
@@ -3120,8 +3049,8 @@ describe Assignment do
       @teacher = @course.enroll_teacher(User.create!, enrollment_state: :active).user
     end
 
-    it "should default to unmuted" do
-      expect(@assignment.muted?).to eql false
+    it "defaults to muted" do
+      expect(@course.assignments.create!).to be_muted
     end
 
     it "should be mutable" do
@@ -3137,23 +3066,9 @@ describe Assignment do
       expect(@assignment.muted?).to eql false
     end
 
-    it 'does not mute non-anonymous, non-moderated assignments when created' do
-      assignment = @course.assignments.create!
-      expect(assignment).not_to be_muted
-    end
-
-    it 'mutes anonymous assignments when created' do
-      assignment = @course.assignments.create!(anonymous_grading: true)
-      expect(assignment).to be_muted
-    end
-
-    it 'mutes moderated assignments when created' do
-      assignment = @course.assignments.create!(moderated_grading: true, grader_count: 1)
-      expect(assignment).to be_muted
-    end
-
     it 'mutes assignments when they are update from non-anonymous to anonymous' do
       assignment = @course.assignments.create!
+      assignment.update!(muted: false)
       expect { assignment.update!(anonymous_grading: true) }.to change {
         assignment.muted?
       }.from(false).to(true)
@@ -3167,38 +3082,14 @@ describe Assignment do
       }.from(false)
     end
 
-    it "ensures an assignment with no previous post policy posts manually when it is muted" do
-      @assignment.mute!
-      expect(@assignment.post_policy).to be_post_manually
-    end
-
-    it "defaults to muted when post policies are enabled" do
-      @course.enable_feature!(:new_gradebook)
-      PostPolicy.enable_feature!
-      expect(@course.assignments.create!).to be_muted
-    end
-
-    it "ensures an auto-posting assignment posts manually when it is muted" do
-      @assignment.post_policy.update!(post_manually: false)
-
-      @assignment.mute!
-      expect(@assignment.post_policy).to be_post_manually
-    end
-
-    it "ensures a muted assignment posts automatically when it is unmuted" do
-      @assignment.mute!
-      @assignment.unmute!
-      expect(@assignment.reload).not_to be_post_manually
-    end
-
     describe "grade change audit records" do
       it "continues to insert grade change records when assignment is muted" do
-        @assignment.mute!
         expect(Auditors::GradeChange::Stream).to receive(:insert).once
         @assignment.grade_student(@student, grade: 10, grader: @teacher)
       end
 
       it "does not insert a grade change event when muting" do
+        @assignment.unmute!
         @assignment.grade_student(@student, grade: 10, grader: @teacher)
         expect(Auditors::GradeChange::Stream).not_to receive(:insert)
         @assignment.mute!
@@ -3207,6 +3098,7 @@ describe Assignment do
 
     describe "grade change live events" do
       it "emits an event for graded submissions when muting" do
+        @assignment.unmute!
         @assignment.grade_student(@student, grade: 10, grader: @teacher)
         expect(Canvas::LiveEvents).to receive(:grade_changed).once
         @assignment.mute!
@@ -3219,6 +3111,7 @@ describe Assignment do
       @assignment = assignment_model(course: @course)
       @student = @course.enroll_student(User.create!, enrollment_state: :active).user
       @teacher = @course.enroll_teacher(User.create!, enrollment_state: :active).user
+      @assignment.unmute!
     end
 
     it "returns falsey when assignment is not muted" do
@@ -3227,7 +3120,7 @@ describe Assignment do
 
     context "when assignment is anonymously graded" do
       before :once do
-        @assignment.update_attributes(moderated_grading: true, anonymous_grading: true, grader_count: 1)
+        @assignment.update(moderated_grading: true, anonymous_grading: true, grader_count: 1)
         @assignment.mute!
       end
 
@@ -3265,7 +3158,7 @@ describe Assignment do
 
     context "when assignment is anonymously graded and not moderated" do
       before :once do
-        @assignment.update_attributes(moderated_grading: false, anonymous_grading: true)
+        @assignment.update(moderated_grading: false, anonymous_grading: true)
         @assignment.mute!
       end
 
@@ -3281,7 +3174,7 @@ describe Assignment do
 
     context "when assignment is not anonymously graded" do
       before :once do
-        @assignment.update_attributes(moderated_grading: true, anonymous_grading: false, grader_count: 1)
+        @assignment.update(moderated_grading: true, anonymous_grading: false, grader_count: 1)
         @assignment.mute!
       end
 
@@ -3737,7 +3630,7 @@ describe Assignment do
       it "should not assign peer reviews to members of the same group when disabled" do
         @submissions = []
         gc = @course.group_categories.create! name: "Groupy McGroupface"
-        @a.update_attributes group_category_id: gc.id,
+        @a.update group_category_id: gc.id,
                              grade_group_students_individually: false
         users = create_users_in_course(@course, 8.times.map{ |i| {name: "user #{i}"} }, return_type: :record)
         ["group_1", "group_2"].each do |group_name|
@@ -3755,7 +3648,7 @@ describe Assignment do
       it "should assign peer reviews to members of the same group when enabled" do
         @submissions = []
         gc = @course.group_categories.create! name: "Groupy McGroupface"
-        @a.update_attributes group_category_id: gc.id,
+        @a.update group_category_id: gc.id,
                              grade_group_students_individually: false
         users = create_users_in_course(@course, 8.times.map{ |i| {name: "user #{i}"} }, return_type: :record)
         ["group_1", "group_2"].each do |group_name|
@@ -4092,7 +3985,7 @@ describe Assignment do
 
     context "letter grades" do
       before :once do
-        @assignment.update_attributes(:grading_type => 'letter_grade', :points_possible => 20)
+        @assignment.update(:grading_type => 'letter_grade', :points_possible => 20)
       end
 
       it "should update grades when assignment changes" do
@@ -4121,7 +4014,7 @@ describe Assignment do
 
     context "gpa scale grades" do
       before :once do
-        @assignment.update_attributes(:grading_type => 'gpa_scale', :points_possible => 20)
+        @assignment.update(:grading_type => 'gpa_scale', :points_possible => 20)
         @course.grading_standards.build({title: "GPA"})
         gs = @course.grading_standards.last
         gs.data = {"4.0" => 0.94,
@@ -4213,7 +4106,7 @@ describe Assignment do
 
       context "when the assignment is due in a closed grading period" do
         before(:once) do
-          @assignment.update_attributes(due_at: 4.weeks.ago)
+          @assignment.update(due_at: 4.weeks.ago)
         end
 
         it "is true for admins" do
@@ -4227,7 +4120,7 @@ describe Assignment do
 
       context "when the assignment is due in an open grading period" do
         before(:once) do
-          @assignment.update_attributes(due_at: 2.weeks.ago)
+          @assignment.update(due_at: 2.weeks.ago)
         end
 
         it "is true for admins" do
@@ -4241,7 +4134,7 @@ describe Assignment do
 
       context "when the assignment is due after all grading periods" do
         before(:once) do
-          @assignment.update_attributes(due_at: 1.day.from_now)
+          @assignment.update(due_at: 1.day.from_now)
         end
 
         it "is true for admins" do
@@ -4255,7 +4148,7 @@ describe Assignment do
 
       context "when the assignment is due before all grading periods" do
         before(:once) do
-          @assignment.update_attributes(due_at: 6.weeks.ago)
+          @assignment.update(due_at: 6.weeks.ago)
         end
 
         it "is true for admins" do
@@ -4269,7 +4162,7 @@ describe Assignment do
 
       context "when the assignment has no due date" do
         before(:once) do
-          @assignment.update_attributes(due_at: nil)
+          @assignment.update(due_at: nil)
         end
 
         it "is true for admins" do
@@ -4283,7 +4176,7 @@ describe Assignment do
 
       context "when the assignment is due in a closed grading period for a student" do
         before(:once) do
-          @assignment.update_attributes(due_at: 2.days.from_now)
+          @assignment.update(due_at: 2.days.from_now)
           override = @assignment.assignment_overrides.build
           override.set = @course.default_section
           override.override_due_at(4.weeks.ago)
@@ -4301,7 +4194,7 @@ describe Assignment do
 
       context "when the assignment is overridden with no due date for a student" do
         before(:once) do
-          @assignment.update_attributes(due_at: nil)
+          @assignment.update(due_at: nil)
           override = @assignment.assignment_overrides.build
           override.set = @course.default_section
           override.save!
@@ -4318,7 +4211,7 @@ describe Assignment do
 
       context "when the assignment has a deleted override in a closed grading period for a student" do
         before(:once) do
-          @assignment.update_attributes(due_at: 2.days.from_now)
+          @assignment.update(due_at: 2.days.from_now)
           override = @assignment.assignment_overrides.build
           override.set = @course.default_section
           override.override_due_at(4.weeks.ago)
@@ -4337,7 +4230,7 @@ describe Assignment do
 
       context "when the assignment is overridden with no due date and is only visible to overrides" do
         before(:once) do
-          @assignment.update_attributes(due_at: 4.weeks.ago, only_visible_to_overrides: true)
+          @assignment.update(due_at: 4.weeks.ago, only_visible_to_overrides: true)
           override = @assignment.assignment_overrides.build
           override.set = @course.default_section
           override.save!
@@ -4745,6 +4638,46 @@ describe Assignment do
     end
   end
 
+  describe "scope :type_quiz_lti" do
+    context "with a quiz_lti assignment" do
+      before :once do
+        assignment_model(:submission_types => "external_tool", :course => @course)
+        tool = @c.context_external_tools.create!(
+          :name => 'Quizzes.Next',
+          :consumer_key => 'test_key',
+          :shared_secret => 'test_secret',
+          :tool_id => 'Quizzes 2',
+          :url => 'http://example.com/launch'
+        )
+        @a.external_tool_tag_attributes = { :content => tool }
+        @a.save!
+      end
+
+      it "includes the quiz_lti quiz" do
+        expect(Assignment.type_quiz_lti).not_to be_empty
+      end
+    end
+
+    context "without any quiz_lti assignments" do
+      before :once do
+        assignment_model(:submission_types => "external_tool", :course => @course)
+        tool = @c.context_external_tools.create!(
+          :name => 'Some.Other.Tool',
+          :consumer_key => 'test_key',
+          :shared_secret => 'test_secret',
+          :tool_id => 'some-other-tool-id',
+          :url => 'http://example.com/launch'
+        )
+        @a.external_tool_tag_attributes = { :content => tool }
+        @a.save!
+      end
+
+      it "returns an empty scope" do
+        expect(Assignment.type_quiz_lti).to be_empty
+      end
+    end
+  end
+
   describe "linked submissions" do
     shared_examples_for "submittable" do
       before :once do
@@ -4985,7 +4918,7 @@ describe Assignment do
         expect(@sub2.messages_sent['Submission Graded']).to be_present
         expect(@sub2.messages_sent['Submission Graded'].first.from_name).to eq @course.name
         expect(@sub2.messages_sent['Submission Grade Changed']).to be_nil
-        @sub2.update_attributes(:graded_at => Time.zone.now - 60*60)
+        @sub2.update(:graded_at => Time.zone.now - 60*60)
         @sub2 = @assignment.grade_student(@stu2, grade: 9, grader: @teacher).first
         expect(@sub2.messages_sent).not_to be_empty
         expect(@sub2.messages_sent['Submission Graded']).to be_nil
@@ -4993,34 +4926,12 @@ describe Assignment do
         expect(@sub2.messages_sent['Submission Grade Changed'].first.from_name).to eq @course.name
       end
 
-      it "should notify affected students on a mass-grade change" do
-        skip "CNVS-5969 - Setting a default grade should send a 'Submission Graded' notification"
-        @assignment.set_default_grade(:default_grade => 10)
-        msg_sub1 = @assignment.submissions.detect{|s| s.id = @sub1.id}
-        expect(msg_sub1.messages_sent).not_to be_nil
-        expect(msg_sub1.messages_sent['Submission Grade Changed']).not_to be_nil
-        msg_sub2 = @assignment.submissions.detect{|s| s.id = @sub2.id}
-        expect(msg_sub2.messages_sent).not_to be_nil
-        expect(msg_sub2.messages_sent['Submission Graded']).not_to be_nil
-      end
-
-      describe 'while they are muted' do
-        before(:once) { @assignment.mute! }
-
-        specify { expect(@assignment).to be_muted }
-
-        it "should not notify affected students on a mass-grade change if muted" do
-          skip "CNVS-5969 - Setting a default grade should send a 'Submission Graded' notification"
-          @assignment.set_default_grade(:default_grade => 10)
-          expect(@assignment.messages_sent).to be_empty
-        end
-
-        it "should not notify students when their grade is changed if muted" do
-          @sub2 = @assignment.grade_student(@stu2, grade: 8, grader: @teacher).first
-          @sub2.update_attributes(:graded_at => Time.zone.now - 60*60)
-          @sub2 = @assignment.grade_student(@stu2, grade: 9, grader: @teacher).first
-          expect(@sub2.messages_sent).to be_empty
-        end
+      it "should not notify students when their grade is changed when grades are not yet posted" do
+        @assignment.ensure_post_policy(post_manually: true)
+        @sub2 = @assignment.grade_student(@stu2, grade: 8, grader: @teacher).first
+        @sub2.update(:graded_at => Time.zone.now - 60*60)
+        @sub2 = @assignment.grade_student(@stu2, grade: 9, grader: @teacher).first
+        expect(@sub2.messages_sent).to be_empty
       end
     end
 
@@ -5028,6 +4939,7 @@ describe Assignment do
       before :once do
         Notification.create(:name => 'Assignment Changed')
         assignment_model(course: @course)
+        @a.unmute!
       end
 
       it "should create a message when an assignment changes after it's been published" do
@@ -5070,43 +4982,6 @@ describe Assignment do
         course_with_teacher(:active_user => true)
         assignment_model(:course => @course)
         expect(@a.messages_sent).not_to be_include('Assignment Created')
-      end
-    end
-
-    context "assignment unmuted" do
-      let(:assignment) { @course.assignments.create! }
-
-      before :once do
-        @assignment_unmuted_notification = Notification.create(name: "Assignment Unmuted")
-        @student.update!(email: "fakeemail@example.com")
-        @student.email_channel.update!(workflow_state: :active)
-      end
-
-      it "should create a message when an assignment is unmuted" do
-        assignment.mute!
-
-        expect {
-          assignment.unmute!
-        }.to change {
-          DelayedMessage.where(
-            communication_channel: @student.email_channel,
-            notification: @assignment_unmuted_notification
-          ).count
-        }.by(1)
-      end
-
-      it "should not create a message in an unpublished course" do
-        @course.update!(workflow_state: "created")
-        assignment.mute!
-
-        expect {
-          assignment.unmute!
-        }.not_to change {
-          DelayedMessage.where(
-            communication_channel: @student.email_channel,
-            notification: @assignment_unmuted_notification
-          ).count
-        }
       end
     end
 
@@ -5272,6 +5147,7 @@ describe Assignment do
   context "group assignment" do
     before :once do
       setup_assignment_with_group
+      @a.unmute!
     end
 
     it "should submit the homework for all students in the same group" do
@@ -5358,7 +5234,7 @@ describe Assignment do
       expect(comments.all? { |c| c.group_comment_id == group_comment_id }).to be_truthy
     end
 
-    it "hides grading comments for all group members if commenter is teacher and assignment is muted after commenting" do
+    it "hides grading comments for all group members if commenter is teacher and grades are hidden after commenting" do
       @a.update_submission(@u1, :comment => "woot", :group_comment => "1", author: @teacher)
       @a.mute!
 
@@ -5720,76 +5596,52 @@ describe Assignment do
         @assignment = @course.assignments.create!(name: "Mute Comment Test", submission_types: %w(online_upload))
       end
 
-      let(:zip) { zip_submissions }
+      let(:zip) { zip_submissions_legacy }
       let(:added_comment) { @assignment.submission_for_student(@student).submission_comments.last }
 
-      context "with post policies enabled" do
+      context "for a manually-posted assignment" do
         before(:each) do
-          @course.enable_feature!(:new_gradebook)
-          PostPolicy.enable_feature!
+          @assignment.post_policy.update!(post_manually: true)
         end
 
-        context "for a manually-posted assignment" do
-          before(:each) do
-            @assignment.post_policy.update!(post_manually: true)
-          end
-
-          it "hides new comments if the submission is not posted" do
-            submit_homework(@student)
-
-            @assignment.generate_comments_from_files(zip.open.path, @user)
-            expect(added_comment).to be_hidden
-          end
-
-          it "shows new comments if the submission is posted" do
-            submit_homework(@student)
-            @assignment.post_submissions
-
-            @assignment.generate_comments_from_files(zip.open.path, @user)
-            expect(added_comment).not_to be_hidden
-          end
-        end
-
-        context "for a automatically-posted assignment" do
-          it "shows new comments if the submission is posted" do
-            submit_homework(@student)
-            @assignment.post_submissions
-
-            @assignment.generate_comments_from_files(zip.open.path, @user)
-            expect(added_comment).not_to be_hidden
-          end
-
-          it "hides new comments if the submission is graded but not posted" do
-            submit_homework(@student)
-            @assignment.grade_student(@student, grade: 1, grader: @teacher)
-            @assignment.hide_submissions
-
-            @assignment.generate_comments_from_files(zip.open.path, @user)
-            expect(added_comment).to be_hidden
-          end
-
-          it "shows new comments if the submission is neither graded nor posted" do
-            submit_homework(@student)
-
-            @assignment.generate_comments_from_files(zip.open.path, @user)
-            expect(added_comment).not_to be_hidden
-          end
-        end
-      end
-
-      context "with post policies not enabled" do
-        it "hides new comments when the assignment is muted" do
-          @assignment.mute!
+        it "hides new comments if the submission is not posted" do
           submit_homework(@student)
 
-          @assignment.generate_comments_from_files(zip.open.path, @user)
+          @assignment.generate_comments_from_files_legacy(zip.open.path, @user)
           expect(added_comment).to be_hidden
         end
 
-        it "shows new comments when the assignment is not muted" do
+        it "shows new comments if the submission is posted" do
+          submit_homework(@student)
+          @assignment.post_submissions
+
+          @assignment.generate_comments_from_files_legacy(zip.open.path, @user)
+          expect(added_comment).not_to be_hidden
+        end
+      end
+
+      context "for a automatically-posted assignment" do
+        it "shows new comments if the submission is posted" do
+          submit_homework(@student)
+          @assignment.post_submissions
+
+          @assignment.generate_comments_from_files_legacy(zip.open.path, @user)
+          expect(added_comment).not_to be_hidden
+        end
+
+        it "hides new comments if the submission is graded but not posted" do
+          submit_homework(@student)
+          @assignment.grade_student(@student, grade: 1, grader: @teacher)
+          @assignment.hide_submissions
+
+          @assignment.generate_comments_from_files_legacy(zip.open.path, @user)
+          expect(added_comment).to be_hidden
+        end
+
+        it "shows new comments if the submission is neither graded nor posted" do
           submit_homework(@student)
 
-          @assignment.generate_comments_from_files(zip.open.path, @user)
+          @assignment.generate_comments_from_files_legacy(zip.open.path, @user)
           expect(added_comment).not_to be_hidden
         end
       end
@@ -6493,7 +6345,7 @@ describe Assignment do
     end
   end
 
-  describe '#generate_comments_from_files' do
+  describe '#generate_comments_from_files_legacy' do
     before :once do
       @students = create_users_in_course(@course, 3, return_type: :record)
 
@@ -6505,9 +6357,9 @@ describe Assignment do
       s1 = @students.first
       submit_homework(s1)
 
-      zip = zip_submissions
+      zip = zip_submissions_legacy
 
-      comments, ignored = @assignment.generate_comments_from_files(
+      comments, ignored = @assignment.generate_comments_from_files_legacy(
         zip.open.path,
         @teacher)
 
@@ -6519,16 +6371,16 @@ describe Assignment do
       s1, s2 = @students
 
       gc = @course.group_categories.create! name: "Homework Groups"
-      @assignment.update_attributes group_category_id: gc.id,
+      @assignment.update group_category_id: gc.id,
                                     grade_group_students_individually: false
       g1, g2 = 2.times.map { |i| gc.groups.create! name: "Group #{i}", context: @course }
       g1.add_user(s1)
       g1.add_user(s2)
 
       submit_homework(s1)
-      zip = zip_submissions
+      zip = zip_submissions_legacy
 
-      comments, _ = @assignment.generate_comments_from_files(
+      comments, _ = @assignment.generate_comments_from_files_legacy(
         zip.open.path,
         @teacher)
 
@@ -6544,16 +6396,156 @@ describe Assignment do
       att = submit_homework(s1)
       sub = @assignment.submissions.where(:user_id => s1).first
 
-      zip = zip_submissions
+      zip = zip_submissions_legacy
       filename = Zip::File.new(zip.open).entries.map(&:name).first
       expect(filename).to eq "anon_#{sub.anonymous_id}_#{att.id}_homework.pdf"
 
-      comments, ignored = @assignment.generate_comments_from_files(
+      comments, ignored = @assignment.generate_comments_from_files_legacy(
         zip.open.path,
         @teacher)
 
       expect(comments.map { |g| g.map { |c| c.submission.user } }).to eq [[s1]]
       expect(ignored).to be_empty
+    end
+  end
+
+  describe "generating comments from files" do
+    let(:attachment_data) { {uploaded_data: stub_file_data("submissions.zip", "", "application/zip")} }
+
+    before :once do
+      Account.site_admin.enable_feature!(:submissions_reupload_status_page)
+      @students = create_users_in_course(@course, 3, return_type: :record)
+
+      @assignment = @course.assignments.create! name: "zip upload test",
+                                                submission_types: %w(online_upload)
+    end
+
+    def zip_submissions
+      zip = Attachment.new filename: 'submissions.zip'
+      zip.user = @teacher
+      zip.workflow_state = 'to_be_zipped'
+      zip.context = @assignment
+      zip.save!
+
+      # add all submissions from the assignment to the zip file
+      ContentZipper.process_attachment(zip, @teacher)
+      raise "zip failed" if zip.workflow_state != "zipped"
+
+      # return a tempfile for use in generating comments
+      zip.open
+    end
+
+    def generate_comments(user)
+      tempfile = zip_submissions
+
+      # create an uploaded file with the zipped submissions, as would be uploaded by the user
+      uploaded_data = ActionDispatch::Http::UploadedFile.new(tempfile: tempfile, filename: "submissions.zip")
+
+      @assignment.generate_comments_from_files_later(
+        {uploaded_data: uploaded_data},
+        user
+      )
+
+      # invoke the job that was created by the previous step
+      job = Delayed::Job.where(tag: "Assignment#generate_comments_from_files").order(:id).last
+      job.invoke_job
+    end
+
+    it "should work for individuals" do
+      s1 = @students.first
+      submit_homework(s1)
+
+      generate_comments(@teacher)
+      results = @assignment.submission_reupload_progress.results
+
+      expect(results[:comments].map { |c| c[:submission][:user_id] }).to eq [s1.id]
+      expect(results[:ignored_files]).to be_empty
+    end
+
+    it "should work for groups" do
+      s1, s2 = @students
+
+      gc = @course.group_categories.create! name: "Homework Groups"
+      @assignment.update group_category_id: gc.id,
+                                    grade_group_students_individually: false
+      g1, g2 = 2.times.map { |i| gc.groups.create! name: "Group #{i}", context: @course }
+      g1.add_user(s1)
+      g1.add_user(s2)
+
+      submit_homework(s1)
+
+      generate_comments(@teacher)
+      results = @assignment.submission_reupload_progress.results
+      submission_user_ids = results[:comments].map { |c| c[:submission][:user_id] }
+
+      expect(submission_user_ids.sort).to eq [s1.id, s2.id]
+    end
+
+    it "excludes student names from filenames when anonymous grading is enabled" do
+      @assignment.update!(anonymous_grading: true)
+
+      s1 = @students.first
+      submit_homework(s1)
+
+      generate_comments(@teacher)
+      results = @assignment.submission_reupload_progress.results
+
+      expect(results[:comments].map { |c| c[:submission][:user_id] }).to eq [s1.id]
+      expect(results[:ignored_files]).to be_empty
+    end
+
+    describe "newly-created comments" do
+      before(:each) do
+        @assignment = @course.assignments.create!(name: "Mute Comment Test", submission_types: %w(online_upload))
+      end
+
+      let(:added_comment) { @assignment.submission_for_student(@student).submission_comments.last }
+
+      context "for a manually-posted assignment" do
+        before(:each) do
+          @assignment.post_policy.update!(post_manually: true)
+        end
+
+        it "hides new comments if the submission is not posted" do
+          submit_homework(@student)
+          generate_comments(@user)
+          expect(added_comment).to be_hidden
+        end
+
+        it "shows new comments if the submission is posted" do
+          submit_homework(@student)
+          @assignment.post_submissions
+
+          generate_comments(@user)
+          expect(added_comment).not_to be_hidden
+        end
+      end
+
+      context "for a automatically-posted assignment" do
+        it "shows new comments if the submission is posted" do
+          submit_homework(@student)
+          @assignment.post_submissions
+
+          generate_comments(@user)
+          expect(added_comment).not_to be_hidden
+        end
+
+        it "hides new comments if the submission is graded but not posted" do
+          submit_homework(@student)
+          @assignment.grade_student(@student, grade: 1, grader: @teacher)
+          @assignment.hide_submissions
+
+          generate_comments(@user)
+          expect(added_comment).to be_hidden
+        end
+
+        it "shows new comments if the submission is neither graded nor posted" do
+          submit_homework(@student)
+
+          generate_comments(@user)
+          expect(added_comment).not_to be_hidden
+        end
+      end
     end
   end
 
@@ -6655,12 +6647,6 @@ describe Assignment do
     it "should update grades if points_possible changes" do
       expect(@assignment.context).to receive(:recompute_student_scores).once
       @assignment.points_possible = 3
-      @assignment.save!
-    end
-
-    it "should update grades if muted changes" do
-      expect(@assignment.context).to receive(:recompute_student_scores).once
-      @assignment.muted = true
       @assignment.save!
     end
 
@@ -7387,13 +7373,14 @@ describe Assignment do
     before(:once) do
       @assignment = @course.assignments.create! points_possible: 10
       @submission = @assignment.submit_homework(@student, body: "hello")
-      @submission_last_updated_at = @submission.updated_at
-      @assignment.mute!
+      @assignment.ensure_post_policy(post_manually: true)
     end
 
     it "touches submissions if you mute the assignment" do
-      touched = @submission.reload.updated_at > @submission_last_updated_at
-      expect(touched).to eq true
+      @assignment.update!(muted: false)
+      @submission_last_updated_at = @submission.reload.updated_at
+      @assignment.mute!
+      expect(@submission.reload.updated_at).to be > @submission_last_updated_at
     end
 
     context "calls assignment_muted_changed" do
@@ -7900,52 +7887,36 @@ describe Assignment do
     let(:course) { Course.create! }
     let(:assignment) { course.assignments.create!(title: 'hello') }
 
-    context "when the post_policies feature flag is enabled" do
-      before(:each) { course.enable_feature!(:new_gradebook) }
-      before(:each) { PostPolicy.enable_feature! }
-
-      context "when the assignment has a post policy" do
-        it "returns true if the assignment's post policy has manual posting enabled" do
-          assignment.post_policy.update!(post_manually: true)
-          expect(assignment).to be_post_manually
-        end
-
-        it "returns false if the assignment's post policy has manual posting disabled" do
-          assignment.post_policy.update!(post_manually: false)
-          expect(assignment).not_to be_post_manually
-        end
+    context "when the assignment has a post policy" do
+      it "returns true if the assignment's post policy has manual posting enabled" do
+        assignment.post_policy.update!(post_manually: true)
+        expect(assignment).to be_post_manually
       end
 
-      context "when the assignment has no post policy but the course does" do
-        it "returns true if the course's post policy has manual posting enabled" do
-          course.default_post_policy.update!(post_manually: true)
-          assignment.post_policy.destroy
-          expect(assignment.reload).to be_post_manually
-        end
+      it "returns false if the assignment's post policy has manual posting disabled" do
+        assignment.post_policy.update!(post_manually: false)
+        expect(assignment).not_to be_post_manually
+      end
+    end
 
-        it "returns false if the course's post policy has manual posting disabled" do
-          course.default_post_policy.update!(post_manually: false)
-          assignment.post_policy.destroy
-          expect(assignment).not_to be_post_manually
-        end
+    context "when the assignment has no post policy but the course does" do
+      it "returns true if the course's post policy has manual posting enabled" do
+        course.default_post_policy.update!(post_manually: true)
+        assignment.post_policy.destroy
+        expect(assignment.reload).to be_post_manually
       end
 
-      it "returns false if neither the assignment nor the course has a post policy attached" do
-        course.default_post_policy.destroy
+      it "returns false if the course's post policy has manual posting disabled" do
+        course.default_post_policy.update!(post_manually: false)
         assignment.post_policy.destroy
         expect(assignment).not_to be_post_manually
       end
     end
 
-    context "when the post_policies feature flag is not enabled" do
-      it "returns true if the assignment is muted" do
-        assignment.mute!
-        expect(assignment).to be_post_manually
-      end
-
-      it "returns false if the assignment is not muted" do
-        expect(assignment).not_to be_post_manually
-      end
+    it "returns false if neither the assignment nor the course has a post policy attached" do
+      course.default_post_policy.destroy
+      assignment.post_policy.destroy
+      expect(assignment).not_to be_post_manually
     end
   end
 
@@ -7962,9 +7933,6 @@ describe Assignment do
     before(:each) do
       student1
       student2
-
-      @course.enable_feature!(:new_gradebook)
-      PostPolicy.enable_feature!
     end
 
     describe "#post_submissions" do
@@ -8186,14 +8154,6 @@ describe Assignment do
         end
       end
 
-      it "does not update the assignment's muted status when post policies are not enabled" do
-        PostPolicy.disable_feature!
-        assignment.mute!
-
-        assignment.post_submissions
-        expect(assignment).to be_muted
-      end
-
       describe "context module progressions" do
         let(:context_module) { @course.context_modules.create! }
         let(:student1) { @course.enroll_user(User.create!, "StudentEnrollment", enrollment_state: "active").user }
@@ -8304,12 +8264,6 @@ describe Assignment do
           expect(@course).to receive(:recompute_student_scores).with([student1.id])
           assignment.hide_submissions(submission_ids: [student1_submission.id])
         end
-      end
-
-      it "does not update the assignment's muted status when post policies are not enabled" do
-        PostPolicy.disable_feature!
-        assignment.hide_submissions
-        expect(assignment).not_to be_muted
       end
     end
   end
@@ -8586,7 +8540,7 @@ describe Assignment do
         it { is_expected.to include("grader_names_visible_to_final_grader" => [true, true]) }
         it { is_expected.to include("graders_anonymous_to_graders" => [false, false]) }
         it { is_expected.to include("moderated_grading" => [false, false]) }
-        it { is_expected.to include("muted" => [false, true]) }
+        it { is_expected.to include("muted" => [true, true]) }
         it { is_expected.to include("omit_from_final_grade" => [false, false]) }
       end
 
@@ -8604,7 +8558,7 @@ describe Assignment do
         it { is_expected.to include("grader_names_visible_to_final_grader" => [true, true]) }
         it { is_expected.to include("graders_anonymous_to_graders" => [false, false]) }
         it { is_expected.to include("moderated_grading" => [false, true]) }
-        it { is_expected.to include("muted" => [false, true]) }
+        it { is_expected.to include("muted" => [true, true]) }
         it { is_expected.to include("omit_from_final_grade" => [false, false]) }
       end
     end
@@ -8792,7 +8746,7 @@ describe Assignment do
             score_maximum: previous_points_possible,
             resource_link: first_line_item.resource_link
           )
-          line_item_two.update_attributes!(created_at: first_line_item.created_at + 1.minute)
+          line_item_two.update!(created_at: first_line_item.created_at + 1.minute)
           assignment.title += " edit"
           assignment.points_possible += 10
           assignment.save!
@@ -9034,7 +8988,7 @@ describe Assignment do
     a
   end
 
-  def zip_submissions
+  def zip_submissions_legacy
     zip = Attachment.new filename: 'submissions.zip'
     zip.user = @teacher
     zip.workflow_state = 'to_be_zipped'

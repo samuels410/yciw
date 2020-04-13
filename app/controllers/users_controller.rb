@@ -858,53 +858,53 @@ class UsersController < ApplicationController
   #     },
   #   ]
   def todo_items
-    return render_unauthorized_action unless @current_user
+    Shackles.activate(:slave) do
+      return render_unauthorized_action unless @current_user
+      bookmark = Plannable::Bookmarker.new(Assignment, false, [:due_at, :created_at], :id)
+      grading_scope = @current_user.assignments_needing_grading(scope_only: true).
+        reorder(:due_at, :id).preload(:external_tool_tag, :rubric_association, :rubric, :discussion_topic, :quiz, :duplicate_of)
+      submitting_scope = @current_user.
+        assignments_needing_submitting(
+          include_ungraded: true,
+          scope_only: true).
+        reorder(:due_at, :id).preload(:external_tool_tag, :rubric_association, :rubric, :discussion_topic, :quiz).eager_load(:duplicate_of)
 
-    bookmark = Plannable::Bookmarker.new(Assignment, false, [:due_at, :created_at], :id)
-    grading_scope = @current_user.assignments_needing_grading(scope_only: true).
-      reorder(:due_at, :id).preload(:external_tool_tag, :rubric_association, :rubric, :discussion_topic, :quiz, :duplicate_of)
-    submitting_scope = @current_user.
-      assignments_needing_submitting(
-        include_ungraded: true,
-        scope_only: true).
-      reorder(:due_at, :id).preload(:external_tool_tag, :rubric_association, :rubric, :discussion_topic, :quiz).eager_load(:duplicate_of)
-
-    grading_collection = BookmarkedCollection.wrap(bookmark, grading_scope)
-    grading_collection = BookmarkedCollection.filter(grading_collection) do |assignment|
-      assignment.context.grants_right?(@current_user, session, :manage_grades)
-    end
-    grading_collection = BookmarkedCollection.transform(grading_collection) do |a|
-      todo_item_json(a, @current_user, session, 'grading')
-    end
-    submitting_collection = BookmarkedCollection.wrap(bookmark, submitting_scope)
-    submitting_collection = BookmarkedCollection.transform(submitting_collection) do |a|
-      todo_item_json(a, @current_user, session, 'submitting')
-    end
-    collections = [
-      ['grading', grading_collection],
-      ['submitting', submitting_collection]
-    ]
-
-    if Array(params[:include]).include? 'ungraded_quizzes'
-      quizzes_bookmark = Plannable::Bookmarker.new(Quizzes::Quiz, false, [:due_at, :created_at], :id)
-      quizzes_scope = @current_user.
-        ungraded_quizzes(
-          :needing_submitting => true,
-          :scope_only => true
-        ).
-        reorder(:due_at, :id)
-      quizzes_collection = BookmarkedCollection.wrap(quizzes_bookmark, quizzes_scope)
-      quizzes_collection = BookmarkedCollection.transform(quizzes_collection) do |a|
+      grading_collection = BookmarkedCollection.wrap(bookmark, grading_scope)
+      grading_collection = BookmarkedCollection.filter(grading_collection) do |assignment|
+        assignment.context.grants_right?(@current_user, session, :manage_grades)
+      end
+      grading_collection = BookmarkedCollection.transform(grading_collection) do |a|
+        todo_item_json(a, @current_user, session, 'grading')
+      end
+      submitting_collection = BookmarkedCollection.wrap(bookmark, submitting_scope)
+      submitting_collection = BookmarkedCollection.transform(submitting_collection) do |a|
         todo_item_json(a, @current_user, session, 'submitting')
       end
+      collections = [
+        ['grading', grading_collection],
+        ['submitting', submitting_collection]
+      ]
 
-      collections << ['quizzes', quizzes_collection]
+      if Array(params[:include]).include? 'ungraded_quizzes'
+        quizzes_bookmark = Plannable::Bookmarker.new(Quizzes::Quiz, false, [:due_at, :created_at], :id)
+        quizzes_scope = @current_user.
+          ungraded_quizzes(
+            :needing_submitting => true,
+            :scope_only => true
+          ).
+          reorder(:due_at, :id)
+        quizzes_collection = BookmarkedCollection.wrap(quizzes_bookmark, quizzes_scope)
+        quizzes_collection = BookmarkedCollection.transform(quizzes_collection) do |a|
+          todo_item_json(a, @current_user, session, 'submitting')
+        end
+
+        collections << ['quizzes', quizzes_collection]
+      end
+
+      paginated_collection = BookmarkedCollection.merge(*collections)
+      todos = Api.paginate(paginated_collection, self, api_v1_user_todo_list_items_url)  
+      render :json => todos
     end
-
-    paginated_collection = BookmarkedCollection.merge(*collections)
-    todos = Api.paginate(paginated_collection, self, api_v1_user_todo_list_items_url)
-
-    render :json => todos
   end
 
   # @API List counts for todo items
@@ -924,13 +924,15 @@ class UsersController < ApplicationController
   #     assignments_needing_submitting: 10
   #   }
   def todo_item_count
-    return render_unauthorized_action unless @current_user
-    grading = @current_user.submissions_needing_grading_count
-    submitting = @current_user.assignments_needing_submitting(include_ungraded: true, scope_only: true, limit: nil).size
-    if Array(params[:include]).include? 'ungraded_quizzes'
-      submitting += @current_user.ungraded_quizzes(:needing_submitting => true, scope_only: true, limit: nil).size
+    Shackles.activate(:slave) do
+      return render_unauthorized_action unless @current_user
+      grading = @current_user.submissions_needing_grading_count
+      submitting = @current_user.assignments_needing_submitting(include_ungraded: true, scope_only: true, limit: nil).size
+      if Array(params[:include]).include? 'ungraded_quizzes'
+        submitting += @current_user.ungraded_quizzes(:needing_submitting => true, scope_only: true, limit: nil).size
+      end
+      render json: {needs_grading_count: grading, assignments_needing_submitting: submitting}
     end
-    render json: {needs_grading_count: grading, assignments_needing_submitting: submitting}
   end
 
   include Api::V1::Assignment
@@ -992,6 +994,9 @@ class UsersController < ApplicationController
   #         "unlock_at"=>nil,
   #         "course_id"=>12942,
   #         "submission_types"=>["none"],
+  #         // [DEPRECATED] This property is deprecated, effective 2020-06-03 (notice given 2020-02-26):
+  #         // A new attribute will be included in a future release to determine whether an assignment has feedback
+  #         // that has not been posted to students.
   #         "muted"=>false,
   #         "needs_grading_count"=>0,
   #         "html_url"=>"http://www.example.com/courses/12942/assignments/9729"
@@ -1247,7 +1252,8 @@ class UsersController < ApplicationController
   #   !!!javascript
   #   "permissions": {
   #    "can_update_name": true, // Whether the user can update their name.
-  #    "can_update_avatar": false // Whether the user can update their avatar.
+  #    "can_update_avatar": false, // Whether the user can update their avatar.
+  #    "limit_parent_app_web_access": false // Whether the user can interact with Canvas web from the Canvas Parent app.
   #   }
   #
   # @argument include[] [String, "uuid"]
@@ -1578,7 +1584,9 @@ class UsersController < ApplicationController
       return render(json: { :message => "Invalid Page Name Provided" }, status: :bad_request)
     end
 
-    user.new_user_tutorial_statuses[params[:page_name]] = value_to_boolean(params[:collapsed])
+    statuses = user.new_user_tutorial_statuses
+    statuses[params[:page_name]] = value_to_boolean(params[:collapsed])
+    user.set_preference(:new_user_tutorial_statuses, statuses)
 
     respond_to do |format|
       format.json do
@@ -1686,16 +1694,17 @@ class UsersController < ApplicationController
       return render(json: { :message => "Invalid Hexcode Provided" }, status: :bad_request)
     end
 
+    colors = user.custom_colors
     user.shard.activate do
       # translate asset string to be relative to user's shard
       unless params[:hexcode].nil?
-        user.custom_colors[context.asset_string] = normalize_hexcode(params[:hexcode])
+        colors[context.asset_string] = normalize_hexcode(params[:hexcode])
       end
 
       respond_to do |format|
         format.json do
-          if user.save
-            render(json: { hexcode: user.custom_colors[context.asset_string]})
+          if user.set_preference(:custom_colors, colors)
+            render(json: { hexcode: colors[context.asset_string]})
           else
             render(json: user.errors, status: :bad_request)
           end
@@ -1769,10 +1778,13 @@ class UsersController < ApplicationController
       position = Integer(val) rescue nil
       if position.nil?
         return render(json: { :message => "Invalid position provided" }, status: :bad_request)
+      elsif position.abs > 1_000
+        # validate that the value used is less than unreasonable, but without any real effort
+        return render(json: { message: "Position #{position} is too high. Your dashboard cards can probably be sorted with numbers 1-5, you could even use a 0." }, status: :bad_request)
       end
     end
 
-    user.dashboard_positions = user.dashboard_positions.merge(params[:dashboard_positions].to_unsafe_h)
+    user.set_dashboard_positions(user.dashboard_positions.merge(params[:dashboard_positions].to_unsafe_h))
 
     respond_to do |format|
       format.json do
@@ -1919,7 +1931,7 @@ class UsersController < ApplicationController
       @user.sortable_name_explicitly_set = user_params[:sortable_name].present?
 
       respond_to do |format|
-        if @user.update_attributes(user_params)
+        if @user.update(user_params)
           @user.avatar_state = (old_avatar_state == :locked ? old_avatar_state : 'approved') if admin_avatar_update
           @user.profile.save if @user.profile.changed?
           @user.save if admin_avatar_update || update_email
@@ -2460,9 +2472,11 @@ class UsersController < ApplicationController
   #          -H 'Authorization: Bearer <token>'
   #
   # @argument include[] [String, "assignment"]
-  #   Associations to include with the group.
+  #   Associations to include with the group
   # @argument only_current_enrollments [boolean]
   #   Returns submissions for only currently active enrollments
+  # @argument only_published_assignments [boolean]
+  #   Returns submissions for only published assignments
   #
   # @returns [Submission]
   #
@@ -2471,6 +2485,7 @@ class UsersController < ApplicationController
     if authorized_action(@user, @current_user, :read_grades)
       collections = []
       only_current_enrollments = value_to_boolean(params[:only_current_enrollments])
+      only_published_assignments = value_to_boolean(params[:only_published_assignments])
 
       # Plannable Bookmarker enables descending order
       bookmarker = Plannable::Bookmarker.new(Submission, true, :graded_at, :id)
@@ -2480,7 +2495,11 @@ class UsersController < ApplicationController
         else
           Submission.all
         end
-        collections << [Shard.current.id, BookmarkedCollection.wrap(bookmarker, submissions.for_user(@user).graded)]
+        if only_published_assignments
+          submissions = submissions.joins(:assignment).merge(Assignment.published)
+        end
+        submissions = submissions.for_user(@user).graded
+        collections << [Shard.current.id, BookmarkedCollection.wrap(bookmarker, submissions)]
       end
 
       scope = BookmarkedCollection.merge(*collections)

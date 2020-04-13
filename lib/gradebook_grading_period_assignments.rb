@@ -16,15 +16,15 @@
 # with this program. If not, see <http://www.gnu.org/licenses/>.
 
 class GradebookGradingPeriodAssignments
-  def initialize(course, settings)
+  def initialize(course, course_settings)
     raise "Context must be a course" unless course.is_a?(Course)
     raise "Context must have an id" unless course.id
 
     @course = course
-    @settings_for_course = settings.fetch(@course.id, {
+    @settings_for_course = course_settings || {
       'show_concluded_enrollments' => 'false',
       'show_inactive_enrollments' => 'false'
-    })
+    }
   end
 
   def to_h
@@ -48,7 +48,7 @@ class GradebookGradingPeriodAssignments
       joins("INNER JOIN #{Enrollment.quoted_table_name} enrollments ON enrollments.user_id = submissions.user_id").
       merge(Assignment.for_course(@course).active).
       where(enrollments: { course_id: @course, type: ['StudentEnrollment', 'StudentViewEnrollment'] }).
-      where.not(grading_period_id: nil, enrollments: { workflow_state: excluded_workflow_states }).
+      where.not(grading_period_id: nil).where.not(enrollments: { workflow_state: excluded_workflow_states }).
       group(:grading_period_id).
       pluck(:grading_period_id, Arel.sql("array_agg(DISTINCT assignment_id)")).
       to_h

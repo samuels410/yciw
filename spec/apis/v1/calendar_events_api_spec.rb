@@ -53,7 +53,7 @@ describe CalendarEventsApiController, type: :request do
     it 'should hide location attributes when user is not logged in a public course' do
       @me = nil
       @user = nil
-      @course.update_attributes(:is_public => true, :indexed => true)
+      @course.update(:is_public => true, :indexed => true)
       @course.calendar_events.create(
         :title => '2',
         :start_at => '2012-01-08 12:00:00',
@@ -69,7 +69,7 @@ describe CalendarEventsApiController, type: :request do
     end
 
     it 'should show location attributes when user logged in a public course' do
-      @course.update_attributes(:is_public => true, :indexed => true)
+      @course.update(:is_public => true, :indexed => true)
       evt = @course.calendar_events.create(
         :title => '2',
         :start_at => '2012-01-08 12:00:00',
@@ -136,7 +136,7 @@ describe CalendarEventsApiController, type: :request do
         @e2 = @user.calendar_events.create!(:title => "today in AKST", :start_at => @akst.parse('2012-01-29 21:00:00')) { |c| c.context = @user }
         @e3 = @user.calendar_events.create!(:title => "tomorrow in AKST", :start_at => @akst.parse('2012-01-30 21:00:00')) { |c| c.context = @user }
 
-        @user.update_attributes! :time_zone => "Alaska"
+        @user.update! :time_zone => "Alaska"
       end
 
       it "shows today's events in user's timezone, even if UTC has crossed into tomorrow" do
@@ -2454,14 +2454,13 @@ describe CalendarEventsApiController, type: :request do
           format: 'json',
           selected_contexts: ['course_1', 'course_2', 'course_3']
       })
-      expect(@user.reload.preferences[:selected_calendar_contexts]).to eq(['course_1', 'course_2', 'course_3'])
+      expect(@user.reload.get_preference(:selected_calendar_contexts)).to eq(['course_1', 'course_2', 'course_3'])
     end
   end
 
   context 'visible_contexts' do
     it 'includes custom colors' do
-      @user.custom_colors[@course.asset_string] = '#0099ff'
-      @user.save!
+      @user.set_preference(:custom_colors, {@course.asset_string => '#0099ff'})
 
       json = api_call(:get, '/api/v1/calendar_events/visible_contexts', {
         controller: 'calendar_events_api',
@@ -2476,8 +2475,7 @@ describe CalendarEventsApiController, type: :request do
     end
 
     it 'includes whether the context has been selected' do
-      @user.preferences[:selected_calendar_contexts] = [@course.asset_string];
-      @user.save!
+      @user.set_preference(:selected_calendar_contexts, [@course.asset_string])
 
       json = api_call(:get, '/api/v1/calendar_events/visible_contexts', {
         controller: 'calendar_events_api',

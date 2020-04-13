@@ -98,14 +98,14 @@ module AssignmentOverridesSeleniumHelper
 
   def select_last_override_section(override_name)
     fj('.ic-tokeninput-input:last').send_keys(override_name)
-    fj(".ic-tokeninput-option:visible:last").click
-    fj('.ic-tokeninput-input:last').send_keys(:tab) # hide the menu so it doesn't interfere with later actions
+    wait_for_ajaximations
+    ffxpath("//div[contains(text(),'#{override_name}')]").last.click
   end
 
   def select_first_override_section(override_name)
     fj('.ic-tokeninput-input:first').send_keys(override_name)
-    fj(".ic-tokeninput-option:visible:first").click
-    fj('.ic-tokeninput-input:first').send_keys(:tab) # hide the menu so it doesn't interfere with later actions
+    wait_for_ajaximations
+    ffxpath("//div[contains(text(),'#{override_name}')]").first.click
   end
 
   def select_first_override_header(override_name)
@@ -329,8 +329,8 @@ module AssignmentOverridesSeleniumHelper
   end
 
   def validate_vdd_quiz_tooltip_dates(context_selector, message)
-    driver.mouse.move_to fln('Multiple Dates', f("#{context_selector}"))
-    expect(fj('.ui-tooltip:visible')).to include_text("#{message}")
+    driver.action.move_to(fln('Multiple Dates', f(context_selector.to_s))).perform
+    expect(fj('.ui-tooltip:visible')).to include_text(message.to_s)
   end
 
   def create_assignment_override(assignment, section, due_date)

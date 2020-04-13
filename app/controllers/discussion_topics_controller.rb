@@ -418,7 +418,7 @@ class DiscussionTopicsController < ApplicationController
         append_sis_data(hash)
         js_env(hash)
         js_env({
-          DIRECT_SHARE_ENABLED: @context.grants_right?(@current_user, session, :manage_content) && @domain_root_account&.feature_enabled?(:direct_share)
+          DIRECT_SHARE_ENABLED: @context.is_a?(Course) && @context.grants_right?(@current_user, session, :manage_content) && @domain_root_account&.feature_enabled?(:direct_share)
         }, true)
         set_tutorial_js_env
 
@@ -647,22 +647,23 @@ class DiscussionTopicsController < ApplicationController
       @unlock_at = @topic.available_from_for(@current_user)
       @topic.change_read_state('read', @current_user) unless @locked.is_a?(Hash) && !@locked[:can_view]
       if @topic.for_group_discussion?
-
-        group_scope = @topic.group_category.groups.active
+        @groups = @topic.group_category.groups.active
         if @topic.for_assignment? && @topic.assignment.only_visible_to_overrides?
-          @groups = group_scope.where(:id => @topic.assignment.assignment_overrides.active.where(:set_type => "Group").pluck(:set_id)).to_a
-          if @groups.empty?
-            @groups = group_scope.to_a # revert to default if we're not using Group overrides
+          override_groups = @groups.joins("INNER JOIN #{AssignmentOverride.quoted_table_name}
+            ON assignment_overrides.set_type = 'Group' AND assignment_overrides.set_id = groups.id").
+            merge(AssignmentOverride.active).
+            where(assignment_overrides: {assignment_id: @topic.assignment_id})
+          if override_groups.present?
+            @groups = override_groups
           end
-        else
-          @groups = group_scope.to_a
         end
-        @groups.select!{ |g| g.grants_any_right?(@current_user, session, :post_to_forum, :read_as_admin) }
-        @groups.sort_by!(&:id)
+        topics = @topic.child_topics
+        unless @context.grants_right?(@current_user, session, :read_as_admin)
+          @groups = @groups.joins(:group_memberships).merge(GroupMembership.active).where(group_memberships: {user_id: @current_user})
+          topics = topics.where(context_type: 'Group', context_id: @groups)
+        end
 
-        topics = @topic.child_topics.to_a
-        topics = topics.select{|t| @groups.include?(t.context) } unless @topic.grants_right?(@current_user, session, :update)
-        @group_topics = @groups.map do |group|
+        @group_topics = @groups.order(:id).map do |group|
           {:group => group, :topic => topics.find{|t| t.context == group} }
         end
       end
@@ -771,8 +772,10 @@ class DiscussionTopicsController < ApplicationController
 
             js_hash = {:DISCUSSION => env_hash}
             if @context.is_a?(Course)
-              js_hash[:TOTAL_USER_COUNT] = @topic.context.enrollments.not_fake.
-                active_or_pending_by_date_ignoring_access.distinct.count(:user_id)
+              Shackles.activate(:slave) do
+                js_hash[:TOTAL_USER_COUNT] = @topic.context.enrollments.not_fake.
+                  active_or_pending_by_date_ignoring_access.distinct.count(:user_id)
+              end
             end
             js_hash[:COURSE_ID] = @context.id if @context.is_a?(Course)
             js_hash[:CONTEXT_ACTION_SOURCE] = :discussion_topic
@@ -1216,7 +1219,7 @@ class DiscussionTopicsController < ApplicationController
             @topic.assignment = nil
           end
         end
-        @topic.update_attributes(discussion_topic_hash)
+        @topic.update(discussion_topic_hash)
         @topic.root_topic.try(:save)
       end
       if !@topic.errors.any? && !@topic.root_topic.try(:errors).try(:any?)

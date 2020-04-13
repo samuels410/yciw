@@ -104,7 +104,7 @@ class Message < ActiveRecord::Base
     state :created do
       event :stage, :transitions_to => :staged do
         self.dispatch_at = Time.now.utc + self.delay_for
-        if self.to != 'dashboard' && !@stage_without_dispatch
+        if self.to != 'dashboard'
           MessageDispatcher.dispatch(self)
         end
       end
@@ -188,6 +188,7 @@ class Message < ActiveRecord::Base
   scope :for, lambda { |context| where(:context_type => context.class.base_class.to_s, :context_id => context) }
 
   scope :after, lambda { |date| where("messages.created_at>?", date) }
+  scope :more_recent_than, lambda { |date| where("messages.created_at>? AND messages.dispatch_at>?", date, date) }
 
   scope :to_dispatch, -> {
     where("messages.workflow_state='staged' AND messages.dispatch_at<=? AND 'messages.to'<>'dashboard'", Time.now.utc)
@@ -362,7 +363,8 @@ class Message < ActiveRecord::Base
   #
   # Returns nothing.
   def stage_without_dispatch!
-    @stage_without_dispatch = true
+    self.dispatch_at = Time.now.utc + self.delay_for
+    self.workflow_state = 'staged'
   end
 
   # Public: Stage the message during the dispatch process. Messages travel
@@ -474,13 +476,13 @@ class Message < ActiveRecord::Base
     return nil unless template
 
     # Add the attribute 'inner_html' with the value of inner_html into the _binding
-    @output_buffer = nil
+    @output_buffer = ActionView::OutputBuffer.new
     inner_html = eval(ActionView::Template::Handlers::ERB::Erubi.new(template, :bufvar => '@output_buffer').src, binding, template_path)
     setter = eval "inner_html = nil; lambda { |v| inner_html = v }", binding
     setter.call(inner_html)
 
     layout_path = Canvas::MessageHelper.find_message_path('_layout.email.html.erb')
-    @output_buffer = nil
+    @output_buffer = ActionView::OutputBuffer.new
     eval(ActionView::Template::Handlers::ERB::Erubi.new(File.read(layout_path)).src, binding, layout_path)
   ensure
     @i18n_scope = orig_i18n_scope
@@ -629,7 +631,8 @@ class Message < ActiveRecord::Base
           notification_service_id,
           notification_message,
           path_type,
-          target
+          target,
+          self.notification&.priority?
         )
       end
       complete_dispatch
@@ -676,7 +679,7 @@ class Message < ActiveRecord::Base
   def notification_targets
     case path_type
     when "push"
-      self.user.notification_endpoints.map(&:arn)
+      self.user.notification_endpoints.pluck(:arn)
     when "twitter"
       twitter_service = user.user_services.where(service: 'twitter').first
       [
@@ -720,6 +723,10 @@ class Message < ActiveRecord::Base
   #
   # Returns an account.
   def context_root_account
+    if context.is_a?(AccountNotification)
+      return context.account.root_account
+    end
+
     unbounded_loop_paranoia_counter = 10
     current_context                 = context
 

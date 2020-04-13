@@ -16,17 +16,21 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-export const REQUEST_DOCS = 'REQUEST_DOCS'
+export const REQUEST_INITIAL_DOCS = 'REQUEST_INITIAL_DOCS'
+export const REQUEST_DOCS = 'REQUEST_NEXT_DOCS'
 export const RECEIVE_DOCS = 'RECEIVE_DOCS'
 export const FAIL_DOCS = 'FAIL_DOCS'
 
+export function requestInitialDocs(contextType) {
+  return {type: REQUEST_INITIAL_DOCS, payload: {contextType}}
+}
 export function requestDocs(contextType) {
   return {type: REQUEST_DOCS, payload: {contextType}}
 }
 
-export function receiveDocs({response, contextType}) {
+export function receiveDocs({response, contextType, contextId}) {
   const {files, bookmark} = response
-  return {type: RECEIVE_DOCS, payload: {files, bookmark, contextType}}
+  return {type: RECEIVE_DOCS, payload: {files, bookmark, contextType, contextId}}
 }
 
 export function failDocs({error, contextType}) {
@@ -36,45 +40,40 @@ export function failDocs({error, contextType}) {
 // dispatches the start of the load, requests a page for the collection from
 // the source, then dispatches the loaded page to the store on success or
 // clears the load on failure
-export function fetchDocs() {
+export function fetchDocs(sortBy) {
   return (dispatch, getState) => {
     const state = getState()
-    dispatch(requestDocs(state.contextType))
     return state.source
-      .fetchDocs(state)
-      .then(response => dispatch(receiveDocs({response, contextType: state.contextType})))
+      .fetchDocs({...state, ...sortBy})
+      .then(response =>
+        dispatch(
+          receiveDocs({response, contextType: state.contextType, contextId: state.contextId})
+        )
+      )
       .catch(error => dispatch(failDocs({error, contextType: state.contextType})))
   }
 }
 
 // fetches a page only if a page is not already being loaded and the
 // collection is not yet completely loaded
-export function fetchNextDocs() {
+export function fetchNextDocs(sortBy) {
   return (dispatch, getState) => {
     const state = getState()
     const documents = state.documents[state.contextType]
 
-    if (documents && !documents.isLoading && documents.hasMore) {
-      return dispatch(fetchDocs())
+    if (!documents?.isLoading && documents?.hasMore) {
+      dispatch(requestDocs(state.contextType))
+      return dispatch(fetchDocs(sortBy))
     }
   }
 }
 
-// fetches the next page (subject to conditions on fetchNextDocs) only if the
-// collection is currently empty
-export function fetchInitialDocs() {
+// fetches the first page
+export function fetchInitialDocs(sortBy) {
   return (dispatch, getState) => {
     const state = getState()
-    const documents = state.documents[state.contextType]
 
-    if (
-      documents &&
-      documents.hasMore &&
-      !documents.isLoading &&
-      documents.files &&
-      documents.files.length === 0
-    ) {
-      return dispatch(fetchDocs())
-    }
+    dispatch(requestInitialDocs(state.contextType))
+    return dispatch(fetchDocs(sortBy))
   }
 }

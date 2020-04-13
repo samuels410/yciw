@@ -26,8 +26,9 @@ class CommunicationChannel < ActiveRecord::Base
 
   belongs_to :pseudonym
   has_many :pseudonyms
-  belongs_to :user
+  belongs_to :user, inverse_of: :communication_channels
   has_many :notification_policies, :dependent => :destroy
+  has_many :notification_policy_overrides, inverse_of: :communication_channel, dependent: :destroy
   has_many :delayed_messages, :dependent => :destroy
   has_many :messages
 
@@ -350,17 +351,6 @@ class CommunicationChannel < ActiveRecord::Base
     true
   end
 
-  scope :for, lambda { |context|
-    case context
-    when User
-      where(:user_id => context)
-    when Notification
-      eager_load(:notification_policies).where(:notification_policies => { :notification_id => context })
-    else
-      all
-    end
-  }
-
   def self.by_path_condition(path)
     Arel::Nodes::NamedFunction.new('lower', [Arel::Nodes.build_quoted(path)])
   end
@@ -373,10 +363,6 @@ class CommunicationChannel < ActiveRecord::Base
 
   scope :active, -> { where(workflow_state: 'active') }
   scope :unretired, -> { where.not(workflow_state: 'retired') }
-
-  scope :for_notification_frequency, lambda { |notification, frequency|
-    joins(:notification_policies).where(:notification_policies => { :notification_id => notification, :frequency => frequency })
-  }
 
   # Get the list of communication channels that overrides an association's default order clause.
   # This returns an unretired and properly ordered already fetch array of CommunicationChannel objects ready for usage.
@@ -394,14 +380,8 @@ class CommunicationChannel < ActiveRecord::Base
       order(Arel.sql("#{self.rank_sql(rank_order, 'communication_channels.path_type')} ASC, communication_channels.position asc")).to_a
   end
 
-  scope :include_policies, -> { preload(:notification_policies) }
-
   scope :in_state, lambda { |state| where(:workflow_state => state.to_s) }
   scope :of_type, lambda { |type| where(:path_type => type) }
-
-  def can_notify?
-    self.notification_policies.any? { |np| np.frequency == 'never' } ? false : true
-  end
 
   def move_to_user(user, migrate=true)
     return unless user

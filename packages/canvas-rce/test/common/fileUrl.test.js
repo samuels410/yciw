@@ -17,15 +17,15 @@
  */
 
 import {ok, strictEqual} from 'assert'
-import * as fileUrl from '../../src/common/fileUrl'
+import {downloadToWrap, fixupFileUrl, prepEmbedSrc, prepLinkedSrc} from '../../src/common/fileUrl'
 
 describe('Common file url utils', () => {
   describe('downloadToWrap', () => {
     let url
 
     beforeEach(() => {
-      const downloadUrl = '/some/path?download_frd=1'
-      url = fileUrl.downloadToWrap(downloadUrl)
+      const downloadUrl = '/some/path/download?download_frd=1'
+      url = downloadToWrap(downloadUrl)
     })
 
     it('removes download_frd from the query params', () => {
@@ -37,15 +37,125 @@ describe('Common file url utils', () => {
     })
 
     it('returns null if url is null', () => {
-      strictEqual(fileUrl.downloadToWrap(null), null)
+      strictEqual(downloadToWrap(null), null)
     })
 
     it('returns undefined if url is undefined', () => {
-      strictEqual(fileUrl.downloadToWrap(undefined), undefined)
+      strictEqual(downloadToWrap(undefined), undefined)
     })
 
     it('returns empty string for empty strings', () => {
-      strictEqual(fileUrl.downloadToWrap(''), '')
+      strictEqual(downloadToWrap(''), '')
+    })
+
+    it('skips swizzling the url if from a different host', () => {
+      const testurl = 'http://instructure.com/some/path'
+      url = downloadToWrap(testurl)
+      strictEqual(url, testurl)
+    })
+  })
+
+  describe('fixupFileUrl', () => {
+    let fileInfo
+
+    describe('for files with an href', () => {
+      beforeEach(() => {
+        fileInfo = {
+          href: '/files/17/download?download_frd=1',
+          uuid: 'xyzzy'
+        }
+      })
+
+      it('skips swizzling the url if from a different host', () => {
+        fileInfo.href = 'http://instructure.com/some/path'
+        const result = fixupFileUrl('course', 2, fileInfo)
+        strictEqual(result.href, fileInfo.href)
+      })
+
+      it('transforms course file urls', () => {
+        // removes download_frd and adds wrap
+        const result = fixupFileUrl('course', 2, fileInfo)
+        strictEqual(result.href, '/courses/2/files/17/download?wrap=1')
+      })
+
+      it('adds the verifier to user files', () => {
+        // while removing download_frd and does not add wrap
+        const result = fixupFileUrl('user', 2, fileInfo)
+        strictEqual(result.href, '/users/2/files/17/download?verifier=xyzzy')
+      })
+    })
+
+    describe('for files with a url', () => {
+      beforeEach(() => {
+        fileInfo = {
+          url: '/files/17/download?download_frd=1',
+          uuid: 'xyzzy'
+        }
+      })
+
+      it('skips transforming the url if from a different host', () => {
+        fileInfo.url = 'http://instructure.com/some/path'
+        const result = fixupFileUrl('course', 2, fileInfo)
+        strictEqual(result.url, fileInfo.url)
+      })
+
+      it('transforms course file urls', () => {
+        // removes download_frd and adds wrap
+        const result = fixupFileUrl('course', 2, fileInfo)
+        strictEqual(result.url, '/courses/2/files/17/download?wrap=1')
+      })
+
+      it('adds the verifier to user files', () => {
+        // while removing download_frd and does not add wrap
+        const result = fixupFileUrl('user', 2, fileInfo)
+        strictEqual(result.url, '/users/2/files/17/download?verifier=xyzzy')
+      })
+    })
+  })
+
+  describe('prepEmbedSrc', () => {
+    it('skips transforming the url if from a different host', () => {
+      const url = 'http://instructure.com/some/path'
+      const result = prepEmbedSrc(url)
+      strictEqual(url, result)
+    })
+
+    it('replaces /download?some_params with /preview?some_params', () => {
+      const url = '/users/2/files/17/download?verifier=xyzzy'
+      strictEqual(prepEmbedSrc(url), '/users/2/files/17/preview?verifier=xyzzy')
+    })
+
+    it('replaces /download and no params with /preview ', () => {
+      const url = '/users/2/files/17/download'
+      strictEqual(prepEmbedSrc(url), '/users/2/files/17/preview')
+    })
+
+    it('does not indescriminetly replace /preview in a url', () => {
+      const url = '/please/download/me'
+      strictEqual(prepEmbedSrc(url), url)
+    })
+  })
+
+  describe('prepLinkedSrc', () => {
+    it('skips transforming the url if from a different host', () => {
+      const url = 'http://instructure.com/some/path'
+      const result = prepLinkedSrc(url)
+      strictEqual(url, result)
+    })
+
+    it('replaces /preview?some_params with /download?some_params', () => {
+      const url = '/users/2/files/17/preview?verifier=xyzzy'
+      strictEqual(prepLinkedSrc(url), '/users/2/files/17/download?verifier=xyzzy')
+    })
+
+    it('replaces /preview and no params with /download', () => {
+      const url = '/users/2/files/17/preview'
+      strictEqual(prepLinkedSrc(url), '/users/2/files/17/download')
+    })
+
+    it('does not indescriminetly replace /download in a url', () => {
+      const url = '/please/preview/me'
+      strictEqual(prepLinkedSrc(url), url)
     })
   })
 })

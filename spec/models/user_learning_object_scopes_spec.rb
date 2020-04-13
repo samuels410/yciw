@@ -542,7 +542,7 @@ describe UserLearningObjectScopes do
     end
 
     it "should not include assessment requests for users not assigned the assignment" do
-      @assignment.update_attributes(only_visible_to_overrides: true)
+      @assignment.update(only_visible_to_overrides: true)
       # create a new section with only the reviewer student
       # since the reviewee is no longer assigned @assignment, the reviewer should
       # have nothing to do.
@@ -593,6 +593,7 @@ describe UserLearningObjectScopes do
       Timecop.travel(1.week) do
         EnrollmentState.recalculate_expired_states # runs periodically in background
         expect(@teacher.reload.assignments_needing_grading.size).to be 0
+
       end
     end
 
@@ -653,14 +654,14 @@ describe UserLearningObjectScopes do
     end
 
     it "should not count submissions for users with a deleted enrollment in the graders's section" do
-      @course1.enroll_student(@student_b, allow_multiple_enrollments: true).update_attributes(workflow_state: 'deleted')
+      @course1.enroll_student(@student_b, allow_multiple_enrollments: true).update(workflow_state: 'deleted')
       assignment = @course1.assignments.first
       assignment.grade_student(@student_a, grade: "1", grader: @teacher)
       expect(@ta.assignments_needing_grading(scope_only: true)).not_to include assignment
     end
 
     it 'should not count submissions for sections where the grader has a deleted enrollment' do
-      @course1.enroll_user(@ta, 'TaEnrollment', allow_multiple_enrollments: true, section: @section1b).update_attributes(workflow_state: 'deleted')
+      @course1.enroll_user(@ta, 'TaEnrollment', allow_multiple_enrollments: true, section: @section1b).update(workflow_state: 'deleted')
       assignment = @course1.assignments.first
       assignment.grade_student(@student_a, grade: "1", grader: @teacher)
       expect(@ta.assignments_needing_grading(scope_only: true)).not_to include assignment
@@ -716,9 +717,21 @@ describe UserLearningObjectScopes do
         end
       end
 
+      after :each do
+        [Shard.default, @shard1, @shard2].each do |shard|
+          shard.activate do
+            Setting.remove('assignments_needing_grading_b')
+          end
+        end
+      end
+
       it "should find assignments from all shards" do
         [Shard.default, @shard1, @shard2].each do |shard|
           shard.activate do
+            expect(@teacher.assignments_needing_grading.sort_by(&:id)).to eq(
+              [@course1.assignments.first, @course2.assignments.first, @assignment3].sort_by(&:id)
+            )
+            Setting.set('assignments_needing_grading_b', 'false')
             expect(@teacher.assignments_needing_grading.sort_by(&:id)).to eq(
               [@course1.assignments.first, @course2.assignments.first, @assignment3].sort_by(&:id)
             )
@@ -771,7 +784,7 @@ describe UserLearningObjectScopes do
       @sectionb = @course.course_sections.create!(name: 'section B')
       @student_a = user_with_pseudonym(active_all: true, name: 'StudentA', username: 'studentA@instructure.com')
       @student_b = user_with_pseudonym(active_all: true, name: 'StudentB', username: 'studentB@instructure.com')
-      @course.enroll_student(@student_a).update_attributes(workflow_state: 'active')
+      @course.enroll_student(@student_a).update(workflow_state: 'active')
       @sectionb.enroll_user(@student_b, 'StudentEnrollment', 'active')
     end
 
@@ -785,7 +798,7 @@ describe UserLearningObjectScopes do
     end
 
     it 'should not show counts for submissions that a grader can\'t see due to enrollment visibility' do
-      @enrollment.update_attributes(limit_privileges_to_course_section: true) # limit the teacher to only see one of the students
+      @enrollment.update(limit_privileges_to_course_section: true) # limit the teacher to only see one of the students
       assignment_model(course: @course, submission_types: ['online_text_entry'])
       [@student_a, @student_b].each do |student|
         @assignment.submit_homework student, body: "submission for #{student.name}"
@@ -795,7 +808,7 @@ describe UserLearningObjectScopes do
     end
 
     it 'should not show counts for submissions in a section where the grader is enrolled but is not a grader' do
-      @enrollment.update_attributes(limit_privileges_to_course_section: true)
+      @enrollment.update(limit_privileges_to_course_section: true)
       @sectionb.enroll_user(@teacher, 'StudentEnrollment', 'active')
       assignment_model(course: @course, submission_types: ['online_text_entry'])
       [@student_a, @student_b].each do |student|

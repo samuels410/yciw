@@ -113,6 +113,9 @@
     "audio_player_for_title_20cc70d": {
         "message": "Ljudspelare för { title }"
     },
+    "auto_saved_content_exists_would_you_like_to_load_t_fee528f2": {
+        "message": "Automatiskt sparat innehåll finns. Vill du läsa in det automatiskt sparade innehållet istället?"
+    },
     "automatically_open_an_in_line_preview_preview_disp_ed784ffe": {
         "message": "Öppna automatiskt en infogad förhandsvisning (Förhandsvisningen visas endast efter att den sparats)"
     },
@@ -143,14 +146,23 @@
     "clear_selected_file_82388e50": {
         "message": "Rensa vald fil"
     },
+    "clear_selected_file_filename_2fe8a58e": {
+        "message": "Rensa vald fil: { filename }"
+    },
     "click_any_page_to_insert_a_link_to_that_page_ac920c02": {
         "message": "Klicka på en sida för att infoga en länk till sidan."
     },
     "click_to_embed_imagename_c41ea8df": {
         "message": "Klicka för att bädda in { imageName }"
     },
+    "click_to_hide_preview_3c707763": {
+        "message": "Klicka för att dölja förhandsgranskning"
+    },
     "click_to_insert_a_link_into_the_editor_c19613aa": {
         "message": "Klicka för att infoga en länk i redigeraren."
+    },
+    "click_to_show_preview_faa27051": {
+        "message": "Klicka för att visa förhandsgranskning"
     },
     "close_a_menu_or_dialog_also_returns_you_to_the_edi_739079e6": {
         "message": "Stäng en meny eller dialogruta Tar dig också tillbaka till redigerarområdet"
@@ -236,9 +248,6 @@
     "date_is_required_8660ec22": {
         "message": "Datum krävs"
     },
-    "date_published_371c4ad0": {
-        "message": "Publiceringsdatum"
-    },
     "date_time_d9fbf2d7": {
         "message": "Datum och tid:"
     },
@@ -301,6 +310,9 @@
     },
     "display_text_link_opens_in_a_new_tab_75e9afc9": {
         "message": "Visa textlänk (öppnas i en ny flik)"
+    },
+    "document_678cd7bf": {
+        "message": "Dokument"
     },
     "documents_81393201": {
         "message": "Dokument"
@@ -367,6 +379,9 @@
     },
     "embed_video_code_703e10f2": {
         "message": "Bädda in videokod"
+    },
+    "equation_1c5ac93c": {
+        "message": "Ekvation"
     },
     "error_loading_grades_e0b38f4d": {
         "message": "Det gick inte att läsa in omdömen"
@@ -437,6 +452,9 @@
     "formatting_5b143aa8": {
         "message": "Formaterar"
     },
+    "found_auto_saved_content_3f6e4ca5": {
+        "message": "Hittade automatiskt sparat innehåll"
+    },
     "found_count_plural_0_results_one_result_other_resu_46aeaa01": {
         "message": "Hittade { count, plural,\n     =0 {# resultat}\n    one {# resultat}\n  other {# resultat}\n}"
     },
@@ -482,6 +500,9 @@
     "height_69b03e15": {
         "message": "Höjd"
     },
+    "image_8ad06": {
+        "message": "Bild"
+    },
     "image_options_5412d02c": {
         "message": "Bildalternativ"
     },
@@ -493,6 +514,9 @@
     },
     "increase_indent_6d550a4a": {
         "message": "Öka indrag"
+    },
+    "insert_593145ef": {
+        "message": "Infoga"
     },
     "insert_equella_links_49a8dacd": {
         "message": "Infoga Equella-länkar"
@@ -538,6 +562,15 @@
     },
     "links_14b70841": {
         "message": "Länkar"
+    },
+    "list_collapsed_9ac35920": {
+        "message": "Listan komprimerades."
+    },
+    "list_collapsed_dde87718": {
+        "message": "Listan komprimerades"
+    },
+    "list_expanded_efec2d0": {
+        "message": "Listan utökades."
     },
     "load_more_35d33c7": {
         "message": "Läs in mer"
@@ -641,6 +674,9 @@
     "no_due_dates_assigned_e8f5bac8": {
         "message": "Inga inlämningsdatum tilldelade"
     },
+    "no_e16d9132": {
+        "message": "Nej"
+    },
     "no_grade_3b4d7f3e": {
         "message": "Ingen omdöme"
     },
@@ -688,6 +724,9 @@
     },
     "opportunities_popup_f6703842": {
         "message": "popupfönster med möjligheter"
+    },
+    "option_selected_list_collapsed_e00180ff": {
+        "message": "{ option } valda. Listan komprimerades."
     },
     "optional_add_course_ef0d70fc": {
         "message": "Valfritt: Lägg till kurs"
@@ -740,6 +779,9 @@
     "preformatted_d0670862": {
         "message": "Förformaterade"
     },
+    "preview_53003fd2": {
+        "message": "Förhandsvisa"
+    },
     "preview_a3f8f854": {
         "message": "FÖRHANDSVISA"
     },
@@ -781,6 +823,9 @@
     },
     "replies_4a8577c8": {
         "message": "Svar"
+    },
+    "restore_auto_save_deccd84b": {
+        "message": "Vill du återställa funktionen Spara automatiskt?"
     },
     "rich_content_editor_2708ef21": {
         "message": "Redigerare för formaterat innehåll"
@@ -917,6 +962,9 @@
     "there_are_no_points_associated_with_this_item_449c712a": {
         "message": "Inga poäng är kopplade till det här objektet"
     },
+    "though_your_video_will_have_the_correct_title_in_t_90e427f3": {
+        "message": "Din video har korrekt titel i webbläsaren, men den uppdaterades inte i databasen."
+    },
     "time_2b5aac58": {
         "message": "Tid"
     },
@@ -1004,6 +1052,9 @@
     "url_22a5f3b8": {
         "message": "URL"
     },
+    "use_arrow_keys_to_navigate_options_2021cc50": {
+        "message": "Använd piltangenterna för att navigera bland alternativen."
+    },
     "used_by_screen_readers_to_describe_the_content_of__b1e76d9e": {
         "message": "Används av skärmläsare för att beskriva en bilds innehåll"
     },
@@ -1012,6 +1063,9 @@
     },
     "user_documents_c206e61f": {
         "message": "Användardokument"
+    },
+    "user_files_78e21703": {
+        "message": "Användarfiler"
     },
     "user_images_b6490852": {
         "message": "Användarbilder"
@@ -1054,6 +1108,9 @@
     },
     "wiki_home_9cd54d0": {
         "message": "Startsida Wiki"
+    },
+    "yes_dde87d5": {
+        "message": "Ja"
     },
     "yesterday_at_date_1aa6d18e": {
         "message": "I går kl. { date }"

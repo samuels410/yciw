@@ -113,6 +113,9 @@
     "audio_player_for_title_20cc70d": {
         "message": "Predvajalnik zvoka za { title }"
     },
+    "auto_saved_content_exists_would_you_like_to_load_t_fee528f2": {
+        "message": "Obstaja samodejno shranjena vsebina. Ali želite namesto tega naložiti samodejno shranjeno vsebino?"
+    },
     "automatically_open_an_in_line_preview_preview_disp_ed784ffe": {
         "message": "Samodejno odpri v predogledu v vrstici. (Predogled se prikaže šele po shranjevanju)"
     },
@@ -143,14 +146,23 @@
     "clear_selected_file_82388e50": {
         "message": "Počisti izbrano datoteko."
     },
+    "clear_selected_file_filename_2fe8a58e": {
+        "message": "Počisti izbrano datoteko: { filename }"
+    },
     "click_any_page_to_insert_a_link_to_that_page_ac920c02": {
         "message": "Kliknite katero koli stran, da vstavite povezavo na to stran."
     },
     "click_to_embed_imagename_c41ea8df": {
         "message": "Kliknite, da vdelate { imageName }."
     },
+    "click_to_hide_preview_3c707763": {
+        "message": "Kliknite, da skrijete predogled"
+    },
     "click_to_insert_a_link_into_the_editor_c19613aa": {
         "message": "Kliknite, da vstavite povezavo v urejevalnik."
+    },
+    "click_to_show_preview_faa27051": {
+        "message": "Kliknite, da prikažete predogled"
     },
     "close_a_menu_or_dialog_also_returns_you_to_the_edi_739079e6": {
         "message": "Zapri meni ali pogovorno okno Prav tako vas vrne v območje urejevalnika"
@@ -213,7 +225,7 @@
         "message": "Navigacija po predmetu"
     },
     "course_to_do_bcbbab54": {
-        "message": "{ course } SEZNAM OPRAVIL"
+        "message": "{ course } ČAKAJOČA OPRAVILA"
     },
     "current_volume_level_c55ab825": {
         "message": "Trenutna raven glasnosti"
@@ -235,9 +247,6 @@
     },
     "date_is_required_8660ec22": {
         "message": "Zahtevan je datum."
-    },
-    "date_published_371c4ad0": {
-        "message": "Datum objave"
     },
     "date_time_d9fbf2d7": {
         "message": "Datum in čas:"
@@ -302,6 +311,9 @@
     "display_text_link_opens_in_a_new_tab_75e9afc9": {
         "message": "Prikaži besedilno povezavo (se odpre v novem zavihku)"
     },
+    "document_678cd7bf": {
+        "message": "Dokument"
+    },
     "documents_81393201": {
         "message": "Dokumenti"
     },
@@ -324,16 +336,16 @@
         "message": "Za brskanje po računalniku povlecite in spustite ali kliknite"
     },
     "due_5d7267be": {
-        "message": "Rok:"
+        "message": "Roki:"
     },
     "due_date_124fdd99": {
-        "message": "Rok: { date }"
+        "message": "Roki: { date }"
     },
     "due_multiple_dates_cc0ee3f5": {
-        "message": "Rok: Več datumov"
+        "message": "Roki: Več datumov"
     },
     "due_when_7eed10c6": {
-        "message": "Rok: { when }"
+        "message": "Roki: { when }"
     },
     "edit_c5fbea07": {
         "message": "Uredi"
@@ -367,6 +379,9 @@
     },
     "embed_video_code_703e10f2": {
         "message": "Vdelaj kodo videoposnetka"
+    },
+    "equation_1c5ac93c": {
+        "message": "Enačba"
     },
     "error_loading_grades_e0b38f4d": {
         "message": "Napaka pri nalaganju ocen"
@@ -437,6 +452,9 @@
     "formatting_5b143aa8": {
         "message": "Oblikovanje"
     },
+    "found_auto_saved_content_3f6e4ca5": {
+        "message": "Našli smo samodejno shranjeno vsebina"
+    },
     "found_count_plural_0_results_one_result_other_resu_46aeaa01": {
         "message": "Najdeno (najden) je { count, plural,\n     =0 {# rezultatov}\n    one {# rezultat }\n  other {# rezultatov}\n}"
     },
@@ -482,6 +500,9 @@
     "height_69b03e15": {
         "message": "Višina"
     },
+    "image_8ad06": {
+        "message": "Slika"
+    },
     "image_options_5412d02c": {
         "message": "Možnosti slike"
     },
@@ -493,6 +514,9 @@
     },
     "increase_indent_6d550a4a": {
         "message": "Povečaj zamik"
+    },
+    "insert_593145ef": {
+        "message": "Vstavi"
     },
     "insert_equella_links_49a8dacd": {
         "message": "Vstavi povezave storitve EQUELLA"
@@ -538,6 +562,15 @@
     },
     "links_14b70841": {
         "message": "Povezave"
+    },
+    "list_collapsed_9ac35920": {
+        "message": "Seznam je strnjen."
+    },
+    "list_collapsed_dde87718": {
+        "message": "Seznam je strnjen"
+    },
+    "list_expanded_efec2d0": {
+        "message": "Seznam je razširjen."
     },
     "load_more_35d33c7": {
         "message": "Naloži več"
@@ -641,6 +674,9 @@
     "no_due_dates_assigned_e8f5bac8": {
         "message": "Ni dodeljenih rokov."
     },
+    "no_e16d9132": {
+        "message": "Ne"
+    },
     "no_grade_3b4d7f3e": {
         "message": "Ni ocen."
     },
@@ -688,6 +724,9 @@
     },
     "opportunities_popup_f6703842": {
         "message": "pojavno okno za priložnosti"
+    },
+    "option_selected_list_collapsed_e00180ff": {
+        "message": "{ option } je izbran(a/o). Seznam je strnjen."
     },
     "optional_add_course_ef0d70fc": {
         "message": "Izbirno: Dodaj predmet"
@@ -740,6 +779,9 @@
     "preformatted_d0670862": {
         "message": "Predoblikovano"
     },
+    "preview_53003fd2": {
+        "message": "Predogled"
+    },
     "preview_a3f8f854": {
         "message": "PREDOGLED"
     },
@@ -781,6 +823,9 @@
     },
     "replies_4a8577c8": {
         "message": "Odgovori"
+    },
+    "restore_auto_save_deccd84b": {
+        "message": "Obnovim samodejno shranjeno vsebino?"
     },
     "rich_content_editor_2708ef21": {
         "message": "Urejevalnik"
@@ -888,7 +933,7 @@
         "message": "Podpisano"
     },
     "success_to_do_created_e34ed395": {
-        "message": "Uspešno: Seznam opravil je ustvarjen."
+        "message": "Uspešno: Čakajoča opravila je ustvarjen."
     },
     "superscript_8cb349a2": {
         "message": "Nadpisano"
@@ -917,6 +962,9 @@
     "there_are_no_points_associated_with_this_item_449c712a": {
         "message": "S tem elementom niso povezane nobene točke."
     },
+    "though_your_video_will_have_the_correct_title_in_t_90e427f3": {
+        "message": "Čeprav bo vaš videoposnetek v brskalniku imel pravilen naslov, ga v zbirki podatkov nismo uspeli posodobiti."
+    },
     "time_2b5aac58": {
         "message": "Čas"
     },
@@ -930,16 +978,16 @@
         "message": "Za objavo: { when }"
     },
     "to_do_1d554f36": {
-        "message": "Seznam opravil"
+        "message": "Čakajoča opravila"
     },
     "to_do_date_4b211ad0": {
-        "message": "Seznam opravil: { date }"
+        "message": "Čakajoča opravila: { date }"
     },
     "to_do_items_loading_d1cdfcd5": {
         "message": "Nalaganje elementov seznama opravil"
     },
     "to_do_when_2783d78f": {
-        "message": "Seznam opravil: { when }"
+        "message": "Čakajoča opravila: { when }"
     },
     "today_76e10f9c": {
         "message": "Danes"
@@ -1004,6 +1052,9 @@
     "url_22a5f3b8": {
         "message": "URL"
     },
+    "use_arrow_keys_to_navigate_options_2021cc50": {
+        "message": "Po možnostih se premikajte s puščičnima tipkama."
+    },
     "used_by_screen_readers_to_describe_the_content_of__b1e76d9e": {
         "message": "Uporabljajo ga bralniki zaslona za opisovanje vsebine slike"
     },
@@ -1012,6 +1063,9 @@
     },
     "user_documents_c206e61f": {
         "message": "Uporabniški dokumenti"
+    },
+    "user_files_78e21703": {
+        "message": "Uporabniške datoteke"
     },
     "user_images_b6490852": {
         "message": "Uporabniške slike"
@@ -1055,6 +1109,9 @@
     "wiki_home_9cd54d0": {
         "message": "Glavna stran wiki"
     },
+    "yes_dde87d5": {
+        "message": "Da"
+    },
     "yesterday_at_date_1aa6d18e": {
         "message": "Včeraj ob { date }"
     },
@@ -1068,7 +1125,7 @@
         "message": "Predložiti morate datum in čas."
     },
     "you_ve_scrolled_back_to_your_very_first_to_do_29374681": {
-        "message": "Z drsnikom ste se pomaknili na čisto prvi seznam opravil."
+        "message": "Z drsnikom ste se pomaknili na čisto prvi čakajoča opravila."
     },
     "your_webcam_may_already_be_in_use_6cd64c25": {
         "message": "Vaša spletna kamera je morda že v uporabi."

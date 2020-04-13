@@ -18,9 +18,9 @@
 
 class LearningOutcome < ActiveRecord::Base
   include Workflow
-  include OutcomeAttributes
   include MasterCourses::Restrictor
   restrict_columns :state, [:workflow_state]
+  self.ignored_columns = %i[migration_id_2 vendor_guid_2]
 
   belongs_to :context, polymorphic: [:account, :course]
   has_many :learning_outcome_results
@@ -160,7 +160,11 @@ class LearningOutcome < ActiveRecord::Base
 
     if context.is_a? Course
       create_missing_outcome_link(context)
-      self.touch if MasterCourses::MasterTemplate.is_master_course?(context)
+      if MasterCourses::MasterTemplate.is_master_course?(context)
+        # mark for re-sync
+        context.learning_outcome_links.polymorphic_where(:content => self).touch_all if self.context_type == "Account"
+        self.touch
+      end
     end
     tag
   end

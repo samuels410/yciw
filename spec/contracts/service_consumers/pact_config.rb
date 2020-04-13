@@ -28,7 +28,7 @@ module PactConfig
     ALL = Providers.constants.map { |c| Providers.const_get(c) }.freeze
   end
 
-  # Add new API and LiveEvents consumers to this Consumers module
+  # Add new API consumers to this module
   module Consumers
     my_broker_host = ENV.fetch('PACT_BROKER_HOST', 'pact-broker.docker')
     if my_broker_host.include?(EXTERNAL_BROKER_HOST)
@@ -37,14 +37,23 @@ module PactConfig
       FIU = 'lmsAPI'.freeze
     else
       # internal consumers
+      # These first 3 are legacy android consumers.  ANDROID, below, represents our latest pact 
+      # testing effort.
       ANDROID_STUDENT = 'Android Student'.freeze
       ANDROID_TEACHER = 'Android Teacher'.freeze
       ANDROID_PARENT = 'Android Parent'.freeze
       GENERIC_CONSUMER = 'Generic Consumer'.freeze
       QUIZ_LTI = 'Quiz LTI'.freeze
       SISTEMIC = 'Sistemic'.freeze
+      ANDROID = 'android'.freeze
     end
     ALL = Consumers.constants.map { |c| Consumers.const_get(c) }.freeze
+  end
+
+  # Add new Live Events consumers to this module
+  module LiveEventConsumers
+    OUTCOMES = 'Outcomes'.freeze
+    QUIZ_LTI = 'Quiz LTI'.freeze
   end
 
   class << self

@@ -49,13 +49,15 @@ class User < ActiveRecord::Base
   include TimeZoneHelper
   time_zone_attribute :time_zone
   include Workflow
+  include UserPreferenceValue::UserMethods # include after other callbacks are defined
 
   def self.enrollment_conditions(state)
     Enrollment::QueryBuilder.new(state).conditions or raise "invalid enrollment conditions"
   end
 
-  has_many :communication_channels, -> { order('communication_channels.position ASC') }, dependent: :destroy
+  has_many :communication_channels, -> { order('communication_channels.position ASC') }, dependent: :destroy, inverse_of: :user
   has_many :notification_policies, through: :communication_channels
+  has_many :notification_policy_overrides, through: :communication_channels
   has_one :communication_channel, -> { where("workflow_state<>'retired'").order(:position) }
   has_many :ignores
   has_many :planner_notes, :dependent => :destroy
@@ -113,7 +115,6 @@ class User < ActiveRecord::Base
   has_many :pseudonyms, -> { order(:position) }, dependent: :destroy
   has_many :active_pseudonyms, -> { where("pseudonyms.workflow_state<>'deleted'") }, class_name: 'Pseudonym'
   has_many :pseudonym_accounts, :source => :account, :through => :pseudonyms
-  has_many :active_pseudonym_accounts, :source => :account, :through => :active_pseudonyms
   has_one :pseudonym, -> { where("pseudonyms.workflow_state<>'deleted'").order(:position) }
   has_many :attachments, :as => 'context', :dependent => :destroy
   has_many :active_images, -> { where("attachments.file_state != ? AND attachments.content_type LIKE 'image%'", 'deleted').order('attachments.display_name').preload(:thumbnail) }, as: :context, inverse_of: :context, class_name: 'Attachment'
@@ -173,6 +174,7 @@ class User < ActiveRecord::Base
   has_many :progresses, :as => :context, :inverse_of => :context
   has_many :one_time_passwords, -> { order(:id) }, inverse_of: :user
   has_many :past_lti_ids, class_name: 'UserPastLtiId', inverse_of: :user
+  has_many :user_preference_values, inverse_of: :user
 
   belongs_to :otp_communication_channel, :class_name => 'CommunicationChannel'
 
@@ -271,8 +273,10 @@ class User < ActiveRecord::Base
 
   def assignment_and_quiz_visibilities(context)
     RequestCache.cache("assignment_and_quiz_visibilities", self, context) do
-      {assignment_ids: DifferentiableAssignment.scope_filter(context.assignments, self, context).pluck(:id),
-        quiz_ids: DifferentiableAssignment.scope_filter(context.quizzes, self, context).pluck(:id)}
+      Shackles.activate(:slave) do
+        {assignment_ids: DifferentiableAssignment.scope_filter(context.assignments, self, context).pluck(:id),
+          quiz_ids: DifferentiableAssignment.scope_filter(context.quizzes, self, context).pluck(:id)}
+      end
     end
   end
 
@@ -1454,11 +1458,11 @@ class User < ActiveRecord::Base
   end
 
   def new_user_tutorial_statuses
-    preferences[:new_user_tutorial_statuses] ||= {}
+    get_preference(:new_user_tutorial_statuses) || {}
   end
 
   def custom_colors
-    colors_hash = (preferences[:custom_colors] ||= {})
+    colors_hash = get_preference(:custom_colors) || {}
     if Shard.current != self.shard
       # translate asset strings to be relative to current shard
       colors_hash = Hash[
@@ -1475,11 +1479,11 @@ class User < ActiveRecord::Base
   end
 
   def dashboard_positions
-    preferences[:dashboard_positions] ||= {}
+    get_preference(:dashboard_positions) || {}
   end
 
-  def dashboard_positions=(new_positions)
-    preferences[:dashboard_positions] = new_positions
+  def set_dashboard_positions(new_positions)
+    set_preference(:dashboard_positions, new_positions)
   end
 
   # Use the user's preferences for the default view
@@ -1493,17 +1497,29 @@ class User < ActiveRecord::Base
     preferences[:dashboard_view] = new_dashboard_view
   end
 
-  def course_nicknames
-    preferences[:course_nicknames] ||= {}
+  def all_course_nicknames(courses=nil)
+    if preferences[:course_nicknames] == UserPreferenceValue::EXTERNAL
+      self.shard.activate do
+        scope = user_preference_values.where(:key => :course_nicknames)
+        scope = scope.where("sub_key IN (?)", courses.map(&:id).map(&:to_json)) if courses
+        Hash[scope.pluck(:sub_key, :value)]
+      end
+    else
+      preferences[:course_nicknames] || {}
+    end
   end
 
   def course_nickname_hash
-    course_nicknames.any? ? Digest::MD5.hexdigest(course_nicknames.sort.join(",")) : "default"
+    if preferences[:course_nicknames].present?
+      @nickname_hash ||= Digest::MD5.hexdigest(user_preference_values.where(:key => :course_nicknames).pluck(:sub_key, :value).sort.join(","))
+    else
+      "default"
+    end
   end
 
   def course_nickname(course)
     shard.activate do
-      course_nicknames[course.id]
+      get_preference(:course_nicknames, course.id)
     end
   end
 
@@ -1516,17 +1532,20 @@ class User < ActiveRecord::Base
   end
 
   def close_announcement(announcement)
-    preferences[:closed_notifications] ||= []
+    closed = get_preference(:closed_notifications).dup || []
     # serialize ids relative to the user
     self.shard.activate do
-      preferences[:closed_notifications] << announcement.id
+      closed << announcement.id
     end
-    preferences[:closed_notifications].uniq!
-    save
+    set_preference(:closed_notifications, closed.uniq)
   end
 
   def prefers_high_contrast?
     !!feature_enabled?(:high_contrast)
+  end
+
+  def prefers_no_celebrations?
+    !!feature_enabled?(:disable_celebrations)
   end
 
   def manual_mark_as_read?
@@ -1558,6 +1577,9 @@ class User < ActiveRecord::Base
   def default_notifications_disabled?
     !!preferences[:default_notifications_disabled]
   end
+
+  # ***** OHI If you're going to add a lot of data into `preferences` here maybe take a look at app/models/user_preference_value.rb instead ***
+  # it will store the data in a separate table on the db and lighten the load on poor `users`
 
   def uuid
     if !read_attribute(:uuid)
@@ -1682,9 +1704,11 @@ class User < ActiveRecord::Base
               where("enrollment_states.state IN ('active', 'invited', 'pending_invited', 'pending_active')")
           end
 
-          scope.select("courses.*, enrollments.id AS primary_enrollment_id, enrollments.type AS primary_enrollment_type, enrollments.role_id AS primary_enrollment_role_id, #{Enrollment.type_rank_sql} AS primary_enrollment_rank, enrollments.workflow_state AS primary_enrollment_state, enrollments.created_at AS primary_enrollment_date").
-              order(Arel.sql("courses.id, #{Enrollment.type_rank_sql}, #{Enrollment.state_rank_sql}")).
-              distinct_on(:id).shard(shards).to_a
+          Shackles.activate(:slave) do
+            scope.select("courses.*, enrollments.id AS primary_enrollment_id, enrollments.type AS primary_enrollment_type, enrollments.role_id AS primary_enrollment_role_id, #{Enrollment.type_rank_sql} AS primary_enrollment_rank, enrollments.workflow_state AS primary_enrollment_state, enrollments.created_at AS primary_enrollment_date").
+                order(Arel.sql("courses.id, #{Enrollment.type_rank_sql}, #{Enrollment.state_rank_sql}")).
+                distinct_on(:id).shard(shards).to_a
+          end
         end
         result.dup
       end
@@ -2484,7 +2508,13 @@ class User < ActiveRecord::Base
   end
 
   def user_can_edit_name?
-    active_pseudonym_accounts.any? { |a| a.settings[:users_can_edit_name] != false } || active_pseudonym_accounts.empty?
+    accounts = pseudonyms.shard(self).active.map(&:account)
+    return true if accounts.empty?
+    accounts.any? { |a| a.settings[:users_can_edit_name] != false }
+  end
+
+  def limit_parent_app_web_access?
+    pseudonyms.shard(self).active.map(&:account).any? { |a| a.limit_parent_app_web_access? }
   end
 
   def sections_for_course(course)

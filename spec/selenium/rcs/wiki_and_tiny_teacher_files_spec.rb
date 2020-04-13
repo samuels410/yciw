@@ -126,11 +126,13 @@ describe "Wiki pages and Tiny WYSIWYG editor Files" do
     end
 
     it "should be able to upload a file and add the file to the rce" do
+      skip('investigate in CCI-182')
       add_file_to_rce
       check_file(f('#wiki_page_show a.instructure_file_link'))
     end
 
     it "should show files uploaded on the images tab in the file tree" do
+      skip('Stabilize in LA-844')
       wiki_page_tools_file_tree_setup(true, true)
       click_files_tab
       expect(sidebar_files.count).to eq 4

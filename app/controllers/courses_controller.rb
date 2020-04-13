@@ -341,6 +341,7 @@ class CoursesController < ApplicationController
   include SyllabusHelper
   include WebZipExportHelper
   include CoursesHelper
+  include NewQuizzesFeaturesHelper
 
   before_action :require_user, :only => [:index, :activity_stream, :activity_stream_summary, :effective_due_dates, :offline_web_exports, :start_offline_web_export]
   before_action :require_user_or_observer, :only=>[:user_index]
@@ -1881,6 +1882,7 @@ class CoursesController < ApplicationController
           @context_membership = @context_enrollment # for AUA
           @context_enrollment.course = @context
           @context_enrollment.user = @current_user
+          @course_notifications_enabled = NotificationPolicyOverride.enabled_for(@current_user, @context)
         end
       end
 
@@ -1937,6 +1939,11 @@ class CoursesController < ApplicationController
         if @context.show_announcements_on_home_page? && @context.grants_right?(@current_user, session, :read_announcements)
           js_env TOTAL_USER_COUNT: @context.enrollments.active.count
           js_env(:SHOW_ANNOUNCEMENTS => true, :ANNOUNCEMENT_LIMIT => @context.home_page_announcement_limit)
+        end
+
+        if @domain_root_account&.feature_enabled?(:mute_notifications_by_course) && params[:view] == 'notifications'
+          render_course_notification_settings
+          return
         end
 
         @contexts = [@context]
@@ -2037,6 +2044,12 @@ class CoursesController < ApplicationController
         render_unauthorized_action
       end
     end
+  end
+
+  def render_course_notification_settings
+    add_crumb(t("Course Notification Settings"))
+    js_bundle :course_notification_settings_show
+    render html: '', layout: true
   end
 
   def confirm_action
@@ -2234,6 +2247,11 @@ class CoursesController < ApplicationController
     # For prepopulating the date fields
     js_env(:OLD_START_DATE => datetime_string(@context.start_at, :verbose))
     js_env(:OLD_END_DATE => datetime_string(@context.conclude_at, :verbose))
+    #
+    js_env(:QUIZZES_NEXT_ENABLED => new_quizzes_enabled?)
+    js_env(:NEW_QUIZZES_IMPORT => new_quizzes_import_enabled?)
+    js_env(:NEW_QUIZZES_MIGRATION => new_quizzes_migration_enabled?)
+    js_env(:NEW_QUIZZES_MIGRATION_DEFAULT => new_quizzes_migration_default)
   end
 
   def copy_course
@@ -2269,6 +2287,7 @@ class CoursesController < ApplicationController
         :context => @course, :migration_type => 'course_copy_importer',
         :initiated_source => api_request? ? (in_app? ? :api_in_app : :api) : :manual)
       @content_migration.migration_settings[:source_course_id] = @context.id
+      @content_migration.migration_settings[:import_quizzes_next] = true if params.dig(:settings, :import_quizzes_next)
       @content_migration.workflow_state = 'created'
       if (adjust_dates = params[:adjust_dates]) && Canvas::Plugin.value_to_boolean(adjust_dates[:enabled])
         params[:date_shift_options][adjust_dates[:operation]] = '1'
@@ -2415,6 +2434,9 @@ class CoursesController < ApplicationController
   #
   # @argument course[syllabus_body] [String]
   #   The syllabus body for the course
+  #
+  # @argument course[syllabus_course_summary] [Boolean]
+  #   Optional. Indicates whether the Course Summary (consisting of the course's assignments and calendar events) is displayed on the syllabus page. Defaults to +true+.
   #
   # @argument course[grading_standard_id] [Integer]
   #   The grading standard id to set for the course.  If no value is provided for this argument the current grading_standard will be un-set from this course.
@@ -3291,7 +3313,7 @@ class CoursesController < ApplicationController
     return {} unless params[:course]
     params[:course].permit(:name, :group_weighting_scheme, :start_at, :conclude_at,
       :grading_standard_id, :grade_passback_setting, :is_public, :is_public_to_auth_users, :allow_student_wiki_edits, :show_public_context_messages,
-      :syllabus_body, :public_description, :allow_student_forum_attachments, :allow_student_discussion_topics, :allow_student_discussion_editing,
+      :syllabus_body, :syllabus_course_summary, :public_description, :allow_student_forum_attachments, :allow_student_discussion_topics, :allow_student_discussion_editing,
       :show_total_grade_as_points, :default_wiki_editing_roles, :allow_student_organized_groups, :course_code, :default_view,
       :open_enrollment, :allow_wiki_comments, :turnitin_comments, :self_enrollment, :license, :indexed,
       :abstract_course, :storage_quota, :storage_quota_mb, :restrict_enrollments_to_course_dates, :use_rights_required,

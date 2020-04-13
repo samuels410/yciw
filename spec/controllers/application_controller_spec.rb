@@ -136,6 +136,16 @@ RSpec.describe ApplicationController do
         expect(controller.js_env[:DIRECT_SHARE_ENABLED]).to be_truthy
       end
 
+      it "sets the env var to false when the context is a group" do
+        root_account = double(global_id: 1, open_registration?: true, settings: {})
+        allow(root_account).to receive(:feature_enabled?).and_return(false)
+        allow(root_account).to receive(:feature_enabled?).with(:direct_share).and_return(true)
+        allow(HostUrl).to receive_messages(file_host: 'files.example.com')
+        controller.instance_variable_set(:@domain_root_account, root_account)
+        controller.instance_variable_set(:@context, group_model)
+        expect(controller.js_env[:DIRECT_SHARE_ENABLED]).to be_falsey
+      end
+
       it "sets the env var to false when FF is disabled" do
         root_account = double(global_id: 1, open_registration?: true, settings: {})
         allow(root_account).to receive(:feature_enabled?).and_return(false)
@@ -174,6 +184,35 @@ RSpec.describe ApplicationController do
       allow(HostUrl).to receive_messages(file_host: 'files.example.com')
       controller.instance_variable_set(:@domain_root_account, root_account)
       expect(controller.js_env[:SETTINGS][:open_registration]).to be_truthy
+    end
+
+    context "show_qr_login (QR for Mobile Login)" do
+      before(:each) do
+        allow(Object).to receive(:const_defined?).and_call_original
+        controller.instance_variable_set(:@domain_root_account, Account.default)
+      end
+
+      it 'is false if InstructureMiscPlugin is not defined and the feature flag is off' do
+        allow(Object).to receive(:const_defined?).with("InstructureMiscPlugin").and_return(false).once
+        expect(controller.js_env[:FEATURES][:show_qr_login]).to be_falsey
+      end
+
+      it 'is false if InstructureMiscPlugin is defined and the feature flag is off' do
+        allow(Object).to receive(:const_defined?).with("InstructureMiscPlugin").and_return(true).once
+        expect(controller.js_env[:FEATURES][:show_qr_login]).to be_falsey
+      end
+
+      it 'is false if InstructureMiscPlugin is not defined and the feature flag is on' do
+        Account.default.enable_feature!(:mobile_qr_login)
+        allow(Object).to receive(:const_defined?).with("InstructureMiscPlugin").and_return(false).once
+        expect(controller.js_env[:FEATURES][:show_qr_login]).to be_falsey
+      end
+
+      it 'is true if InstructureMiscPlugin is defined and the feature flag is on' do
+        Account.default.enable_feature!(:mobile_qr_login)
+        allow(Object).to receive(:const_defined?).with("InstructureMiscPlugin").and_return(true).once
+        expect(controller.js_env[:FEATURES][:show_qr_login]).to be_truthy
+      end
     end
 
     it 'sets LTI_LAUNCH_FRAME_ALLOWANCES' do
@@ -566,7 +605,7 @@ RSpec.describe ApplicationController do
           allow(content_tag).to receive(:id).and_return(42)
           allow(controller).to receive(:require_user) { user_model }
           allow(controller).to receive(:lti_launch_params) {{}}
-          content_tag.update_attributes!(context: assignment_model)
+          content_tag.update!(context: assignment_model)
         end
 
         context 'display_type == "full_width' do
@@ -632,7 +671,7 @@ RSpec.describe ApplicationController do
           allow(controller).to receive(:require_user) { user_model }
           controller.instance_variable_set(:@current_user, user)
           controller.instance_variable_set(:@domain_root_account, course.account)
-          content_tag.update_attributes!(context: assignment_model)
+          content_tag.update!(context: assignment_model)
         end
 
         describe 'LTI 1.3' do
@@ -651,7 +690,7 @@ RSpec.describe ApplicationController do
             tool.save!
 
             assignment = assignment_model(submission_types: 'external_tool', external_tool_tag: content_tag)
-            content_tag.update_attributes!(context: assignment)
+            content_tag.update!(context: assignment)
           end
 
           shared_examples_for 'a placement that caches the launch' do
@@ -745,7 +784,7 @@ RSpec.describe ApplicationController do
       context 'return_url' do
         before do
           controller.instance_variable_set(:"@context", course)
-          content_tag.update_attributes!(context: assignment_model)
+          content_tag.update!(context: assignment_model)
           allow(content_tag.context).to receive(:quiz_lti?).and_return(true)
           allow(controller).to receive(:render)
           allow(controller).to receive(:lti_launch_params)
@@ -754,11 +793,36 @@ RSpec.describe ApplicationController do
           allow(controller).to receive(:polymorphic_url).and_return('host/quizzes')
         end
 
-        it 'is set to quizzes page when launched from quizzes page' do
-          allow(controller.request).to receive(:referer).and_return('courses/1/quizzes')
-          controller.context.root_account.enable_feature! :newquizzes_on_quiz_page
-          controller.send(:content_tag_redirect, course, content_tag, nil)
-          expect(assigns[:return_url]).to eq 'host/quizzes'
+        context 'is set to gradebook page when launched from graedbook page' do
+          it 'for small id' do
+            allow(controller.request).to receive(:referer).and_return('courses/1/gradebook')
+            expect(controller).to receive(:polymorphic_url).with([course, :gradebook]).and_return('host/gradebook')
+            controller.send(:content_tag_redirect, course, content_tag, nil)
+            expect(assigns[:return_url]).to eq 'host/gradebook'
+          end
+
+          it 'for large id' do
+            allow(controller.request).to receive(:referer).and_return('courses/100/gradebook')
+            expect(controller).to receive(:polymorphic_url).with([course, :gradebook]).and_return('host/gradebook')
+            controller.send(:content_tag_redirect, course, content_tag, nil)
+            expect(assigns[:return_url]).to eq 'host/gradebook'
+          end
+        end
+
+        context 'is set to quizzes page when launched from quizzes page' do
+          it 'for small id' do
+            allow(controller.request).to receive(:referer).and_return('courses/1/quizzes')
+            controller.context.root_account.enable_feature! :newquizzes_on_quiz_page
+            controller.send(:content_tag_redirect, course, content_tag, nil)
+            expect(assigns[:return_url]).to eq 'host/quizzes'
+          end
+
+          it 'for large id' do
+            allow(controller.request).to receive(:referer).and_return('courses/100/quizzes')
+            controller.context.root_account.enable_feature! :newquizzes_on_quiz_page
+            controller.send(:content_tag_redirect, course, content_tag, nil)
+            expect(assigns[:return_url]).to eq 'host/quizzes'
+          end
         end
 
         it 'is set to quizzes page when launched from assignments/new' do
@@ -829,32 +893,40 @@ RSpec.describe ApplicationController do
         expect(assigns[:lti_launch].params["custom_test_token"]).to be_present
       end
 
-      it 'uses selection_width and selection_height if provided' do
-        allow(controller).to receive(:named_context_url).and_return(tool.url)
-        allow(controller).to receive(:render)
-        allow(controller).to receive_messages(js_env:[])
-        controller.instance_variable_set(:"@context", course)
-        allow(content_tag).to receive(:id).and_return(42)
-        controller.send(:content_tag_redirect, course, content_tag, nil)
+      context 'tool dimensions' do
+        before do
+          allow(controller).to receive(:named_context_url).and_return(tool.url)
+          allow(controller).to receive(:render)
+          allow(controller).to receive_messages(js_env:[])
+          controller.instance_variable_set(:"@context", course)
+          allow(content_tag).to receive(:id).and_return(42)
+        end
 
-        expect(assigns[:lti_launch].tool_dimensions[:selection_width]).to eq '500px'
-        expect(assigns[:lti_launch].tool_dimensions[:selection_height]).to eq '300px'
-      end
+        it 'uses selection_width and selection_height if provided' do
+          controller.send(:content_tag_redirect, course, content_tag, nil)
 
-      it 'appends px to tool dimensions only when needed' do
-        tool.settings = {}
-        tool.save!
-        content_tag = ContentTag.create(content: tool, url: tool.url)
+          expect(assigns[:lti_launch].tool_dimensions[:selection_width]).to eq '500px'
+          expect(assigns[:lti_launch].tool_dimensions[:selection_height]).to eq '300px'
+        end
 
-        allow(controller).to receive(:named_context_url).and_return(tool.url)
-        allow(controller).to receive(:render)
-        allow(controller).to receive_messages(js_env:[])
-        controller.instance_variable_set(:"@context", course)
-        allow(content_tag).to receive(:id).and_return(42)
-        controller.send(:content_tag_redirect, course, content_tag, nil)
+        it 'uses selection_width and selection_height from the ContentTag if provided' do
+          content_tag.update_attributes(link_settings: {selection_width: 543, selection_height: 321})
+          controller.send(:content_tag_redirect, course, content_tag, nil)
 
-        expect(assigns[:lti_launch].tool_dimensions[:selection_width]).to eq '100%'
-        expect(assigns[:lti_launch].tool_dimensions[:selection_height]).to eq '100%'
+          expect(assigns[:lti_launch].tool_dimensions[:selection_width]).to eq '543px'
+          expect(assigns[:lti_launch].tool_dimensions[:selection_height]).to eq '321px'
+        end
+
+        it 'appends px to tool dimensions only when needed' do
+          tool.settings = {}
+          tool.save!
+          content_tag = ContentTag.create(content: tool, url: tool.url)
+
+          controller.send(:content_tag_redirect, course, content_tag, nil)
+
+          expect(assigns[:lti_launch].tool_dimensions[:selection_width]).to eq '100%'
+          expect(assigns[:lti_launch].tool_dimensions[:selection_height]).to eq '100%'
+        end
       end
     end
 
@@ -1612,6 +1684,24 @@ describe CoursesController do
         allow(controller).to receive(:params).and_return(params)
         controller.send(:validate_scopes)
         expect(params).to eq(include: [], includes: ['uuid'])
+      end
+    end
+
+    context 'with valid scopes and allow includes on dev key' do
+      let(:developer_key) { DeveloperKey.create!(require_scopes: true, allow_includes: true, scopes: ['url:GET|/api/v1/accounts']) }
+
+      it 'keeps includes for adequately scoped requests' do
+        user = user_model
+        token = AccessToken.create!(user: user, developer_key: developer_key, scopes: ['url:GET|/api/v1/accounts'])
+        controller.instance_variable_set(:@access_token, token)
+        allow(controller).to receive(:request).and_return(double({
+          method: 'GET',
+          path: '/api/v1/accounts'
+        }))
+        params = { include: ['a'], includes: ['uuid', 'b']}
+        allow(controller).to receive(:params).and_return(params)
+        controller.send(:validate_scopes)
+        expect(params).to eq(include: ['a'], includes: ['uuid', 'b'])
       end
     end
   end

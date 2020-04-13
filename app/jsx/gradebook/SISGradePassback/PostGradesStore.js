@@ -67,6 +67,10 @@ const PostGradesStore = state => {
       return section_for_everyone
     },
 
+    selectedSISId() {
+      return this.getState().selected.sis_id
+    },
+
     setGradeBookAssignments(gradebookAssignments) {
       const assignments = []
       for (const id in gradebookAssignments) {

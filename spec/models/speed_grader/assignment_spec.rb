@@ -20,6 +20,7 @@ require 'lti2_spec_helper'
 
 describe SpeedGrader::Assignment do
   before :once do
+    PostPolicy.enable_feature!
     course_with_teacher(active_all: true)
     student_in_course(active_all: true, user_name: "some user")
   end
@@ -282,20 +283,12 @@ describe SpeedGrader::Assignment do
 
     describe "has_postable_comments" do
       before(:each) do
-        PostPolicy.enable_feature!
         @course.root_account.enable_feature!(:allow_postable_submission_comments)
-        @course.enable_feature!(:new_gradebook)
         @assignment.ensure_post_policy(post_manually: true)
       end
 
       it "is not included when allow_postable_submission_comments feature is not enabled" do
         @course.root_account.disable_feature!(:allow_postable_submission_comments)
-        json = SpeedGrader::Assignment.new(@assignment, @teacher).json
-        expect(json[:submissions].first).not_to have_key "has_postable_comments"
-      end
-
-      it "is not included when Post Policies are not enabled" do
-        @course.disable_feature!(:new_gradebook)
         json = SpeedGrader::Assignment.new(@assignment, @teacher).json
         expect(json[:submissions].first).not_to have_key "has_postable_comments"
       end
@@ -471,25 +464,14 @@ describe SpeedGrader::Assignment do
         json[:submissions].detect { |submission| submission[:user_id] == @student_1.id.to_s }
       end
 
-      context "when post policies are enabled" do
-        before(:each) do
-          @course.enable_feature!(:new_gradebook)
-          PostPolicy.enable_feature!
-        end
-
-        it "includes the submission's posted-at date in the posted_at field" do
-          posted_at_time = 1.day.ago
-          @assignment.submission_for_student(@student_1).update!(posted_at: posted_at_time)
-          expect(submission_json["posted_at"]).to eq posted_at_time
-        end
-
-        it "includes nil for the posted_at field if the submission is not posted" do
-          expect(submission_json["posted_at"]).to be nil
-        end
+      it "includes the submission's posted-at date in the posted_at field" do
+        posted_at_time = 1.day.ago
+        @assignment.submission_for_student(@student_1).update!(posted_at: posted_at_time)
+        expect(submission_json["posted_at"]).to eq posted_at_time
       end
 
-      it "omits the posted_at field when post policies are not enabled" do
-        expect(submission_json).not_to have_key(:posted_at)
+      it "includes nil for the posted_at field if the submission is not posted" do
+        expect(submission_json["posted_at"]).to be nil
       end
     end
 
@@ -517,7 +499,7 @@ describe SpeedGrader::Assignment do
 
       context 'for an anonymized assignment' do
         before(:each) do
-          assignment.update!(anonymous_grading: true, muted: true)
+          allow(assignment).to receive(:anonymize_students?).and_return(true)
         end
 
         it 'includes the viewed_at field if the user is an admin' do
@@ -574,7 +556,7 @@ describe SpeedGrader::Assignment do
 
     it 'does not include concluded students when user preference is to not include' do
       Enrollment.find_by(user: @student1).conclude
-      @course.update_attributes!(conclude_at: 1.day.ago, start_at: 2.days.ago)
+      @course.update!(conclude_at: 1.day.ago, start_at: 2.days.ago)
       json = SpeedGrader::Assignment.new(@assignment, @teacher).json
       expect(json[:context][:students].count).to be 1
     end
@@ -582,7 +564,7 @@ describe SpeedGrader::Assignment do
     it 'includes concluded when user preference is to include' do
       @teacher.preferences[:gradebook_settings][@course.id]['show_concluded_enrollments'] = 'true'
       Enrollment.find_by(user: @student1).conclude
-      @course.update_attributes!(conclude_at: 1.day.ago, start_at: 2.days.ago)
+      @course.update!(conclude_at: 1.day.ago, start_at: 2.days.ago)
       json = SpeedGrader::Assignment.new(@assignment, @teacher).json
       expect(json[:context][:students].count).to be 2
     end
@@ -614,7 +596,6 @@ describe SpeedGrader::Assignment do
 
       context 'when a course has new gradeook and filter by student group enabled' do
         before(:once) do
-          @course.enable_feature!(:new_gradebook)
           @course.root_account.enable_feature!(:filter_speed_grader_by_student_group)
           @course.update!(filter_speed_grader_by_student_group: true)
         end
@@ -805,7 +786,7 @@ describe SpeedGrader::Assignment do
 
         reps = @assignment.representatives(user: @teacher, includes: [:completed])
         user = reps.find { |u| u.name == @first_group.name }
-        expect(user).to eql(enrollments.first.user)
+        expect(enrollments.find_by(user: user)).to be_present
       end
 
       it 'does not include concluded students when included' do
@@ -823,7 +804,7 @@ describe SpeedGrader::Assignment do
 
         reps = @assignment.representatives(user: @teacher, includes: [:inactive])
         user = reps.find { |u| u.name == @first_group.name }
-        expect(user).to eql(enrollments.first.user)
+        expect(enrollments.find_by(user: user)).to be_present
       end
 
       it 'does not include inactive students when included' do
@@ -866,55 +847,40 @@ describe SpeedGrader::Assignment do
       user_session(teacher)
     end
 
-    context "for a course with New Gradebook enabled" do
-      before(:once) do
-        course.enable_feature!(:new_gradebook)
-      end
-
-      it "only returns students from the selected section if the user has selected one" do
-        teacher.preferences.deep_merge!(gradebook_settings: {
-          course.id => {'filter_rows_by' => {'section_id' => section1.id.to_s}}
-        })
-        expect(returned_student_ids).to contain_exactly(section1_student.id.to_s)
-      end
-
-      it "returns all eligible students if the user has not selected a section" do
-        expect(returned_student_ids).to match_array(all_course_student_ids)
-      end
-
-      it "returns all eligible students if the selected section is set to nil" do
-        teacher.preferences.deep_merge!(gradebook_settings: {
-          course.id => {'filter_rows_by' => {'section_id' => nil}}
-        })
-        expect(returned_student_ids).to match_array(all_course_student_ids)
-      end
-
-      context "when the user is filtering by both section and group" do
-        let_once(:group) do
-          category = course.group_categories.create!(name: "Group Set")
-          category.create_groups(2)
-
-          group = category.groups.first
-          group.add_user(section1_student)
-          group.add_user(section2_student)
-          group
-        end
-
-        it "restricts by both section and group when section_id and group_id are both specified" do
-          teacher.preferences.deep_merge!(gradebook_settings: {
-            course.id => {'filter_rows_by' => {'section_id' => section1.id.to_s, 'student_group_id' => group.id.to_s}}
-          })
-          expect(returned_student_ids).to contain_exactly(section1_student.id.to_s)
-        end
-      end
+    it "only returns students from the selected section if the user has selected one" do
+      teacher.preferences.deep_merge!(gradebook_settings: {
+        course.id => {'filter_rows_by' => {'section_id' => section1.id.to_s}}
+      })
+      expect(returned_student_ids).to contain_exactly(section1_student.id.to_s)
     end
 
-    context "for a course not using New Gradebook" do
-      it "does not attempt to filter by section" do
+    it "returns all eligible students if the user has not selected a section" do
+      expect(returned_student_ids).to match_array(all_course_student_ids)
+    end
+
+    it "returns all eligible students if the selected section is set to nil" do
+      teacher.preferences.deep_merge!(gradebook_settings: {
+        course.id => {'filter_rows_by' => {'section_id' => nil}}
+      })
+      expect(returned_student_ids).to match_array(all_course_student_ids)
+    end
+
+    context "when the user is filtering by both section and group" do
+      let_once(:group) do
+        category = course.group_categories.create!(name: "Group Set")
+        category.create_groups(2)
+
+        group = category.groups.first
+        group.add_user(section1_student)
+        group.add_user(section2_student)
+        group
+      end
+
+      it "restricts by both section and group when section_id and group_id are both specified" do
         teacher.preferences.deep_merge!(gradebook_settings: {
-          course.id => {'filter_rows_by' => {'section_id' => section1.id.to_s}}
+          course.id => {'filter_rows_by' => {'section_id' => section1.id.to_s, 'student_group_id' => group.id.to_s}}
         })
-        expect(returned_student_ids).to match_array(all_course_student_ids)
+        expect(returned_student_ids).to contain_exactly(section1_student.id.to_s)
       end
     end
   end
@@ -1586,17 +1552,17 @@ describe SpeedGrader::Assignment do
 
     it "includes 'has_originality_report' in the json for group assignments" do
       user_two = test_student.dup
-      user_two.update_attributes!(lti_context_id: SecureRandom.uuid)
+      user_two.update!(lti_context_id: SecureRandom.uuid)
       assignment.course.enroll_student(user_two)
 
       group = group_model(context: assignment.course)
-      group.update_attributes!(users: [user_two, test_student])
+      group.update!(users: [user_two, test_student])
 
       submission = assignment.submit_homework(test_student, submission_type: 'online_upload', attachments: [attachment])
       assignment.submit_homework(user_two, submission_type: 'online_upload', attachments: [attachment])
 
       assignment.submissions.each do |s|
-        s.update_attributes!(group: group, turnitin_data: {blah: 1})
+        s.update!(group: group, turnitin_data: {blah: 1})
       end
 
       report = OriginalityReport.create!(originality_score: '1', submission: submission, attachment: attachment)
@@ -2977,25 +2943,14 @@ describe SpeedGrader::Assignment do
     let_once(:assignment) { @course.assignments.create!(title: "hi") }
     let(:json) { SpeedGrader::Assignment.new(assignment, @teacher).json }
 
-    context "when post policies are enabled" do
-      before(:once) do
-        @course.enable_feature!(:new_gradebook)
-        PostPolicy.enable_feature!
-      end
-
-      it "sets post_manually to true in the response if the assignment is manually-posted" do
-        assignment.ensure_post_policy(post_manually: true)
-        expect(json['post_manually']).to be true
-      end
-
-      it "sets post_manually to false in the response if the assignment is not manually-posted" do
-        assignment.ensure_post_policy(post_manually: false)
-        expect(json['post_manually']).to be false
-      end
+    it "sets post_manually to true in the response if the assignment is manually-posted" do
+      assignment.ensure_post_policy(post_manually: true)
+      expect(json['post_manually']).to be true
     end
 
-    it "does not set post_manually in the response when post policies are not enabled" do
-      expect(json).not_to have_key('post_manually')
+    it "sets post_manually to false in the response if the assignment is not manually-posted" do
+      assignment.ensure_post_policy(post_manually: false)
+      expect(json['post_manually']).to be false
     end
   end
 end

@@ -19,6 +19,10 @@
 require 'spec_helper'
 
 describe SubmissionsController do
+  before :once do
+    PostPolicy.enable_feature!
+  end
+
   it_behaves_like 'a submission update action', :submissions
 
   describe "POST create" do
@@ -482,6 +486,83 @@ describe SubmissionsController do
         expect(attachment.instfs_uuid).to eq uuid
       end
     end
+
+    describe "confetti celebrations" do
+      before(:each) do
+        Account.default.enable_feature!(:confetti_for_assignments)
+      end
+
+      context "submission is made before due date" do
+        before(:each) do
+          course_with_student_logged_in(:active_all => true)
+          @assignment = @course.assignments.create!(:title => "some assignment", :submission_types => "online_url,online_upload", :due_at => 5.days.from_now)
+        end
+
+        it "redirects with confetti" do
+          post 'create', params: {:course_id => @course.id, :assignment_id => @assignment.id, :submission => {:submission_type => "online_url", :url => "url"}}
+          expect(response).to be_redirect
+          expect(response).to redirect_to(course_assignment_url(@course, @assignment, :confetti => true))
+        end
+
+        context "confetti_for_assignments flag is disabled" do
+          before(:each) do
+            Account.default.disable_feature!(:confetti_for_assignments)
+          end
+
+          it "redirects without confetti" do
+            post 'create', params: {
+              :course_id => @course.id,
+              :assignment_id => @assignment.id,
+              :submission => {:submission_type => "online_url", :url => "url"}
+            }
+            expect(response).to be_redirect
+            expect(response).to_not redirect_to(course_assignment_url(@course, @assignment, :confetti => true))
+          end
+        end
+      end
+
+      context "submission is made after due date" do
+        before(:each) do
+          course_with_student_logged_in(:active_all => true)
+          @assignment = @course.assignments.create!(:title => "some assignment", :submission_types => "online_url,online_upload", :due_at => 5.days.ago)
+        end
+
+        it "redirects without confetti" do
+          post 'create', params: {:course_id => @course.id, :assignment_id => @assignment.id, :submission => {:submission_type => "online_url", :url => "url"}}
+          expect(response).to be_redirect
+          expect(response).to_not redirect_to(course_assignment_url(@course, @assignment, :confetti => true))
+        end
+      end
+
+      context "submission is made with no due date" do
+        before(:each) do
+          course_with_student_logged_in(:active_all => true)
+          @assignment = @course.assignments.create!(:title => "some assignment", :submission_types => "online_url,online_upload")
+        end
+
+        it "redirects with confetti" do
+          post 'create', params: {:course_id => @course.id, :assignment_id => @assignment.id, :submission => {:submission_type => "online_url", :url => "url"}}
+          expect(response).to be_redirect
+          expect(response).to redirect_to(course_assignment_url(@course, @assignment, :confetti => true))
+        end
+
+        context "confetti_for_assignments flag is disabled" do
+          before(:each) do
+            Account.default.disable_feature!(:confetti_for_assignments)
+          end
+
+          it "redirects without confetti" do
+            post 'create', params: {
+              :course_id => @course.id,
+              :assignment_id => @assignment.id,
+              :submission => {:submission_type => "online_url", :url => "url"}
+            }
+            expect(response).to be_redirect
+            expect(response).to_not redirect_to(course_assignment_url(@course, @assignment, :confetti => true))
+          end
+        end
+      end
+    end
   end
 
   describe "GET zip" do
@@ -574,8 +655,8 @@ describe SubmissionsController do
       expect(submission.read?(@teacher)).to be_falsey
     end
 
-    it "renders json with scores for teachers on muted assignments" do
-      @assignment.update!(muted: true)
+    it "renders json with scores for teachers for unposted submissions" do
+      @assignment.ensure_post_policy(post_manually: true)
       request.accept = Mime[:json].to_s
       get :show, params: {course_id: @context.id, assignment_id: @assignment.id, id: @student.id}, format: :json
       expect(body['id']).to eq @submission.id
@@ -585,9 +666,9 @@ describe SubmissionsController do
       expect(body['published_score']).to eq 10
     end
 
-    it "renders json without scores for students on muted assignments" do
+    it "renders json without scores for students for unposted submissions" do
       user_session(@student)
-      @assignment.update!(muted: true)
+      @assignment.ensure_post_policy(post_manually: true)
       request.accept = Mime[:json].to_s
       get :show, params: {course_id: @context.id, assignment_id: @assignment.id, id: @student.id}, format: :json
       expect(body['id']).to eq @submission.id
@@ -597,9 +678,27 @@ describe SubmissionsController do
       expect(body['published_score']).to be nil
     end
 
+    it "renders json without scores for students with an unposted submission for a quiz" do
+      quiz = @context.quizzes.create!
+      quiz.workflow_state = "available"
+      quiz.quiz_questions.create!({ question_data: test_quiz_data.first })
+      quiz.save!
+      quiz.assignment.ensure_post_policy(post_manually: true)
+
+      quiz_submission = quiz.generate_submission(@student)
+      Quizzes::SubmissionGrader.new(quiz_submission).grade_submission
+
+      user_session(@student)
+      request.accept = Mime[:json].to_s
+      get :show, params: {course_id: @context.id, assignment_id: quiz.assignment.id, id: @student.id}, format: :json
+      expect(body['id']).to eq quiz_submission.submission.id
+      expect(body['body']).to be nil
+    end
+
     it "renders the page for submitting student" do
       user_session(@student)
-      @assignment.update!(anonymous_grading: true, muted: true)
+      @assignment.update!(anonymous_grading: true)
+      @assignment.ensure_post_policy(post_manually: true)
       get :show, params: {course_id: @context.id, assignment_id: @assignment.id, id: @student.id}
       assert_status(200)
     end
@@ -674,28 +773,28 @@ describe SubmissionsController do
       new_student = User.create!
       @context.enroll_student(new_student, enrollment_state: 'active')
       user_session(new_student)
-      @assignment.update!(anonymous_grading: true, muted: true)
+      @assignment.update!(anonymous_grading: true)
       get :show, params: {course_id: @context.id, assignment_id: @assignment.id, id: @student.id}
       assert_unauthorized
     end
 
     it "renders unauthorized for teacher" do
       user_session(@teacher)
-      @assignment.update!(anonymous_grading: true, muted: true)
+      @assignment.update!(anonymous_grading: true)
       get :show, params: {course_id: @context.id, assignment_id: @assignment.id, id: @student.id}
       assert_unauthorized
     end
 
     it "renders unauthorized for admin" do
       user_session(account_admin_user)
-      @assignment.update!(anonymous_grading: true, muted: true)
+      @assignment.update!(anonymous_grading: true)
       get :show, params: {course_id: @context.id, assignment_id: @assignment.id, id: @student.id}
       assert_unauthorized
     end
 
     it "renders the page for site admin" do
       user_session(site_admin_user)
-      @assignment.update!(anonymous_grading: true, muted: true)
+      @assignment.update!(anonymous_grading: true)
       get :show, params: {course_id: @context.id, assignment_id: @assignment.id, id: @student.id}
       assert_status(200)
     end
@@ -725,6 +824,7 @@ describe SubmissionsController do
       @association = @rubric.associate_with @assignment, @context, :purpose => 'grading'
       @assignment.peer_reviews = true
       @assignment.save!
+      @assignment.unmute!
       @assignment.assign_peer_review(@assessor, @submission.user)
       @assessment = @association.assess(:assessor => @assessor, :user => @submission.user, :artifact => @submission, :assessment => { :assessment_type => 'grading'})
       user_session(@assessor)
@@ -768,6 +868,34 @@ describe SubmissionsController do
     it 'redirects to the originality report URL if it exists' do
       get 'originality_report', params: {course_id: assignment.context_id, assignment_id: assignment.id, submission_id: test_student.id, asset_string: attachment.asset_string}
       expect(response).to redirect_to originality_report.originality_report_url
+    end
+
+    context 'when there are multiple originality reports' do
+      let(:submission2) { assignment.submit_homework(test_student, body: 'hello world') }
+      let(:report_url2) { 'http://www.another-test-score.com/' }
+      let(:originality_report2) {
+        OriginalityReport.create!(attachment: nil,
+                                  submission: submission2,
+                                  originality_score: 0.4,
+                                  originality_report_url: report_url2)
+      }
+
+      it 'can use attempt number to find the report url for text entry submissions' do
+        originality_report2 # Create immediately
+        originality_report.update!(attachment: nil)
+        expect(submission2.id).to eq(submission.id) # submission2 is updated/reloaded with new version (last attempt number)
+        expect(submission2.attempt).to be > submission.attempt
+        get 'originality_report', params: {
+          course_id: assignment.context_id, assignment_id: assignment.id, submission_id: test_student.id,
+          asset_string: submission.asset_string, attempt: 1
+        }
+        expect(response).to redirect_to originality_report.originality_report_url
+        get 'originality_report', params: {
+          course_id: assignment.context_id, assignment_id: assignment.id, submission_id: test_student.id,
+          asset_string: submission.asset_string, attempt: 2
+        }
+        expect(response).to redirect_to originality_report2.originality_report_url
+      end
     end
 
     it 'returns bad_request if submission_id is not an integer' do

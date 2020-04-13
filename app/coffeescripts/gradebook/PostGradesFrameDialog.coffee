@@ -36,8 +36,8 @@ export default class PostGradesFrameDialog
       @$dialog.dialog
         autoOpen: false
         resizable: false
-        width: Number(options.launchWidth) || 800
-        height: Number(options.launchHeight) || 600
+        width: 800
+        height: 600
         dialogClass: 'post-grades-frame-dialog'
 
       # list for focus/blur events
@@ -72,12 +72,8 @@ export default class PostGradesFrameDialog
       @$dialog.dialog('close')
 
     onDialogOpen: (event) =>
-      $(window).on('externalContentReady', @close)
-      $(window).on('externalContentCancel', @close)
 
     onDialogClose: (event) =>
-      $(window).off('externalContentReady', @close)
-      $(window).off('externalContentCancel', @close)
       @$dialog.dialog('destroy').remove()
       if @returnFocusTo
         @returnFocusTo.focus()

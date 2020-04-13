@@ -18,8 +18,11 @@
 require File.expand_path(File.dirname(__FILE__) + '/../sharding_spec_helper')
 
 describe GradeSummaryPresenter do
-  describe '#courses_with_grades' do
+  before :once do
+    PostPolicy.enable_feature!
+  end
 
+  describe '#courses_with_grades' do
     describe 'all on one shard' do
       let(:course) { Course.create! }
       let(:presenter) { GradeSummaryPresenter.new(course, @user, nil) }
@@ -615,41 +618,57 @@ describe GradeSummaryPresenter do
 
     let_once(:presenter) { GradeSummaryPresenter.new(course, student, student.id) }
 
-    context "when post policies are enabled" do
-      before(:once) do
-        course.enable_feature!(:new_gradebook)
-        PostPolicy.enable_feature!
-        assignment1.ensure_post_policy(post_manually: true)
-        assignment2.ensure_post_policy(post_manually: false)
-      end
-
-      it "returns true if any of the student's submissions in the course are graded and unposted" do
-        assignment1.grade_student(student, grader: teacher, score: 1)
-
-        expect(presenter).to be_hidden_submissions
-      end
-
-      it "returns true if any of the student's submissions are unposted and assignment posts manually" do
-        expect(presenter).to be_hidden_submissions
-      end
-
-      it "returns false if all of the student's submissions in the course are posted" do
-        assignment1.post_submissions
-        assignment2.post_submissions
-
-        expect(presenter).not_to be_hidden_submissions
-      end
+    before(:once) do
+      assignment1.ensure_post_policy(post_manually: true)
+      assignment2.ensure_post_policy(post_manually: false)
     end
 
-    context "when post policies are not enabled" do
-      it "returns true if any assignment in the course is muted" do
-        assignment1.mute!
-        expect(presenter).to be_hidden_submissions
-      end
+    it "returns true if any of the student's submissions in the course are graded and unposted" do
+      assignment1.grade_student(student, grader: teacher, score: 1)
 
-      it "returns false if no assignments in the course are muted" do
-        expect(presenter).not_to be_hidden_submissions
-      end
+      expect(presenter).to be_hidden_submissions
+    end
+
+    it "returns true if any of the student's submissions are unposted and assignment posts manually" do
+      expect(presenter).to be_hidden_submissions
+    end
+
+    it "returns false if all of the student's submissions in the course are posted" do
+      assignment1.post_submissions
+      assignment2.post_submissions
+
+      expect(presenter).not_to be_hidden_submissions
+    end
+  end
+
+  describe "#show_updated_plagiarism_icons?" do
+    let_once(:actual_plagiarism_data) do
+      {
+        provider: "turnitin",
+        submission_0: { status: "pending" }
+      }
+    end
+    let_once(:course) { Course.create! }
+    let_once(:student) { course.enroll_student(User.create!, enrollment_state: :active).user }
+    let_once(:presenter) { GradeSummaryPresenter.new(course, student, student.id) }
+
+    it "returns false if no plagiarism data is supplied" do
+      course.root_account.enable_feature!(:new_gradebook_plagiarism_indicator)
+      expect(presenter).not_to be_show_updated_plagiarism_icons(nil)
+    end
+
+    it "returns false if vacuous plagiarism data is supplied" do
+      course.root_account.enable_feature!(:new_gradebook_plagiarism_indicator)
+      expect(presenter).not_to be_show_updated_plagiarism_icons({})
+    end
+
+    it "returns false if the new_gradebook_plagiarism_indicator flag is not enabled on the root account" do
+      expect(presenter).not_to be_show_updated_plagiarism_icons(actual_plagiarism_data)
+    end
+
+    it "returns true if given plagiarism data and the new_gradebook_plagiarism_indicator flag is enabled" do
+      course.root_account.enable_feature!(:new_gradebook_plagiarism_indicator)
+      expect(presenter).to be_show_updated_plagiarism_icons(actual_plagiarism_data)
     end
   end
 end

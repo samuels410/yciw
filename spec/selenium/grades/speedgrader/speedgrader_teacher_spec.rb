@@ -30,6 +30,8 @@ describe "speed grader" do
   include GroupsCommon
 
   before(:each) do
+    PostPolicy.enable_feature!
+
     stub_kaltura
     course_with_teacher_logged_in
     @assignment = @course.assignments.create(name: 'assignment with rubric', points_possible: 10)
@@ -78,7 +80,7 @@ describe "speed grader" do
 
   context "url submissions" do
     before do
-      @assignment.update_attributes! submission_types: 'online_url',
+      @assignment.update! submission_types: 'online_url',
                                      title: "url submission"
       student_in_course
       @assignment.submit_homework(@student, submission_type: "online_url", workflow_state: "submitted", url: "http://www.instructure.com")
@@ -234,7 +236,7 @@ describe "speed grader" do
 
   context "multiple enrollments" do
     before(:each) do
-      student_in_course
+      student_in_course(active_all: true)
       @course_section = @course.course_sections.create!(name: "<h1>Other Section</h1>")
       @enrollment = @course.enroll_student(@student,
                                            enrollment_state: "active",

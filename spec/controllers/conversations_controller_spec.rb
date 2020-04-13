@@ -45,7 +45,7 @@ describe ConversationsController do
       conversation
 
       term = @course.root_account.enrollment_terms.create! :name => "Fall"
-      @course.update_attributes! :enrollment_term => term
+      @course.update! :enrollment_term => term
 
       get 'index'
       expect(response).to be_successful
@@ -237,6 +237,25 @@ describe ConversationsController do
       expect(assigns[:conversation]).not_to be_nil
     end
 
+    it 'should not allow creating conversations in concluded courses for students' do
+      user_session(@student)
+      @course.update!(workflow_state: 'completed')
+
+      post 'create', params: { recipients: [@teacher.id.to_s], body: "yo", context_code: @course.asset_string }
+      expect(response).not_to be_successful
+      expect(response.body).to include('Unable to send messages')
+    end
+
+    it 'should allow creating conversations in concluded courses for teachers' do
+      user_session(@teacher)
+      teacher2 = teacher_in_course(active_all: true).user
+      @course.update!(workflow_state: 'claimed')
+
+      post 'create', params: { recipients: [teacher2.id.to_s], body: "yo", context_code: @course.asset_string }
+      expect(response).to be_successful
+      expect(assigns[:conversation]).not_to be_nil
+    end
+
     it "should require permissions for sending to other students" do
       user_session(@student)
 
@@ -374,6 +393,14 @@ describe ConversationsController do
           end
         end
       end
+
+      it 'does not allow sending messages to other users in a group if the permission is disabled' do
+        user_session(@new_user1)
+        @course.account.role_overrides.create!(:permission => :send_messages, :role => student_role, :enabled => false)
+        post 'create', params: { recipients: [@new_user2.id.to_s], body: 'ooo eee', group_conversation: 'true', context_code: @course.asset_string }
+
+        expect(response).not_to be_successful
+      end
     end
 
     it "should correctly infer context tags" do
@@ -465,6 +492,22 @@ describe ConversationsController do
         @students.each{|x| expect(x.user_notes.size).to be(1)}
       end
     end
+
+    describe "for recipients the sender has no relationship with" do
+      it "should fail" do
+        user_session(@student)
+        post 'create', params: { recipients: [User.create.id.to_s], body: "foo" }
+        expect(response.status).to eq 400
+      end
+
+      context "as a siteadmin user with send_messages grants" do
+        it "should succeed" do
+          user_session(site_admin_user)
+          post 'create', params: { recipients: [User.create.id.to_s], body: "foo" }
+          expect(response.status).to eq 201
+        end
+      end
+    end
   end
 
   describe "POST 'update'" do
@@ -537,6 +580,25 @@ describe ConversationsController do
       message = @conversation.messages.first
       student = message.recipients.first
       expect(student.user_notes.size).to eq 1
+    end
+
+    it "should not allow new messages in concluded courses for students" do
+      course_with_student_logged_in(:active_all => true)
+      conversation
+      @course.update!({workflow_state: 'completed'})
+
+      post 'add_message', params: { conversation_id: @conversation.conversation_id, body: "hello world" }
+      assert_unauthorized
+    end
+
+    it "should allow new messages in concluded courses for teachers" do
+      course_with_teacher_logged_in(:active_all => true)
+      conversation
+      @course.update!({workflow_state: 'completed'})
+
+      post 'add_message', params: { conversation_id: @conversation.conversation_id, body: "hello world" }
+      expect(response).to be_successful
+      expect(assigns[:conversation]).not_to be_nil
     end
   end
 

@@ -78,6 +78,35 @@ describe ContextModulesController do
         expect(assigns[:modules]).to eq [@m2]
       end
     end
+
+    context "default post to SIS" do
+      before :once do
+        @course.account.tap do |a|
+          a.enable_feature! :new_sis_integrations
+          a.settings[:sis_syncing] = {locked: false, value: true}
+          a.settings[:sis_default_grade_export] = {locked: false, value: true}
+          a.save!
+        end
+      end
+
+      before :each do
+        user_session(@teacher)
+      end
+
+      it "is true if account setting is on" do
+        get 'index', params: {:course_id => @course.id}
+        expect(controller.js_env[:DEFAULT_POST_TO_SIS]).to eq true
+      end
+
+      it "is false if a due date is required" do
+        @course.account.tap do |a|
+          a.settings[:sis_require_assignment_due_date] = {locked: false, value: true}
+          a.save!
+        end
+        get 'index', params: {:course_id => @course.id}
+        expect(controller.js_env[:DEFAULT_POST_TO_SIS]).to eq false
+      end
+    end
   end
 
   describe "PUT 'update'" do
@@ -1022,6 +1051,18 @@ describe ContextModulesController do
 
       get 'item_redirect_mastery_paths', params: {course_id: @course.id, id: item.id}
       assert_redirected_to controller: 'discussion_topics', action: 'edit', id: topic.id, anchor: 'mastery-paths-editor'
+    end
+
+    it "should redirect to the assignment edit mastery paths page for new quizzes" do
+      tool = @course.context_external_tools.create! tool_id: ContextExternalTool::QUIZ_LTI, name: 'Q.N',
+                                                    consumer_key: '1', shared_secret: '1', domain: 'quizzes.example.com'
+      assignment = @course.assignments.create!
+      assignment.quiz_lti!
+      assignment.save!
+      item = @mod.add_item type: 'assignment', id: assignment.id
+
+      get 'item_redirect_mastery_paths', params: {course_id: @course.id, id: item.id}
+      assert_redirected_to controller: 'assignments', action: 'edit', id: assignment.id, anchor: 'mastery-paths-editor'
     end
 
     it "should 404 if module item is not a graded type" do

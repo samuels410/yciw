@@ -17,7 +17,6 @@
  */
 
 import $ from 'jquery'
-import {include} from 'lodash'
 import CheckboxView from 'compiled/views/gradebook/CheckboxView'
 
 QUnit.module('gradebook/CheckboxView', {

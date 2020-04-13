@@ -26,6 +26,9 @@
     "message": "Innspeling av lyd og bilde er ikkje tilgjengeleg."
   },
   "audio_player_for_title_20cc70d": { "message": "Audiospelar for { title }" },
+  "auto_saved_content_exists_would_you_like_to_load_t_fee528f2": {
+    "message": "Auto-lagra innhald finst. Vil du laste inn auto-lagra innhald i staden for?"
+  },
   "automatically_open_an_in_line_preview_preview_disp_ed784ffe": {
     "message": "Opne automatisk i integrert førehandsvising (sjå førehandsvisinga etter lagring)"
   },
@@ -34,14 +37,23 @@
   "choose_caption_file_9c45bc4e": { "message": "Vel undertekstfil" },
   "circle_unordered_list_9e3a0763": { "message": "sirkulær uordna liste" },
   "clear_selected_file_82388e50": { "message": "Fjern vald fil" },
+  "clear_selected_file_filename_2fe8a58e": {
+    "message": "Fjern vald fil: { filename }"
+  },
   "click_any_page_to_insert_a_link_to_that_page_ac920c02": {
     "message": "Klikk på eit sidenamn for å sette inn ei lenke til sida. "
   },
   "click_to_embed_imagename_c41ea8df": {
     "message": "Klikk for å sette inn { imageName }"
   },
+  "click_to_hide_preview_3c707763": {
+    "message": "Klikk for å skjule førehandsvising"
+  },
   "click_to_insert_a_link_into_the_editor_c19613aa": {
     "message": "Klikk for å setje inn ei lenke i editoren. "
+  },
+  "click_to_show_preview_faa27051": {
+    "message": "Klikk for å vise førehandsvising"
   },
   "close_a_menu_or_dialog_also_returns_you_to_the_edi_739079e6": {
     "message": "Om du lukkar menyen eller dialogen, kjem du tilbake til redigeringsområdet"
@@ -70,7 +82,6 @@
   "current_volume_level_c55ab825": { "message": "Gjeldande volumnivå" },
   "custom_6979cd81": { "message": "Eigendefinert" },
   "date_added_ed5ad465": { "message": "Dato lagd til" },
-  "date_published_371c4ad0": { "message": "Dato publisert" },
   "decrease_indent_de6343ab": { "message": "Reduser innrykk" },
   "default_bulleted_unordered_list_47079da8": {
     "message": "standard uordna liste med kulepunkt"
@@ -91,6 +102,7 @@
   "display_text_link_opens_in_a_new_tab_75e9afc9": {
     "message": "Vis lenketekst (opnast i ny fane)"
   },
+  "document_678cd7bf": { "message": "Dokument" },
   "documents_81393201": { "message": "Dokument" },
   "done_54e3d4b6": { "message": "Fullført" },
   "drag_a_file_here_1bf656d5": { "message": "Dra ei fil hit" },
@@ -115,6 +127,8 @@
   "embed_preview_2d741e1f": { "message": "Sett inn-førehandsvising" },
   "embed_video_a97a64af": { "message": "Integrer video" },
   "embed_video_code_703e10f2": { "message": "Sett inn videokode" },
+  "embedded_content_aaeb4d3d": { "message": "innebygd innhald" },
+  "equation_1c5ac93c": { "message": "Likning" },
   "error_uploading_video_audio_recording_16d9730a": {
     "message": "Feil under opplasting av video-/lydinnspeling"
   },
@@ -137,6 +151,7 @@
     "message": "Sentrer popup-menyen"
   },
   "formatting_5b143aa8": { "message": "Formatering" },
+  "found_auto_saved_content_3f6e4ca5": { "message": "Fann auto-lagra innhald" },
   "generating_preview_45b53be0": { "message": "Genererer førehandsvising..." },
   "go_to_the_editor_s_menubar_e6674c81": {
     "message": "Gå til menylinja i redigeringsprogrammet"
@@ -151,10 +166,12 @@
   "heading_3_2c83de44": { "message": "Overskrift 3" },
   "heading_4_b2e74be7": { "message": "Overskrift 4" },
   "height_69b03e15": { "message": "Høgde" },
+  "image_8ad06": { "message": "Bilde" },
   "image_options_5412d02c": { "message": "Alternativ for bilde" },
   "image_options_tray_90a46006": { "message": "Redigeringsmeny for bilde" },
   "images_7ce26570": { "message": "Bilde" },
   "increase_indent_6d550a4a": { "message": "Auk innrykk" },
+  "insert_593145ef": { "message": "Set inn" },
   "insert_equella_links_49a8dacd": { "message": "Sett inn Equella-lenker" },
   "insert_link_6dc23cae": { "message": "Sett inn lenke" },
   "insert_math_equation_57c6e767": { "message": "Sett inn matematikklikning" },
@@ -194,6 +211,7 @@
   "no_alt_text_decorative_image_f318fc0e": {
     "message": "Ingen alternativ tekst (dekorativt bilde)"
   },
+  "no_e16d9132": { "message": "Nei" },
   "no_results_940393cf": { "message": "Utan resultat. " },
   "no_results_found_for_filterterm_ad1b04c8": {
     "message": "Ingen resultat funne for { filterTerm }"
@@ -219,6 +237,7 @@
   },
   "posted_when_a578f5ab": { "message": "Posta: { when }" },
   "preformatted_d0670862": { "message": "Førehandsformatert" },
+  "preview_53003fd2": { "message": "Førehandsvising" },
   "preview_a3f8f854": { "message": "Førehandsvisning" },
   "previous_page_928fc112": { "message": "Førre side" },
   "published_c944a23d": { "message": "publisert" },
@@ -228,6 +247,7 @@
   "record_upload_media_5fdce166": { "message": "Ta opp / last opp media" },
   "recording_98da6bda": { "message": "Opptak" },
   "remove_link_d1f2f4d0": { "message": "Fjern lenke" },
+  "restore_auto_save_deccd84b": { "message": "Gjenopprette auto-lagring?" },
   "rich_content_editor_2708ef21": {
     "message": "Redigeringsprogram for rikt innhald"
   },
@@ -272,6 +292,9 @@
   "syllabus_f191f65b": { "message": "Emneoversikt" },
   "tab_arrows_4cf5abfc": { "message": "TAB/piltastar" },
   "text_7f4593da": { "message": "Tekst" },
+  "though_your_video_will_have_the_correct_title_in_t_90e427f3": {
+    "message": "Sjølv om videoen din har rett tittel i nettlesaren, er den ikkje oppdatert i databasen."
+  },
   "title_ee03d132": { "message": "Tittel" },
   "to_be_posted_when_d24bf7dc": { "message": "Vert posta: { when }" },
   "to_do_when_2783d78f": { "message": "Gjeremål: { when }" },
@@ -310,6 +333,7 @@
     "message": "Brukt av skjermlesarar for å skildre videoen"
   },
   "user_documents_c206e61f": { "message": "Brukardokument" },
+  "user_files_78e21703": { "message": "Brukarfiler" },
   "user_images_b6490852": { "message": "Brukarbilder" },
   "user_media_14fbf656": { "message": "Brukarmedia" },
   "video_audio_recording_uploaded_6af5d378": {
@@ -328,6 +352,7 @@
   },
   "width_x_height_px_ff3ccb93": { "message": "{ width } x { height }px" },
   "wiki_home_9cd54d0": { "message": "Wiki-startside" },
+  "yes_dde87d5": { "message": "Ja" },
   "your_webcam_may_already_be_in_use_6cd64c25": {
     "message": "Ditt webkamera kan allereie være i bruk"
   }

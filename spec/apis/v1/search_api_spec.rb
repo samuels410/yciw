@@ -24,7 +24,7 @@ describe SearchController, type: :request do
     @account = Account.default
     course_with_teacher(:active_course => true, :active_enrollment => true, :user => user_with_pseudonym(:active_user => true))
     @course.update_attribute(:name, "the course")
-    @course.default_section.update_attributes(:name => "the section")
+    @course.default_section.update(:name => "the section")
     @other_section = @course.course_sections.create(:name => "the other section")
     @me = @user
 
@@ -510,7 +510,7 @@ describe SearchController, type: :request do
       specs_require_cache(:redis_cache_store)
 
       it "should show new groups in existing categories" do
-        skip('LA-382')
+
         json = api_call(:get, "/api/v1/search/recipients.json?context=course_#{@course.id}_groups&synthetic_contexts=1",
           {:controller => 'search', :action => 'recipients', :format => 'json', :context => "course_#{@course.id}_groups", :synthetic_contexts => "1"})
         expect(json.map{|r| r["id"]}).to eq ["group_#{@group.id}"]

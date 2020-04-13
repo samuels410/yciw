@@ -58,6 +58,7 @@ describe "assignment groups" do
     end
 
     it "should edit a due date", priority: "2", test_id: 216346 do
+      skip('flaky spec, LA-749')
       assignment = create_assignment!
       visit_assignment_edit_page(assignment)
 
@@ -91,11 +92,9 @@ describe "assignment groups" do
 
       assign = create_assignment!
       visit_assignment_edit_page(assign)
-
       wait_for_ajaximations
       select_first_override_section(default_section.name)
       select_first_override_header("Mastery Paths")
-
       first_due_at_element.clear
       first_due_at_element.
         send_keys(format_date_for_view(default_section_due, :medium))
@@ -103,7 +102,6 @@ describe "assignment groups" do
       add_override
       wait_for_ajaximations
       select_last_override_section(other_section.name)
-
       last_due_at_element.
         send_keys(format_date_for_view(other_section_due, :medium))
 
@@ -194,7 +192,7 @@ describe "assignment groups" do
 
       get "/courses/#{@course.id}/assignments"
       expect(f('.assignment .assignment-date-due')).to include_text "Multiple Dates"
-      driver.mouse.move_to f(".assignment .assignment-date-due a")
+      driver.action.move_to(f(".assignment .assignment-date-due a")).perform
       wait_for_ajaximations
 
       tooltip = fj('.vdd_tooltip_content:visible')

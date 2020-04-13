@@ -55,6 +55,14 @@ module Lti::Messages
       'link_selection' => false
     }.freeze
 
+    ACCEPT_MULTIPLE = {
+      'migration_selection' => false,
+      'editor_button' => true,
+      'assignment_selection' => false,
+      'homework_submission' => false,
+      'link_selection' => true
+    }.freeze
+
     MODAL_PLACEMENTS = %w(editor_button assignment_selection link_selection migration_selection).freeze
 
     def initialize(tool:, context:, user:, expander:, return_url:, opts: {})
@@ -69,12 +77,18 @@ module Lti::Messages
 
     private
 
+    def accept_multiple_overrides
+      {
+        'link_selection' => Account.site_admin.feature_enabled?(:process_multiple_content_items_modules_index)
+      }
+    end
+
     def add_deep_linking_request_claims!
       @message.deep_linking_settings.deep_link_return_url = return_url
       @message.deep_linking_settings.accept_types = ACCEPT_TYPES[placement]
       @message.deep_linking_settings.accept_presentation_document_targets = DOCUMENT_TARGETS[placement]
       @message.deep_linking_settings.accept_media_types = MEDIA_TYPES[placement].join(',')
-      @message.deep_linking_settings.accept_multiple = false
+      @message.deep_linking_settings.accept_multiple = ACCEPT_MULTIPLE.merge(accept_multiple_overrides)[placement]
       @message.deep_linking_settings.auto_create = AUTO_CREATE[placement]
     end
 
@@ -85,7 +99,10 @@ module Lti::Messages
     def return_url
       @expander.controller.polymorphic_url(
         [@context, :deep_linking_response],
-        { modal: MODAL_PLACEMENTS.include?(placement) }
+        {
+          modal: MODAL_PLACEMENTS.include?(placement),
+          context_module_id: @opts[:context_module_id]
+        }.compact
       )
     end
   end

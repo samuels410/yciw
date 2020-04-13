@@ -542,7 +542,7 @@ describe DiscussionTopic do
           group_category = @course.group_categories.create(:name => "new cat")
           @group = @course.groups.create(:name => "group", :group_category => group_category)
           @group.add_user(@student1)
-          @course.update_attributes(:start_at => 2.days.ago, :conclude_at => 1.day.ago, :restrict_enrollments_to_course_dates => true)
+          @course.update(:start_at => 2.days.ago, :conclude_at => 1.day.ago, :restrict_enrollments_to_course_dates => true)
           @topic = @group.discussion_topics.create(:title => "group topic")
           @topic.save!
 
@@ -555,8 +555,8 @@ describe DiscussionTopic do
           group_category = @course.group_categories.create(:name => "new cat")
           @group = @course.groups.create(:name => "group", :group_category => group_category)
           @group.add_user(@student1)
-          @course.update_attributes(:start_at => 2.days.ago, :conclude_at => 1.day.ago, :restrict_enrollments_to_course_dates => true)
-          @section.update_attributes(:start_at => 2.days.ago, :end_at => 2.days.from_now,
+          @course.update(:start_at => 2.days.ago, :conclude_at => 1.day.ago, :restrict_enrollments_to_course_dates => true)
+          @section.update(:start_at => 2.days.ago, :end_at => 2.days.from_now,
             :restrict_enrollments_to_section_dates => true)
           @topic = @group.discussion_topics.create(:title => "group topic")
           @topic.save!
@@ -1096,6 +1096,38 @@ describe DiscussionTopic do
       expect { @course.discussion_topics.create!(:title => "topic", :user => @teacher) }.to change { @student.stream_item_instances.count }.by(1)
     end
 
+    it "should remove stream items from users removed from the discussion" do
+      section1 = @course.course_sections.create!
+      section2 = @course.course_sections.create!
+      student1 = create_enrolled_user(@course, section1, :name => 'student 1', :enrollment_type => 'StudentEnrollment')
+      student2 = create_enrolled_user(@course, section2, :name => 'student 2', :enrollment_type => 'StudentEnrollment')
+      topic = @course.discussion_topics.create!(title: "Ben Loves Panda", user: @teacher)
+      add_section_to_topic(topic, section1)
+      add_section_to_topic(topic, section2)
+      topic.save!
+      topic.publish!
+      expect(student1.stream_item_instances.count).to eq 1
+      expect(student2.stream_item_instances.count).to eq 1
+
+      expect {
+        topic.update!(course_sections: [section1])
+      }.to change { student1.stream_item_instances.count }.by(0).and change {
+        student2.stream_item_instances.count
+      }.from(1).to(0)
+    end
+
+    it "should remove stream items from users if updated to a delayed post in the future" do
+      announcement = @course.announcements.create!(title: 'Lemon Loves Panda', message: 'Because panda is home')
+
+      expect(@student.stream_item_instances.count).to eq 1
+
+      announcement.delayed_post_at = 5.days.from_now
+      announcement.workflow_state = 'post_delayed'
+      announcement.save!
+
+      expect(@student.stream_item_instances.count).to eq 0
+    end
+
     it "should not send stream items to students if the topic isn't published" do
       topic = nil
       expect { topic = @course.discussion_topics.create!(:title => "secret topic", :user => @teacher, :workflow_state => 'unpublished') }.to change { @student.stream_item_instances.count }.by(0)
@@ -1502,6 +1534,29 @@ describe DiscussionTopic do
       @student.reload
       expect(@student.submissions.size).to eq 1
       expect(@student.submissions.first.submission_type).to eq 'discussion_topic'
+    end
+
+    it "should create use entry time when groupless students are (for whatever reason) posting to a graded group discussion" do
+      group_category = @course.group_categories.create!(:name => "category")
+      @group1 = @course.groups.create!(:name => "group 1", :group_category => group_category)
+
+      @topic.group_category = group_category
+      @topic.save!
+
+      entry = @topic.reply_from(:user => @student, :text => "entry")
+      @student.reload
+      expect(@student.submissions).to be_empty
+
+      entry_time = 1.minute.ago
+      DiscussionEntry.where(:id => entry.id).update_all(:created_at => entry_time)
+      @assignment = assignment_model(:course => @course, :lock_at => 1.day.ago)
+      @topic.assignment = @assignment
+      @topic.save
+      @student.reload
+      expect(@student.submissions.size).to eq 1
+      sub = @student.submissions.first
+      expect(sub.submission_type).to eq 'discussion_topic'
+      expect(sub.submitted_at).to eq entry_time # the submission time should be backdated to the entry creation time
     end
 
     it "should have the correct submission date if submission has comment" do
@@ -1943,7 +1998,7 @@ describe DiscussionTopic do
       reply = @topic.reply_from(:user => @user, :text => "ohai")
       run_jobs
       expect(Delayed::Job.strand_size("materialized_discussion:#{@topic.id}")).to eq 0
-      reply.update_attributes(:message => "i got that wrong before")
+      reply.update(:message => "i got that wrong before")
       expect(Delayed::Job.strand_size("materialized_discussion:#{@topic.id}")).to eq 1
     end
 
@@ -2332,12 +2387,12 @@ describe DiscussionTopic do
     end
 
     it 'returns student entries if specified' do
-      @topic.update_attributes(podcast_has_student_posts: true)
+      @topic.update(podcast_has_student_posts: true)
       expect(@topic.entries_for_feed(@student, true)).to match_array([@entry1, @entry2])
     end
 
     it 'only returns admin entries if specified' do
-      @topic.update_attributes(podcast_has_student_posts: false)
+      @topic.update(podcast_has_student_posts: false)
       expect(@topic.entries_for_feed(@student, true)).to match_array([@entry1])
     end
 
@@ -2346,7 +2401,7 @@ describe DiscussionTopic do
       membership = group_with_user(group_category: @group_category, user: @student)
       @topic = @group.discussion_topics.create(title: "group topic", user: @teacher)
       @topic.discussion_entries.create(message: "some message", user: @student)
-      @topic.update_attributes(podcast_has_student_posts: false)
+      @topic.update(podcast_has_student_posts: false)
       expect(@topic.entries_for_feed(@student, true)).to_not be_empty
     end
   end

@@ -27,6 +27,7 @@ import {ScreenReaderContent} from '@instructure/ui-a11y'
 
 import {ToggleDetails} from '@instructure/ui-toggle-details'
 import {Text, Heading} from '@instructure/ui-elements'
+import {Flex} from '@instructure/ui-flex'
 import update from 'immutability-helper'
 
 import select from '../../shared/select'
@@ -202,19 +203,26 @@ export class DiscussionsContainer extends Component {
             <Heading level="h2">{this.props.title}</Heading>
           </ScreenReaderContent>
           <ToggleDetails
+            fluidWidth
             expanded={this.state.expanded}
             onToggle={this.toggleExpanded}
             summary={
-              <div aria-hidden="true">
-                <Text weight="bold">{this.props.title}</Text>
-              </div>
+              <Flex>
+                <Flex.Item shouldGrow shouldShrink>
+                  <div aria-hidden="true">
+                    <Text weight="bold">{this.props.title}</Text>
+                  </div>
+                </Flex.Item>
+                {!this.props.pinned ? (
+                  <Flex.Item shouldShrink textAlign="end">
+                    <span className="recent-activity-text-container">
+                      <Text fontStyle="italic">{I18n.t('Ordered by Recent Activity')}</Text>
+                    </span>
+                  </Flex.Item>
+                ) : null}
+              </Flex>
             }
           >
-            {!this.props.pinned ? (
-              <span className="recent-activity-text-container">
-                <Text fontStyle="italic">{I18n.t('Ordered by Recent Activity')}</Text>
-              </span>
-            ) : null}
             {this.props.discussions.length
               ? this.renderDiscussions()
               : this.renderBackgroundImage()}

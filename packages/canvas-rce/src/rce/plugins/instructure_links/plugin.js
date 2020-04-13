@@ -38,9 +38,41 @@ const getAnchorElement = function(editor, node) {
 
 tinymce.create('tinymce.plugins.InstructureLinksPlugin', {
   init(ed) {
+    const contextType = ed.settings.canvas_rce_user_context.type
+
     // Register commands
     ed.addCommand('instructureLinkCreate', clickCallback.bind(this, ed, CREATE_LINK))
     ed.addCommand('instructureLinkEdit', clickCallback.bind(this, ed, EDIT_LINK))
+    ed.addCommand('instructureTrayForLinks', (ui, plugin_key) => {
+      bridge.showTrayForPlugin(plugin_key)
+    })
+    ed.addCommand('instructureTrayToEditLink', (ui, editor) => {
+      trayController.showTrayForEditor(editor)
+    })
+
+    // Register shortcuts
+    ed.addShortcut('Meta+K', '', 'instructureLinkCreate')
+
+    // Register menu item
+    ed.ui.registry.addNestedMenuItem('instructure_links', {
+      text: formatMessage('Link'),
+      icon: 'link',
+      getSubmenuItems: () => ['instructure_external_link', 'instructure_course_link']
+    })
+    ed.ui.registry.addMenuItem('instructure_external_link', {
+      text: formatMessage('External Links'),
+      shortcut: 'Meta+K',
+      onAction: () => ed.execCommand('instructureLinkCreate')
+    })
+    if (contextType === 'course') {
+      ed.ui.registry.addMenuItem('instructure_course_link', {
+        text: formatMessage('Course Links'),
+        onAction: () => {
+          ed.focus(true) // activate the editor without changing focus
+          ed.execCommand('instructureTrayForLinks', false, PLUGIN_KEY)
+        }
+      })
+    }
 
     // Register toolbar button
     ed.ui.registry.addMenuButton('instructure_links', {
@@ -55,7 +87,7 @@ tinymce.create('tinymce.plugins.InstructureLinksPlugin', {
               type: 'menuitem',
               text: formatMessage('Edit Link'),
               onAction: () => {
-                trayController.showTrayForEditor(ed)
+                ed.execCommand('instructureTrayToEditLink', false, ed)
               }
             },
             {
@@ -74,16 +106,19 @@ tinymce.create('tinymce.plugins.InstructureLinksPlugin', {
               onAction: () => {
                 ed.execCommand('instructureLinkCreate')
               }
-            },
-            {
+            }
+          ]
+
+          if (contextType === 'course') {
+            items.splice(1, 0, {
               type: 'menuitem',
               text: formatMessage('Course Links'),
               onAction() {
                 ed.focus(true) // activate the editor without changing focus
-                bridge.showTrayForPlugin(PLUGIN_KEY)
+                ed.execCommand('instructureTrayForLinks', false, PLUGIN_KEY)
               }
-            }
-          ]
+            })
+          }
         }
         callback(items)
       },
@@ -105,7 +140,7 @@ tinymce.create('tinymce.plugins.InstructureLinksPlugin', {
     ed.ui.registry.addButton('instructure-link-options', {
       onAction(/* buttonApi */) {
         // show the tray
-        trayController.showTrayForEditor(ed)
+        ed.execCommand('instructureTrayToEditLink', false, ed)
       },
 
       text: formatMessage('Options'),

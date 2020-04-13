@@ -402,14 +402,14 @@ module Lti
       end
 
       it 'has a substitution for com.instructure.Assignment.lti.id when there is no tool setting' do
-        assignment.update_attributes(context: course)
+        assignment.update(context: course)
         variable_expander = VariableExpander.new(root_account,
                                                  account,
                                                  controller,
                                                  current_user: user,
                                                  tool: tool,
                                                  assignment: assignment)
-        assignment.update_attributes(context: course)
+        assignment.update(context: course)
         exp_hash = {test: '$com.instructure.Assignment.lti.id'}
         variable_expander.expand_variables!(exp_hash)
         expect(exp_hash[:test]).to eq assignment.lti_context_id
@@ -768,8 +768,8 @@ module Lti
         end
 
         before do
-          group.update_attributes!(users: [user])
-          new_assignment.update_attributes!(group_category: group_category)
+          group.update!(users: [user])
+          new_assignment.update!(group_category: group_category)
         end
 
         shared_examples 'a safe expansion when assignment is blank' do
@@ -1104,6 +1104,14 @@ module Lti
           exp_hash = {test: '$Canvas.term.startAt'}
           variable_expander.expand_variables!(exp_hash)
           expect(exp_hash[:test]).to eq '2015-05-21 17:01:36'
+        end
+
+        it 'has substitution for $Canvas.course.endAt' do
+          course.conclude_at = '2019-04-21 17:01:36'
+          course.save!
+          exp_hash = {test: '$Canvas.course.endAt'}
+          variable_expander.expand_variables!(exp_hash)
+          expect(exp_hash[:test]).to eq '2019-04-21 17:01:36'
         end
 
         it 'has a functioning guard for $Canvas.term.name when term.name is not set' do
