@@ -65,7 +65,10 @@ test('Grid.Util.toRows', () => {
     }
   ]
   ok(
-    isEqual(Grid.Util.toRows(rollups).map(r => r.student.id), [3, 1, 2]),
+    isEqual(
+      Grid.Util.toRows(rollups).map(r => r.student.id),
+      [3, 1, 2]
+    ),
     'returns rows in the same user order as rollups'
   )
 })

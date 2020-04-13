@@ -17,7 +17,7 @@
  */
 
 import $ from 'jquery'
-import {monitorLtiMessages} from '../../../javascripts/lti/messages'
+import {monitorLtiMessages} from '../../lti/messages'
 
 const LTI_MIME_TYPES = [
   'application/vnd.ims.lti.v1.ltilink',

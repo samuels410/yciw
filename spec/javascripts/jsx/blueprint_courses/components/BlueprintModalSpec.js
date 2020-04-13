@@ -85,4 +85,3 @@ test('renders the Done button when there are changes, but is in the process of s
   equal(buttons.length, 1)
   equal(buttons.at(0).prop('children'), 'Done')
 })
-

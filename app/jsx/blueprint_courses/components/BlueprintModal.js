@@ -120,9 +120,7 @@ export default class BlueprintModal extends Component {
                 </Flex.Item>
               )}
               <Flex.Item margin="0 x-small 0 0">
-                <Button onClick={this.props.onCancel}>
-                  {I18n.t('Cancel')}
-                </Button>
+                <Button onClick={this.props.onCancel}>{I18n.t('Cancel')}</Button>
               </Flex.Item>
               {this.props.saveButton ? (
                 this.props.saveButton

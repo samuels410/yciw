@@ -33,7 +33,13 @@ QUnit.module('GradebookGrid TotalGradeCellFormatter', hooks => {
     setFixtureHtml($fixture)
 
     gradebook = createGradebook({
-      grading_standard: [['A', 0.9], ['B', 0.8], ['C', 0.7], ['D', 0.6], ['F', 0.0]],
+      grading_standard: [
+        ['A', 0.9],
+        ['B', 0.8],
+        ['C', 0.7],
+        ['D', 0.6],
+        ['F', 0.0]
+      ],
       show_total_grade_as_points: true
     })
     sinon.stub(gradebook, 'getTotalPointsPossible').returns(10)

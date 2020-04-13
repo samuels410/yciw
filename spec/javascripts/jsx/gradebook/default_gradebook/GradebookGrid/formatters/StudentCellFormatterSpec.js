@@ -45,12 +45,18 @@ QUnit.module('GradebookGrid StudentCellFormatter', hooks => {
 
     gradebook.setStudentGroups([
       {
-        groups: [{id: '1', name: 'First Category 1'}, {id: '2', name: 'First Category 2'}],
+        groups: [
+          {id: '1', name: 'First Category 1'},
+          {id: '2', name: 'First Category 2'}
+        ],
         id: '1',
         name: 'First Category'
       },
       {
-        groups: [{id: '3', name: 'Second Category 1'}, {id: '4', name: 'Second Category 2'}],
+        groups: [
+          {id: '3', name: 'Second Category 1'},
+          {id: '4', name: 'Second Category 2'}
+        ],
         id: '2',
         name: 'Second Category'
       }

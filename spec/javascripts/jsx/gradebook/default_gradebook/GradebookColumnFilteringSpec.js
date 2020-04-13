@@ -511,7 +511,10 @@ QUnit.module('Gradebook Grid Column Filtering', suiteHooks => {
         grading_period_set: {
           id: '1501',
           display_totals_for_all_grading_periods: true,
-          grading_periods: [{id: '1401', title: 'GP1'}, {id: '1402', title: 'GP2'}]
+          grading_periods: [
+            {id: '1401', title: 'GP1'},
+            {id: '1402', title: 'GP2'}
+          ]
         }
       })
     })

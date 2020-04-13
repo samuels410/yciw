@@ -30,7 +30,13 @@ QUnit.module('GradebookGrid TotalGradeOverrideCellFormatter', suiteHooks => {
 
     gradebook = createGradebook({
       final_grade_override_enabled: true,
-      grading_standard: [['A', 0.9], ['B', 0.8], ['C', 0.7], ['D', 0.6], ['F', 0.0]]
+      grading_standard: [
+        ['A', 0.9],
+        ['B', 0.8],
+        ['C', 0.7],
+        ['D', 0.6],
+        ['F', 0.0]
+      ]
     })
     finalGradeOverrides = {
       1101: {

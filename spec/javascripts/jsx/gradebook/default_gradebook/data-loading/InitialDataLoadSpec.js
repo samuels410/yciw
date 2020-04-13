@@ -93,7 +93,10 @@ QUnit.module('Gradebook Initial Data Loading', suiteHooks => {
       context_modules_url: '/context-modules',
       custom_column_data_url: '/custom-column-data',
       final_grade_override_enabled: false,
-      sections: [{id: '2001', name: 'Freshmen'}, {id: '2002', name: 'Sophomores'}],
+      sections: [
+        {id: '2001', name: 'Freshmen'},
+        {id: '2002', name: 'Sophomores'}
+      ],
       students_stateless_url: '/students-url',
       submissions_url: '/submissions-url'
     }
@@ -232,7 +235,10 @@ QUnit.module('Gradebook Initial Data Loading', suiteHooks => {
     test('finishes rendering the UI after storing the loaded assignment groups', () => {
       initializeGradebook()
       sinon.stub(gradebook, 'finishRenderingUI').callsFake(() => {
-        deepEqual(gradebook.assignmentGroupList().map(group => group.id), ['2201'])
+        deepEqual(
+          gradebook.assignmentGroupList().map(group => group.id),
+          ['2201']
+        )
       })
       loadEssentialGridData()
     })

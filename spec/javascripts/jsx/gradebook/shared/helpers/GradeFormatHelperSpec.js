@@ -581,7 +581,13 @@ QUnit.module('GradeFormatHelper', suiteHooks => {
     QUnit.module('when formatting as "gradingScheme"', contextHooks => {
       contextHooks.beforeEach(() => {
         options.formatType = 'gradingScheme'
-        options.gradingScheme = [['A', 0.9], ['B', 0.8], ['C', 0.7], ['D', 0.6], ['F', 0.5]]
+        options.gradingScheme = [
+          ['A', 0.9],
+          ['B', 0.8],
+          ['C', 0.7],
+          ['D', 0.6],
+          ['F', 0.5]
+        ]
       })
 
       test('returns the matching scheme grade for the "final" score', () => {
@@ -589,7 +595,10 @@ QUnit.module('GradeFormatHelper', suiteHooks => {
       })
 
       test('avoids floating point calculation issues when computing the percent', () => {
-        options.gradingScheme = [['A', 0.94665], ['F', 0]]
+        options.gradingScheme = [
+          ['A', 0.94665],
+          ['F', 0]
+        ]
         submission.score = 946.65
         options.pointsPossible = 1000
         const floatingPointResult = (946.65 / 1000) * 100
@@ -629,7 +638,13 @@ QUnit.module('GradeFormatHelper', suiteHooks => {
       contextHooks => {
         contextHooks.beforeEach(() => {
           options.formatType = 'gradingScheme'
-          options.gradingScheme = [['A', 0.9], ['B', 0.8], ['C', 0.7], ['D', 0.6], ['F', 0.5]]
+          options.gradingScheme = [
+            ['A', 0.9],
+            ['B', 0.8],
+            ['C', 0.7],
+            ['D', 0.6],
+            ['F', 0.5]
+          ]
           options.pointsPossible = 0
         })
 
