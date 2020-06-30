@@ -33,12 +33,16 @@ class Lti::LineItem < ApplicationRecord
              class_name: 'Lti::ResourceLink'
   belongs_to :assignment,
              inverse_of: :line_items
+  belongs_to :root_account,
+             class_name: 'Account',
+             foreign_key: :root_account_id
   has_many :results,
            inverse_of: :line_item,
            class_name: 'Lti::Result',
            foreign_key: :lti_line_item_id,
            dependent: :destroy
 
+  before_create :set_root_account_id
   before_destroy :destroy_resource_link, if: :assignment_line_item? # assignment will destroy all the other line_items of a resourceLink
 
   AGS_EXT_SUBMISSION_TYPE = 'https://canvas.instructure.com/lti/submission_type'.freeze
@@ -71,10 +75,17 @@ class Lti::LineItem < ApplicationRecord
         end
       end
 
-      a = assignment.presence || Assignment.create!(assignment_attr)
-      opts = {assignment: a}.merge(params)
-      opts[:client_id] = tool.developer_key.global_id
-      self.create!(opts)
+      line_item = nil
+      if assignment.blank?
+        # Creating a new assignment of submission type external_tool creates a "default"
+        # LineItem (and associated ResourceLink) which we can just modify & use
+        assignment = Assignment.create!(assignment_attr)
+        line_item = assignment.line_items.first
+      end
+
+      line_item ||= self.new(assignment: assignment, root_account_id: assignment.root_account_id)
+      line_item.update_attributes!(params.to_h.merge(client_id: tool.developer_key.global_id).compact)
+      line_item
     end
   end
 
@@ -108,5 +119,9 @@ class Lti::LineItem < ApplicationRecord
   # this is to prevent orphaned (ie undeleted state) line_items when an assignment is destroyed
   def destroy_resource_link
     self.resource_link&.destroy
+  end
+
+  def set_root_account_id
+    self.root_account_id = assignment&.root_account_id unless root_account_id
   end
 end

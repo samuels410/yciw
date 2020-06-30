@@ -224,7 +224,6 @@ module Importers
         end
 
         clear_assignment_and_quiz_caches(migration)
-        DueDateCacher.recompute_course(course, update_grades: true, executing_user: migration.user)
       end
 
       migration.trigger_live_events!
@@ -292,6 +291,7 @@ module Importers
               event.lock_at = shift_date(event.lock_at, shift_options)
               event.unlock_at = shift_date(event.unlock_at, shift_options)
               event.peer_reviews_due_at = shift_date(event.peer_reviews_due_at, shift_options)
+              event.needs_update_cached_due_dates = true if event.update_cached_due_dates?
               event.save_without_broadcasting
               if event.errors.any?
                 migration.add_warning(t("Couldn't adjust dates on assignment %{name} (ID %{id})", name: event.name, id: event.id.to_s))
@@ -380,8 +380,11 @@ module Importers
     end
 
     def self.clear_assignment_and_quiz_caches(migration)
-      assignments = migration.imported_migration_items_by_class(Assignment).select(&:update_cached_due_dates?)
-      Assignment.clear_cache_keys(assignments, :availability) if assignments.any?
+      assignments = migration.imported_migration_items_by_class(Assignment).select(&:needs_update_cached_due_dates)
+      if assignments.any?
+        Assignment.clear_cache_keys(assignments, :availability)
+        DueDateCacher.recompute_course(migration.context, assignments: assignments, update_grades: true, executing_user: migration.user)
+      end
       quizzes = migration.imported_migration_items_by_class(Quizzes::Quiz).select(&:should_clear_availability_cache)
       Quizzes::Quiz.clear_cache_keys(quizzes, :availability) if quizzes.any?
     end

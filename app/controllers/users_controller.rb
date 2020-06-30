@@ -446,14 +446,17 @@ class UsersController < ApplicationController
       users = UserSearch.scope_for(@context, @current_user,
         {order: params[:order], sort: params[:sort], enrollment_role_id: params[:role_filter_id],
           enrollment_type: params[:enrollment_type]})
+      users = users.with_last_login if params[:sort] == 'last_login'
     end
 
     includes = (params[:include] || []) & %w{avatar_url email last_login time_zone uuid}
     includes << 'last_login' if params[:sort] == 'last_login' && !includes.include?('last_login')
-    users = users.with_last_login if includes.include?('last_login') && !search_term
-    users = Api.paginate(users, self, api_v1_account_users_url, page_opts)
-    user_json_preloads(users, includes.include?('email'))
-    render :json => users.map { |u| user_json(u, @current_user, session, includes)}
+    Shackles.activate(:slave) do
+      users = Api.paginate(users, self, api_v1_account_users_url, page_opts)
+      user_json_preloads(users, includes.include?('email'))
+      User.preload_last_login(users, @context.resolved_root_account_id) if includes.include?('last_login') && !(params[:sort] == 'last_login')
+      render :json => users.map { |u| user_json(u, @current_user, session, includes)}
+    end
   end
 
 
@@ -531,7 +534,8 @@ class UsersController < ApplicationController
       },
       :STUDENT_PLANNER_ENABLED => planner_enabled?,
       :STUDENT_PLANNER_COURSES => planner_enabled? && map_courses_for_menu(@current_user.courses_with_primary_enrollment),
-      :STUDENT_PLANNER_GROUPS => planner_enabled? && map_groups_for_planner(@current_user.current_groups)
+      :STUDENT_PLANNER_GROUPS => planner_enabled? && map_groups_for_planner(@current_user.current_groups),
+      :PAST_ANNOUNCEMENTS_ENABLED => @domain_root_account.feature_enabled?('past_announcements')
     })
 
     @announcements = AccountNotification.for_user_and_account(@current_user, @domain_root_account)
@@ -562,7 +566,13 @@ class UsersController < ApplicationController
 
   def dashboard_cards
     dashboard_courses = map_courses_for_menu(@current_user.menu_courses, tabs: DASHBOARD_CARD_TABS)
-    Rails.cache.write(['last_known_dashboard_cards_count', @current_user.global_id].cache_key, dashboard_courses.count)
+    if @domain_root_account.feature_enabled?(:unpublished_courses)
+      published, unpublished = dashboard_courses.partition { |course| course[:published]}
+      Rails.cache.write(['last_known_dashboard_cards_published_count', @current_user.global_id].cache_key, published.count)
+      Rails.cache.write(['last_known_dashboard_cards_unpublished_count', @current_user.global_id].cache_key, unpublished.count)
+    else
+      Rails.cache.write(['last_known_dashboard_cards_count', @current_user.global_id].cache_key, dashboard_courses.count)
+    end
     render json: dashboard_courses
   end
 
@@ -902,7 +912,7 @@ class UsersController < ApplicationController
       end
 
       paginated_collection = BookmarkedCollection.merge(*collections)
-      todos = Api.paginate(paginated_collection, self, api_v1_user_todo_list_items_url)  
+      todos = Api.paginate(paginated_collection, self, api_v1_user_todo_list_items_url)
       render :json => todos
     end
   end
@@ -1462,6 +1472,14 @@ class UsersController < ApplicationController
   #   created user automatically logged in. The URL is only valid for a short time, and must
   #   match the domain this request is directed to, and be for a well-formed path that Canvas
   #   can recognize.
+  #
+  # @argument initial_enrollment_type [String]
+  #   `observer` if doing a self-registration with a pairing code. This allows setting the
+  #   password during user creation.
+  #
+  # @argument pairing_code[code] [String]
+  #   If provided and valid, will link the new user as an observer to the student's whose
+  #   pairing code is given.
   #
   # @returns User
   def create
@@ -2545,7 +2563,7 @@ class UsersController < ApplicationController
     # find all ungraded submissions in one query
     ungraded_submissions = course.submissions.
         where.not(:assignments => {:workflow_state => 'deleted'}).
-        preload(:assignment).
+        eager_load(:assignment).
         where("user_id IN (?) AND #{Submission.needs_grading_conditions}", ids).
         except(:order).
         order(:submitted_at).to_a

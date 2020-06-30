@@ -27,9 +27,9 @@ module Canvas
     # (which is far less often than the many times per day users are currently being touched)
 
     ALLOWED_TYPES = {
-      'Account' => %w{account_chain role_overrides global_navigation},
+      'Account' => %w{account_chain role_overrides global_navigation feature_flags},
       'Course' => %w{account_associations},
-      'User' => %w{enrollments groups account_users todo_list submissions},
+      'User' => %w{enrollments groups account_users todo_list submissions user_services},
       'Assignment' => %w{availability},
       'Quizzes::Quiz' => %w{availability}
     }.freeze
@@ -47,8 +47,7 @@ module Canvas
     end
 
     def self.enabled?
-      # add a switch just in case things aren't getting cleared quite the way they should
-       !::Rails.cache.is_a?(::ActiveSupport::Cache::NullStore) && Canvas.redis_enabled? && Setting.get("revert_cache_register", "false") != "true"
+       !::Rails.cache.is_a?(::ActiveSupport::Cache::NullStore) && Canvas.redis_enabled?
     end
 
     module ActiveRecord
@@ -56,6 +55,7 @@ module Canvas
         module ClassMethods
           def base_cache_register_key_for(id_or_record)
             id = ::Shard.global_id_for(id_or_record)
+            raise "invalid argument for cache clearing #{id}" if id && !id.is_a?(Integer) unless ::Rails.env.production?
             id && "cache_register/#{self.model_name.cache_key}/#{id}"
           end
 

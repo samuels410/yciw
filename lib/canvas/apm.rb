@@ -17,7 +17,8 @@
 
 require 'ddtrace'
 require 'digest/sha1'
-require 'canvas/dynamic_settings'
+
+require_dependency 'canvas/dynamic_settings'
 
 module Canvas
   # This module is currently a wrapper for managing connecting with ddtrace
@@ -47,6 +48,7 @@ module Canvas
       attr_accessor :canvas_cluster
 
       def reset!
+        @_app_analytics_enabled = nil
         @_config = nil
         @_host_sample_rate = nil
         @_host_sampling_decision = nil
@@ -74,6 +76,11 @@ module Canvas
       def host_sample_rate
         return @_host_sample_rate if @_host_sample_rate.present?
         @_host_sample_rate = self.config.fetch('host_sample_rate', 0.0).to_f
+      end
+
+      def analytics_enabled?
+        return @_app_analytics_enabled unless @_app_analytics_enabled.nil?
+        @_app_analytics_enabled = self.config.fetch('app_analytics_enabled', false)
       end
 
       def configured?
@@ -109,6 +116,10 @@ module Canvas
         sampler = self.rate_sampler
         debug_mode = @enable_debug_mode.presence || false
         Datadog.configure do |c|
+          # this is filtered on the datadog UI side
+          # to make sure we don't analyze _everything_
+          # which would be very expensive
+          c.analytics_enabled = self.analytics_enabled?
           c.tracer sampler: sampler, debug: debug_mode
           c.use :aws
           c.use :faraday

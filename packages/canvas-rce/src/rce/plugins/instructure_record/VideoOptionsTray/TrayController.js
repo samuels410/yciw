@@ -26,7 +26,7 @@ import VideoOptionsTray from '.'
 export const CONTAINER_ID = 'instructure-video-options-tray-container'
 
 export const VIDEO_SIZE_DEFAULT = {height: '225px', width: '400px'} // AKA "LARGE"
-export const AUDIO_PLAYER_SIZE = {width: '300px', height: '2.813rem'}
+export const AUDIO_PLAYER_SIZE = {width: '320px', height: '14.25rem'}
 
 export default class TrayController {
   constructor() {
@@ -67,9 +67,16 @@ export default class TrayController {
   _applyVideoOptions(videoOptions) {
     if (this.$videoContainer && this.$videoContainer.firstElementChild?.tagName === 'IFRAME') {
       if (videoOptions.displayAs === 'embed') {
+        const isVertical = videoOptions.appliedHeight > videoOptions.appliedWidth
+        // player v5 requires more space for the CC button
+        // TODO: remove when using v7
+        const minWidth = videoOptions.subtitles?.length ? 400 : 320
         const styl = {
           height: `${videoOptions.appliedHeight}px`,
-          width: `${videoOptions.appliedWidth}px`
+          width: `${Math.max(
+            minWidth,
+            isVertical ? videoOptions.appliedHeight : videoOptions.appliedWidth
+          )}px`
         }
         this._editor.dom.setStyles(this.$videoContainer, styl)
         this._editor.dom.setStyles(this.$videoContainer.firstElementChild, styl)
@@ -108,11 +115,21 @@ export default class TrayController {
         this._editor.selection.select(link)
         this.$videoContainer = null
       }
+      videoOptions
+        .updateMediaObject({
+          media_object_id: videoOptions.media_object_id,
+          title: videoOptions.titleText,
+          subtitles: videoOptions.subtitles
+        })
+        .then(_r => {
+          if (this.$videoContainer && videoOptions.displayAs === 'embed') {
+            this.$videoContainer.firstElementChild.contentWindow.location.reload()
+          }
+        })
+        .catch(ex => {
+          console.error('failed updating video captions', ex) // eslint-disable-line no-console
+        })
     }
-    videoOptions.updateMediaObject({
-      media_object_id: videoOptions.media_object_id,
-      title: videoOptions.titleText
-    })
     this._dismissTray()
   }
 
@@ -127,8 +144,6 @@ export default class TrayController {
 
   _renderTray(trayProps) {
     let vo = {}
-    // we will need this element when we do tracks but not for now.
-    // const $video = this._editor.selection.getNode()
 
     if (this._shouldOpen) {
       /*
@@ -137,7 +152,7 @@ export default class TrayController {
        * be used for initial video options.
        */
       this._renderId++
-      vo = asVideoElement(this.$videoContainer)
+      vo = asVideoElement(this.$videoContainer) || {}
     }
 
     const element = (

@@ -19,9 +19,9 @@
 import React from 'react'
 import {render} from '@testing-library/react'
 import RceFileBrowser from '../FileBrowser'
-import FileBrowser from '../../../../../../../app/jsx/shared/rce/FileBrowser'
+import FileBrowser from '../../../../canvasFileBrowser/FileBrowser'
 
-jest.mock('../../../../../../../app/jsx/shared/rce/FileBrowser', () => {
+jest.mock('../../../../canvasFileBrowser/FileBrowser', () => {
   return jest.fn(() => 'Files Browser')
 })
 
@@ -33,11 +33,14 @@ describe('RceFileBrowser', () => {
     render(<RceFileBrowser onFileSelect={onFileSelect} />)
     // This is the selectFile prop passed to the Canvas FileBrowser that we mocked above
     const selectFile = FileBrowser.mock.calls[0][0].selectFile
-    selectFile({name: 'a file', api: {url: '/file/download'}})
+    selectFile({name: 'a file', api: {url: '/file/download', 'content-type': 'application/pdf'}})
     expect(onFileSelect).toHaveBeenCalledWith({
       name: 'a file',
       title: 'a file',
-      href: '/file/download'
+      href: '/file/download',
+      content_type: 'application/pdf',
+      target: '_blank',
+      class: 'instructure_file_link instructure_scribd_file'
     })
   })
 })

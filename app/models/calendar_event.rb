@@ -51,15 +51,19 @@ class CalendarEvent < ActiveRecord::Base
   belongs_to :user
   belongs_to :parent_event, :class_name => 'CalendarEvent', :foreign_key => :parent_calendar_event_id, :inverse_of => :child_events
   has_many :child_events, -> { where("calendar_events.workflow_state <> 'deleted'") }, class_name: 'CalendarEvent', foreign_key: :parent_calendar_event_id, inverse_of: :parent_event
+  belongs_to :web_conference, autosave: true
+
   validates_presence_of :context, :workflow_state
   validates_associated :context, :if => lambda { |record| record.validate_context }
   validates_length_of :description, :maximum => maximum_long_text_length, :allow_nil => true, :allow_blank => true
   validates_length_of :title, :maximum => maximum_string_length, :allow_nil => true, :allow_blank => true
   validates_length_of :comments, maximum: 255, allow_nil: true, allow_blank: true
+  validate :validate_conference_visibility
   before_save :default_values
   after_save :touch_context
   after_save :replace_child_events
   after_save :sync_parent_event
+  after_save :sync_conference
   after_update :sync_child_events
 
   # when creating/updating a calendar_event, you can give it a list of child
@@ -166,7 +170,7 @@ class CalendarEvent < ActiveRecord::Base
 
   scope :not_hidden, -> do
     where("NOT EXISTS (
-      SELECT id 
+      SELECT id
       FROM #{CalendarEvent.quoted_table_name} sub_events
       WHERE sub_events.parent_calendar_event_id=calendar_events.id
         AND sub_events.workflow_state <> 'deleted'
@@ -302,7 +306,8 @@ class CalendarEvent < ActiveRecord::Base
     :title,
     :description,
     :location_name,
-    :location_address
+    :location_address,
+    :web_conference
   ].freeze
   LOCKED_ATTRIBUTES = CASCADED_ATTRIBUTES + [
     :start_at,
@@ -314,6 +319,21 @@ class CalendarEvent < ActiveRecord::Base
     cascaded_changes = CASCADED_ATTRIBUTES.select { |attr| saved_change_to_attribute?(attr) }
     child_events.are_locked.update_all Hash[locked_changes.map{ |attr| [attr, send(attr)] }] if locked_changes.present?
     child_events.are_unlocked.update_all Hash[cascaded_changes.map{ |attr| [attr, send(attr)] }] if cascaded_changes.present?
+  end
+
+  def sync_conference
+    return if web_conference_id.blank?
+    if saved_change_to_title?
+      web_conference.title = title
+    end
+    if saved_change_to_start_at? && web_conference.user_settings.key?(:scheduled_date)
+      web_conference.user_settings[:scheduled_date] = start_at
+    end
+    unless web_conference.lti?
+      web_conference.invite_users_from_context
+    end
+
+    web_conference.save!
   end
 
   attr_writer :skip_sync_parent_event
@@ -730,6 +750,24 @@ class CalendarEvent < ActiveRecord::Base
       cal.add_event(event) if event
 
       return cal.to_ical
+    end
+  end
+
+  def validate_conference_visibility
+    return unless web_conference_id_changed?
+    return if web_conference_id.nil?
+    unless user.blank? || web_conference.grants_right?(user, :read)
+      errors.add(:web_conference_id, 'cannot add web conference without read access for user')
+      return
+    end
+    conference_context = case context
+                         when Course, Group
+                           context
+                         when CourseSection
+                           context.course
+    end
+    if conference_context != web_conference.context
+      errors.add(:web_conference_id, 'cannot add web conference from different context')
     end
   end
 end

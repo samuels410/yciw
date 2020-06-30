@@ -19,10 +19,6 @@
 require File.expand_path(File.dirname(__FILE__) + '/../spec_helper.rb')
 
 describe ContextModule do
-  before :once do
-    PostPolicy.enable_feature!
-  end
-
   def course_module
     course_with_student(active_all: true)
     @module = @course.context_modules.create!(:name => "some module")
@@ -41,6 +37,15 @@ describe ContextModule do
       mod.name = 'blah'
       expect(mod).to be_valid
     end
+  end
+
+  describe "#set_root_account_id" do
+    subject { context_module.root_account }
+
+    let(:course) { course_factory }
+    let(:context_module) { course.context_modules.create! }
+
+    it { is_expected.to eq course.root_account }
   end
 
   describe "publish_items!" do
@@ -414,6 +419,12 @@ describe ContextModule do
       expect(empty.content_tags.order(:position).pluck(:title)).to eq(%w(attach assign))
     end
 
+    it "sets the indent to 0" do
+      empty = @course.context_modules.create! name: 'empty'
+      empty.insert_items([@attach, @assign])
+      expect(empty.content_tags.pluck(:indent)).to eq([0, 0])
+    end
+
     it "doesn't add weird things to a module" do
       @module.insert_items([@attach, user_model, 'foo', @assign])
       expect(@module.content_tags.order(:position).pluck(:title)).to eq(
@@ -438,6 +449,15 @@ describe ContextModule do
       @module.content_tags.find_by(title: 'two').destroy
       @module.insert_items([@attach, @assign], 3)
       expect(@module.content_tags.not_deleted.pluck(:title)).to eq(%w(one three attach assign))
+    end
+
+    it "respects the added items' published state" do
+      @page.unpublish!
+      m = @course.context_modules.create!
+      m.insert_items([@assign, @page, @tool])
+      expect(m.content_tags.pluck(:title, :workflow_state)).to eq(
+        [['assign', 'active'], ['page', 'unpublished'], ['tool', 'active']]
+      )
     end
   end
 

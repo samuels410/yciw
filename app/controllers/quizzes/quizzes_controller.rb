@@ -45,8 +45,7 @@ class Quizzes::QuizzesController < ApplicationController
     :read_only,
     :managed_quiz_data,
     :submission_versions,
-    :submission_html,
-    :toggle_post_to_sis
+    :submission_html
   ]
   before_action :set_download_submission_dialog_title , only: [:show,:statistics]
   after_action :lock_results, only: [ :show, :submission_html ]
@@ -107,6 +106,7 @@ class Quizzes::QuizzesController < ApplicationController
         :URLS => {
           new_assignment_url: new_polymorphic_url([@context, :assignment]),
           new_quiz_url: context_url(@context, :context_quizzes_new_url, :fresh => 1),
+          new_quizzes_selection: api_v1_course_new_quizzes_selection_update_url(@context),
           question_banks_url: context_url(@context, :context_question_banks_url),
           assignment_overrides: api_v1_course_quiz_assignment_overrides_url(@context),
           new_quizzes_assignment_overrides: api_v1_course_new_quizzes_assignment_overrides_url(@context)
@@ -135,7 +135,8 @@ class Quizzes::QuizzesController < ApplicationController
         :MAX_NAME_LENGTH => max_name_length,
         :DUE_DATE_REQUIRED_FOR_ACCOUNT => due_date_required_for_account,
         :MAX_NAME_LENGTH_REQUIRED_FOR_ACCOUNT => max_name_length_required_for_account,
-        :SIS_INTEGRATION_SETTINGS_ENABLED => sis_integration_settings_enabled
+        :SIS_INTEGRATION_SETTINGS_ENABLED => sis_integration_settings_enabled,
+        :NEW_QUIZZES_SELECTED => quiz_engine_selection
       }
       if @context.is_a?(Course) && @context.grants_right?(@current_user, session, :read)
         hash[:COURSE_ID] = @context.id.to_s
@@ -376,6 +377,7 @@ class Quizzes::QuizzesController < ApplicationController
       quiz_params[:title] ||= t(:default_title, "New Quiz")
       quiz_params[:description] = process_incoming_html_content(quiz_params[:description]) if quiz_params.key?(:description)
       quiz_params.delete(:points_possible) unless quiz_params[:quiz_type] == 'graded_survey'
+      quiz_params[:disable_timer_autosubmission] = false if quiz_params[:time_limit].blank?
       quiz_params[:access_code] = nil if quiz_params[:access_code] == ""
       if quiz_params[:quiz_type] == 'assignment' || quiz_params[:quiz_type] == 'graded_survey'
         quiz_params[:assignment_group_id] ||= @context.assignment_groups.first.id
@@ -436,6 +438,7 @@ class Quizzes::QuizzesController < ApplicationController
       quiz_params[:description] = process_incoming_html_content(quiz_params[:description]) if quiz_params.key?(:description)
 
       quiz_params.delete(:points_possible) unless quiz_params[:quiz_type] == 'graded_survey'
+      quiz_params[:disable_timer_autosubmission] = false if quiz_params[:time_limit].blank?
       quiz_params[:access_code] = nil if quiz_params[:access_code] == ""
       if quiz_params[:quiz_type] == 'assignment' || quiz_params[:quiz_type] == 'graded_survey' #'new' && params[:quiz][:assignment_group_id]
         if (assignment_group_id = quiz_params.delete(:assignment_group_id)) && assignment_group_id.present?
@@ -576,17 +579,6 @@ class Quizzes::QuizzesController < ApplicationController
                            :other => "%{count} quizzes successfully unpublished!" },
                          :count => @quizzes.length)
 
-      respond_to do |format|
-        format.html { redirect_to named_context_url(@context, :context_quizzes_url) }
-        format.json { render :json => {}, :status => :ok }
-      end
-    end
-  end
-
-  def toggle_post_to_sis
-    if authorized_action(@quiz, @current_user, :update)
-      @quiz.post_to_sis = params[:post_to_sis]
-      @quiz.save!
       respond_to do |format|
         format.html { redirect_to named_context_url(@context, :context_quizzes_url) }
         format.json { render :json => {}, :status => :ok }
@@ -1088,5 +1080,17 @@ class Quizzes::QuizzesController < ApplicationController
     scope = DifferentiableAssignment.scope_filter(scope, @current_user, @context)
 
     @_quizzes = sort_quizzes(scope)
+  end
+
+  def quiz_engine_selection
+    selection = nil
+    if @context.is_a?(Course) && @context.settings.dig(:engine_selected, :user_id)
+      user_id = @current_user.id
+      selection_obj = @context.settings.dig(:engine_selected, :user_id)
+      if selection_obj[:expiration] > Time.zone.today
+        selection = selection_obj[:newquizzes_engine_selected]
+      end
+      selection
+    end
   end
 end

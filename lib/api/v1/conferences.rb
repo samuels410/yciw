@@ -19,22 +19,28 @@
 module Api::V1::Conferences
 
   API_CONFERENCE_JSON_OPTS = {
-    :only => %w(id title conference_type description
+    :only => %w(
+      id title conference_type description
       duration ended_at started_at user_ids long_running
-      recordings join_url has_advanced_settings conference_key)
-  }
+      recordings join_url has_advanced_settings conference_key
+      context_type context_id
+    ).freeze
+  }.freeze
 
   def api_conferences_json(conferences, user, session)
-    json = conferences.map do |c|
-      api_json(c, user, session, API_CONFERENCE_JSON_OPTS)
-    end
-    json.each do |j|
+    json = conferences.map {|c| api_conference_json(c, user, session)}
+    {'conferences' => json}
+  end
+
+  def api_conference_json(conference, user, session)
+    api_json(conference, user, session, API_CONFERENCE_JSON_OPTS).tap do |j|
+      j['lti_settings'] = conference.lti_settings if Account.site_admin.feature_enabled?(:conference_selection_lti_placement)
       j['has_advanced_settings'] = value_to_boolean(j['has_advanced_settings'])
       j['long_running'] = value_to_boolean(j['long_running'])
       j['duration'] = j['duration'].to_i if j['duration']
       j['users'] = Array(j.delete('user_ids'))
+      j['url'] = named_context_url(conference.context, :context_conference_url, conference)
     end
-    {'conferences' => json}
   end
 
   def ui_conferences_json(conferences, context, user, session)
@@ -75,10 +81,12 @@ module Api::V1::Conferences
   def conference_types_json(conference_types)
     conference_types.map do |conference_type|
       {
-        name: conference_type[:plugin].name,
+        name: conference_type[:name],
         type: conference_type[:conference_type],
         settings: conference_user_setting_fields_json(conference_type[:user_setting_fields]),
-        free_trial: !!conference_type[:free_trial]
+        free_trial: !!conference_type[:free_trial],
+        lti_settings: conference_type[:lti_settings].as_json,
+        contexts: conference_type[:contexts]&.map(&:asset_string)
       }
     end
   end

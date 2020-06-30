@@ -17,10 +17,41 @@
  */
 import gql from 'graphql-tag'
 
-export const COURSE_NOTIFICATIONS_ENABLED_QUERY = gql`
+export const COURSE_NOTIFICATIONS_QUERY = gql`
   query GetNotificationPreferences($courseId: ID!) {
     course(id: $courseId) {
+      _id
+      name
       notificationPreferencesEnabled
+      notificationPreferences {
+        channels {
+          _id
+          path
+          pathType
+          notificationPolicies(contextType: Course) {
+            communicationChannelId
+            frequency
+            notification {
+              _id
+              category
+              categoryDisplayName
+              categoryDescription
+              name
+            }
+          }
+          notificationPolicyOverrides(contextType: Course, courseId: $courseId) {
+            communicationChannelId
+            frequency
+            notification {
+              _id
+              category
+              categoryDisplayName
+              categoryDescription
+              name
+            }
+          }
+        }
+      }
     }
   }
 `

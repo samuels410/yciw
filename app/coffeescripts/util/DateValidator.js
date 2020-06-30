@@ -91,27 +91,23 @@ const DATE_RANGE_ERRORS = {
 export default class DateValidator {
   constructor(params) {
     this.dateRange = params.date_range
-    this.data = params.data
-    this.forIndividualStudents = params.forIndividualStudents
     this.hasGradingPeriods = params.hasGradingPeriods
     this.gradingPeriods = params.gradingPeriods
     this.userIsAdmin = params.userIsAdmin
     this.dueDateRequired = params.postToSIS && ENV.DUE_DATE_REQUIRED_FOR_ACCOUNT
   }
 
-  validateDatetimes() {
-    const lockAt = this.data.lock_at
-    const unlockAt = this.data.unlock_at
-    const dueAt = this.data.due_at
-    const section = _.find(ENV.SECTION_LIST, {id: this.data.course_section_id})
+  validateDatetimes(data) {
+    const lockAt = data.lock_at
+    const unlockAt = data.unlock_at
+    const dueAt = data.due_at
+    const section_id = data.set_type === 'CourseSection' ? data.set_id : data.course_section_id
+    const section = _.find(ENV.SECTION_LIST, {id: section_id})
     const currentDateRange = section ? this.getSectionRange(section) : this.dateRange
     const datetimesToValidate = []
+    const forIndividualStudents = data.student_ids?.length || data.set_type === 'ADHOC'
 
-    if (
-      currentDateRange.start_at &&
-      currentDateRange.start_at.date &&
-      !this.forIndividualStudents
-    ) {
+    if (currentDateRange.start_at && currentDateRange.start_at.date && !forIndividualStudents) {
       datetimesToValidate.push({
         date: currentDateRange.start_at.date,
         validationDates: {
@@ -122,7 +118,7 @@ export default class DateValidator {
         type: currentDateRange.start_at.date_context
       })
     }
-    if (currentDateRange.end_at && currentDateRange.end_at.date && !this.forIndividualStudents) {
+    if (currentDateRange.end_at && currentDateRange.end_at.date && !forIndividualStudents) {
       datetimesToValidate.push({
         date: currentDateRange.end_at.date,
         validationDates: {
@@ -159,7 +155,7 @@ export default class DateValidator {
       })
     }
 
-    if (this.hasGradingPeriods && !this.userIsAdmin && this.data.persisted === false) {
+    if (this.hasGradingPeriods && !this.userIsAdmin && data.persisted === false) {
       datetimesToValidate.push({
         date: dueAt,
         range: 'grading_period_range'

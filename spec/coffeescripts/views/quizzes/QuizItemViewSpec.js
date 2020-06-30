@@ -126,8 +126,8 @@ test('shows solid quiz icon for new.quizzes', () => {
   equal(view.$('i.icon-quiz.icon-Solid').length, 1)
 })
 
-test('shows a non-student a line quiz icon for old quizzes', () => {
-  Object.assign(window.ENV, {current_user_roles: ['teacher']})
+test('shows a teacher a line quiz icon for old quizzes', () => {
+  Object.assign(window.ENV, {current_user_roles: ['teacher', 'student']})
   const quiz = createQuiz({id: 1, title: 'Foo', can_update: true})
   const view = createView(quiz, {canManage: true, migrate_quiz_enabled: false})
   equal(view.$('i.icon-quiz').length, 1)
@@ -137,7 +137,7 @@ test('shows a non-student a line quiz icon for old quizzes', () => {
 test('shows a student a solid quiz icon for old quizzes', () => {
   Object.assign(window.ENV, {current_user_roles: ['student']})
   const quiz = createQuiz({id: 1, title: 'Foo', can_update: true})
-  const view = createView(quiz, {canManage: true, migrate_quiz_enabled: false})
+  const view = createView(quiz, {canManage: false, migrate_quiz_enabled: false})
   equal(view.$('i.icon-quiz.icon-Solid').length, 1)
 })
 
@@ -587,6 +587,20 @@ QUnit.module('direct share', hooks => {
     equal(ReactDOM.render.lastCall.args[0].props.open, false)
   })
 
+  test('uses the correct content_type for new quizzes on Copy To', () => {
+    const quiz = createQuiz({id: 1, title: 'Foo', can_update: true, quiz_type: 'quizzes.next'})
+    const view = createView(quiz, {DIRECT_SHARE_ENABLED: true})
+    view.$(`.al-trigger`).simulate('click')
+    view.$(`.quiz-copy-to`).simulate('click')
+    const args = ReactDOM.render.firstCall.args
+    equal(args[0].props.open, true)
+    equal(args[0].props.sourceCourseId, 123)
+    deepEqual(args[0].props.contentSelection, {assignments: [1]})
+
+    clearTimeout(args[0].props.onDismiss())
+    equal(ReactDOM.render.lastCall.args[0].props.open, false)
+  })
+
   test('opens and closes the Send To tray', () => {
     const quiz = createQuiz({id: '1', title: 'Foo', can_update: true})
     const view = createView(quiz, {DIRECT_SHARE_ENABLED: true})
@@ -601,7 +615,7 @@ QUnit.module('direct share', hooks => {
     equal(ReactDOM.render.lastCall.args[0].props.open, false)
   })
 
-  test('uses the correct content_type for new quizzes', () => {
+  test('uses the correct content_type for new quizzes on Send To', () => {
     const quiz = createQuiz({id: '1', title: 'Foo', can_update: true, quiz_type: 'quizzes.next'})
     const view = createView(quiz, {DIRECT_SHARE_ENABLED: true})
     view.$(`.al-trigger`).simulate('click')

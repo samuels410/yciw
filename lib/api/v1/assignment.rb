@@ -120,7 +120,8 @@ module Api::V1::Assignment
       override_dates: true,
       needs_grading_count_by_section: false,
       exclude_response_fields: [],
-      include_planner_override: false
+      include_planner_override: false,
+      include_can_edit: false
     )
 
     if opts[:override_dates] && !assignment.new_record?
@@ -216,11 +217,13 @@ module Api::V1::Assignment
 
     if assignment.external_tool? && assignment.external_tool_tag.present?
       external_tool_tag = assignment.external_tool_tag
-      hash['external_tool_tag_attributes'] = {
+      tool_attributes = {
         'url' => external_tool_tag.url,
         'new_tab' => external_tool_tag.new_tab,
-        'resource_link_id' => assignment.lti_resource_link_id
+        'resource_link_id' => assignment.lti_resource_link_id,
       }
+      tool_attributes.merge!(external_tool_tag.attributes.slice('content_type', 'content_id')) if external_tool_tag.content_id
+      hash['external_tool_tag_attributes'] = tool_attributes
       hash['url'] = sessionless_launch_url(@context,
                                            :launch_type => 'assessment',
                                            :assignment_id => assignment.id)
@@ -311,6 +314,16 @@ module Api::V1::Assignment
         hash['all_dates'] = assignment.dates_hash_visible_to(user)
       else
         hash['all_dates_count'] = override_count
+      end
+    end
+
+    if opts[:include_can_edit]
+      can_edit_assignment = assignment.user_can_update?(user, session)
+      hash['can_edit'] = can_edit_assignment
+      hash['all_dates']&.each do |date_hash|
+        in_closed_grading_period = date_in_closed_grading_period?(date_hash['due_at'])
+        date_hash['in_closed_grading_period'] = in_closed_grading_period
+        date_hash['can_edit'] = can_edit_assignment && (!in_closed_grading_period || !constrained_by_grading_periods?)
       end
     end
 

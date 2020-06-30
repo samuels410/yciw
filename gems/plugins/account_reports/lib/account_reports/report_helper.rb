@@ -72,16 +72,27 @@ module AccountReports::ReportHelper
     end
   end
 
-  def start_at
-    if @account_report.value_for_param("start_at")
-      @start ||= account_time_parse(@account_report.parameters["start_at"])
+  def datetime_from_param(param)
+    if @account_report.value_for_param(param)
+      account_time_parse(@account_report.parameters[param])
     end
   end
 
+  def restricted_datetime_from_param(param, earliest: nil, latest: nil, fallback: nil)
+    time = datetime_from_param(param)
+    return fallback if time.nil? && fallback
+    return unless time
+    time = earliest if earliest&.> time
+    time = latest if latest&.< time
+    time
+  end
+
+  def start_at
+    @start ||= datetime_from_param('start_at')
+  end
+
   def end_at
-    if @account_report.value_for_param("end_at")
-      @end ||= account_time_parse(@account_report.parameters["end_at"])
-    end
+    @end ||= datetime_from_param('end_at')
   end
 
   def course
@@ -275,7 +286,7 @@ module AccountReports::ReportHelper
     ExtendedCSV.open(file, "w", options) do |csv|
       csv.instance_variable_set(:@account_report, @account_report)
       csv << headers unless headers.nil?
-      Shackles.activate(:slave) { yield csv } if block_given?
+      activate_report_db { yield csv } if block_given?
       Shackles.activate(:master) { @account_report.update_attribute(:current_line, csv.lineno) }
     end
     file
@@ -356,6 +367,14 @@ module AccountReports::ReportHelper
     @account_report.write_report_runners
   end
 
+  def activate_report_db(&block)
+    if !!Shard.current.database_server.config[:report] && Setting.get('use_report_dbs_for_reports', 'true') == 'true'
+      Shackles.activate(:report, &block)
+    else
+      Shackles.activate(:slave, &block)
+    end
+  end
+
   def run_account_report_runner(report_runner, headers, files: nil)
     return if report_runner.reload.workflow_state == 'aborted'
     @account_report = report_runner.account_report
@@ -367,7 +386,7 @@ module AccountReports::ReportHelper
       # runners can be completed before they get here, and we should not try to process them.
       unless report_runner.workflow_state == 'completed'
         report_runner.start
-        Shackles.activate(:slave) { AccountReports::REPORTS[@account_report.report_type].parallel_proc.call(@account_report, report_runner) }
+        activate_report_db { AccountReports::REPORTS[@account_report.report_type].parallel_proc.call(@account_report, report_runner) }
       end
     rescue => e
       report_runner.fail

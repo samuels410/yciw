@@ -5,6 +5,9 @@
     "add_8523c19b": {
         "message": "Lägg till"
     },
+    "add_another_f4e50d57": {
+        "message": "Lägg till en till"
+    },
     "add_cc_subtitles_55f0394e": {
         "message": "Lägg till CC/undertext"
     },
@@ -52,6 +55,12 @@
     },
     "an_error_occurred_generating_the_file_preview_cf259955": {
         "message": "Ett fel uppstod vid generering av förhandsvisning av filen."
+    },
+    "an_error_occurred_making_a_network_request_d1bda348": {
+        "message": "Ett fel uppstod vid försök att göra en nätverksförfrågan"
+    },
+    "an_error_occurred_uploading_your_media_71f1444d": {
+        "message": "Ett fel uppstod när dina mediefiler laddades upp."
     },
     "announcement_fb4cb645": {
         "message": "Anslag"
@@ -118,6 +127,9 @@
     },
     "automatically_open_an_in_line_preview_preview_disp_ed784ffe": {
         "message": "Öppna automatiskt en infogad förhandsvisning (Förhandsvisningen visas endast efter att den sparats)"
+    },
+    "available_folders_694d0436": {
+        "message": "Tillgängliga mappar"
     },
     "beginning_of_your_to_do_history_61ef2dce": {
         "message": "Början av din att göra-historik"
@@ -210,6 +222,9 @@
         "message": "Kursdokument"
     },
     "course_files_62deb8f8": {
+        "message": "Kursfiler"
+    },
+    "course_files_a31f97fc": {
         "message": "Kursfiler"
     },
     "course_images_f8511d04": {
@@ -380,6 +395,9 @@
     "embed_video_code_703e10f2": {
         "message": "Bädda in videokod"
     },
+    "embedded_content_aaeb4d3d": {
+        "message": "inbäddat innehåll"
+    },
     "equation_1c5ac93c": {
         "message": "Ekvation"
     },
@@ -425,6 +443,12 @@
     "file_name_8fd421ff": {
         "message": "Filnamn"
     },
+    "file_upload_failed_af22dd91": {
+        "message": "Det gick inte att ladda upp filen"
+    },
+    "file_uploading_56c9c0c8": {
+        "message": "Filen laddas upp"
+    },
     "file_url_c12b64be": {
         "message": "Filens URL"
     },
@@ -446,8 +470,8 @@
     "finish_bc343002": {
         "message": "Avsluta"
     },
-    "focus_the_popup_context_toolbar_7979f4f8": {
-        "message": "Fokusera verktygsfältets popupinnehåll"
+    "folder_tree_fbab0726": {
+        "message": "Mappträd"
     },
     "formatting_5b143aa8": {
         "message": "Formaterar"
@@ -483,6 +507,9 @@
         "message": "Omdömen har lästs in"
     },
     "group_files_4324f3df": {
+        "message": "Gruppfiler"
+    },
+    "group_files_82e5dcdb": {
         "message": "Gruppfiler"
     },
     "group_navigation_99f191a": {
@@ -602,6 +629,9 @@
     "loading_failed_e6a9d8ef": {
         "message": "Det gick inte att läsa in."
     },
+    "loading_folders_d8b5869e": {
+        "message": "Läser in mappar"
+    },
     "loading_grades_c842c887": {
         "message": "Läser in omdömen"
     },
@@ -616,6 +646,9 @@
     },
     "location_3b6ff307": {
         "message": "Plats:"
+    },
+    "locked_762f138b": {
+        "message": "Låst"
     },
     "looks_like_there_isn_t_anything_here_d9bcef49": {
         "message": "Det verkar inte finnas något här"
@@ -643,6 +676,9 @@
     },
     "must_be_at_least_width_x_height_px_41dc825e": {
         "message": "Måste vara minst { width } x { height }pixlar"
+    },
+    "my_files_2f621040": {
+        "message": "Mina filer"
     },
     "my_grades_98834476": {
         "message": "Mina omdömen"
@@ -676,6 +712,9 @@
     },
     "no_e16d9132": {
         "message": "Nej"
+    },
+    "no_file_chosen_9a880793": {
+        "message": "Ingen fil har valts"
     },
     "no_grade_3b4d7f3e": {
         "message": "Ingen omdöme"
@@ -806,6 +845,9 @@
     "quizzes_7e598f57": {
         "message": "Quiz"
     },
+    "reading_a_media_track_file_failed_aborting_be051b20": {
+        "message": "Det gick inte att läsa en mediespårsfil. Avbryter."
+    },
     "record_7c9448b": {
         "message": "Spela in"
     },
@@ -890,6 +932,12 @@
     "something_went_wrong_and_i_don_t_know_what_to_show_e0c54ec8": {
         "message": "Något gick fel och jag vet inte vad jag ska visa dig."
     },
+    "something_went_wrong_check_your_connection_and_try_2a7b2d13": {
+        "message": "Något gick fel. Kontrollera din anslutning och försök igen."
+    },
+    "something_went_wrong_d238c551": {
+        "message": "Något gick fel"
+    },
     "something_went_wrong_try_again_after_refreshing_th_e094eb8d": {
         "message": "Något gick fel. Uppdatera sidan och försök igen."
     },
@@ -932,11 +980,17 @@
     "subscript_59744f96": {
         "message": "Nedsänkt"
     },
+    "success_file_uploaded_8174e93f": {
+        "message": "Klart: Filen har laddats upp"
+    },
     "success_to_do_created_e34ed395": {
         "message": "Klart: Skapade att göra-objekt"
     },
     "superscript_8cb349a2": {
         "message": "Upphöjd"
+    },
+    "supported_file_types_srt_or_webvtt_7d827ed": {
+        "message": "Filtyper som stöds: SRT eller WebVTT"
     },
     "switch_to_raw_html_editor_4c9ac7de": {
         "message": "Växla till rå HTML-redigerare"
@@ -1028,9 +1082,6 @@
     "upload_document_253f0478": {
         "message": "Ladda upp dokument"
     },
-    "upload_error_f9c00e27": {
-        "message": "Uppladdningsfel"
-    },
     "upload_file_fd2361b8": {
         "message": "Ladda upp fil"
     },
@@ -1039,6 +1090,9 @@
     },
     "upload_media_ce31135a": {
         "message": "Ladda upp media"
+    },
+    "upload_not_available_for_this_folder_8f8623c6": {
+        "message": "Uppladdning är inte tillgängligt för den här mappen"
     },
     "upload_record_media_e4207d72": {
         "message": "Ladda upp/spela in media"

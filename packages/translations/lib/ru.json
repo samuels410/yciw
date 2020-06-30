@@ -5,6 +5,9 @@
     "add_8523c19b": {
         "message": "Добавить"
     },
+    "add_another_f4e50d57": {
+        "message": "Добавить другой"
+    },
     "add_cc_subtitles_55f0394e": {
         "message": "Добавить копию/подзаголовки"
     },
@@ -52,6 +55,12 @@
     },
     "an_error_occurred_generating_the_file_preview_cf259955": {
         "message": "Произошла ошибка при создании предварительного просмотра файла"
+    },
+    "an_error_occurred_making_a_network_request_d1bda348": {
+        "message": "Произошла ошибка, что привело к созданию сетевого запроса"
+    },
+    "an_error_occurred_uploading_your_media_71f1444d": {
+        "message": "Произошла ошибка при отправке вашего мультимедиа."
     },
     "announcement_fb4cb645": {
         "message": "Объявление"
@@ -118,6 +127,9 @@
     },
     "automatically_open_an_in_line_preview_preview_disp_ed784ffe": {
         "message": "Автоматически открывать встроенный предварительный просмотр. (Предварительный просмотр отображается только после сохранения)"
+    },
+    "available_folders_694d0436": {
+        "message": "Доступные папки"
     },
     "beginning_of_your_to_do_history_61ef2dce": {
         "message": "Начало вашей истории задач"
@@ -210,6 +222,9 @@
         "message": "Документы курса"
     },
     "course_files_62deb8f8": {
+        "message": "Файлы курса"
+    },
+    "course_files_a31f97fc": {
         "message": "Файлы курса"
     },
     "course_images_f8511d04": {
@@ -380,6 +395,9 @@
     "embed_video_code_703e10f2": {
         "message": "Вставить код видео"
     },
+    "embedded_content_aaeb4d3d": {
+        "message": "интегрированный контент"
+    },
     "equation_1c5ac93c": {
         "message": "Формула"
     },
@@ -425,6 +443,12 @@
     "file_name_8fd421ff": {
         "message": "Имя файла"
     },
+    "file_upload_failed_af22dd91": {
+        "message": "Не удалось загрузить файл"
+    },
+    "file_uploading_56c9c0c8": {
+        "message": "Отправка файла"
+    },
     "file_url_c12b64be": {
         "message": "URL файла"
     },
@@ -446,8 +470,8 @@
     "finish_bc343002": {
         "message": "Закончить"
     },
-    "focus_the_popup_context_toolbar_7979f4f8": {
-        "message": "Сконцентрироваться на всплывающей контекстной панели инструментов"
+    "folder_tree_fbab0726": {
+        "message": "Структура папки"
     },
     "formatting_5b143aa8": {
         "message": "Форматирование"
@@ -483,6 +507,9 @@
         "message": "Оценки загружены"
     },
     "group_files_4324f3df": {
+        "message": "Файлы группы"
+    },
+    "group_files_82e5dcdb": {
         "message": "Файлы группы"
     },
     "group_navigation_99f191a": {
@@ -602,6 +629,9 @@
     "loading_failed_e6a9d8ef": {
         "message": "Сбой загрузки."
     },
+    "loading_folders_d8b5869e": {
+        "message": "Загрузка папок"
+    },
     "loading_grades_c842c887": {
         "message": "Загрузка оценок"
     },
@@ -616,6 +646,9 @@
     },
     "location_3b6ff307": {
         "message": "Местоположение:"
+    },
+    "locked_762f138b": {
+        "message": "Заблокировано"
     },
     "looks_like_there_isn_t_anything_here_d9bcef49": {
         "message": "Похоже, здесь ничего нет"
@@ -643,6 +676,9 @@
     },
     "must_be_at_least_width_x_height_px_41dc825e": {
         "message": "Должно быть как минимум { width } x { height }пикселов"
+    },
+    "my_files_2f621040": {
+        "message": "Мои файлы"
     },
     "my_grades_98834476": {
         "message": "Мои оценки"
@@ -676,6 +712,9 @@
     },
     "no_e16d9132": {
         "message": "Нет"
+    },
+    "no_file_chosen_9a880793": {
+        "message": "Не выбран ни один файл"
     },
     "no_grade_3b4d7f3e": {
         "message": "Нет оценки"
@@ -806,6 +845,9 @@
     "quizzes_7e598f57": {
         "message": "Тесты"
     },
+    "reading_a_media_track_file_failed_aborting_be051b20": {
+        "message": "Сбой чтения файла мультимедийного трека. Прерывание."
+    },
     "record_7c9448b": {
         "message": "Запись"
     },
@@ -890,6 +932,12 @@
     "something_went_wrong_and_i_don_t_know_what_to_show_e0c54ec8": {
         "message": "Что-то пошло не так, и я не знаю, что вам показать."
     },
+    "something_went_wrong_check_your_connection_and_try_2a7b2d13": {
+        "message": "Что-то пошло не так, проверьте подключение и попробуйте еще раз."
+    },
+    "something_went_wrong_d238c551": {
+        "message": "Что-то пошло не так"
+    },
     "something_went_wrong_try_again_after_refreshing_th_e094eb8d": {
         "message": "Что-то пошло не так, обновите страницу и попробуйте еще раз"
     },
@@ -932,11 +980,17 @@
     "subscript_59744f96": {
         "message": "Надпись снизу"
     },
+    "success_file_uploaded_8174e93f": {
+        "message": "Успешно: Файл отправлен"
+    },
     "success_to_do_created_e34ed395": {
         "message": "Успешно: Задание создано"
     },
     "superscript_8cb349a2": {
         "message": "Надпись сверху"
+    },
+    "supported_file_types_srt_or_webvtt_7d827ed": {
+        "message": "Поддерживаемые типы файлов: SRT или WebVTT"
     },
     "switch_to_raw_html_editor_4c9ac7de": {
         "message": "Перейти в редактор raw html"
@@ -1028,9 +1082,6 @@
     "upload_document_253f0478": {
         "message": "Загрузить документ"
     },
-    "upload_error_f9c00e27": {
-        "message": "Ошибка при загрузке"
-    },
     "upload_file_fd2361b8": {
         "message": "Загрузить файл"
     },
@@ -1039,6 +1090,9 @@
     },
     "upload_media_ce31135a": {
         "message": "Загрузить медиа"
+    },
+    "upload_not_available_for_this_folder_8f8623c6": {
+        "message": "Отправка недоступна для этой папки"
     },
     "upload_record_media_e4207d72": {
         "message": "Загрузить/записать медиа"

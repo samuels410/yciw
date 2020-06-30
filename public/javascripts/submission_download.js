@@ -24,7 +24,10 @@ import './jquery.ajaxJSON'
 import 'jqueryui/dialog'
 import 'jqueryui/progressbar'
 
+const MAX_RETRIES = 3
+
 INST.downloadSubmissions = function(url, onClose) {
+  let retryCount = 0
   let cancelled = false
   const title = ENV.SUBMISSION_DOWNLOAD_DIALOG_TITLE || I18n.t('Download Assignment Submissions')
 
@@ -68,6 +71,14 @@ INST.downloadSubmissions = function(url, onClose) {
 
             location.href = url
             return
+          } else if (attachment.workflow_state === 'errored') {
+            // The only way the backend gets to an "errored" state is if there are no files to add
+            // to the zip in the first place...
+            $('#download_submissions_dialog .progress').progressbar('value', 100)
+            $('#download_submissions_dialog .status').text(
+              I18n.t('No submissions to zip. Please try again after student submissions.')
+            )
+            cancelled = true
           } else {
             let progress = parseInt(attachment.file_state, 10)
             if (isNaN(progress)) {
@@ -102,6 +113,15 @@ INST.downloadSubmissions = function(url, onClose) {
         setTimeout(checkForChange, 3000)
       },
       () => {
+        retryCount += 1
+        if (retryCount > MAX_RETRIES) {
+          $('#download_submissions_dialog .progress').progressbar('value', 100)
+          $('#download_submissions_dialog .status').text(
+            I18n.t('Something went wrong downloading submissions. Please try again later.')
+          )
+          cancelled = true
+        }
+
         $('#download_submissions_dialog .status_loader').css('visibility', 'hidden')
         setTimeout(checkForChange, 1000)
       }

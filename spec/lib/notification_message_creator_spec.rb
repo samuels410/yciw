@@ -93,26 +93,6 @@ describe NotificationMessageCreator do
       expect(messages.first.communication_channel).to eql(@user.communication_channel)
     end
 
-    it "should not use the default if a policy does apply" do
-      assignment_model
-      @user = user_model(:workflow_state => 'registered')
-      a = @user.communication_channels.create(:path => "a@example.com", :path_type => 'email')
-      a.confirm!
-      b = @user.communication_channels.create(:path => "b@example.com")
-      b.confirm!
-      @n = Notification.create!(:name => "New notification", :category => 'TestImmediately')
-      messages = NotificationMessageCreator.new(@n, @assignment, :to_list => @user).create_message
-      channels = messages.collect(&:communication_channel)
-      expect(channels).to include(a)
-      expect(channels).not_to include(b)
-
-      b.notification_policies.create!(:notification => @n, :frequency => 'immediately')
-      messages = NotificationMessageCreator.new(@n, @assignment, :to_list => @user).create_message
-      channels = messages.collect(&:communication_channel)
-      expect(channels).to include(b)
-      expect(channels).not_to include(a)
-    end
-
     it 'uses the default channel and the push channel if only the push channel has a policy' do
       assignment_model
       @user = user_model(:workflow_state => 'registered')
@@ -131,6 +111,20 @@ describe NotificationMessageCreator do
       channels = messages.collect(&:communication_channel)
       expect(channels).to include(b)
       expect(channels).to include(a)
+    end
+
+    it 'only sends notifications to active channels' do
+      assignment_model
+      @user = user_model(:workflow_state => 'registered')
+      a = @user.communication_channels.create(:path => "a@example.com", :path_type => 'email')
+      a.confirm!
+      b = @user.communication_channels.create(:path => "b@example.com", :path_type => 'email')
+      @n = Notification.create!(:name => "New notification", :category => 'TestImmediately')
+
+      messages = NotificationMessageCreator.new(@n, @assignment, :to_list => @user).create_message
+      channels = messages.collect(&:communication_channel)
+      expect(channels).to include(a)
+      expect(channels).not_to include(b)
     end
 
     it 'does not send a notification when policy override is disabled for a course' do
@@ -276,23 +270,46 @@ describe NotificationMessageCreator do
       expect(DelayedMessage.where(:communication_channel_id => @communication_channel).exists?).to eq true
     end
 
-    it "should make a delayed message for the default channel based on the notification's default frequency when there is no policy on any channel for the notification" do
-      notification_set # we get one channel here
-      communication_channel_model(path: 'yes@example.com').confirm! # this gives us a total of two channels
-      NotificationPolicy.delete_all
+    describe "notification's default frequency" do
+      before(:once) do
+        # two channels, two notifications with default freq of never and daily, and a notification policy.
+        notification_set({ notification_opts: { category: 'Discussion' } })
+        @a = @cc
+        @never_notification = @notification
+        communication_channel_model(path: 'yes@example.com').confirm!
+        @b = @cc
+      end
 
-      @notification = @notification.dup
-      @notification.category = 'Discussion' # default frequency of 'Never'
-      expect { NotificationMessageCreator.new(@notification, @assignment, :to_list => @user).create_message }.to change(DelayedMessage, :count).by 0
-      @notification.category = 'DiscussionEntry' # default frequency of 'Daily'
-      expect { NotificationMessageCreator.new(@notification, @assignment, :to_list => @user).create_message }.to change(DelayedMessage, :count).by 1
-      DelayedMessage.delete_all
-      NotificationPolicy.delete_all # gotta do this because create_message actually creates the default policy
-      @user.reload
-      notification_policy_model(:notification => @notification,
-                                :communication_channel => @communication_channel,
-                                :frequency => 'immediately')
-      expect { NotificationMessageCreator.new(@notification, @assignment, :to_list => @user).create_message }.to change(DelayedMessage, :count).by 0
+      let(:notification) { notification_model({ subject: "<%= t :subject, 'hoy es today' %>", name: "Test daily", category: 'DiscussionEntry' }) }
+      let(:immediate_notification) { notification_model({ name: "Newish notification", category: 'TestImmediately' }) }
+
+      it 'should not create delayed messages when default is never' do
+        expect { NotificationMessageCreator.new(@never_notification, @assignment, to_list: @user).create_message }.to change(DelayedMessage, :count).by 0
+      end
+
+      it 'should use the default policy on default channel' do
+        expect { NotificationMessageCreator.new(notification, @assignment, :to_list => @user).create_message }.to change(DelayedMessage, :count).by 1
+      end
+
+      it 'should not use default policy on default channel when other policy exists' do
+        notification_policy_model(notification: notification, communication_channel: @communication_channel, frequency: 'immediately')
+        expect { NotificationMessageCreator.new(notification, @assignment, :to_list => @user).create_message }.to change(DelayedMessage, :count).by 0
+      end
+
+      it "should use default policy on immediate notifications" do
+        messages = NotificationMessageCreator.new(immediate_notification, @assignment, :to_list => @user).create_message
+        channels = messages.collect(&:communication_channel)
+        expect(channels).to include(@a)
+        expect(channels).not_to include(@b)
+      end
+
+      it 'should not use default policy on immediate notifications when other policy exists' do
+        notification_policy_model(notification: immediate_notification, communication_channel: @b, frequency: 'immediately')
+        messages = NotificationMessageCreator.new(immediate_notification, @assignment, :to_list => @user).create_message
+        channels = messages.collect(&:communication_channel)
+        expect(channels).to include(@b)
+        expect(channels).not_to include(@a)
+      end
     end
 
     it "should send dashboard (but not dispatch messages) for registered users based on default policies" do
@@ -446,6 +463,106 @@ describe NotificationMessageCreator do
       expect {
         NotificationMessageCreator.new(@notification, @assignment, :to_list => @user).create_message
       }.to change(DelayedMessage, :count).by 0
+    end
+
+    context "notification policy overrides" do
+      before(:each) do
+        notification_set({notification_opts: {category: 'PandaExpressTime'}})
+        @course.root_account.enable_feature!(:mute_notifications_by_course)
+        @course.root_account.enable_feature!(:notification_granular_course_preferences)
+      end
+
+      it 'uses the policy override if available for immediate messages' do
+        @notification_policy.frequency = 'daily'
+        @notification_policy.save!
+        NotificationPolicyOverride.create_or_update_for(@user.email_channel, @notification.category, 'immediately', @course)
+
+        messages = NotificationMessageCreator.new(
+          @notification,
+          @assignment,
+          to_list: @user,
+          data: {
+            course_id: @course.id,
+            root_account_id: @user.account.id
+          }
+        ).create_message
+        expect(messages).not_to be_empty
+      end
+
+      it 'uses the policy override if available for delayed messages' do
+        @notification_policy.frequency = 'immediately'
+        @notification_policy.save!
+        NotificationPolicyOverride.create_or_update_for(@user.email_channel, @notification.category, 'daily', @course)
+
+        expect {
+          NotificationMessageCreator.new(
+            @notification,
+            @assignment,
+            to_list: @user,
+            data: {
+              course_id: @course.id,
+              root_account_id: @user.account.id
+            }
+          ).create_message
+        }.to change(DelayedMessage, :count).by 1
+      end
+
+      it 'uses course overrides over account overrides' do
+        @notification_policy.frequency = 'weekly'
+        @notification_policy.save!
+        NotificationPolicyOverride.create_or_update_for(@user.email_channel, @notification.category, 'immediately', @course)
+        NotificationPolicyOverride.create_or_update_for(@user.email_channel, @notification.category, 'daily', @user.account)
+
+        messages = NotificationMessageCreator.new(
+          @notification,
+          @assignment,
+          to_list: @user,
+          data: {
+            course_id: @course.id,
+            root_account_id: @user.account.id
+          }
+        ).create_message
+        expect(messages).not_to be_empty
+        expect(DelayedMessage.count).to be 0
+      end
+
+      it 'uses account overrides over normal policies' do
+        @notification_policy.frequency = 'weekly'
+        @notification_policy.save!
+        NotificationPolicyOverride.create_or_update_for(@user.email_channel, @notification.category, 'immediately', @user.account)
+
+        messages = NotificationMessageCreator.new(
+          @notification,
+          @assignment,
+          to_list: @user,
+          data: {
+            course_id: @course.id,
+            root_account_id: @user.account.id
+          }
+        ).create_message
+        expect(messages).not_to be_empty
+        expect(DelayedMessage.count).to be 0
+      end
+
+      it 'ignores overrides if the feature is not enabled' do
+        @course.root_account.disable_feature!(:notification_granular_course_preferences)
+        @notification_policy.frequency = 'immediately'
+        @notification_policy.save!
+        NotificationPolicyOverride.create_or_update_for(@user.email_channel, @notification.category, 'weekly', @course)
+        NotificationPolicyOverride.create_or_update_for(@user.email_channel, @notification.category, 'daily', @user.account)
+
+        messages = NotificationMessageCreator.new(
+          @notification,
+          @assignment,
+          to_list: @user,
+          data: {
+            course_id: @course.id,
+            root_account_id: @user.account.id
+          }
+        ).create_message
+        expect(messages).not_to be_empty
+        expect(DelayedMessage.count).to be 0
+      end
     end
   end
 

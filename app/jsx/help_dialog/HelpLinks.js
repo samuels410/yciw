@@ -24,6 +24,7 @@ import {List, Spinner, Text, Pill} from '@instructure/ui-elements'
 import FeaturedHelpLink from './FeaturedHelpLink'
 import {View} from '@instructure/ui-view'
 import {Flex} from '@instructure/ui-flex'
+import {ScreenReaderContent, PresentationContent} from '@instructure/ui-a11y'
 import tourPubSub from '../nav_tourpoints/tourPubsub'
 
 export default function HelpLinks({links, hasLoaded, onClick}) {
@@ -69,6 +70,7 @@ export default function HelpLinks({links, hasLoaded, onClick}) {
                     >
                       {link.text}
                     </Link>
+                    {has_new_tag && <ScreenReaderContent>{I18n.t('New')}</ScreenReaderContent>}
                     {link.subtext && (
                       <Text as="div" size="small">
                         {link.subtext}
@@ -76,7 +78,11 @@ export default function HelpLinks({links, hasLoaded, onClick}) {
                     )}
                   </Flex.Item>
                   <Flex.Item>
-                    {has_new_tag && <Pill variant="success" text={I18n.t('NEW')} />}
+                    {has_new_tag && (
+                      <PresentationContent>
+                        <Pill variant="success" text={I18n.t('NEW')} />
+                      </PresentationContent>
+                    )}
                   </Flex.Item>
                 </Flex>
               </List.Item>
@@ -86,7 +92,9 @@ export default function HelpLinks({links, hasLoaded, onClick}) {
             // if the current user is a teacher, show a link to
             // open up the welcome tour
             window.ENV.FEATURES?.product_tours &&
-              window.ENV.current_user_roles?.includes('teacher') && [
+              (window.ENV.current_user_types?.includes('Account Admin') ||
+                window.ENV.current_user_roles?.includes('teacher') ||
+                window.ENV.current_user_roles?.includes('student')) && [
                 <List.Item key="welcome_tour">
                   <View className="welcome-tour-link">
                     <Link isWithinText={false} onClick={() => tourPubSub.publish('tour-open')}>

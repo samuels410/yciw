@@ -41,6 +41,26 @@ describe "Importing Learning Outcomes" do
     expect(log.child_outcome_links.detect{ |link| link.content == lo2 }).not_to be_nil
   end
 
+  context 'selectable_outcomes_in_course_copy enabled' do
+    before(:example) do
+      @context.root_account.enable_feature!(:selectable_outcomes_in_course_copy)
+    end
+
+    after(:example) do
+      @context.root_account.disable_feature!(:selectable_outcomes_in_course_copy)
+    end
+
+    it "should import group" do
+      migration = ContentMigration.create!(:context => @context)
+      migration.migration_ids_to_import = {:copy=>{}}
+      data = [{type: 'learning_outcome_group', title: 'hey', migration_id: 'x'}.with_indifferent_access]
+      data = {'learning_outcomes'=>data}
+      expect do
+        Importers::LearningOutcomeImporter.process_migration(data, migration)
+      end.to change { LearningOutcomeGroup.count }.by 1
+    end
+  end
+
   it "should not fail when passing an outcome that already exists" do
     existing_outcome = LearningOutcome.where(migration_id: "bdf6dc13-5d8f-43a8-b426-03380c9b6781").first
     identifier = existing_outcome.migration_id
@@ -136,5 +156,35 @@ describe "Importing Learning Outcomes" do
     expect(existing_outcome.data[:rubric_criterion][:mastery_points]).to eq 3
     expect(existing_outcome.data[:rubric_criterion][:points_possible]).to eq 5
     expect(existing_outcome.data[:rubric_criterion][:ratings]).to eq current_ratings
+  end
+
+  describe "with the outcome_guid_course_exports FF enabled" do
+    before(:once) { @context.root_account.enable_feature!(:outcome_guid_course_exports) }
+    it "does not duplicate outcomes in a context with different external_identifiers and the same vendor_guid" do
+      lo1 = LearningOutcome.where(migration_id: "bdf6dc13-5d8f-43a8-b426-03380c9b6781").first
+      lo1.update!(vendor_guid: "vendor-guid-1")
+
+      lo_data = @data["learning_outcomes"].find{|lo| lo["migration_id"] == "bdf6dc13-5d8f-43a8-b426-03380c9b6781" }
+      lo_data[:vendor_guid] = "vendor-guid-1"
+      lo_data[:migration_id] = "7321d12e-3705-430d-9dfd-2511b0c73c14"
+      lo_data[:external_identifier] = "0"
+
+      Importers::LearningOutcomeImporter.import_from_migration(lo_data, @migration)
+      expect(@context.learning_outcomes.count).to eq 2 # lo1 is not duplicated
+    end
+  end
+
+  describe "with the outcome_guid_course_exports FF disabled" do
+    it "duplicates outcomes even if the vendor_guid already exists in the context" do
+      lo1 = LearningOutcome.where(migration_id: "bdf6dc13-5d8f-43a8-b426-03380c9b6781").first
+      lo1.update!(vendor_guid: "vendor-guid-1")
+
+      lo_data = @data["learning_outcomes"].find{|lo| lo["migration_id"] == "bdf6dc13-5d8f-43a8-b426-03380c9b6781" }
+      lo_data[:vendor_guid] = "vendor-guid-1"
+      lo_data[:migration_id] = "7321d12e-3705-430d-9dfd-2511b0c73c14"
+      lo_data[:external_identifier] = "0"
+      Importers::LearningOutcomeImporter.import_from_migration(lo_data, @migration)
+      expect(@context.learning_outcomes.count).to eq 3 # lo1 is duplicated
+    end
   end
 end

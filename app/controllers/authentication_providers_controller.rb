@@ -214,7 +214,9 @@
 #     }
 #
 class AuthenticationProvidersController < ApplicationController
-  before_action :require_context, :require_root_account_management
+  before_action :require_context
+  before_action :require_root_account_management, except: :show
+  before_action :require_user, only: :show
   include Api::V1::AuthenticationProvider
 
   # @API List authentication providers
@@ -237,19 +239,37 @@ class AuthenticationProvidersController < ApplicationController
   # @API Add authentication provider
   #
   # Add external authentication provider(s) for the account.
-  # Services may be CAS, Facebook, GitHub, Google, LDAP, LinkedIn,
+  # Services may be Apple, CAS, Facebook, GitHub, Google, LDAP, LinkedIn,
   # Microsoft, OpenID Connect, SAML, or Twitter.
   #
   # Each authentication provider is specified as a set of parameters as
   # described below. A provider specification must include an 'auth_type'
-  # parameter with a value of 'canvas', 'cas', 'clever', 'facebook', 'github', 'google',
-  # 'ldap', 'linkedin', 'microsoft', 'openid_connect', 'saml', or 'twitter'. The other
-  # recognized parameters depend on this auth_type; unrecognized parameters are discarded.
-  # Provider specifications not specifying a valid auth_type are ignored.
+  # parameter with a value of 'apple', 'canvas', 'cas', 'clever', 'facebook',
+  # 'github', 'google', 'ldap', 'linkedin', 'microsoft', 'openid_connect',
+  # 'saml', or 'twitter'. The other recognized parameters depend on this
+  # auth_type; unrecognized parameters are discarded. Provider specifications
+  # not specifying a valid auth_type are ignored.
   #
   # You can set the 'position' for any configuration. The config in the 1st position
   # is considered the default. You can set 'jit_provisioning' for any configuration
   # besides Canvas.
+  #
+  # For Apple, the additional recognized parameters are:
+  #
+  # - client_id [Required]
+  #
+  #   The developer’s client identifier, as provided by WWDR. Not available if
+  #   configured globally for Canvas.
+  #
+  # - login_attribute [Optional]
+  #
+  #   The attribute to use to look up the user's login in Canvas. Either
+  #   'sub' (the default), or 'email'
+  #
+  # - federated_attributes [Optional]
+  #
+  #   See FederatedAttributesConfig. Valid provider attributes are 'email',
+  #   'firstName', 'lastName', and 'sub'.
   #
   # For Canvas, the additional recognized parameter is:
   #
@@ -743,8 +763,12 @@ class AuthenticationProvidersController < ApplicationController
   #
   # @returns AuthenticationProvider
   def show
-    aac = @account.authentication_providers.active.find params[:id]
+    aac = @account.authentication_providers.active.find(params[:id])
+    return if aac.auth_type != 'canvas' && !require_root_account_management
     render json: aac_json(aac)
+  rescue ActiveRecord::RecordNotFound
+    return unless require_root_account_management
+    raise
   end
 
   # @API Delete authentication provider

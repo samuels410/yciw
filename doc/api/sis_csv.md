@@ -269,6 +269,13 @@ user's name, but you can customize it here.</td>
 still be provided.</td>
 </tr>
 <tr>
+<td>pronouns</td>
+<td>text</td>
+<td></td>
+<td>✓</td>
+<td>User's preferred pronouns. Accepted values are determined by the account settings.</td>
+</tr>
+<tr>
 <td>status</td>
 <td>enum</td>
 <td>✓</td>
@@ -496,7 +503,7 @@ specified the default term for the account will be used</td>
 <td>enum</td>
 <td>✓</td>
 <td>✓</td>
-<td>active, deleted, completed</td>
+<td>active, deleted, completed, published</td>
 </tr>
 <tr>
 <td>integration_id</td>

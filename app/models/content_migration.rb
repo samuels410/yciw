@@ -26,6 +26,7 @@ class ContentMigration < ActiveRecord::Base
   belongs_to :overview_attachment, :class_name => 'Attachment'
   belongs_to :exported_attachment, :class_name => 'Attachment'
   belongs_to :source_course, :class_name => 'Course'
+  belongs_to :root_account, :class_name => 'Account'
   has_one :content_export
   has_many :migration_issues
   has_one :job_progress, :class_name => 'Progress', :as => :context, :inverse_of => :context
@@ -34,6 +35,8 @@ class ContentMigration < ActiveRecord::Base
   before_save :set_started_at_and_finished_at
   after_save :handle_import_in_progress_notice
   after_save :check_for_blocked_migration
+  before_create :set_root_account_id
+  attr_accessor :skip_root_account_assignment
 
   DATE_FORMAT = "%m/%d/%Y"
 
@@ -560,13 +563,15 @@ class ContentMigration < ActiveRecord::Base
       end
 
       migration_settings[:migration_ids_to_import] ||= {:copy=>{}}
+      if self.for_master_course_import?
+        process_master_deletions(data['deletions']) if data['deletions'].present?
+      end
       import!(data)
 
       if !self.import_immediately?
         update_import_progress(100)
       end
       if self.for_master_course_import?
-        process_master_deletions(data['deletions']) if data['deletions'].present?
         self.update_master_migration('completed')
       end
     rescue => e
@@ -975,6 +980,16 @@ class ContentMigration < ActiveRecord::Base
           job.save
         end
       end
+    end
+  end
+
+  def set_root_account_id
+    return if skip_root_account_assignment
+    case self.context
+    when Course, Group
+      self.root_account_id = self.context.root_account_id
+    when Account
+      self.root_account_id = self.context.resolved_root_account_id
     end
   end
 

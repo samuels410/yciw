@@ -23,8 +23,6 @@ describe "grades" do
   include_context "in-process server selenium tests"
 
   before(:once) do
-    PostPolicy.enable_feature!
-
     @teacher1 = course_with_teacher(name: 'Teacher Boss1', active_user: true, active_enrollment: true, active_course: true).user
     @student_1 = course_with_student(course: @course, name: "Student 1", active_all:true).user
     @student_2 = course_with_student(course: @course, name: "Student 2", active_all:true).user
@@ -356,7 +354,7 @@ describe "grades" do
         @first_assignment.grade_student(@s, grade: 4, grader: @teacher)
       end
 
-      AssignmentScoreStatisticsGenerator.update_score_statistics(@course.id)
+      ScoreStatisticsGenerator.update_score_statistics(@course.id)
 
       StudentGradesPage.visit_as_student(@course)
       f('.toggle_score_details_link').click

@@ -30,10 +30,6 @@ class TestCourseApi
 end
 
 describe Api::V1::Course do
-  before :once do
-    PostPolicy.enable_feature!
-  end
-
   describe '#course_json' do
     before :once do
       @test_api = TestCourseApi.new
@@ -3719,6 +3715,7 @@ describe CoursesController, type: :request do
           'grade_passback_setting' => nil,
           'allow_student_organized_groups' => true,
           'hide_distribution_graphs' => false,
+          'hide_sections_on_course_users_page' => false,
           'hide_final_grades' => false,
           'lock_all_announcements' => false,
           'restrict_student_past_view' => false,
@@ -3726,6 +3723,7 @@ describe CoursesController, type: :request do
           'show_announcements_on_home_page' => false,
           'usage_rights_required' => false,
           'home_page_announcement_limit' => nil,
+          'syllabus_course_summary' => true,
           'image_url' => nil,
           'image_id' => nil,
           'image' => nil
@@ -3751,12 +3749,14 @@ describe CoursesController, type: :request do
           :allow_student_organized_groups => false,
           :filter_speed_grader_by_student_group => true,
           :hide_distribution_graphs => true,
+          :hide_sections_on_course_users_page => true,
           :hide_final_grades => true,
           :lock_all_announcements => true,
           :usage_rights_required => true,
           :restrict_student_past_view => true,
           :restrict_student_future_view => true,
           :show_announcements_on_home_page => false,
+          :syllabus_course_summary => false,
           :home_page_announcement_limit => nil
         })
         expect(json).to eq({
@@ -3770,6 +3770,7 @@ describe CoursesController, type: :request do
           'grade_passback_setting' => nil,
           'allow_student_organized_groups' => false,
           'hide_distribution_graphs' => true,
+          'hide_sections_on_course_users_page' => true,
           'hide_final_grades' => true,
           'lock_all_announcements' => true,
           'usage_rights_required' => true,
@@ -3777,6 +3778,7 @@ describe CoursesController, type: :request do
           'restrict_student_future_view' => true,
           'show_announcements_on_home_page' => false,
           'home_page_announcement_limit' => nil,
+          'syllabus_course_summary' => false,
           'image_url' => nil,
           'image_id' => nil,
           'image' => nil
@@ -3788,11 +3790,13 @@ describe CoursesController, type: :request do
         expect(@course.allow_student_discussion_editing).to eq false
         expect(@course.allow_student_organized_groups).to eq false
         expect(@course.hide_distribution_graphs).to eq true
+        expect(@course.hide_sections_on_course_users_page).to be true
         expect(@course.hide_final_grades).to eq true
         expect(@course.usage_rights_required).to eq true
         expect(@course.lock_all_announcements).to eq true
         expect(@course.show_announcements_on_home_page).to eq false
-        expect(@course.home_page_announcement_limit).to be_falsey
+        expect(@course.syllabus_course_summary?).to eq false
+        expect(@course.home_page_announcement_limit).to be nil
       end
     end
 
@@ -3819,6 +3823,7 @@ describe CoursesController, type: :request do
           'grade_passback_setting' => nil,
           'allow_student_organized_groups' => true,
           'hide_distribution_graphs' => false,
+          'hide_sections_on_course_users_page' => false,
           'hide_final_grades' => false,
           'lock_all_announcements' => false,
           'restrict_student_past_view' => false,
@@ -3826,6 +3831,7 @@ describe CoursesController, type: :request do
           'show_announcements_on_home_page' => false,
           'usage_rights_required' => false,
           'home_page_announcement_limit' => nil,
+          'syllabus_course_summary' => true,
           'image_url' => nil,
           'image_id' => nil,
           'image' => nil
@@ -3916,6 +3922,42 @@ describe CoursesController, type: :request do
                     { controller: "courses", course_id: @course.id.to_s, action: "ping", format: 'json' })
     @enrollment.reload
     expect(@enrollment.last_activity_at).not_to be_nil
+  end
+
+  describe "#student_view_student" do
+    let(:course) { Course.create! }
+    let(:teacher) { course.enroll_teacher(User.create!, enrollment_state: "active").user }
+    let(:student) { course.enroll_student(User.create!, enrollment_state: "active").user }
+
+    let(:path) { "/api/v1/courses/#{course.id}/student_view_student" }
+    let(:request_params) do
+      { controller: "courses", action: "student_view_student", course_id: course.id, format: :json }
+    end
+    let(:api_response) { api_call_as_user(teacher, :get, path, request_params) }
+
+    it "returns data for a test student in the course" do
+      user_id = api_response["id"]
+      expect(user_id).to eq course.student_view_student.id
+    end
+
+    it "creates a new test student if one does not exist" do
+      expect {
+        api_response
+      }.to change { StudentViewEnrollment.where(course_id: course.id).count }.by(1)
+    end
+
+    it "does not create a new test student if one already exists" do
+      course.student_view_student
+
+      expect {
+        api_response
+      }.not_to change { StudentViewEnrollment.where(course_id: course.id).count }
+    end
+
+    it "returns unauthorized if the caller does not have permission to use the student view" do
+      response = api_call_as_user(student, :get, path, request_params)
+      expect(response["status"]).to eq "unauthorized"
+    end
   end
 end
 
@@ -4326,6 +4368,36 @@ describe CoursesController, type: :request do
           "unposted_final_score" => 60.0,
           "grading_period_id" => grading_period.id
         })
+      end
+    end
+  end
+end
+describe CoursesController, type: :request do
+  describe "/quizzes" do
+    context "as teacher" do
+
+      before :once do
+        Account.default.enable_feature!(:newquizzes_on_quiz_page)
+        @course = Course.create!
+        @user = course_with_teacher(course: @course, active_all: true).user
+        @course.enable_feature!(:quizzes_next)
+        @options = { controller: "courses", action: "new_quizzes_selection_update", format: "json", id: @course.id }
+      end
+
+      it "should update settings" do
+        json = api_call(:put, "/api/v1/courses/#{@course.id}/quizzes", @options, {
+            newquizzes_engine_selected: true
+        })
+        engine = json.dig('engine_selected', 'user_id')
+        expect(engine).to include({
+          'newquizzes_engine_selected' => 'true'
+        })
+        @course.reload
+        user_id = @user.id
+        selection_obj = @course.settings[:engine_selected][:user_id]
+        expiration = Time.zone.today + 30.days
+        expect(selection_obj[:newquizzes_engine_selected]).to eq 'true'
+        expect(selection_obj[:expiration]).to eq expiration
       end
     end
   end

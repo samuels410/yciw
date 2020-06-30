@@ -51,6 +51,7 @@ window.bundles.push = loadBundle
 window.bundles.forEach(loadBundle)
 
 if (ENV.csp)
+  // eslint-disable-next-line promise/catch-or-return
   import('./account_settings/alert_enforcement').then(({default: setupCSP}) =>
     setupCSP(window.document)
   )
@@ -61,6 +62,7 @@ $('html').removeClass('scripts-not-loaded')
 
 $('.help_dialog_trigger').click(event => {
   event.preventDefault()
+  // eslint-disable-next-line promise/catch-or-return
   import('compiled/helpDialog').then(({default: helpDialog}) => helpDialog.open())
 })
 
@@ -79,22 +81,12 @@ if (
   window.ENV.context_asset_string &&
   splitAssetString(window.ENV.context_asset_string)[0] === 'courses'
 ) {
+  // eslint-disable-next-line promise/catch-or-return
   import('./new_user_tutorial/initializeNewUserTutorials').then(
     ({default: initializeNewUserTutorials}) => {
       initializeNewUserTutorials()
     }
   )
-}
-
-// edge < 15 does not support css vars
-// edge >= 15 claims to, but is currently broken
-const edge = window.navigator.userAgent.indexOf('Edge') > -1
-const supportsCSSVars =
-  !edge && window.CSS && window.CSS.supports && window.CSS.supports('(--foo: red)')
-if (!supportsCSSVars) {
-  import('./canvasCssVariablesPolyfill').then(({default: canvasCssVariablesPolyfill}) => {
-    window.canvasCssVariablesPolyfill = canvasCssVariablesPolyfill
-  })
 }
 
 ;(window.requestIdleCallback || window.setTimeout)(() => {

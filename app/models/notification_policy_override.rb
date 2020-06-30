@@ -31,8 +31,10 @@ class NotificationPolicyOverride < ActiveRecord::Base
   include NotificationPreloader
 
   belongs_to :communication_channel, inverse_of: :notification_policy_overrides
-  belongs_to :context, polymorphic: [:course]
+  belongs_to :context, polymorphic: [:account, :course]
   belongs_to :notification, inverse_of: :notification_policy_overrides
+
+  has_many :delayed_messages, inverse_of: :notification_policy_override, :dependent => :destroy
 
   def self.enable_for_context(user, context, enable: true)
     user.shard.activate do
@@ -64,11 +66,31 @@ class NotificationPolicyOverride < ActiveRecord::Base
     end
   end
 
-  def self.enabled_for(user, context)
-    !(find_all_for(user, context).where(notification_id: nil).take&.workflow_state == 'disabled')
+  def self.enabled_for(user, context, channel: nil)
+    !(find_all_for(user, context, channel: channel).find { |npo| npo.notification_id.nil? && npo.workflow_state == 'disabled' })
   end
 
-  def self.find_all_for(user, context)
-    NotificationPolicyOverride.where(communication_channel_id: user.communication_channels, context: context)
+  def self.find_all_for(user, context, channel: nil)
+    if channel&.notification_policy_overrides&.loaded?
+      channel.notification_policy_overrides.select { |npo| npo.context_id == context.id && npo.context_type == context.class.name }
+    elsif channel
+      channel.notification_policy_overrides.where(context_id: context.id, context_type: context.class.name)
+    else
+      user.notification_policy_overrides.where(context_id: context.id, context_type: context.class.name)
+    end
+  end
+
+  def self.create_or_update_for(communication_channel, notification_category, frequency, context)
+    notifications = Notification.all_cached.select { |n| n.category == notification_category }
+    communication_channel.shard.activate do
+      unique_constraint_retry do
+        notifications.each do |notification|
+          np = communication_channel.notification_policy_overrides.find { |npo| npo.notification_id == notification.id && npo.context_id == context.id && npo.context_type == context.class.name }
+          np ||= communication_channel.notification_policy_overrides.build(notification: notification, context_id: context.id, context_type: context.class.name)
+          np.frequency = frequency
+          np.save!
+        end
+      end
+    end
   end
 end

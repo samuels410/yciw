@@ -16,6 +16,13 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
+import groovy.time.*
+
+def runDatadogMetric(name, extraTags, body) {
+  def dd = load('build/new-jenkins/groovy/datadog.groovy')
+  dd.runDataDogForMetricWithExtraTags(name,extraTags,body)
+}
+
 /**
  * appends stages to the nodes based on the count passed into
  * the closure.
@@ -23,34 +30,39 @@
  * @nodes: the hash of nodes to be ran later
  * @stage_count: the amount of nodes to add to the hash
  * @stage_name_prefix: the name to prefix the stages with
- * @success_mark: what to mark the success as. null/false if no marking.
+ * @test_label: specific test label used to mark the success and identify node pool. null/false if no marking.
  * @stage_block: the closure thats exectued after unstashing build scripts
  */
 def appendStagesAsBuildNodes(nodes,
                              stage_count,
                              stage_name_prefix,
-                             success_mark,
+                             test_label,
                              stage_block) {
   for(int i = 0; i < stage_count; i++) {
     // make this a local variable so when the closure resolves
     // it gets the correct number
     def index = i;
     // we cant use String.format, so... yea
-    def stage_name = "$stage_name_prefix ${index + 1}"
+    def stage_name = "$stage_name_prefix ${(index + 1).toString().padLeft(2, '0')}"
+    def timeStart = new Date()
     nodes[stage_name] = {
-      node('canvas-docker') {
+      node("canvas-$test_label-docker") {
+        def duration = TimeCategory.minus(new Date(), timeStart).toMilliseconds()
         // make sure to unstash
         unstash name: "build-dir"
         unstash name: "build-docker-compose"
-        stage_block(index)
+        def splunk = load 'build/new-jenkins/groovy/splunk.groovy'
+        splunk.upload([splunk.eventForNodeWait(stage_name, duration)])
+        def extraTags = ["parallelStageName:${stage_name}"]
+        runDatadogMetric(test_label,extraTags) {
+          stage_block(index)
+        }
       }
 
       // mark with instance index.
       // we need to do this on the main node so we dont run into
       // concurrency issues with persisting the success
-      if (success_mark) {
-        load('build/new-jenkins/groovy/successes.groovy').saveSuccess(success_mark)
-      }
+      load('build/new-jenkins/groovy/successes.groovy').saveSuccess(test_label)
     }
   }
 }
@@ -69,7 +81,7 @@ def stashBuildScripts() {
  * common helper for adding rspec tests to be ran
  */
 def addRSpecSuites(stages) {
-  def rspec_node_total = load('build/new-jenkins/groovy/rspec.groovy').config().rspec_node_total
+  def rspec_node_total = load('build/new-jenkins/groovy/rspec.groovy').rspecConfig().node_total
   def successes = load('build/new-jenkins/groovy/successes.groovy')
 
   if (successes.hasSuccess('rspec', rspec_node_total)) {
@@ -88,7 +100,7 @@ def addRSpecSuites(stages) {
  * common helper for adding selenium tests to be ran
  */
 def addSeleniumSuites(stages) {
-  def selenium_node_total = load('build/new-jenkins/groovy/rspec.groovy').config().selenium_node_total
+  def selenium_node_total = load('build/new-jenkins/groovy/rspec.groovy').seleniumConfig().node_total
   def successes = load('build/new-jenkins/groovy/successes.groovy')
 
   if (successes.hasSuccess('selenium', selenium_node_total)) {

@@ -1,6 +1,7 @@
 {
   "accessibility_checker_b3af1f6c": { "message": "アクセシビリティチェッカー" },
   "add_8523c19b": { "message": "追加" },
+  "add_another_f4e50d57": { "message": "もう 1 つ追加" },
   "add_cc_subtitles_55f0394e": { "message": "CC /字幕を追加" },
   "align_11050992": { "message": "位置調整" },
   "align_center_ca078feb": { "message": "中央揃え" },
@@ -12,6 +13,12 @@
   "alt_text_611fb322": { "message": "Alt テキスト" },
   "an_error_occurred_generating_the_file_preview_cf259955": {
     "message": "ファイルプレビューの作成中にエラーが発生しました"
+  },
+  "an_error_occurred_making_a_network_request_d1bda348": {
+    "message": "ネットワーク要求の作成中にエラーが発生しました"
+  },
+  "an_error_occurred_uploading_your_media_71f1444d": {
+    "message": "あなたのメディアをアップロードする際にエラーが発生しました。"
   },
   "announcement_list_da155734": { "message": "アナウンス リスト" },
   "announcements_a4b8ed4a": { "message": "発表" },
@@ -32,6 +39,7 @@
   "automatically_open_an_in_line_preview_preview_disp_ed784ffe": {
     "message": "インラインプレビューが自動的に開きます。(プレビューが表示されるのは保存後のみです)"
   },
+  "available_folders_694d0436": { "message": "使用可能なフォルダ" },
   "cancel_caeb1e68": { "message": "キャンセル" },
   "canvas_plugins_705a5016": { "message": "Canvas プラグイン" },
   "choose_caption_file_9c45bc4e": {
@@ -79,6 +87,7 @@
   },
   "course_documents_104d76e0": { "message": "コースドキュメント" },
   "course_files_62deb8f8": { "message": "コースファイル" },
+  "course_files_a31f97fc": { "message": "コース ファイル" },
   "course_images_f8511d04": { "message": "コース画像" },
   "course_links_b56959b9": { "message": "コースリンク" },
   "course_media_ec759ad": { "message": "コースメディア" },
@@ -95,6 +104,7 @@
   },
   "describe_the_image_e65d2e32": { "message": "(画像の説明)" },
   "describe_the_video_2fe8f46a": { "message": "（ビデオを説明する）" },
+  "details_98a31b68": { "message": "詳細" },
   "dimensions_45ddb7b7": { "message": "寸法" },
   "directionality_ebcae6d0": { "message": "方向" },
   "disable_in_line_preview_2a675175": {
@@ -131,6 +141,7 @@
   "embed_preview_2d741e1f": { "message": "プレビューの埋め込み" },
   "embed_video_a97a64af": { "message": "ビデオを埋め込む" },
   "embed_video_code_703e10f2": { "message": "ビデオコードの埋め込み" },
+  "embedded_content_aaeb4d3d": { "message": "埋め込まれたコンテンツ" },
   "equation_1c5ac93c": { "message": "方程式" },
   "error_uploading_video_audio_recording_16d9730a": {
     "message": "映像/オーディオ録音のアップロード中にエラーが発生しました"
@@ -139,6 +150,10 @@
   "external_links_3d9f074e": { "message": "外部リンク" },
   "extra_large_b6cdf1ff": { "message": "特大" },
   "file_name_8fd421ff": { "message": "ファイル名" },
+  "file_upload_failed_af22dd91": {
+    "message": "ファイルのアップロードに失敗しました"
+  },
+  "file_uploading_56c9c0c8": { "message": "ファイルをアップロード中" },
   "file_url_c12b64be": { "message": "ファイル URL" },
   "filename_file_icon_602eb5de": { "message": "{ filename } ファイルアイコン" },
   "filename_image_preview_6cef8f26": {
@@ -153,6 +168,7 @@
   "focus_the_popup_context_toolbar_7979f4f8": {
     "message": "ポップアップコンテキストツールバーに注目する"
   },
+  "folder_tree_fbab0726": { "message": "フォルダツリー" },
   "formatting_5b143aa8": { "message": "フォーマット" },
   "found_auto_saved_content_3f6e4ca5": {
     "message": "自動保存されたコンテンツが見つかりました"
@@ -169,6 +185,7 @@
   },
   "grades_a61eba0a": { "message": "成績" },
   "group_files_4324f3df": { "message": "グループファイル" },
+  "group_files_82e5dcdb": { "message": "グループ ファイル" },
   "group_navigation_99f191a": { "message": "グループ ナビゲーション" },
   "heading_2_5b84eed2": { "message": "見出し2" },
   "heading_3_2c83de44": { "message": "見出し3" },
@@ -205,7 +222,9 @@
   "loading_bde52856": { "message": "読み込み中" },
   "loading_failed_b3524381": { "message": "読み込みに失敗しました..." },
   "loading_failed_e6a9d8ef": { "message": "読込みに失敗しました。" },
+  "loading_folders_d8b5869e": { "message": "フォルダを読み込み中..." },
   "loading_media_f3455841": { "message": "メディアの読込み" },
+  "locked_762f138b": { "message": "ロックされています" },
   "media_af190855": { "message": "メディア" },
   "medium_5a8e9ead": { "message": "中" },
   "mic_a7f3d311": { "message": "マイク" },
@@ -214,6 +233,7 @@
   "must_be_at_least_width_x_height_px_41dc825e": {
     "message": "少なくとも { width } x { height }px でなければなりません"
   },
+  "my_files_2f621040": { "message": "マイ ファイル" },
   "navigate_through_the_menu_or_toolbar_415a4e50": {
     "message": "メニューまたはツールバーを移動する"
   },
@@ -222,6 +242,7 @@
     "message": "別のテキストはありません (装飾画像)"
   },
   "no_e16d9132": { "message": "いいえ" },
+  "no_file_chosen_9a880793": { "message": "ファイルが選択されていません" },
   "no_results_940393cf": { "message": "結果がありません。" },
   "no_results_found_for_filterterm_ad1b04c8": {
     "message": "{ filterTerm }の結果が見つかりませんでした"
@@ -256,6 +277,9 @@
   "published_c944a23d": { "message": "公開済み" },
   "published_when_302d8e23": { "message": "公開済み:{ when }" },
   "quizzes_7e598f57": { "message": "クイズ" },
+  "reading_a_media_track_file_failed_aborting_be051b20": {
+    "message": "メディアトラックファイルの読み取りに失敗しました。中止中。"
+  },
   "record_7c9448b": { "message": "記録" },
   "record_upload_media_5fdce166": { "message": "メディアの記録/アップロード" },
   "recording_98da6bda": { "message": "記録" },
@@ -284,6 +308,10 @@
   "something_went_wrong_and_i_don_t_know_what_to_show_e0c54ec8": {
     "message": "何かがうまくいきませんでした。何を見せればいいのかわかりません。"
   },
+  "something_went_wrong_check_your_connection_and_try_2a7b2d13": {
+    "message": "エラーが発生しました。接続を確認して、もう一度お試しください。"
+  },
+  "something_went_wrong_d238c551": { "message": "なにかが失敗しました" },
   "something_went_wrong_try_again_after_refreshing_th_e094eb8d": {
     "message": "問題が発生しました。ページを最新に更新してからもう一度お試しください"
   },
@@ -297,7 +325,13 @@
   "styles_2aa721ef": { "message": "スタイル" },
   "submit_a3cc6859": { "message": "提出" },
   "subscript_59744f96": { "message": "下付き" },
+  "success_file_uploaded_8174e93f": {
+    "message": "成功：ファイルをアップロードしました"
+  },
   "superscript_8cb349a2": { "message": "上付き" },
+  "supported_file_types_srt_or_webvtt_7d827ed": {
+    "message": "サポートされるファイルタイプ：SRT または WebVTT"
+  },
   "switch_to_raw_html_editor_4c9ac7de": {
     "message": "ロー html エディタに切り替える"
   },
@@ -329,10 +363,12 @@
   "unpublished_dfd8801": { "message": "未公開" },
   "untitled_16aa4f2b": { "message": "無題" },
   "upload_document_253f0478": { "message": "ドキュメントをアップロードする" },
-  "upload_error_f9c00e27": { "message": "アップロードエラー" },
   "upload_file_fd2361b8": { "message": "ファイルアップロード" },
   "upload_image_6120b609": { "message": "イメージのアップロード" },
   "upload_media_ce31135a": { "message": "メディアを読み込む" },
+  "upload_not_available_for_this_folder_8f8623c6": {
+    "message": "このフォルダにはアップロードできません"
+  },
   "upload_record_media_e4207d72": {
     "message": "メディアをアップロード/記録する"
   },

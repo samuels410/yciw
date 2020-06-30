@@ -138,7 +138,7 @@
 #
 class ProfileController < ApplicationController
   before_action :require_registered_user, :except => [:show, :settings, :communication, :communication_update]
-  before_action :require_user, :only => [:settings, :communication, :communication_update]
+  before_action :require_user, :only => [:settings, :communication, :communication_update, :qr_mobile_login]
   before_action :require_user_for_private_profile, :only => :show
   before_action :reject_student_view_student
   before_action :require_password_session, :only => [:communication, :communication_update, :update]
@@ -242,8 +242,8 @@ class ProfileController < ApplicationController
       :channels => @user.communication_channels.all_ordered_for_display(@user).map { |c| communication_channel_json(c, @user, session) },
       :policies => NotificationPolicy.setup_with_default_policies(@user, full_category_list).map { |p| notification_policy_json(p, @user, session).tap { |json| json[:communication_channel_id] = p.communication_channel_id } },
       :categories => categories,
-      :deprecate_sms_enabled => @domain_root_account.feature_enabled?(:deprecate_sms),
-      :allowed_sms_categories => Notification.categories_to_send_in_sms,
+      :deprecate_sms_enabled => !@domain_root_account.settings[:sms_allowed] && Account.site_admin.feature_enabled?(:deprecate_sms),
+      :allowed_sms_categories => Notification.categories_to_send_in_sms(@domain_root_account),
       :update_url => communication_update_profile_path,
       :show_observed_names => @user.observer_enrollments.any? || @user.as_observer_observation_links.any? ? @user.send_observed_names_in_notifications? : nil
       },
@@ -490,4 +490,27 @@ class ProfileController < ApplicationController
     })
     render :content_shares
   end
+
+  def qr_mobile_login
+    unless instructure_misc_plugin_available? && !!@domain_root_account&.mobile_qr_login_is_enabled?
+      head 404
+      return
+    end
+
+    @user ||= @current_user
+    set_active_tab 'qr_mobile_login'
+    @context = @user.profile if @user == @current_user
+
+    add_crumb(@user.short_name, profile_path)
+    add_crumb(t('crumbs.mobile_qr_login', "QR for Mobile Login"))
+
+    js_bundle :qr_mobile_login
+
+    render html: '', layout: true
+  end
 end
+
+def instructure_misc_plugin_available?
+  Object.const_defined?("InstructureMiscPlugin")
+end
+private :instructure_misc_plugin_available?

@@ -151,6 +151,7 @@ class ApplicationController < ActionController::Base
           url_for_high_contrast_tinymce_editor_css: editor_hc_css,
           current_user_id: @current_user.try(:id),
           current_user_roles: @current_user.try(:roles, @domain_root_account),
+          current_user_types: @current_user.try{|u| u.account_users.map{|t| t.readable_type }},
           current_user_disabled_inbox: @current_user.try(:disabled_inbox?),
           files_domain: HostUrl.file_host(@domain_root_account || Account.default, request.host_with_port),
           DOMAIN_ROOT_ACCOUNT_ID: @domain_root_account.try(:global_id),
@@ -158,7 +159,6 @@ class ApplicationController < ActionController::Base
           use_responsive_layout: use_responsive_layout?,
           use_rce_enhancements: (@context.is_a?(User) ? @domain_root_account : @context).try(:feature_enabled?, :rce_enhancements),
           rce_auto_save: @context.try(:feature_enabled?, :rce_auto_save),
-          DIRECT_SHARE_ENABLED: !@context.is_a?(Group) && @domain_root_account.try(:feature_enabled?, :direct_share),
           help_link_name: help_link_name,
           help_link_icon: help_link_icon,
           use_high_contrast: @current_user.try(:prefers_high_contrast?),
@@ -171,16 +171,14 @@ class ApplicationController < ActionController::Base
             collapse_global_nav: @current_user.try(:collapse_global_nav?),
             show_feedback_link: show_feedback_link?
           },
-          FEATURES: {
-            assignment_bulk_edit: Account.site_admin.feature_enabled?(:assignment_bulk_edit),
-            la_620_old_rce_init_fix: Account.site_admin.feature_enabled?(:la_620_old_rce_init_fix),
-            cc_in_rce_video_tray: Account.site_admin.feature_enabled?(:cc_in_rce_video_tray),
-            show_qr_login: Object.const_defined?("InstructureMiscPlugin") && !!@domain_root_account&.feature_enabled?(:mobile_qr_login),
-            responsive_2020_03: !!@domain_root_account&.feature_enabled?(:responsive_2020_03),
-            featured_help_links: Account.site_admin.feature_enabled?(:featured_help_links),
-            product_tours: !!@domain_root_account&.feature_enabled?(:product_tours)
-          }
         }
+        @js_env[:KILL_JOY] = @domain_root_account.kill_joy? if @domain_root_account&.kill_joy?
+
+        cached_features = cached_js_env_account_features
+        @js_env[:DIRECT_SHARE_ENABLED] = cached_features.delete(:direct_share) && !@context.is_a?(Group)
+        @js_env[:FEATURES] = cached_features.merge(
+          canvas_k6_theme: @context.try(:feature_enabled?, :canvas_k6_theme)
+        )
         @js_env[:current_user] = @current_user ? Rails.cache.fetch(['user_display_json', @current_user].cache_key, :expires_in => 1.hour) { user_display_json(@current_user, :profile, [:avatar_is_fallback]) } : {}
         @js_env[:page_view_update_url] = page_view_path(@page_view.id, page_view_token: @page_view.token) if @page_view
         @js_env[:IS_LARGE_ROSTER] = true if !@js_env[:IS_LARGE_ROSTER] && @context.respond_to?(:large_roster?) && @context.large_roster?
@@ -197,7 +195,7 @@ class ApplicationController < ActionController::Base
         end
 
         @js_env[:lolcalize] = true if ENV['LOLCALIZE']
-        @js_env[:rce_auto_save_max_age_ms] = Setting.get('rce_auto_save_max_age_ms', 1.hour.to_i * 1000).to_i if @js_env[:rce_auto_save]
+        @js_env[:rce_auto_save_max_age_ms] = Setting.get('rce_auto_save_max_age_ms', 1.day.to_i * 1000).to_i if @js_env[:rce_auto_save]
       end
     end
 
@@ -206,6 +204,29 @@ class ApplicationController < ActionController::Base
     @js_env
   end
   helper_method :js_env
+
+  # put feature checks on Account.site_admin and @domain_root_account that we're loading for every page in here
+  # so altogether we can get them faster the vast majority of the time
+  JS_ENV_SITE_ADMIN_FEATURES = [:cc_in_rce_video_tray, :featured_help_links].freeze
+  JS_ENV_ROOT_ACCOUNT_FEATURES = [
+    :direct_share, :assignment_bulk_edit, :responsive_admin_settings, :responsive_awareness,
+    :responsive_misc, :product_tours, :module_dnd, :files_dnd, :unpublished_courses
+  ].freeze
+  JS_ENV_FEATURES_HASH = Digest::MD5.hexdigest([JS_ENV_SITE_ADMIN_FEATURES + JS_ENV_ROOT_ACCOUNT_FEATURES].sort.join(",")).freeze
+  def cached_js_env_account_features
+    # can be invalidated by a flag change on either site admin or the domain root account
+    Rails.cache.fetch(["js_env_account_features", JS_ENV_FEATURES_HASH,
+        Account.site_admin.cache_key(:feature_flags), @domain_root_account&.cache_key(:feature_flags)].cache_key) do
+      results = {}
+      JS_ENV_SITE_ADMIN_FEATURES.each do |f|
+        results[f] = Account.site_admin.feature_enabled?(f)
+      end
+      JS_ENV_ROOT_ACCOUNT_FEATURES.each do |f|
+        results[f] = !!@domain_root_account&.feature_enabled?(f)
+      end
+      results
+    end
+  end
 
   def add_to_js_env(hash, jsenv, overwrite)
     hash.each do |k,v|
@@ -269,9 +290,11 @@ class ApplicationController < ActionController::Base
     return [] if context.is_a?(Group)
 
     context = context.account if context.is_a?(User)
-    tools = ContextExternalTool.all_tools_for(context, {:placements => type,
+    tools = Shackles.activate(:slave) do
+      ContextExternalTool.all_tools_for(context, {:placements => type,
       :root_account => @domain_root_account, :current_user => @current_user,
       :tool_ids => tool_ids}).to_a
+    end
 
     tools.select! do |tool|
       tool.visible_with_permission_check?(type, @current_user, context, session) &&
@@ -293,7 +316,7 @@ class ApplicationController < ActionController::Base
     hash = {
       :id => tool.id,
       :title => tool.label_for(type, I18n.locale),
-      :base_url =>  polymorphic_url([context, :external_tool], url_params)
+      :base_url =>  polymorphic_url([context, :external_tool], url_params),
     }
     hash.merge!(:tool_id => tool.tool_id) if tool.tool_id.present?
 
@@ -301,6 +324,8 @@ class ApplicationController < ActionController::Base
     extension_settings.each do |setting|
       hash[setting] = tool.extension_setting(type, setting)
     end
+    hash[:base_title] = tool.default_label(I18n.locale) if custom_settings.include?(:base_title)
+    hash[:external_url] = tool.url if custom_settings.include?(:external_url)
     hash
   end
   helper_method :external_tool_display_hash
@@ -694,6 +719,19 @@ class ApplicationController < ActionController::Base
       return false
     end
     true
+  end
+
+  # Render a general error page with the given details.
+  # Arguments of this method must be translated
+  def render_error_with_details(title:, summary: nil, directions: nil)
+    render(
+      'shared/errors/error_with_details',
+      locals: {
+        title: title,
+        summary: summary,
+        directions: directions
+      }
+    )
   end
 
   def render_unauthorized_action
@@ -1616,16 +1654,18 @@ class ApplicationController < ActionController::Base
   # Retrieving wiki pages needs to search either using the id or
   # the page title.
   def get_wiki_page
-    @wiki = @context.wiki
+    Shackles.activate(params[:action] == "edit" ? :master : :slave) do
+      @wiki = @context.wiki
 
-    @page_name = params[:wiki_page_id] || params[:id] || (params[:wiki_page] && params[:wiki_page][:title])
-    if(params[:format] && !['json', 'html'].include?(params[:format]))
-      @page_name += ".#{params[:format]}"
-      params[:format] = 'html'
+      @page_name = params[:wiki_page_id] || params[:id] || (params[:wiki_page] && params[:wiki_page][:title])
+      if(params[:format] && !['json', 'html'].include?(params[:format]))
+        @page_name += ".#{params[:format]}"
+        params[:format] = 'html'
+      end
+      return if @page || !@page_name
+
+      @page = @wiki.find_page(@page_name) if params[:action] != 'create'
     end
-    return if @page || !@page_name
-
-    @page = @wiki.find_page(@page_name) if params[:action] != 'create'
 
     unless @page
       if params[:titleize].present? && !value_to_boolean(params[:titleize])
@@ -1762,7 +1802,15 @@ class ApplicationController < ActionController::Base
           add_crumb(@resource_title)
           @mark_done = MarkDonePresenter.new(self, @context, params["module_item_id"], @current_user, @assignment)
           @prepend_template = 'assignments/lti_header' unless render_external_tool_full_width?
-          @lti_launch.params = lti_launch_params(adapter)
+          begin
+            @lti_launch.params = lti_launch_params(adapter)
+          rescue Lti::Ims::AdvantageErrors::InvalidLaunchError
+            return render_error_with_details(
+              title: t('LTI Launch Error'),
+              summary: t('There was an error launching to the configured tool.'),
+              directions: t('Please try re-establishing the connection to the tool by re-selecting the tool in the assignment or module item interface and saving.')
+            )
+          end
         else
           @lti_launch.params = adapter.generate_post_payload
         end
@@ -1786,12 +1834,16 @@ class ApplicationController < ActionController::Base
     # but we still use the assignment#new page to create the quiz.
     # also handles launch from existing quiz on quizzes page.
     if ref.present? && @assignment&.quiz_lti?
-      if (ref.include?('assignments/new') || ref =~ /courses\/[0-9]+\/quizzes/i) && @context.root_account.feature_enabled?(:newquizzes_on_quiz_page)
+      if (ref.include?('assignments/new') || ref =~ /courses\/\d+\/quizzes/i) && @context.root_account.feature_enabled?(:newquizzes_on_quiz_page)
         return polymorphic_url([@context, :quizzes])
       end
 
-      if ref =~ /courses\/[0-9]+\/gradebook/i
+      if ref =~ /courses\/\d+\/gradebook/i
         return polymorphic_url([@context, :gradebook])
+      end
+
+      if ref =~ /courses\/\d+$/i
+        return polymorphic_url([@context])
       end
     end
     named_context_url(@context, :context_external_content_success_url, 'external_tool_redirect', include_host: true)
@@ -1976,6 +2028,7 @@ class ApplicationController < ActionController::Base
     else
       return false unless authorized_action(@context, @current_user, :manage_account_settings)
     end
+    true
   end
 
   def require_root_account_management
@@ -2425,6 +2478,7 @@ class ApplicationController < ActionController::Base
     ), id: 'assignment_groups_url')
 
     js_env({
+      :COURSE_ID => @context.id.to_s,
       :URLS => {
         :new_assignment_url => new_polymorphic_url([@context, :assignment]),
         :new_quiz_url => context_url(@context, :context_quizzes_new_url),
@@ -2491,7 +2545,15 @@ class ApplicationController < ActionController::Base
   end
 
   def user_has_google_drive
-    @user_has_google_drive ||= google_drive_connection.authorized?
+    @user_has_google_drive ||= begin
+      if logged_in_user
+        Rails.cache.fetch_with_batched_keys('user_has_google_drive', batch_object: logged_in_user, batched_keys: :user_services) do
+          google_drive_connection.authorized?
+        end
+      else
+        google_drive_connection.authorized?
+      end
+    end
   end
 
   def self.instance_id
@@ -2499,10 +2561,6 @@ class ApplicationController < ActionController::Base
   end
 
   def self.region
-    nil
-  end
-
-  def self.cluster
     nil
   end
 

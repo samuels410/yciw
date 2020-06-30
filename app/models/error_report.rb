@@ -26,6 +26,7 @@ class ErrorReport < ActiveRecord::Base
   serialize :data, Hash
 
   before_save :guess_email
+  before_save :truncate_enormous_fields
 
   # Define a custom callback for external notification of an error report.
   define_callbacks :on_send_to_external
@@ -34,9 +35,14 @@ class ErrorReport < ActiveRecord::Base
     run_callbacks(:on_send_to_external)
   end
 
+  def truncate_enormous_fields
+    self.message = message.truncate(1024, omission: '...<truncated>') if message
+    data['exception_message'] = data['exception_message'].truncate(1024, omission: '...<truncated>') if data['exception_message']
+  end
+
   class Reporter
 
-    IGNORED_CATEGORIES = "404,ActionDispatch::RemoteIp::IpSpoofAttackError".freeze
+    IGNORED_CATEGORIES = "404,ActionDispatch::RemoteIp::IpSpoofAttackError,Turnitin::Errors::SubmissionNotScoredError".freeze
 
     def ignored_categories
       Setting.get('ignored_error_report_categories', IGNORED_CATEGORIES).split(',')

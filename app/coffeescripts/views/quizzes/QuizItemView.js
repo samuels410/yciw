@@ -196,11 +196,13 @@ export default class ItemView extends Backbone.View {
 
   renderCopyToTray(open) {
     const quizId = this.model.get('id')
+    const isOldQuiz = this.model.get('quiz_type') !== 'quizzes.next'
+    const contentSelection = isOldQuiz ? {quizzes: [quizId]} : {assignments: [quizId]}
     ReactDOM.render(
       <DirectShareCourseTray
         open={open}
         sourceCourseId={ENV.COURSE_ID}
-        contentSelection={{quizzes: [quizId]}}
+        contentSelection={contentSelection}
         onDismiss={() => {
           this.renderCopyToTray(false)
           return setTimeout(() => this.$settingsButton.focus(), 100)
@@ -253,7 +255,8 @@ export default class ItemView extends Backbone.View {
   }
 
   isStudent() {
-    return ENV.current_user_roles && ENV.current_user_roles.includes('student')
+    // must check canManage because current_user_roles will include roles from other enrolled courses
+    return ENV.current_user_roles?.includes('student') && !this.canManage()
   }
 
   canDuplicate() {

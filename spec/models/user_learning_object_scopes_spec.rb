@@ -160,7 +160,7 @@ describe UserLearningObjectScopes do
       end
 
       it "should include assignments with lock_at in the future" do
-        @quiz.lock_at = 1.hour.from_now
+        @quiz.lock_at = 3.days.from_now
         @quiz.save!
         DueDateCacher.recompute(@quiz.assignment)
         list = @student.assignments_for_student('submitting', contexts: [@course])
@@ -176,6 +176,7 @@ describe UserLearningObjectScopes do
       end
 
       it "should not include assignments where lock_at is in past" do
+        @quiz.due_at = 2.hours.ago
         @quiz.lock_at = 1.hour.ago
         @quiz.save!
         DueDateCacher.recompute(@quiz.assignment)
@@ -192,6 +193,7 @@ describe UserLearningObjectScopes do
         end
 
         it "should include assignments where lock_at is in past" do
+          @quiz.due_at = 2.hours.ago
           @quiz.lock_at = 1.hour.ago
           @quiz.save!
           DueDateCacher.recompute(@quiz.assignment)
@@ -640,7 +642,7 @@ describe UserLearningObjectScopes do
       @course2.assignments.first.grade_student(@student_a, grade: "1", grader: @teacher)
       @ta = User.find(@ta.id)
       expect(@ta.assignments_needing_grading.size).to be 1
-      expect(@ta.assignments_needing_grading(scope_only: true).size).to be 1
+      expect(@ta.assignments_needing_grading(scope_only: true).to_a.size).to be 1
       expect(@ta.assignments_needing_grading).to be_include(@course2.assignments.first)
 
       # but if we enroll the TA in both sections of course1, it should be accessible
@@ -648,7 +650,7 @@ describe UserLearningObjectScopes do
                           :allow_multiple_enrollments => true, :limit_privileges_to_course_section => true)
       @ta = User.find(@ta.id)
       expect(@ta.assignments_needing_grading.size).to be 2
-      expect(@ta.assignments_needing_grading(scope_only: true).size).to be 2
+      expect(@ta.assignments_needing_grading(scope_only: true).to_a.size).to be 2
       expect(@ta.assignments_needing_grading).to be_include(@course1.assignments.first)
       expect(@ta.assignments_needing_grading).to be_include(@course2.assignments.first)
     end
@@ -688,10 +690,12 @@ describe UserLearningObjectScopes do
       create_records(Submission, assignment_ids.map do |id|
         {
           assignment_id: id,
+          course_id: @course1.id,
           user_id: @student_b.id,
           body: "hello",
           workflow_state: "submitted",
           submission_type: 'online_text_entry'
+
         }
       end)
       expect(@teacher.assignments_needing_grading.size).to eq 15
@@ -717,21 +721,9 @@ describe UserLearningObjectScopes do
         end
       end
 
-      after :each do
-        [Shard.default, @shard1, @shard2].each do |shard|
-          shard.activate do
-            Setting.remove('assignments_needing_grading_b')
-          end
-        end
-      end
-
       it "should find assignments from all shards" do
         [Shard.default, @shard1, @shard2].each do |shard|
           shard.activate do
-            expect(@teacher.assignments_needing_grading.sort_by(&:id)).to eq(
-              [@course1.assignments.first, @course2.assignments.first, @assignment3].sort_by(&:id)
-            )
-            Setting.set('assignments_needing_grading_b', 'false')
             expect(@teacher.assignments_needing_grading.sort_by(&:id)).to eq(
               [@course1.assignments.first, @course2.assignments.first, @assignment3].sort_by(&:id)
             )
@@ -754,6 +746,16 @@ describe UserLearningObjectScopes do
 
       it "should apply a global limit" do
         expect(@teacher.assignments_needing_grading(:limit => 1).length).to eq 1
+      end
+
+      it 'should not fail with the dynamic setting turned off' do
+        [Shard.default, @shard1, @shard2].each do |shard|
+          shard.activate do
+            override_dynamic_settings(private: { canvas: { disable_needs_grading_queries: true } }) do
+              expect(@teacher.assignments_needing_grading).to eq []
+            end
+          end
+        end
       end
     end
 

@@ -91,10 +91,6 @@ export default class Quiz extends Backbone.Model {
       this.set('edit_url', this.edit_url())
       this.set('publish_url', this.publish_url())
       this.set('unpublish_url', this.unpublish_url())
-      this.set(
-        'toggle_post_to_sis_url',
-        `${this.get('base_url')}/${this.get('id')}/toggle_post_to_sis`
-      )
     }
   }
 
@@ -119,7 +115,9 @@ export default class Quiz extends Backbone.Model {
     const pts = this.get('points_possible')
     let text = ''
     if (pts && pts > 0 && !this.isUngradedSurvey()) {
-      text = I18n.t('assignment_points_possible', 'pt', {count: pts})
+      text = Number.isInteger(pts)
+        ? I18n.t('assignment_points_possible', 'pt', {count: pts})
+        : I18n.t('%{points} pts', {points: I18n.n(pts)})
     }
     return this.set('possible_points_label', text)
   }

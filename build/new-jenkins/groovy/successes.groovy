@@ -20,17 +20,28 @@ def log(message) {
   echo "[successes.groovy]: ${message}"
 }
 
+def canSaveSucceses() {
+  return env.GERRIT_CHANGE_NUMBER && env.GERRIT_PATCHSET_NUMBER
+}
+
 def successFile() {
   return "_buildmeta/${env.GERRIT_CHANGE_NUMBER}-${env.GERRIT_PATCHSET_NUMBER}-successes"
 }
 
+// we have a stage that marks a build as successful. this removes
+// all success marks and replaces it with the 'build' mark. this
+// causes the post hooks to be unable to read successes.
+def hasSuccessOrBuildIsSuccessful(name, required_count = 1) {
+  return hasSuccess('build') || hasSuccess(name, required_count)
+}
+
 def hasSuccess(name, required_count = 1) {
-  if (!fileExists(successFile())) {
+  if (!fileExists(successFile()) && canSaveSucceses()) {
     copyArtifacts(
       filter: '_buildmeta/*',
       optional: true,
       projectName: env.JOB_NAME,
-      parameters: "GERRIT_CHANGE_NUMBER=${env.GERRIT_CHANGE_NUMBER},GERRIT_PATCHSET_NUMBER=${GERRIT_PATCHSET_NUMBER}",
+      parameters: "GERRIT_CHANGE_NUMBER=${env.GERRIT_CHANGE_NUMBER},GERRIT_PATCHSET_NUMBER=${env.GERRIT_PATCHSET_NUMBER}",
       selector: lastCompleted()
     )
     archiveArtifacts(artifacts: '_buildmeta/*', allowEmptyArchive: true)
@@ -64,7 +75,7 @@ def saveSuccess(name) {
   sh 'mkdir -p _buildmeta'
   sh "echo '|$name|' >> ${successFile()}"
   archiveArtifacts(artifacts: '_buildmeta/*')
-  log "Success artifact created, future builds will skip this step ${env.JOB_NAME}: ${successFile()}"
+  log "Success artifact created, future builds will skip this step $name: ${successFile()}"
   sh "cat ${successFile()}"
 }
 

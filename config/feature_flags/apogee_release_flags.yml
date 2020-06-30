@@ -24,12 +24,6 @@ allow_postable_submission_comments:
     user will allow posting the assignment. Previously, this would have required a grade before posting could
     occur.
   applies_to: RootAccount
-new_gradebook_sort_options:
-  state: allowed
-  applies_to: Course
-  root_opt_in: true
-  display_name: Additional Sort Options for New Gradebook
-  description: Enables sorting by SIS ID, integration ID and login ID in New Gradebook.
 eportfolio_moderation:
   state: hidden
   applies_to: RootAccount
@@ -46,13 +40,41 @@ gradebook_export_sort_order_bugfix:
   applies_to: SiteAdmin
   display_name: Gradebook Export Sort Order Bugfix (Tally-219)
   description: Changes the sort order of the gradebook export to more closely match the canvas documentation
-submissions_reupload_status_page:
-  state: hidden
-  applies_to: SiteAdmin
-  display_name: Submissions Re-Upload Status Page
-  description: Allows the user to navigate away while submission re-uploads are processing
 include_speed_grader_in_assignment_header_menu:
   state: hidden
   applies_to: SiteAdmin
   display_name: Include SpeedGrader in Assignment Header Menu
   description: Includes a link to SpeedGrader in the assignment header menu in Gradebook.
+prefetch_gradebook_user_ids:
+  state: hidden
+  applies_to: SiteAdmin
+  display_name: Prefetch User IDs in Gradebook
+  description: Load user ids upon page load so that Gradebook loads more quickly.
+datadog_rum_js:
+  state: hidden
+  applies_to: SiteAdmin
+  display_name: Datadog RUM JS Agent
+  description: Include the Datadog RUM JS Agent in the document HEAD.
+grade_calculator_performance_improvements:
+  state: hidden
+  applies_to: SiteAdmin
+  display_name: Grade Calculator Performance Improvements
+  description: Performance improvements for the grade calculation process.
+gradebook_dataloader_improvements:
+  state: hidden
+  applies_to: SiteAdmin
+  display_name: Gradebook Data Loading Performance Improvements
+  description: Performance improvements for loading data into Gradebook.
+  environments:
+    ci:
+      state: on
+    development:
+      state: on
+    test:
+      state: on
+missing_policy_applicator_emits_live_events:
+  state: hidden
+  applies_to: RootAccount
+  display_name: Missing Policy Applicator Emits Live Events
+  description: Allows the missing policy applicator to emit submission_updated live events for each submission
+    marked as missing.

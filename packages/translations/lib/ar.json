@@ -5,6 +5,9 @@
     "add_8523c19b": {
         "message": "إضافة"
     },
+    "add_another_f4e50d57": {
+        "message": "إضافة محتوى"
+    },
     "add_cc_subtitles_55f0394e": {
         "message": "إضافة شرح مكتوب لأحداث العرض/أشرطة الترجمة"
     },
@@ -52,6 +55,12 @@
     },
     "an_error_occurred_generating_the_file_preview_cf259955": {
         "message": "حدث خطأ أثناء إنشاء معاينة للملف"
+    },
+    "an_error_occurred_making_a_network_request_d1bda348": {
+        "message": "حدث خطأ أثناء إجراء طلب شبكة"
+    },
+    "an_error_occurred_uploading_your_media_71f1444d": {
+        "message": "حدث خطأ أثناء تحميل الوسائط."
     },
     "announcement_fb4cb645": {
         "message": "الإعلان"
@@ -118,6 +127,9 @@
     },
     "automatically_open_an_in_line_preview_preview_disp_ed784ffe": {
         "message": "افتح تلقائيًا معاينة داخلية. (لا تظهر المعاينة إلا بعد الحفظ)"
+    },
+    "available_folders_694d0436": {
+        "message": "المجلدات المتاحة"
     },
     "beginning_of_your_to_do_history_61ef2dce": {
         "message": "بداية سجل قائمة المهام الخاصة بك"
@@ -210,6 +222,9 @@
         "message": "مستندات المساق"
     },
     "course_files_62deb8f8": {
+        "message": "ملفات المساق"
+    },
+    "course_files_a31f97fc": {
         "message": "ملفات المساق"
     },
     "course_images_f8511d04": {
@@ -380,6 +395,9 @@
     "embed_video_code_703e10f2": {
         "message": "رمز تضمين الفيديو"
     },
+    "embedded_content_aaeb4d3d": {
+        "message": "مضمّن آخر"
+    },
     "equation_1c5ac93c": {
         "message": "معادلة"
     },
@@ -425,6 +443,12 @@
     "file_name_8fd421ff": {
         "message": "اسم الملف"
     },
+    "file_upload_failed_af22dd91": {
+        "message": "فشل تحميل الملف"
+    },
+    "file_uploading_56c9c0c8": {
+        "message": "جارٍ تحميل الملف"
+    },
     "file_url_c12b64be": {
         "message": "عنوان URL للملف"
     },
@@ -446,8 +470,8 @@
     "finish_bc343002": {
         "message": "إنهاء"
     },
-    "focus_the_popup_context_toolbar_7979f4f8": {
-        "message": "التركيز على شريط أدوات مساق النافذة المنبثقة"
+    "folder_tree_fbab0726": {
+        "message": "شجرة المجلد"
     },
     "formatting_5b143aa8": {
         "message": "التنسيق"
@@ -483,6 +507,9 @@
         "message": "تم تحميل الدرجات"
     },
     "group_files_4324f3df": {
+        "message": "ملفات المجموعة"
+    },
+    "group_files_82e5dcdb": {
         "message": "ملفات المجموعة"
     },
     "group_navigation_99f191a": {
@@ -602,6 +629,9 @@
     "loading_failed_e6a9d8ef": {
         "message": "فشل التحميل."
     },
+    "loading_folders_d8b5869e": {
+        "message": "جارٍ تحميل المجلدات"
+    },
     "loading_grades_c842c887": {
         "message": "جارٍ تحميل الدرجات"
     },
@@ -616,6 +646,9 @@
     },
     "location_3b6ff307": {
         "message": "الموقع:"
+    },
+    "locked_762f138b": {
+        "message": "مؤمّن"
     },
     "looks_like_there_isn_t_anything_here_d9bcef49": {
         "message": "يبدو أنه لا يوجد أي شيء هنا"
@@ -643,6 +676,9 @@
     },
     "must_be_at_least_width_x_height_px_41dc825e": {
         "message": "يجب أن تكون { width } x { height } بكسل على الأقل."
+    },
+    "my_files_2f621040": {
+        "message": "ملفاتي"
     },
     "my_grades_98834476": {
         "message": "درجاتي"
@@ -676,6 +712,9 @@
     },
     "no_e16d9132": {
         "message": "لا"
+    },
+    "no_file_chosen_9a880793": {
+        "message": "لم يتم اختيار ملف"
     },
     "no_grade_3b4d7f3e": {
         "message": "لا توجد أي درجة"
@@ -806,6 +845,9 @@
     "quizzes_7e598f57": {
         "message": "الاختبارات الموجزة"
     },
+    "reading_a_media_track_file_failed_aborting_be051b20": {
+        "message": "فشلت قراءة ملف مسار الوسائط. جارٍ الإيقاف قبل الاكتمال."
+    },
     "record_7c9448b": {
         "message": "تسجيل"
     },
@@ -890,6 +932,12 @@
     "something_went_wrong_and_i_don_t_know_what_to_show_e0c54ec8": {
         "message": "حدثت مشكلة ولا أعلم ماذا أعرض لك."
     },
+    "something_went_wrong_check_your_connection_and_try_2a7b2d13": {
+        "message": "حدث خطأ ما، تفقد الاتصال الخاص بك وأعد المحاولة مجددًا."
+    },
+    "something_went_wrong_d238c551": {
+        "message": "حدث خطأ ما"
+    },
     "something_went_wrong_try_again_after_refreshing_th_e094eb8d": {
         "message": "حدث خطأ ما، حاول مجدداً بعد تحديث الصفحة"
     },
@@ -932,11 +980,17 @@
     "subscript_59744f96": {
         "message": "منخفض"
     },
+    "success_file_uploaded_8174e93f": {
+        "message": "نجاح: تم تحميل الملف"
+    },
     "success_to_do_created_e34ed395": {
         "message": "نجاح: تم إنشاء قائمة مهام"
     },
     "superscript_8cb349a2": {
         "message": "مرتفع"
+    },
+    "supported_file_types_srt_or_webvtt_7d827ed": {
+        "message": "أنواع الملفات المدعومة: SRT أو WebVTT"
     },
     "switch_to_raw_html_editor_4c9ac7de": {
         "message": "التبديل إلي محرر html أولي"
@@ -1028,9 +1082,6 @@
     "upload_document_253f0478": {
         "message": "تحميل المستند"
     },
-    "upload_error_f9c00e27": {
-        "message": "خطأ في التحميل"
-    },
     "upload_file_fd2361b8": {
         "message": "تحميل ملف"
     },
@@ -1039,6 +1090,9 @@
     },
     "upload_media_ce31135a": {
         "message": "تحميل الوسائط"
+    },
+    "upload_not_available_for_this_folder_8f8623c6": {
+        "message": "التحميل غير متاح لهذا المجلد"
     },
     "upload_record_media_e4207d72": {
         "message": "تحميل/تسجيل الوسائط"

@@ -23,10 +23,6 @@ require 'csv'
 require 'socket'
 
 describe Course do
-  before :once do
-    PostPolicy.enable_feature!
-  end
-
   include_examples "outcome import context examples"
 
   describe 'relationships' do
@@ -53,8 +49,6 @@ end
 
 describe Course do
   before :once do
-    PostPolicy.enable_feature!
-
     Account.default
     Account.default.default_enrollment_term
   end
@@ -256,6 +250,51 @@ describe Course do
     end
   end
 
+  describe "#hide_sections_on_course_users_page?" do
+    context "FF is On" do
+      before :once do
+        course_with_student
+        @course.root_account.enable_feature!(:hide_course_sections_from_students)
+      end
+
+      context "Setting is set to On" do
+        before :each do
+          @course.update!(:hide_sections_on_course_users_page => true)
+        end
+
+        it "returns true when there is more than one section" do
+          @course.course_sections.create!
+          expect(@course.sections_hidden_on_roster_page?(current_user: @user)).to be true
+        end
+
+        it "returns false when there is only one section" do
+          expect(@course.sections_hidden_on_roster_page?(current_user: @user)).to be false
+        end
+      end
+
+      context "Setting is set to Off" do
+        before :each do
+          @course.update!(:hide_sections_on_course_users_page => false)
+        end
+
+        it "returns false" do
+          expect(@course.sections_hidden_on_roster_page?(current_user: @user)).to be false
+        end
+      end
+    end
+
+    context "FF is off" do
+      before :once do
+        course_with_student
+        @course.root_account.disable_feature!(:hide_course_sections_from_students)
+      end
+
+      it "returns false" do
+        expect(@course.sections_hidden_on_roster_page?(current_user: @user)).to be false
+      end
+    end
+  end
+
   describe "#filter_speed_grader_by_student_group?" do
     before :once do
       @course = Account.default.courses.create!
@@ -294,10 +333,11 @@ describe Course do
       @course.recompute_student_scores
     end
 
-    it "should not use student ids for deleted enrollments, even if they are explicitly passed" do
+    it "recomputes nothing if no students are visible" do
       @course.save!
       enrollment = course_with_student(course: @course, active_all: true)
       enrollment.destroy
+      3.times{ enrollment_model(workflow_state: 'registered', course: @course, user: user_model) }
       expect(Enrollment).to receive(:recompute_final_score).with([], any_args)
       @course.recompute_student_scores([enrollment.user_id])
     end
@@ -365,7 +405,6 @@ describe Course do
 
     @course.update_attribute(:public_syllabus, true)
     expect(@course.syllabus_visibility_option).to eq('public')
-
   end
 
   it 'should return offline web export flag' do
@@ -1755,8 +1794,6 @@ end
 
 describe Course, "gradebook_to_csv" do
   before :once do
-    PostPolicy.enable_feature!
-
     course_with_student active_all: true
     teacher_in_course active_all: true
   end
@@ -2337,6 +2374,22 @@ describe Course, "tabs_available" do
       expect(tab_ids.length).to eql(length)
     end
 
+    it "should return K-6 tabs if feature flag is enabled for teachers" do
+      begin
+        @course.enable_feature!(:canvas_k6_theme)
+        tabs = @course.tabs_available(@user)
+        expect(tabs.count {|t| !t[:hidden] }).to eq 5
+        expect(tabs.count {|t| t[:hidden] }).to eq 12
+      ensure
+        @course.disable_feature!(:canvas_k6_theme)
+      end
+    end
+
+    it "should default tab configuration to an empty array" do
+      course = Course.new
+      expect(course.tab_configuration).to eq []
+    end
+
     it "should overwrite the order of tabs if configured" do
       @course.tab_configuration = [{ id: Course::TAB_COLLABORATIONS }]
       available_tabs = @course.tabs_available(@user).map { |tab| tab[:id] }
@@ -2345,6 +2398,12 @@ describe Course, "tabs_available" do
 
       expect(available_tabs).to        eq (custom_tabs + default_tabs).uniq
       expect(available_tabs.length).to eq default_tabs.length
+    end
+
+    it "should not blow up if somehow nils got in there" do
+      course = Course.new
+      course.tab_configuration = [{'id' => 1}, nil]
+      expect(course.tab_configuration).to eq [{'id' => 1}]
     end
 
     it "should not omit the target attribute for an external tool tab that is part of the tab configuration list" do
@@ -2412,6 +2471,16 @@ describe Course, "tabs_available" do
   context "students" do
     before :once do
       course_with_student(:active_all => true)
+    end
+
+    it "should return K-6 tabs if feature flag is enabled for students" do
+      begin
+        @course.enable_feature!(:canvas_k6_theme)
+        tab_ids = @course.tabs_available(@user).map{|t| t[:id] }
+        expect(tab_ids).to eq [Course::TAB_HOME, Course::TAB_GRADES]
+      ensure
+        @course.disable_feature!(:canvas_k6_theme)
+      end
     end
 
     it "should hide unused tabs if not an admin" do
@@ -4035,6 +4104,30 @@ describe Course, 'tabs_available' do
   end
 end
 
+describe Course, 'tab_hidden?' do
+  before :once do
+    course_model
+  end
+
+  it "should not have any hidden tabs by default" do
+    Course.default_tabs.each do |tab|
+      expect(@course.tab_hidden?(tab[:id])).to be_falsey
+    end
+  end
+
+  it "should hide certain tabs when canvas_k6_theme feature flag is enabled" do
+    begin
+      @course.enable_feature!(:canvas_k6_theme)
+      Course.default_tabs.each do |tab|
+        hidden = !Course::CANVAS_K6_TAB_IDS.include?(tab[:id])
+        expect(@course.tab_hidden?(tab[:id])).to(hidden ? be_truthy : be_falsey)
+      end
+    ensure
+      @course.disable_feature!(:canvas_k6_theme)
+    end
+  end
+end
+
 describe Course, 'scoping' do
   it 'should search by multiple fields' do
     c1 = Course.new
@@ -5241,9 +5334,10 @@ describe Course do
 
   describe 'grade weight notification' do
     before :once do
-      course_with_student(:active_all => true, :active_cc => true)
+      course_with_student(:active_all => true)
+      @student.communication_channels.create!(:path => 'test@example.com').confirm!
       n = Notification.create!(name: 'Grade Weight Changed', category: 'TestImmediately')
-      NotificationPolicy.create(:notification => n, :communication_channel => @student.communication_channel, :frequency => "immediately")
+      NotificationPolicy.create!(:notification => n, :communication_channel => @student.communication_channel, :frequency => "immediately")
     end
 
     it "sends a notification when the course scheme changes" do

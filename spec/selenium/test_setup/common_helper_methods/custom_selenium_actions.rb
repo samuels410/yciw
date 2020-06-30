@@ -473,19 +473,24 @@ module CustomSeleniumActions
       el.send_keys [(driver.browser == :safari ? :command : :control), 'a']
       el.send_keys(value)
     else
-      case driver.browser
-      when :firefox, :safari, :internet_explorer
-        keys = [[MODIFIER_KEY, "a"], :backspace]
-      when :chrome
-        driver.execute_script("arguments[0].select();", el)
-        keys = value.to_s.empty? ? [:backspace] : []
-      end
+      driver.execute_script("arguments[0].select();", el)
+      keys = value.to_s.empty? ? [:backspace] : []
       keys << value
       el.send_keys(*keys)
+      count = 0
+      until el['value'] == value.to_s
+        break if count > 1
+        count += 1
+        driver.execute_script("arguments[0].select();", el)
+        el.send_keys(*keys)
+      end
     end
 
     if options[:tab_out]
       el.send_keys(:tab)
+    end
+    if options[:press_return]
+      el.send_keys(:return)
     end
   end
 
@@ -619,6 +624,24 @@ module CustomSeleniumActions
     unless (find_all_with_jquery(flash_message_selector).length) == 0
       find_all_with_jquery(flash_message_selector).each(&:click)
     end
+  end
+
+  # Scroll To Element (without executing Javascript)
+  #
+  # Moves the mouse to the middle of the given element. The element is scrolled
+  # into view and its location is calculated using getBoundingClientRect.
+  # Then the mouse is moved to optional offset coordinates from the element.
+  #
+  # Note that when using offsets, both coordinates need to be passed.
+  #
+  # element (Selenium::WebDriver::Element) — to move to.
+  # right_by (Integer) (defaults to: nil) — Optional offset from the top-left corner.
+  #   A negative value means coordinates right from the element.
+  # down_by (Integer) (defaults to: nil) — Optional offset from the top-left corner.
+  #   A negative value means coordinates above the element.
+  def scroll_to_element(element, right_by = nil, down_by = nil)
+    driver.action.move_to(element, right_by, down_by).perform
+    wait_for_ajaximations
   end
 
   def scroll_into_view(selector)

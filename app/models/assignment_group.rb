@@ -25,6 +25,9 @@ class AssignmentGroup < ActiveRecord::Base
   workflow { state :available }
   include Canvas::SoftDeletable
 
+  include MasterCourses::Restrictor
+  restrict_columns :content, [:group_weight, :rules]
+
   attr_readonly :context_id, :context_type
 
   attr_accessor :saved_by
@@ -50,6 +53,7 @@ class AssignmentGroup < ActiveRecord::Base
   validates :default_assignment_name, length: { maximum: maximum_string_length }, allow_nil: true
   validates :name, length: { maximum: maximum_string_length }, allow_nil: true
 
+  before_create :set_root_account_id
   before_save :set_context_code
   before_save :generate_default_values
   after_save :course_grading_change
@@ -278,5 +282,9 @@ class AssignmentGroup < ActiveRecord::Base
 
   def effective_due_dates
     @effective_due_dates ||= EffectiveDueDates.for_course(context, published_assignments)
+  end
+
+  def set_root_account_id
+    self.root_account_id ||= context.root_account_id
   end
 end

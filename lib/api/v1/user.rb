@@ -84,8 +84,8 @@ module Api::V1::User
         json[:avatar_url] = avatar_url_for_user(user)
       end
       if enrollments
-        json[:enrollments] = enrollments.map do |enrollment|
-          enrollment_json(enrollment, current_user, session, includes, enrollment_json_opts)
+        json[:enrollments] = enrollments.map do |e|
+          enrollment_json(e, current_user, session, includes: includes, excludes: excludes, opts: enrollment_json_opts)
         end
       end
       # include a permissions check here to only allow teachers and admins
@@ -117,7 +117,7 @@ module Api::V1::User
       json[:confirmation_url] = user.communication_channels.email.first.try(:confirmation_url) if includes.include?('confirmation_url')
 
       if includes.include?('last_login')
-        last_login = user.read_attribute(:last_login)
+        last_login = user.last_login || user.read_attribute(:last_login)
         if last_login.is_a?(String)
           Time.use_zone('UTC') { last_login = Time.zone.parse(last_login) }
         end
@@ -252,8 +252,10 @@ module Api::V1::User
                               :type
                             ]
 
-  def enrollment_json(enrollment, user, session, includes = [], opts = {})
-    api_json(enrollment, user, session, :only => API_ENROLLMENT_JSON_OPTS).tap do |json|
+  def enrollment_json(enrollment, user, session, includes: [], opts: {}, excludes: [])
+    only = API_ENROLLMENT_JSON_OPTS.dup
+    only = only.without(:course_section_id) if excludes.include?('course_section_id')
+    api_json(enrollment, user, session, only: only).tap do |json|
       json[:enrollment_state] = json.delete('workflow_state')
       if enrollment.course.workflow_state == 'deleted' || enrollment.course_section.workflow_state == 'deleted'
         json[:enrollment_state] = 'deleted'
@@ -267,7 +269,7 @@ module Api::V1::User
         json[:sis_import_id] = enrollment.sis_batch_id
       end
       if enrollment.student?
-        json[:grades] = grades_hash(enrollment, user, opts)
+        json[:grades] = grades_hash(enrollment, user, includes, opts)
       end
       if user_can_read_sis_data?(@current_user, enrollment.course)
         json[:sis_account_id] = enrollment.course.account.sis_source_id
@@ -298,7 +300,7 @@ module Api::V1::User
   end
 
   private
-  def grades_hash(enrollment, user, opts = {})
+  def grades_hash(enrollment, user, includes, opts = {})
     grades = {
       html_url: course_student_grades_url(enrollment.course_id, enrollment.user_id)
     }
@@ -310,6 +312,9 @@ module Api::V1::User
       score_opts = period ? { grading_period_id: period.id } : Score.params_for_course
 
       grades[:grading_period_id] = period&.id if opts[:current_grading_period_scores]
+
+      include_current_points = includes.include?("current_points")
+      grades[:current_points] = enrollment.computed_current_points(score_opts) if include_current_points
 
       if course.grants_any_right?(user, :manage_grades, :view_all_grades)
         override_grade = enrollment.override_grade(score_opts)
@@ -325,6 +330,8 @@ module Api::V1::User
         grades[:unposted_current_grade] = enrollment.unposted_current_grade(score_opts)
         grades[:unposted_final_score]   = enrollment.unposted_final_score(score_opts)
         grades[:unposted_final_grade]   = enrollment.unposted_final_grade(score_opts)
+
+        grades[:unposted_current_points] = enrollment.unposted_current_points(score_opts) if include_current_points
       else
         grades[:current_grade] = enrollment.effective_current_grade(score_opts)
         grades[:current_score] = enrollment.effective_current_score(score_opts)

@@ -21,6 +21,7 @@ import {scaleForHeight, scaleForWidth} from '../shared/DimensionUtils'
 
 export const MIN_HEIGHT = 10
 export const MIN_WIDTH = 10
+export const MIN_WIDTH_VIDEO = 320
 
 export const SMALL = 'small'
 export const MEDIUM = 'medium'
@@ -107,6 +108,12 @@ export function fromVideoEmbed($element) {
     naturalWidth,
     source: $videoElem && $videoElem.querySelector('source')
   }
+  videoOptions.tracks =
+    $videoElem &&
+    Array.prototype.map.call($videoElem.querySelectorAll('track'), t => ({
+      locale: t.getAttribute('srclang'),
+      language: t.getAttribute('label')
+    }))
 
   videoOptions.videoSize = imageSizeFromKnownOptions(videoOptions)
 

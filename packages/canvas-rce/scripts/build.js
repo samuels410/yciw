@@ -26,14 +26,24 @@ const exec = promisify(require('child_process').exec)
 const getTranslationList = require('@instructure/translations/bin/get-translation-list')
 
 shell.set('-e')
-shell.rm('-rf', 'lib/')
+
+// We make this directory if it doesn't exist so that the following delete command works outside of docker.  This
+// directory is automatically created via a volume mount when using docker, so the -p flag prevents the mkdir command
+// from failing
+shell.exec('mkdir -p lib')
+shell.exec('mkdir -p es')
+
+// We can't delete this directory when inside docker because it is used as a volume mount point, so instead we
+// delete everything in it.
+shell.exec('rm -rf lib/*')
+shell.exec('rm -rf es/*')
 const npm_bin_path = shell.exec('npm bin').trim()
 
 shell.echo('Building CommonJS version')
-shell.exec(`TRANSFORM_IMPORTS=1 ${npm_bin_path}/babel --out-dir lib src`)
+shell.exec(`JEST_WORKER_ID=1 ${npm_bin_path}/babel --out-dir lib src --ignore '**/__tests__'`)
 
 shell.echo('Building ES Modules version')
-shell.exec(`ES_MODULES=1 ${npm_bin_path}/babel --out-dir lib/modules src`)
+shell.exec(`${npm_bin_path}/babel --out-dir es src --ignore '**/__tests__'`)
 
 shell.echo(`building pretranslated output in lib/translated in mulitple processes`)
 getTranslationList('canvas-rce')

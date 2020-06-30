@@ -24,6 +24,7 @@ import axios from 'axios'
 import DashboardCardAction from './DashboardCardAction'
 import CourseActivitySummaryStore from './CourseActivitySummaryStore'
 import DashboardCardMenu from './DashboardCardMenu'
+import PublishButton from './PublishButton'
 import {showConfirmUnfavorite} from './ConfirmUnfavoriteCourseModal'
 import {showFlashError} from '../shared/FlashAlert'
 import instFSOptimizedImageUrl from '../shared/helpers/instFSOptimizedImageUrl'
@@ -80,7 +81,14 @@ export default class DashboardCard extends Component {
     moveCard: PropTypes.func,
     onConfirmUnfavorite: PropTypes.func,
     totalCards: PropTypes.number,
-    position: PropTypes.oneOfType([PropTypes.number, PropTypes.func])
+    position: PropTypes.oneOfType([PropTypes.number, PropTypes.func]),
+    enrollmentType: PropTypes.string,
+    observee: PropTypes.string,
+    published: PropTypes.bool,
+    canChangeCourseState: PropTypes.bool,
+    defaultView: PropTypes.string,
+    pagesUrl: PropTypes.string,
+    frontPageTitle: PropTypes.string
   }
 
   static defaultProps = {
@@ -95,7 +103,9 @@ export default class DashboardCard extends Component {
     connectDropTarget: c => c,
     moveCard: () => {},
     totalCards: 0,
-    position: 0
+    position: 0,
+    published: false,
+    canChangeCourseState: false
   }
 
   constructor(props) {
@@ -341,14 +351,14 @@ export default class DashboardCard extends Component {
           />
           <a href={this.props.href} className="ic-DashboardCard__link">
             <div className="ic-DashboardCard__header_content">
-              <h2
+              <h3
                 className="ic-DashboardCard__header-title ellipsis"
                 title={this.props.originalName}
               >
                 <span style={{color: this.props.backgroundColor}}>
                   {this.state.nicknameInfo.nickname}
                 </span>
-              </h2>
+              </h3>
               <div
                 className="ic-DashboardCard__header-subtitle ellipsis"
                 title={this.props.courseCode}
@@ -358,8 +368,24 @@ export default class DashboardCard extends Component {
               <div className="ic-DashboardCard__header-term ellipsis" title={this.props.term}>
                 {this.props.term ? this.props.term : null}
               </div>
+              {this.props.enrollmentType === 'ObserverEnrollment' && this.props.observee && (
+                <div className="ic-DashboardCard__header-term ellipsis" title={this.props.observee}>
+                  {I18n.t('Observing: %{observee}', {observee: this.props.observee})}
+                </div>
+              )}
             </div>
           </a>
+          {window.ENV?.FEATURES?.unpublished_courses &&
+            !this.props.published &&
+            this.props.canChangeCourseState && (
+              <PublishButton
+                courseNickname={this.state.nicknameInfo.nickname}
+                defaultView={this.props.defaultView}
+                pagesUrl={this.props.pagesUrl}
+                frontPageTitle={this.props.frontPageTitle}
+                courseId={this.props.id}
+              />
+            )}
           {this.renderHeaderButton()}
         </div>
         <nav

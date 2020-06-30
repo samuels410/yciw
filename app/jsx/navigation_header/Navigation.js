@@ -132,6 +132,12 @@ export default class Navigation extends React.Component {
       ({type, noFocus}) => {
         this.ensureLoaded(type)
         this.openTray(type, noFocus)
+
+        // If we're already open for the specified type
+        // send a message that we are open.
+        if (this.state.isTrayOpen && this.state.type === type) {
+          tourPubSub.publish('navigation-tray-opened', type)
+        }
       }
     )
     this.closePublishUnsubscribe = tourPubSub.subscribe('navigation-tray-close', () => {
@@ -290,7 +296,6 @@ export default class Navigation extends React.Component {
             loaded={this.state.profileAreLoaded}
             tabs={this.state.profile}
             counts={{unreadShares: this.state.unreadSharesCount}}
-            showQRLoginLink={window.ENV.FEATURES.show_qr_login}
           />
         )
       case 'help':
@@ -326,6 +331,7 @@ export default class Navigation extends React.Component {
 
   // Also have to attend to the unread dot on the mobile view inbox
   onInboxUnreadUpdate(unreadCount) {
+    if (this.state.unreadInboxCount !== unreadCount) this.setState({unreadInboxCount: unreadCount})
     const el = document.getElementById('mobileHeaderInboxUnreadBadge')
     if (el) el.style.display = unreadCount > 0 ? '' : 'none'
     if (typeof this.props.onDataReceived === 'function') this.props.onDataReceived()

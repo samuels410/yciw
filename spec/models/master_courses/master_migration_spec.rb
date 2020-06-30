@@ -33,6 +33,7 @@ describe MasterCourses::MasterMigration do
     it "should queue a migration" do
       expect_any_instance_of(MasterCourses::MasterMigration).to receive(:queue_export_job).once
       mig = MasterCourses::MasterMigration.start_new_migration!(@template, @user)
+      expect(mig.root_account).to eq @course.root_account
       expect(mig.id).to be_present
       expect(mig.master_template).to eq @template
       expect(mig.user).to eq @user
@@ -159,6 +160,7 @@ describe MasterCourses::MasterMigration do
 
       expect(@migration).to be_completed
       expect(@migration.imports_completed_at).to be_present
+      expect(@migration.migration_results.last.root_account_id).to eq @copy_from.root_account_id
 
       expect(@template.master_content_tags.polymorphic_where(:content => assmt).first.restrictions).to be_empty # never mind
 
@@ -286,6 +288,25 @@ describe MasterCourses::MasterMigration do
         expect(event_to.reload).to be_deleted
         expect(tool_to.reload).to be_deleted
       end
+    end
+
+    it "deletes associated pages before importing new ones" do
+      @copy_to = course_factory
+      @template.add_child_course!(@copy_to)
+
+      @page = @copy_from.wiki_pages.create!(:title => "wiki", :body => "ohai")
+      run_master_migration
+
+      @page_to = @copy_to.wiki_pages.where(:migration_id => mig_id(@page)).first
+      Timecop.freeze(1.minute.from_now) do
+        @page.destroy
+        @page2 = @copy_from.wiki_pages.create!(:title => "wiki", :body => "ohai") # same title
+      end
+
+      run_master_migration
+      expect(@page_to.reload).to be_deleted
+      @page2_to = @copy_to.wiki_pages.where(:migration_id => mig_id(@page2)).first
+      expect(@page2_to.title).to eq @page2.title
     end
 
     it "should sync deleted quiz questions (unless changed downstream)" do
@@ -481,6 +502,18 @@ describe MasterCourses::MasterMigration do
       expect(quiz_to.reload.quiz_questions.where(:migration_id => mig_id(@new_qq)).first).to_not be_nil
     end
 
+    it "should create submissions for assignments without due dates on initial sync" do
+      course_with_student(:active_all => true)
+      @copy_to = @course
+      sub = @template.add_child_course!(@copy_to)
+
+      assmt = @copy_from.assignments.create!(:title => "assmt")
+      run_master_migration
+
+      assmt_to = @copy_to.assignments.where(:migration_id => mig_id(assmt)).first
+      expect(assmt_to.submissions.where(:user_id => @student)).to be_exists
+    end
+
     it "shouldn't delete an assignment group if it's not empty downstream" do
       @copy_to = course_factory
       sub = @template.add_child_course!(@copy_to)
@@ -516,6 +549,39 @@ describe MasterCourses::MasterMigration do
       expect(ag3_to.reload).to_not be_deleted # should skip deletion because of @new_assmt
       expect(a3_to.reload).to be_deleted # but should have still deleted the assigment
       expect(@new_assmt.reload).to_not be_deleted
+    end
+
+    it "shouldn't change assignment group weights and rules if changed downstream" do
+      @copy_to = course_factory
+      sub = @template.add_child_course!(@copy_to)
+
+      ag1 = @copy_from.assignment_groups.create!(:name => "group1", :group_weight => 50)
+      a1 = @copy_from.assignments.create!(:title => "assmt1", :assignment_group => ag1)
+      ag1.update_attribute(:rules, "drop_lowest:1\nnever_drop:#{a1.id}\n")
+
+      run_master_migration
+
+      ag1_to = @copy_to.assignment_groups.where(:migration_id => mig_id(ag1)).first
+      a1_to = ag1_to.assignments.first
+      expect(ag1_to.group_weight).to eq 50
+      expect(ag1_to.rules).to eq "drop_lowest:1\nnever_drop:#{a1_to.id}\n"
+
+      # check that syncs still work before we change downstream
+      Timecop.freeze(30.seconds.from_now) do
+        ag1.update_attributes(:rules => "drop_lowest:2\n", :group_weight => 75)
+      end
+      run_master_migration
+      expect(ag1_to.reload.group_weight).to eq 75
+      expect(ag1_to.rules).to eq "drop_lowest:2\n"
+
+      # change downstream
+      Timecop.freeze(30.seconds.from_now) do
+        ag1.touch
+        ag1_to.update_attributes(:rules => "drop_lowest:3\n", :group_weight => 25)
+      end
+      run_master_migration
+      expect(ag1_to.reload.group_weight).to eq 25 # should not have reverted from downstream change
+      expect(ag1_to.rules).to eq "drop_lowest:3\n"
     end
 
     it "should sync unpublished quiz points possible" do
@@ -1272,8 +1338,6 @@ describe MasterCourses::MasterMigration do
 
     it "allows a minion course's change of the graded status of a discussion topic to stick" do
       @copy_to = course_factory
-      deleted_sub = MasterCourses::MasterTemplate.set_as_master_course(course_factory).add_child_course!(@copy_to)
-      deleted_sub.destroy
       sub = @template.add_child_course!(@copy_to)
 
       topic = @copy_from.discussion_topics.new
@@ -1300,6 +1364,31 @@ describe MasterCourses::MasterMigration do
 
       expect(topic_to.reload.assignment).to be_nil
       expect(assignment_to.reload).to be_deleted
+    end
+
+    it "allows a minion course's change of the graded status of a discussion topic to stick in the opposite direction too" do
+      # should be able to make it graded downstream
+      @copy_to = course_factory
+      sub = @template.add_child_course!(@copy_to)
+
+      topic = @copy_from.discussion_topics.create!
+      run_master_migration
+
+      topic_to = @copy_to.discussion_topics.where(:migration_id => mig_id(topic)).take
+      topic_to.assignment = @copy_to.assignments.build(:due_at => 1.month.from_now)
+      topic_to.save!
+
+      topic_tag = MasterCourses::ChildContentTag.where(content_type: 'DiscussionTopic', content_id: topic_to.id).take
+      expect(topic_tag.downstream_changes).to include 'assignment_id'
+
+      Timecop.travel(1.hour.from_now) do
+        topic.message = 'content updated'
+        topic.save!
+      end
+      run_master_migration
+
+      expect(topic_to.reload.assignment).to_not be_nil
+      expect(topic_to.assignment).to_not be_deleted
     end
 
     it "should ignore course settings on selective export unless requested" do
@@ -2103,6 +2192,28 @@ describe MasterCourses::MasterMigration do
 
       run_master_migration
       expect(mod2_to.reload.prerequisites).to be_empty
+    end
+
+    it "copies module requirements (and lack thereof)" do
+      @copy_to = course_factory
+      @template.add_child_course!(@copy_to)
+
+      mod1 = @copy_from.context_modules.create! :name => 'mod'
+      page = @copy_from.wiki_pages.create!(:title => "some page")
+      page_tag = mod1.add_item({:id => page.id, :type => 'wiki_page', :indent => 1})
+      mod1.update_attributes(:completion_requirements => [{:id => page_tag.id, :type => 'must_view'}])
+
+      run_master_migration
+
+      mod1_to = @copy_to.context_modules.where(:migration_id => mig_id(mod1)).first
+      page_tag_to = mod1_to.content_tags.first
+      expect(mod1_to.completion_requirements).to eq([{:id => page_tag_to.id, :type => 'must_view'}])
+
+      Timecop.freeze(1.minute.from_now) do
+        mod1.update_attributes(:completion_requirements => [])
+      end
+      run_master_migration
+      expect(mod1_to.reload.completion_requirements).to eq([])
     end
 
     it "should copy the lack of a module unlock date" do

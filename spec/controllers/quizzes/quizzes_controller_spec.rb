@@ -66,8 +66,6 @@ describe Quizzes::QuizzesController do
   end
 
   before :once do
-    PostPolicy.enable_feature!
-
     course_with_teacher(:active_all => true)
     student_in_course(:active_all => true)
     @student2 = @student
@@ -1675,6 +1673,7 @@ describe Quizzes::QuizzesController do
                 title: "overrides",
                 assignment_overrides: [{
                   course_section_id: @section.id,
+                  due_at: nil
                 }]
               },
               post_to_sis: '1'

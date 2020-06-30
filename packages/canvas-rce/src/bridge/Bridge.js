@@ -122,7 +122,7 @@ export default class Bridge {
     return false
   }
 
-  insertLink = (link, fromTray = true) => {
+  insertLink = (link, textOverride) => {
     if (this.focusedEditor) {
       const {selection} = this.focusedEditor.props.tinymce.get(this.focusedEditor.props.textareaId)
       link.selectionDetails = {
@@ -132,17 +132,15 @@ export default class Bridge {
       if (!link.text) {
         link.text = link.title || link.href
       }
-      this.focusedEditor.insertLink(link)
-      if (fromTray && this.controller) {
-        this.controller.hideTray()
-      }
+      this.focusedEditor.insertLink(link, textOverride)
+      this.controller?.hideTray()
     } else {
       console.warn('clicked sidebar link without a focused editor')
     }
   }
 
-  insertFileLink = (link, fromTray = true) => {
-    return this.insertLink(link, fromTray)
+  insertFileLink = link => {
+    return this.insertLink(link)
   }
 
   insertImage(image) {
@@ -158,7 +156,10 @@ export default class Bridge {
 
   insertImagePlaceholder(fileMetaProps) {
     if (this.focusedEditor) {
-      this.focusedEditor.insertImagePlaceholder(fileMetaProps)
+      // don't insert a placeholder if the user has selected content
+      if (!this.existingContentToLink()) {
+        this.focusedEditor.insertImagePlaceholder(fileMetaProps)
+      }
     } else {
       console.warn('clicked sidebar image without a focused editor')
     }
@@ -167,6 +168,15 @@ export default class Bridge {
   removePlaceholders(name) {
     if (this.focusedEditor) {
       this.focusedEditor.removePlaceholders(name)
+    }
+  }
+
+  showError(err) {
+    if (this.focusedEditor) {
+      this.focusedEditor.addAlert({
+        text: err.toString(),
+        type: 'error'
+      })
     }
   }
 

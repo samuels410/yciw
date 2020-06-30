@@ -17,8 +17,11 @@
 #
 
 require File.expand_path(File.dirname(__FILE__) + '/../../../../spec_helper')
+require File.expand_path(File.dirname(__FILE__) + '/../../../../lti_1_3_tool_configuration_spec_helper.rb')
 
 shared_context 'advantage services context' do
+  include_context 'lti_1_3_tool_configuration_spec_helper'
+
   let_once(:root_account) do
     Account.default
   end
@@ -39,8 +42,14 @@ shared_context 'advantage services context' do
        https://canvas.instructure.com/lti/data_services/scope/list
        https://canvas.instructure.com/lti/data_services/scope/destroy
        https://canvas.instructure.com/lti/data_services/scope/list_event_types
+       https://canvas.instructure.com/lti/account_lookup/scope/show
        https://canvas.instructure.com/lti/feature_flags/scope/show
-      ).join(' ')
+       https://canvas.instructure.com/lti/account_external_tools/scope/create
+       https://canvas.instructure.com/lti/account_external_tools/scope/update
+       https://canvas.instructure.com/lti/account_external_tools/scope/list
+       https://canvas.instructure.com/lti/account_external_tools/scope/show
+       https://canvas.instructure.com/lti/account_external_tools/scope/destroy
+    ).join(' ')
   end
   let(:access_token_signing_key) { Canvas::Security.encryption_key }
   let(:test_request_host) { 'test.host' }

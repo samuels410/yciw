@@ -34,27 +34,44 @@ export default class FileSelectBox extends React.Component {
     folders: []
   }
 
+  isDirty = true
+
   componentWillMount() {
-    // Get a decent url partial in order to create the store.
-    const contextUrl = splitAssetString(this.props.contextString).join('/')
+    this.refresh()
+  }
 
-    // Create the stores, and add change listeners to them.
-    this.fileStore = new FileStore(contextUrl, {perPage: 50, only: ['names']})
-    this.folderStore = new FolderStore(contextUrl, {perPage: 50})
-    this.fileStore.addChangeListener(() => {
-      this.setState({
-        files: this.fileStore.getState().items
-      })
-    })
-    this.folderStore.addChangeListener(() => {
-      this.setState({
-        folders: this.folderStore.getState().items
-      })
-    })
+  setDirty() {
+    this.isDirty = true
+  }
 
-    // Fetch the data.
-    this.fileStore.fetch({fetchAll: true})
-    this.folderStore.fetch({fetchAll: true})
+  refresh() {
+    if (this.isDirty) {
+      // Get a decent url partial in order to create the store.
+      const contextUrl = splitAssetString(this.props.contextString).join('/')
+
+      // Create the stores, and add change listeners to them.
+      this.fileStore = new FileStore(contextUrl, {perPage: 50, only: ['names']})
+      this.folderStore = new FolderStore(contextUrl, {perPage: 50})
+      this.fileStore.addChangeListener(() => {
+        this.setState({
+          files: this.fileStore.getState().items
+        })
+      })
+      this.folderStore.addChangeListener(() => {
+        this.setState({
+          folders: this.folderStore.getState().items
+        })
+      })
+
+      // Fetch the data.
+      this.fileStore.fetch({fetchAll: true})
+      this.folderStore.fetch({fetchAll: true})
+      this.isDirty = false
+    }
+  }
+
+  getFolderById = id => {
+    return this.state.folders.find(folder => folder.id.toString() === id)
   }
 
   // Let's us know if the stores are still loading data.
@@ -107,18 +124,21 @@ export default class FileSelectBox extends React.Component {
   }
 
   render() {
+    const moduleDnd = window?.ENV?.FEATURES?.module_dnd
+    const ariaLabel = moduleDnd
+      ? I18n.t('Select the files you want to associate, or add files by selecting "New File(s)".')
+      : I18n.t('Select the file you want to associate, or add a file by selecting "New File".')
+    const newFile = moduleDnd ? I18n.t('[ New File(s) ]') : I18n.t('[ New File ]')
     return (
       <div>
         <select
           ref="selectBox"
           aria-busy={this.isLoading()}
           className="module_item_select"
-          aria-label={I18n.t(
-            'Select the file you want to associate, or add a file by selecting "New File".'
-          )}
+          aria-label={ariaLabel}
           multiple
         >
-          <option value="new">{I18n.t('[ New File ]')}</option>
+          <option value="new">{newFile}</option>
           {this.renderFilesAndFolders()}
         </select>
       </div>

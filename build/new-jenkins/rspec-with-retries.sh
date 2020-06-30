@@ -8,7 +8,7 @@ export ERROR_CONTEXT_BASE_PATH="/usr/src/app/log/spec_failures/Initial"
 
 success_status=0
 webdriver_crash_status=98
-test_failure_status=99
+test_failure_status=1
 
 max_failures=${MAX_FAIL:=200} # TODO: need to get env variable setup, MAX number of failures before quit
 rerun_number=0
@@ -31,13 +31,13 @@ while true; do
 
   if [[ $reruns_started ]]; then
     if [ $1 ] && [ $1 = 'performance' ]; then
-      command="docker-compose exec -T web bundle exec rspec --options spec/spec.opts spec/selenium/performance/ --only-failures --failure-exit-code 99";
+      command="docker-compose --project-name canvas-lms0 exec -T canvas bundle exec rspec --options spec/spec.opts spec/selenium/performance/ --only-failures --failure-exit-code 99";
     else
       command="build/new-jenkins/rspec-tests.sh only-failures";
     fi
   else
     if [ $1 ] && [ $1 = 'performance' ]; then
-      command="docker-compose exec -T web bundle exec rspec --options spec/spec.opts spec/selenium/performance/ --failure-exit-code 99"
+      command="docker-compose --project-name canvas-lms0 exec -T canvas bundle exec rspec --options spec/spec.opts spec/selenium/performance/ --failure-exit-code 99"
     else
       command="build/new-jenkins/rspec-tests.sh"
     fi

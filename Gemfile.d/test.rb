@@ -48,7 +48,6 @@ group :test do
   gem 'selenium-webdriver', '3.142.7'
     gem 'childprocess', '3.0.0', require: false
   gem 'webdrivers', '4.2.0', require: false
-  gem 'selinimum', '0.0.1', require: false, path: 'gems/selinimum'
   gem 'test-queue', github: 'instructure/test-queue', ref: 'd35166408df3a5396cd809e85dcba175136a69ba', require: false
   gem 'testrailtagging', '0.3.8.7', require: false
 
@@ -65,6 +64,8 @@ group :test do
   gem 'pact_broker-client', '1.25.0'
   gem 'database_cleaner', '~> 1.5', '>= 1.5.3'
 
-  gem 'knapsack', '1.18.0'
+  gem 'parallel_tests'
   gem 'flakey_spec_catcher', require: false
+
+  gem 'factory_bot', '5.2.0', require: false
 end

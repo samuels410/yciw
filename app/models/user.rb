@@ -100,9 +100,11 @@ class User < ActiveRecord::Base
   has_many :current_groups, :through => :current_group_memberships, :source => :group
   has_many :user_account_associations
   has_many :associated_accounts, -> { order("user_account_associations.depth") }, source: :account, through: :user_account_associations
-  has_many :associated_root_accounts, -> { order("user_account_associations.depth").where(accounts: { parent_account_id: nil }) }, source: :account, through: :user_account_associations
+  has_many :associated_root_accounts, -> { order("user_account_associations.depth").
+    where(accounts: { parent_account_id: nil }) }, source: :account, through: :user_account_associations
   has_many :developer_keys
-  has_many :access_tokens, -> { where(:workflow_state => "active").preload(:developer_key) }
+  has_many :access_tokens, -> { where(:workflow_state => "active").preload(:developer_key) }, inverse_of: :user
+  has_many :masquerade_tokens, -> { where(:workflow_state => "active").preload(:developer_key) }, class_name: 'AccessToken', inverse_of: :real_user
   has_many :notification_endpoints, :through => :access_tokens
   has_many :context_external_tools, -> { order(:name) }, as: :context, inverse_of: :context, dependent: :destroy
   has_many :lti_results, inverse_of: :user, class_name: 'Lti::Result', dependent: :destroy
@@ -176,16 +178,39 @@ class User < ActiveRecord::Base
   has_many :past_lti_ids, class_name: 'UserPastLtiId', inverse_of: :user
   has_many :user_preference_values, inverse_of: :user
 
+  has_many :auditor_authentication_records,
+    class_name: "Auditors::ActiveRecord::AuthenticationRecord",
+    dependent: :destroy,
+    inverse_of: :user
+  has_many :auditor_course_records,
+    class_name: "Auditors::ActiveRecord::CourseRecord",
+    dependent: :destroy,
+    inverse_of: :user
+  has_many :auditor_student_grade_change_records,
+    foreign_key: 'student_id',
+    class_name: "Auditors::ActiveRecord::GradeChangeRecord",
+    dependent: :destroy,
+    inverse_of: :student
+  has_many :auditor_grader_grade_change_records,
+    foreign_key: 'grader_id',
+    class_name: "Auditors::ActiveRecord::GradeChangeRecord",
+    dependent: :destroy,
+    inverse_of: :grader
+
   belongs_to :otp_communication_channel, :class_name => 'CommunicationChannel'
 
   include StickySisFields
-  are_sis_sticky :name, :sortable_name, :short_name
+  are_sis_sticky :name, :sortable_name, :short_name, :pronouns
 
   include FeatureFlags
 
   def conversations
     # i.e. exclude any where the user has deleted all the messages
     all_conversations.visible.order("last_message_at DESC, conversation_id DESC")
+  end
+
+  def starred_conversations
+    all_conversations.order("updated_at DESC, conversation_id DESC").starred
   end
 
   def page_views(options={})
@@ -308,14 +333,27 @@ class User < ActiveRecord::Base
   end
 
   scope :with_last_login, lambda {
-    select("users.*, MAX(current_login_at) as last_login").
+    select_clause = "MAX(current_login_at) as last_login"
+    select_clause = "users.*, #{select_clause}" if select_values.blank?
+    select(select_clause).
       joins("LEFT OUTER JOIN #{Pseudonym.quoted_table_name} ON pseudonyms.user_id = users.id").
       group("users.id")
   }
 
+  attr_accessor :last_login
+  def self.preload_last_login(users, account_id)
+    maxes = Pseudonym.active.where(user_id: users).group(:user_id).where(account_id: account_id).
+      maximum(:current_login_at)
+    users.each do |u|
+      u.last_login = maxes[u.id]
+    end
+  end
+
   scope :for_course_with_last_login, lambda { |course, root_account_id, enrollment_type|
     # add a field to each user that is the aggregated max from current_login_at and last_login_at from their pseudonyms
-    scope = select("users.*, MAX(current_login_at) as last_login").
+    select_clause = "MAX(current_login_at) as last_login"
+    select_clause = "users.*, #{select_clause}" if select_values.blank?
+    scope = select(select_clause).
       # left outer join ensures we get the user even if they don't have a pseudonym
       joins(sanitize_sql([<<-SQL, root_account_id])).where(:enrollments => { :course_id => course })
         LEFT OUTER JOIN #{Pseudonym.quoted_table_name} ON pseudonyms.user_id = users.id AND pseudonyms.account_id = ?
@@ -1479,10 +1517,11 @@ class User < ActiveRecord::Base
   end
 
   def dashboard_positions
-    get_preference(:dashboard_positions) || {}
+    @dashboard_positions ||= get_preference(:dashboard_positions) || {}
   end
 
   def set_dashboard_positions(new_positions)
+    @dashboard_positions = nil
     set_preference(:dashboard_positions, new_positions)
   end
 
@@ -1645,35 +1684,37 @@ class User < ActiveRecord::Base
   # made a tree, it would be the chain between the root and the first branching
   # point.
   def common_account_chain(in_root_account)
-    rid = in_root_account.id
-    accts = self.associated_accounts.where("accounts.id = ? OR accounts.root_account_id = ?", rid, rid)
-    return [] if accts.blank?
-    children = accts.inject({}) do |hash,acct|
-      pid = acct.parent_account_id
-      if pid.present?
-        hash[pid] ||= []
-        hash[pid] << acct
+    Shackles.activate(:slave) do
+      rid = in_root_account.id
+      accts = self.associated_accounts.where("accounts.id = ? OR accounts.root_account_id = ?", rid, rid)
+      return [] if accts.blank?
+      children = accts.inject({}) do |hash,acct|
+        pid = acct.parent_account_id
+        if pid.present?
+          hash[pid] ||= []
+          hash[pid] << acct
+        end
+        hash
       end
-      hash
+
+      enrollment_account_ids = in_root_account.
+        all_enrollments.
+        current_and_concluded.
+        where(user_id: self).
+        joins(:course).
+        distinct.
+        pluck(:account_id)
+
+      longest_chain = [in_root_account]
+      while true
+        break if enrollment_account_ids.include?(longest_chain.last.id)
+
+        next_children = children[longest_chain.last.id]
+        break unless next_children.present? && next_children.count == 1
+        longest_chain << next_children.first
+      end
+      longest_chain
     end
-
-    enrollment_account_ids = in_root_account.
-      all_enrollments.
-      current_and_concluded.
-      where(user_id: self).
-      joins(:course).
-      distinct.
-      pluck(:account_id)
-
-    longest_chain = [in_root_account]
-    while true
-      break if enrollment_account_ids.include?(longest_chain.last.id)
-
-      next_children = children[longest_chain.last.id]
-      break unless next_children.present? && next_children.count == 1
-      longest_chain << next_children.first
-    end
-    longest_chain
   end
 
   def courses_with_primary_enrollment(association = :current_and_invited_courses, enrollment_uuid = nil, options = {})
@@ -1741,6 +1782,10 @@ class User < ActiveRecord::Base
         end
       end
 
+      Shard.partition_by_shard(res, ->(c){ c.shard }) do |shard_courses|
+        roles = Role.where(:id => shard_courses.map(&:primary_enrollment_role_id).uniq).to_a.index_by(&:id)
+        shard_courses.each{|c| c.primary_enrollment_role = roles[c.primary_enrollment_role_id]}
+      end
       @courses_with_primary_enrollment[cache_key] =
         res.sort_by{ |c| [c.primary_enrollment_rank, Canvas::ICU.collation_key(c.name)] }
     end
@@ -1923,22 +1968,24 @@ class User < ActiveRecord::Base
     end
   end
 
-  def submissions_for_context_codes(context_codes, start_at: nil, limit: 20)
-    return [] unless context_codes.present?
+  def submissions_for_course_ids(course_ids, start_at: nil, limit: 20)
+    return [] unless course_ids.present?
 
     shard.activate do
-      Rails.cache.fetch([self, 'submissions_for_context_codes', context_codes, start_at, limit].cache_key, expires_in: 15.minutes) do
+      ids_hash = Digest::MD5.hexdigest(course_ids.sort.join(","))
+      Rails.cache.fetch_with_batched_keys(['submissions_for_course_ids', ids_hash, start_at, limit].cache_key, expires_in: 1.day, batch_object: self, batched_keys: :submissions) do
         start_at ||= 4.weeks.ago
 
         Shackles.activate(:slave) do
           submissions = []
           submissions += self.submissions.posted.where("GREATEST(submissions.submitted_at, submissions.created_at) > ?", start_at).
-            for_context_codes(context_codes).eager_load(:assignment).
+            where(:course_id => course_ids).eager_load(:assignment).
             where("submissions.score IS NOT NULL AND assignments.workflow_state=?", 'published').
             order('submissions.created_at DESC').
             limit(limit).to_a
 
-          submissions += Submission.active.posted.where(user_id: self).for_context_codes(context_codes).
+          submissions += Submission.active.posted.where(user_id: self).
+            where(:course_id => course_ids).
             joins(:assignment).
             where(assignments: {workflow_state: 'published'}).
             where('last_comment_at > ?', start_at).
@@ -1957,16 +2004,16 @@ class User < ActiveRecord::Base
 
   # This is only feedback for student contexts (unless specific contexts are passed in)
   def recent_feedback(
-    context_codes: nil,
+    course_ids: nil,
     contexts: nil,
-    **opts # forwarded to submissions_for_context_codes
+    **opts # forwarded to submissions_for_course_ids
   )
-    context_codes ||= if contexts
-        setup_context_lookups(contexts)
+    course_ids ||= if contexts
+        contexts.select{|c| c.is_a?(Course)}.map(&:id)
       else
-        self.participating_student_course_ids.map { |id| "course_#{id}" }
+        self.participating_student_course_ids
       end
-    submissions_for_context_codes(context_codes, **opts)
+    submissions_for_course_ids(course_ids, **opts)
   end
 
   def visible_stream_item_instances(opts={})
@@ -2875,6 +2922,15 @@ class User < ActiveRecord::Base
     end
   end
 
+  def submittable_attachments
+    self.attachments.active.or(
+      Attachment.active.where(
+        context_type: 'Group',
+        context_id: self.current_group_memberships.active.select(:group_id)
+      )
+    )
+  end
+
   def authenticate_one_time_password(code)
     result = one_time_passwords.where(code: code, used: false).take
     return unless result
@@ -2892,11 +2948,15 @@ class User < ActiveRecord::Base
 
   def user_roles(root_account, exclude_deleted_accounts = nil)
     roles = ['user']
-    enrollment_types = root_account.all_enrollments.where(user_id: self, workflow_state: 'active').distinct.pluck(:type)
+    enrollment_types = Shackles.activate(:slave) do
+      root_account.all_enrollments.where(user_id: self, workflow_state: 'active').distinct.pluck(:type)
+    end
     roles << 'student' unless (enrollment_types & %w[StudentEnrollment StudentViewEnrollment]).empty?
     roles << 'teacher' unless (enrollment_types & %w[TeacherEnrollment TaEnrollment DesignerEnrollment]).empty?
     roles << 'observer' unless (enrollment_types & %w[ObserverEnrollment]).empty?
-    account_users = root_account.cached_all_account_users_for(self)
+    account_users = Shackles.activate(:slave) do
+      root_account.cached_all_account_users_for(self)
+    end
 
     if exclude_deleted_accounts
       account_users = account_users.select { |a| a.account.workflow_state == 'active' }
@@ -2933,7 +2993,7 @@ class User < ActiveRecord::Base
     code = nil
     loop do
       code = SecureRandom.base64().gsub(/\W/, '')[0..5]
-      break if ObserverPairingCode.active.where(code: code).count == 0
+      break unless ObserverPairingCode.active.where(code: code).exists?
     end
     observer_pairing_codes.create(expires_at: 7.days.from_now, code: code)
   end

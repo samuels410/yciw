@@ -573,10 +573,6 @@ describe RubricAssessment do
       end
 
       describe "submission posting" do
-        before(:once) do
-          PostPolicy.enable_feature!
-        end
-
         let(:assessment_params) do
           {
             user: @student,
@@ -663,6 +659,26 @@ describe RubricAssessment do
       RoleOverride.create!(:context => @account, :permission => 'manage_courses', :role => role, :enabled => false)
       @account.account_users.create!(user: @user, role: role)
       expect(@assessment.grants_right?(@user, :read)).to eq true
+    end
+  end
+
+  describe 'create' do
+    it 'sets the root_account_id using rubric' do
+      assessment = @association.assess({
+        :user => @student,
+        :assessor => @teacher,
+        :artifact => @assignment.find_or_create_submission(@student),
+        :assessment => {
+          :assessment_type => 'grading',
+          :criterion_crit1 => {
+            :points => 5,
+            :comments => 'abcdefg',
+          }
+        }
+      })
+
+      expect(assessment.root_account_id).to_not be_nil
+      expect(assessment.root_account_id).to eq @rubric.root_account_id
     end
   end
 end

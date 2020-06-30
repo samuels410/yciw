@@ -110,6 +110,8 @@ class Auditors::Course
   end
 
   Stream = Auditors.stream do
+    backend_strategy -> { Auditors.backend_strategy }
+    active_record_type Auditors::ActiveRecord::CourseRecord
     database -> { Canvas::Cassandra::DatabaseBuilder.from_config(:auditors) }
     table :courses
     record_type Auditors::Course::Record
@@ -119,12 +121,14 @@ class Auditors::Course
       table :courses_by_course
       entry_proc lambda{ |record| record.course }
       key_proc lambda{ |course| course.global_id }
+      ar_conditions_proc lambda { |course| { course_id: course.id } }
     end
 
     add_index :account do
       table :courses_by_account
       entry_proc lambda{ |record| record.account }
       key_proc lambda{ |account| account.global_id }
+      ar_conditions_proc lambda { |account| { account_id: account.id } }
     end
   end
 
@@ -198,21 +202,24 @@ class Auditors::Course
         data[k] = change.map{|v| v.is_a?(String) ? CanvasTextHelper.truncate_text(v, :max_length => 1000) : v}
       end
     end
+    event_record = nil
     course.shard.activate do
-      record = Auditors::Course::Record.generate(course, user, event_type, data, opts)
-      Auditors::Course::Stream.insert(record)
+      event_record = Auditors::Course::Record.generate(course, user, event_type, data, opts)
+      Auditors::Course::Stream.insert(event_record, {backend_strategy: :cassandra}) if Auditors.write_to_cassandra?
+      Auditors::Course::Stream.insert(event_record, {backend_strategy: :active_record}) if Auditors.write_to_postgres?
     end
+    event_record
   end
 
   def self.for_course(course, options={})
     course.shard.activate do
-      Auditors::Course::Stream.for_course(course, options)
+      Auditors::Course::Stream.for_course(course, Auditors.read_stream_options(options))
     end
   end
 
   def self.for_account(account, options={})
     account.shard.activate do
-      Auditors::Course::Stream.for_account(account, options)
+      Auditors::Course::Stream.for_account(account, Auditors.read_stream_options(options))
     end
   end
 end

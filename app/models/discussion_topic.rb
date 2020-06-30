@@ -89,6 +89,7 @@ class DiscussionTopic < ActiveRecord::Base
   acts_as_list scope: { context: self, pinned: true }
 
   before_create :initialize_last_reply_at
+  before_create :set_root_account_id
   before_save :default_values
   before_save :set_schedule_delayed_transitions
   after_save :update_assignment
@@ -927,8 +928,12 @@ class DiscussionTopic < ActiveRecord::Base
 
   def clear_non_applicable_stream_items_for_sections
     # either changed sections or made section specificness
-    return unless self.is_section_specific? ? @sections_changed : !self.is_section_specific_before_last_save
+    return unless self.is_section_specific? ? @sections_changed : self.is_section_specific_before_last_save
 
+    send_later_if_production(:clear_stream_items_for_sections)
+  end
+
+  def clear_stream_items_for_sections
     remaining_participants = participants
     user_ids = []
     stream_item&.stream_item_instances&.find_each do |item|
@@ -942,12 +947,16 @@ class DiscussionTopic < ActiveRecord::Base
   end
 
   def clear_non_applicable_stream_items_for_delayed_posts
-    user_ids = []
     if self.is_announcement && self.delayed_post_at? && @delayed_post_at_changed && self.delayed_post_at > Time.now
-      stream_item&.stream_item_instances&.find_each do |item|
-        user_ids.push(item.user_id)
-        item.destroy
-      end
+      send_later_if_production(:clear_stream_items_for_delayed_posts)
+    end
+  end
+
+  def clear_stream_items_for_delayed_posts
+    user_ids = []
+    stream_item&.stream_item_instances&.find_each do |item|
+      user_ids.push(item.user_id)
+      item.destroy
     end
     self.clear_stream_item_cache_for(user_ids)
   end
@@ -1116,7 +1125,7 @@ class DiscussionTopic < ActiveRecord::Base
 
     given do |user, session|
       self.allow_rating && (!self.only_graders_can_rate ||
-                            self.context.grants_right?(user, session, :manage_grades))
+                            self.course.grants_right?(user, session, :manage_grades))
     end
     can :rate
   end
@@ -1589,5 +1598,9 @@ class DiscussionTopic < ActiveRecord::Base
     else
       GradingStandard.default_instance
     end
+  end
+
+  def set_root_account_id
+    self.root_account_id ||= self.context&.root_account_id
   end
 end

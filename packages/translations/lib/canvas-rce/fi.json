@@ -3,6 +3,7 @@
     "message": "Helppokäyttöisyyden tarkistus"
   },
   "add_8523c19b": { "message": "Lisää" },
+  "add_another_f4e50d57": { "message": "Lisää toinen" },
   "add_cc_subtitles_55f0394e": { "message": "Lisää CC/alaotsikko" },
   "align_11050992": { "message": "Tasaa" },
   "align_center_ca078feb": { "message": "Tasaa keskelle" },
@@ -14,6 +15,12 @@
   "alt_text_611fb322": { "message": "Alt Text" },
   "an_error_occurred_generating_the_file_preview_cf259955": {
     "message": "Tiedoston esikatselun luonnissa ilmeni virhe"
+  },
+  "an_error_occurred_making_a_network_request_d1bda348": {
+    "message": "Ilmeni virhe tehtäessä verkkopyyntöä"
+  },
+  "an_error_occurred_uploading_your_media_71f1444d": {
+    "message": "Ilmeni virhe mediaasi ladatessa."
   },
   "announcement_list_da155734": { "message": "Ilmoitusluettelo" },
   "announcements_a4b8ed4a": { "message": "Ilmoitukset" },
@@ -34,6 +41,7 @@
   "automatically_open_an_in_line_preview_preview_disp_ed784ffe": {
     "message": "Avaa automaattisesti tekstiin sidottu esikatselu. (Esikatselu näkyy vain tallentamisen jälkeen)"
   },
+  "available_folders_694d0436": { "message": "Saatavissa olevat kansiot" },
   "cancel_caeb1e68": { "message": "Peruuta" },
   "canvas_plugins_705a5016": { "message": "Canvas-lisäosat" },
   "choose_caption_file_9c45bc4e": { "message": "Muokkaa tekstitystiedostoa" },
@@ -81,6 +89,7 @@
   },
   "course_documents_104d76e0": { "message": "Kurssiasiakirjat" },
   "course_files_62deb8f8": { "message": "Kurssitiedostot" },
+  "course_files_a31f97fc": { "message": "Kurssitiedostot" },
   "course_images_f8511d04": { "message": "Kurssin kuvat" },
   "course_links_b56959b9": { "message": "Kurssin linkit" },
   "course_media_ec759ad": { "message": "Kurssimedia" },
@@ -97,6 +106,7 @@
   },
   "describe_the_image_e65d2e32": { "message": "(Kuvaa kuva)" },
   "describe_the_video_2fe8f46a": { "message": "(Kuvaa video)" },
+  "details_98a31b68": { "message": "Lisätiedot" },
   "dimensions_45ddb7b7": { "message": "Mitat" },
   "directionality_ebcae6d0": { "message": "suuntaisuus" },
   "disable_in_line_preview_2a675175": {
@@ -135,6 +145,7 @@
   "embed_preview_2d741e1f": { "message": "Upota esikatselu" },
   "embed_video_a97a64af": { "message": "Upota video" },
   "embed_video_code_703e10f2": { "message": "Upota videokoodi" },
+  "embedded_content_aaeb4d3d": { "message": "upotettu sisältö" },
   "equation_1c5ac93c": { "message": "Yhtälö" },
   "error_uploading_video_audio_recording_16d9730a": {
     "message": "Virhe video-/ääninauhoituksen lataamisessa"
@@ -145,6 +156,8 @@
   "external_links_3d9f074e": { "message": "Ulkoiset linkit" },
   "extra_large_b6cdf1ff": { "message": "Erittäin suuri" },
   "file_name_8fd421ff": { "message": "Tiedoston nimi" },
+  "file_upload_failed_af22dd91": { "message": "Tiedoston lataus epäonnistui" },
+  "file_uploading_56c9c0c8": { "message": "Tiedostoa ladataan" },
   "file_url_c12b64be": { "message": "Tiedoston URL" },
   "filename_file_icon_602eb5de": { "message": "{ filename } tiedostokuvake" },
   "filename_image_preview_6cef8f26": {
@@ -159,6 +172,7 @@
   "focus_the_popup_context_toolbar_7979f4f8": {
     "message": "Kohdista ponnahdussisällön työkalupalkki"
   },
+  "folder_tree_fbab0726": { "message": "Kansiopuu" },
   "formatting_5b143aa8": { "message": "Muotoillaan" },
   "found_auto_saved_content_3f6e4ca5": {
     "message": "Löytyi automaattisesti tallennettua sisältöä"
@@ -175,6 +189,7 @@
   },
   "grades_a61eba0a": { "message": "Arvosanat" },
   "group_files_4324f3df": { "message": "Ryhmän tiedostot" },
+  "group_files_82e5dcdb": { "message": "Ryhmän tiedostot" },
   "group_navigation_99f191a": { "message": "Ryhmän navigointi" },
   "heading_2_5b84eed2": { "message": "Otsikko 2" },
   "heading_3_2c83de44": { "message": "Otsikko 3" },
@@ -209,7 +224,9 @@
   "loading_bde52856": { "message": "Ladataan" },
   "loading_failed_b3524381": { "message": "Lataus epäonnistui..." },
   "loading_failed_e6a9d8ef": { "message": "Lataus epäonnistui." },
+  "loading_folders_d8b5869e": { "message": "Ladataan kansioita" },
   "loading_media_f3455841": { "message": "Ladataan tietovälinettä" },
+  "locked_762f138b": { "message": "Lukittu" },
   "media_af190855": { "message": "Tietoväline" },
   "medium_5a8e9ead": { "message": "Tietoväline" },
   "mic_a7f3d311": { "message": "Mikrofoni" },
@@ -218,6 +235,7 @@
   "must_be_at_least_width_x_height_px_41dc825e": {
     "message": "Täytyy olla vähintään { width } x { height }px."
   },
+  "my_files_2f621040": { "message": "Omat tiedostot" },
   "navigate_through_the_menu_or_toolbar_415a4e50": {
     "message": "Siirry valikon tai työkalupalkin läpi"
   },
@@ -226,6 +244,7 @@
     "message": "Ei Alt Text (Koristekuva)"
   },
   "no_e16d9132": { "message": "Ei" },
+  "no_file_chosen_9a880793": { "message": "Ei valittua tiedostoa" },
   "no_results_940393cf": { "message": "Ei tuloksia." },
   "no_results_found_for_filterterm_ad1b04c8": {
     "message": "Tuloksia ei löytynyt kohteelle { filterTerm }"
@@ -260,6 +279,9 @@
   "published_c944a23d": { "message": "julkaistu" },
   "published_when_302d8e23": { "message": "Julkaistu: { when }" },
   "quizzes_7e598f57": { "message": "Tietovisat" },
+  "reading_a_media_track_file_failed_aborting_be051b20": {
+    "message": "Mediaraidan luku epäonnistui. Keskeytetään."
+  },
   "record_7c9448b": { "message": "Nauhoita" },
   "record_upload_media_5fdce166": { "message": "Nauhoita/lataa mediaa" },
   "recording_98da6bda": { "message": "Nauhoitetaan" },
@@ -288,6 +310,10 @@
   "something_went_wrong_and_i_don_t_know_what_to_show_e0c54ec8": {
     "message": "Jotakin meni pieleen enkä tiedä, mitä näyttää sinulle,"
   },
+  "something_went_wrong_check_your_connection_and_try_2a7b2d13": {
+    "message": "Jotakin meni pieleen, tarkista yhteytesi ja yritä uudelleen."
+  },
+  "something_went_wrong_d238c551": { "message": "Jotakin meni pieleen." },
   "something_went_wrong_try_again_after_refreshing_th_e094eb8d": {
     "message": "Jotakin meni pieleen, yritä uudelleen sivun päivittämisen jälkeen"
   },
@@ -303,7 +329,13 @@
   "styles_2aa721ef": { "message": "Tyylit" },
   "submit_a3cc6859": { "message": "Lähetä" },
   "subscript_59744f96": { "message": "Alaindeksi" },
+  "success_file_uploaded_8174e93f": {
+    "message": "Onnistuminen: Tiedoston ladattu"
+  },
   "superscript_8cb349a2": { "message": "Yläindeksi" },
+  "supported_file_types_srt_or_webvtt_7d827ed": {
+    "message": "Tuetut tiedostotyypit: SRT tai WebVTT"
+  },
   "switch_to_raw_html_editor_4c9ac7de": {
     "message": "Vaihda html-raakaeditoriin"
   },
@@ -335,10 +367,12 @@
   "unpublished_dfd8801": { "message": "julkaisematon" },
   "untitled_16aa4f2b": { "message": "Nimetön" },
   "upload_document_253f0478": { "message": "Lataa asiakirja" },
-  "upload_error_f9c00e27": { "message": "Latausvirhe" },
   "upload_file_fd2361b8": { "message": "Lataa tiedosto" },
   "upload_image_6120b609": { "message": "Lisää kuva" },
   "upload_media_ce31135a": { "message": "Lataa mediaa" },
+  "upload_not_available_for_this_folder_8f8623c6": {
+    "message": "Lataus ei ole saatavissa tälle kansiolle"
+  },
   "upload_record_media_e4207d72": { "message": "Lataa/Tallennusväline" },
   "uppercase_alphabetic_ordered_list_3f5aa6b2": {
     "message": "aakkosellinen järjestetty isojen kirjainten lista"

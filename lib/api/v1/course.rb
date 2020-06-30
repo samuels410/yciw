@@ -38,12 +38,14 @@ module Api::V1::Course
     settings[:allow_student_organized_groups] = course.allow_student_organized_groups?
     settings[:hide_final_grades] = course.hide_final_grades?
     settings[:hide_distribution_graphs] = course.hide_distribution_graphs?
+    settings[:hide_sections_on_course_users_page] = course.hide_sections_on_course_users_page?
     settings[:lock_all_announcements] = course.lock_all_announcements?
     settings[:usage_rights_required] = course.usage_rights_required?
     settings[:restrict_student_past_view] = course.restrict_student_past_view?
     settings[:restrict_student_future_view] = course.restrict_student_future_view?
     settings[:show_announcements_on_home_page] = course.show_announcements_on_home_page?
     settings[:home_page_announcement_limit] = course.home_page_announcement_limit
+    settings[:syllabus_course_summary] = course.syllabus_course_summary?
     settings[:image_url] = course.image_url
     settings[:image_id] = course.image_id
     settings[:image] = course.image
@@ -158,7 +160,7 @@ module Api::V1::Course
   end
 
   def apply_nickname(hash, course, user)
-    nickname = user.course_nickname(course)
+    nickname = course.preloaded_nickname? ? course.preloaded_nickname : user.course_nickname(course)
     if nickname
       hash['original_name'] = hash['name']
       hash['name'] = nickname
@@ -183,7 +185,7 @@ module Api::V1::Course
   def preload_teachers(courses)
     threshold = params[:teacher_limit].presence&.to_i
     if threshold
-      scope = TeacherEnrollment.active_or_pending.where(:course_id => courses).distinct.select(:user_id, :course_id)
+      scope = TeacherEnrollment.where.not(:workflow_state => %w{deleted rejected}).where(:course_id => courses).distinct.select(:user_id, :course_id)
       teacher_counts = Enrollment.from("(#{scope.to_sql}) AS t").group("t.course_id").count
       to_preload = []
       courses.each do |course|

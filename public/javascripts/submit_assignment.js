@@ -23,6 +23,7 @@ import GoogleDocsTreeView from 'compiled/views/GoogleDocsTreeView'
 import homework_submission_tool from 'jst/assignments/homework_submission_tool'
 import HomeworkSubmissionLtiContainer from 'compiled/external_tools/HomeworkSubmissionLtiContainer'
 import RCEKeyboardShortcuts from 'compiled/views/editor/KeyboardShortcuts' /* TinyMCE Keyboard Shortcuts for a11y */
+import iframeAllowances from 'jsx/external_apps/lib/iframeAllowances'
 import RichContentEditor from 'jsx/shared/rce/RichContentEditor'
 import {uploadFile} from 'jsx/shared/upload_file'
 import {
@@ -66,6 +67,7 @@ var SubmitAssignment = {
         $('<iframe/>', {
           frameborder: 0,
           src: url,
+          allow: iframeAllowances(),
           id: 'homework_selection_iframe',
           tabindex: '0'
         }).css({width, height})
@@ -278,9 +280,12 @@ $(document).ready(function() {
         url: $(this).attr('action'),
         success(data) {
           submitting = true
-          window.location = window.location.href
-            .replace(/\#$/g, '')
-            .replace(window.location.hash, '')
+          const url = new URL(window.location.href)
+          url.hash = ''
+          if (window.ENV.CONFETTI_ENABLED && !data?.submission?.late) {
+            url.searchParams.set('confetti', 'true')
+          }
+          window.location = url.toString()
         },
         error(data) {
           submissionForm

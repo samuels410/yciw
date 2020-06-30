@@ -20,8 +20,6 @@ require_relative '../spec_helper'
 
 RSpec.describe SubmissionComment do
   before(:once) do
-    PostPolicy.enable_feature!
-
     course_with_teacher(active_all: true)
     course_with_observer(active_all: true)
     student_in_course(active_all: true)
@@ -38,6 +36,17 @@ RSpec.describe SubmissionComment do
 
   it "creates a new instance given valid attributes" do
     expect(@submission.submission_comments.create!(valid_attributes)).to be_persisted
+  end
+
+  describe '#set_root_account_id' do
+    subject { submission_comment.root_account }
+
+    let(:submission) { @submission }
+    let(:submission_comment) { submission.submission_comments.create!(valid_attributes) }
+
+    context 'as a before_save callback' do
+      it { is_expected.to eq submission.context.root_account }
+    end
   end
 
   describe '#body' do
@@ -745,6 +754,13 @@ This text has a http://www.google.com link in it...
       expect(ContentParticipation).to receive(:create_or_update).
         with({content: @submission, user: @submission.user, workflow_state: "unread"})
       @comment = @submission.add_comment(author: @teacher, comment: "some comment")
+    end
+  end
+
+  describe "workflow_state" do
+    it "is set to active by default" do
+      comment = @submission.add_comment(author: @teacher, comment: ":|")
+      expect(comment).to be_active
     end
   end
 end

@@ -34,6 +34,14 @@ class NotificationMessageCreator
       @to_channels = communication_channels_from_to_list(options[:to_list])
     end
     @message_data = options.delete(:data)
+    course_id = @message_data&.dig(:course_id)
+    root_account_id = @message_data&.dig(:root_account_id)
+    if course_id && root_account_id
+      @account = Account.new(id: root_account_id)
+      @course = Course.new(id: course_id)
+      @mute_notifications_by_course_enabled = @account.feature_enabled?(:mute_notifications_by_course)
+      @override_preferences_enabled = @account.feature_enabled?(:notification_granular_course_preferences)
+    end
   end
 
   # Public: create (and dispatch, and queue delayed) a message
@@ -47,7 +55,7 @@ class NotificationMessageCreator
   def create_message
     to_user_channels = Hash.new([])
     @to_users.each do |user|
-      to_user_channels[user] += [user.email_channel]
+      to_user_channels[user] += user.communication_channels.select(&:active?)
     end
     @to_channels.each do |channel|
       to_user_channels[channel.user] += [channel]
@@ -75,16 +83,10 @@ class NotificationMessageCreator
       I18n.with_locale(user_locale) do
         channels.each do |default_channel|
           if @notification.registration?
-            registration_channels = if default_channel then
-                                      [default_channel]
-                                    else
-                                      immediate_channels_for(user)
-                                    end
-            immediate_messages += build_immediate_messages_for(user, registration_channels)
-          else
-            if @notification.summarizable?
-              delayed_messages += build_summaries_for(user, default_channel)
-            end
+            immediate_messages += build_immediate_messages_for(user, [default_channel])
+          elsif @notification.summarizable?
+            policy = delayed_policy_for(user, default_channel)
+            delayed_messages << build_summary_for(user, policy) if policy
           end
         end
 
@@ -123,16 +125,10 @@ class NotificationMessageCreator
   # root_account_id on the message, or look up policy overrides in the future.
   # A user can disable notifications for a course with a notification policy
   # override.
-  def notifications_enabled_for_course?(user)
+  def notifications_enabled_for_context?(user, context)
     return true unless @notification.summarizable?
-    course_id = @message_data&.dig(:course_id)
-    root_account_id = @message_data&.dig(:root_account_id)
-    if course_id && root_account_id
-      a = Account.new(id: root_account_id)
-      course = Course.new(id: course_id)
-      if a.feature_enabled?(:mute_notifications_by_course)
-        return NotificationPolicyOverride.enabled_for(user, course)
-      end
+    if @mute_notifications_by_course_enabled
+      return NotificationPolicyOverride.enabled_for(user, context)
     end
     true
   end
@@ -147,10 +143,6 @@ class NotificationMessageCreator
     end
 
     build_summary_for(user, fallback_policy)
-  end
-
-  def build_summaries_for(user, channel=user.email_channel)
-    delayed_policies_for(user, channel).map{ |policy| build_summary_for(user, policy) }
   end
 
   def build_summary_for(user, policy)
@@ -178,7 +170,8 @@ class NotificationMessageCreator
 
   def build_immediate_messages_for(user, channels=immediate_channels_for(user).reject(&:unconfirmed?))
     return [] unless asset_filtered_by_user(user)
-    return [] unless notifications_enabled_for_course?(user)
+    return [] unless notifications_enabled_for_context?(user, @course)
+
     messages = []
     message_options = message_options_for(user)
     channels.reject!{ |channel| ['email', 'sms'].include?(channel.path_type) } if @notification.summarizable? && too_many_messages_for?(user)
@@ -219,31 +212,43 @@ class NotificationMessageCreator
     messages
   end
 
-  def unretired_policies_for(user)
-    user.communication_channels.select { |cc| !cc.retired? }.map(&:notification_policies).flatten
+  def delayed_policy_for(user, channel, notification: @notification)
+    return if !channel.active?
+    return if too_many_messages_for?(user)
+    return if channel.path_type != 'email'
+    return unless notifications_enabled_for_context?(user, @course)
+
+    if @override_preferences_enabled
+      policy = override_policy_for(channel, @message_data&.dig(:course_id), 'Course')
+      policy ||= override_policy_for(channel, @message_data&.dig(:root_account_id), 'Account')
+    end
+    if !policy && should_use_default_policy?(user, channel)
+      policy ||= channel.notification_policies.new(notification_id: @notification.id, frequency: @notification.default_frequency(user))
+    end
+    # We use find here because the policies and policy overrides are already loaded and we don't want to execute a query
+    policy ||= channel.notification_policies.find { |np| np.notification_id == notification.id }
+    policy if ['daily', 'weekly'].include?(policy&.frequency)
   end
 
-  def delayed_policies_for(user, channel=user.email_channel)
-    # This condition is weird. Why would not throttling stop sending notifications?
-    # Why could an inactive email channel stop us here? We handle that later! And could still send
-    # notifications without it!
-    return [] if channel && !channel.active? && !too_many_messages_for?(user)
-    return [] unless notifications_enabled_for_course?(user)
+  def should_use_default_policy?(user, channel)
+    # only use new policies for default channel when there are no other policies for the notification and user.
+    # If another policy exists then it means the notification preferences page has been visited and null values
+    # show as never policies in the UI.
+    default_email?(user, channel) && (user.notification_policies.find { |np| np.notification_id == @notification.id }).nil?
+  end
 
-    # If any channel has a policy, even policy-less channels don't get the notification based on the
-    # notification default frequency. Is that right?
-    policies = unretired_policies_for(user).select { |np| np.notification_id == @notification.id }
-    if !policies.empty?
-      policies = policies.select { |np| ['daily', 'weekly'].include?(np.frequency) && np.communication_channel.path_type == 'email' }
-    elsif channel &&
-          channel.active? &&
-          channel.path_type == 'email'
-      frequency = @notification.default_frequency(user)
-      if ['daily', 'weekly'].include?(frequency)
-        policies << channel.notification_policies.create!(:notification => @notification, :frequency => frequency)
+  def default_email?(user, channel)
+    user.email_channel == channel
+  end
+
+  def override_policy_for(channel, context_id, context_type, notification: @notification)
+    if context_id
+      channel.notification_policy_overrides.find do |np|
+        np.notification_id == notification.id &&
+        np.context_id == context_id &&
+        np.context_type == context_type
       end
     end
-    policies
   end
 
   def users_from_to_list(to_list)
@@ -304,8 +309,22 @@ class NotificationMessageCreator
   def immediate_channels_for(user)
     return [] unless user.registered?
 
-    active_channel_scope = user.communication_channels.select { |cc| cc.active? && cc.notification_policies.find { |np| np.notification_id == @notification.id } }
-    immediate_channel_scope = active_channel_scope.select { |cc| cc.notification_policies.find { |np| np.notification_id == @notification.id && np.frequency == 'immediately' } }
+    active_channel_scope = user.communication_channels.select do |cc|
+      cc.active? &&
+      (
+        (@override_preferences_enabled && override_policy_for(cc, @message_data&.dig(:course_id), 'Course')) ||
+        (@override_preferences_enabled && override_policy_for(cc, @message_data&.dig(:root_account_id), 'Account')) ||
+        cc.notification_policies.find { |np| np.notification_id == @notification.id }
+      )
+    end
+    immediate_channel_scope = active_channel_scope.select do |cc|
+      if @override_preferences_enabled
+        policy = override_policy_for(cc, @message_data&.dig(:course_id), 'Course')
+        policy ||= override_policy_for(cc, message_data&.dig(:root_account_id), 'Account')
+      end
+      policy ||= cc.notification_policies.find { |np| np.notification_id == @notification.id }
+      policy.frequency == 'immediately'
+    end
 
     user_has_a_policy = active_channel_scope.find { |cc| cc.path_type != 'push' }
     if !user_has_a_policy && @notification.default_frequency(user) == 'immediately'

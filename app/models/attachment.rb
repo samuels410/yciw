@@ -37,7 +37,7 @@ class Attachment < ActiveRecord::Base
   end
 
   EXCLUDED_COPY_ATTRIBUTES = %w{id root_attachment_id uuid folder_id user_id
-                                filename namespace workflow_state}
+                                filename namespace workflow_state root_account_id}
 
   include HasContentTags
   include ContextModuleItem
@@ -75,10 +75,12 @@ class Attachment < ActiveRecord::Base
   has_one :thumbnail, -> { where(thumbnail: 'thumb') }, foreign_key: "parent_id"
   has_many :thumbnails, :foreign_key => "parent_id"
   has_many :children, foreign_key: :root_attachment_id, class_name: 'Attachment'
+  has_many :attachment_upload_statuses
   has_one :crocodoc_document
   has_one :canvadoc
   belongs_to :usage_rights
 
+  before_create :set_root_account_id
   before_save :infer_display_name
   before_save :default_values
   before_save :set_need_notify
@@ -88,11 +90,11 @@ class Attachment < ActiveRecord::Base
 
   def self.file_store_config
     # Return existing value, even if nil, as long as it's defined
-    @file_store_config ||= ConfigFile.load('file_store')
+    @file_store_config ||= ConfigFile.load('file_store').dup
     @file_store_config ||= { 'storage' => 'local' }
     @file_store_config['path_prefix'] ||= @file_store_config['path'] || 'tmp/files'
     @file_store_config['path_prefix'] = nil if @file_store_config['path_prefix'] == 'tmp/files' && @file_store_config['storage'] == 's3'
-    return @file_store_config
+    @file_store_config
   end
 
   def self.s3_config
@@ -511,6 +513,14 @@ class Attachment < ActiveRecord::Base
     end
   end
 
+  def root_account
+    begin
+      root_account_id && Account.find_cached(root_account_id)
+    rescue ::Canvas::AccountCacheError
+      nil
+    end
+  end
+
   def namespace
     read_attribute(:namespace) || (new_record? ? write_attribute(:namespace, infer_namespace) : nil)
   end
@@ -835,11 +845,7 @@ class Attachment < ActiveRecord::Base
   end
 
   def url_ttl
-    settings = begin
-      root_account_id && Account.find_cached(root_account_id).settings
-    rescue ::Canvas::AccountCacheError
-    end
-    setting = settings&.[](:s3_url_ttl_seconds)
+    setting = root_account&.settings&.[](:s3_url_ttl_seconds)
     setting ||= Setting.get('attachment_url_ttl', 1.hour.to_s)
     setting.to_i.seconds
   end
@@ -914,7 +920,7 @@ class Attachment < ActiveRecord::Base
       raise FailedResponse.new("Expected 200, got #{response.code}: #{response.body}") unless response.code.to_i == 200
       response.read_body(dest, &block)
     end
-  rescue FailedResponse, Net::ReadTimeout => e
+  rescue FailedResponse, Net::ReadTimeout, Net::OpenTimeout => e
     if (retries += 1) < Setting.get(:streaming_download_retries, '5').to_i
       Canvas::Errors.capture_exception(:attachment, e)
       retry
@@ -1544,7 +1550,7 @@ class Attachment < ActiveRecord::Base
 
   def make_childless(preferred_child = nil)
     return if root_attachment_id
-    child = preferred_child || children.first
+    child = preferred_child || children.take
     return unless child
     raise "must be a child" unless child.root_attachment_id == id
     child.root_attachment_id = nil
@@ -2066,6 +2072,19 @@ class Attachment < ActiveRecord::Base
           end
         end
       end
+    end
+  end
+
+  def set_root_account_id
+    # needed to do it this way since root_account_id is a method in this class
+    unless read_attribute(:root_account_id)
+      self.root_account_id = 
+        case self.context
+        when Account
+          self.context.resolved_root_account_id
+        else
+          self.context.root_account_id if self.context.respond_to?(:root_account_id)
+        end
     end
   end
 end

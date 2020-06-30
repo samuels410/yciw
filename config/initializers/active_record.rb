@@ -66,6 +66,12 @@ class ActiveRecord::Base
     def default_scope(*)
       raise "please don't ever use default_scope. it may seem like a great solution, but I promise, it isn't"
     end
+
+    def vacuum
+      Shackles.activate(:deploy) do
+        connection.execute("VACUUM ANALYZE #{quoted_table_name}")
+      end
+    end
   end
 
   def read_or_initialize_attribute(attr_name, default_value)
@@ -899,31 +905,28 @@ ActiveRecord::Relation.class_eval do
       table = "#{table_name}_find_in_batches_temp_table_#{sql.hash.abs.to_s(36)}"
       table = table[-63..-1] if table.length > 63
 
-      connection.execute "CREATE TEMPORARY TABLE #{table} AS #{sql}"
+      rows = connection.update("CREATE TEMPORARY TABLE #{table} AS #{sql}")
+
       begin
-        index = "temp_primary_key"
-        case connection.adapter_name
-          when 'PostgreSQL'
-            begin
-              old_proc = connection.raw_connection.set_notice_processor {}
-              if pluck && pluck.any?{|p| p == primary_key.to_s}
-                connection.execute("CREATE INDEX #{connection.quote_local_table_name(index)} ON #{connection.quote_local_table_name(table)}(#{connection.quote_column_name(primary_key)})")
-                index = primary_key.to_s
-              else
-                pluck.unshift(index) if pluck
-                connection.execute "ALTER TABLE #{table}
-                                 ADD temp_primary_key SERIAL PRIMARY KEY"
-              end
-            ensure
-              connection.raw_connection.set_notice_processor(&old_proc) if old_proc
+        if (rows > batch_size)
+          index = "temp_primary_key"
+          begin
+            old_proc = connection.raw_connection.set_notice_processor {}
+            if pluck && pluck.any?{|p| p == primary_key.to_s}
+              connection.execute("CREATE INDEX #{connection.quote_local_table_name(index)} ON #{connection.quote_local_table_name(table)}(#{connection.quote_column_name(primary_key)})")
+              index = primary_key.to_s
+            else
+              pluck.unshift(index) if pluck
+              connection.execute "ALTER TABLE #{table}
+                               ADD temp_primary_key SERIAL PRIMARY KEY"
             end
-          else
-            raise "Temp tables not supported!"
+          ensure
+            connection.raw_connection.set_notice_processor(&old_proc) if old_proc
+          end
         end
 
         includes = includes_values + preload_values
         klass.unscoped do
-
           quoted_plucks = pluck && pluck.map do |column_name|
             # Rails 4.2 is going to try to quote them anyway but unfortunately not to the temp table, so just make it explicit
             column_names.include?(column_name) ?
@@ -931,15 +934,26 @@ ActiveRecord::Relation.class_eval do
           end
 
           if pluck
-            batch = klass.from(table).order(Arel.sql(index)).limit(batch_size).pluck(*quoted_plucks)
+            if index
+              batch = klass.from(table).order(Arel.sql(index)).limit(batch_size).pluck(*quoted_plucks)
+            else
+              batch = klass.from(table).pluck(*quoted_plucks)
+            end
           else
-            sql = "SELECT * FROM #{table} ORDER BY #{index} LIMIT #{batch_size}"
-            batch = klass.find_by_sql(sql)
+            if index
+              sql = "SELECT * FROM #{table} ORDER BY #{index} LIMIT #{batch_size}"
+              batch = klass.find_by_sql(sql)
+            else
+              batch = klass.find_by_sql("SELECT * FROM #{table}")
+            end
           end
-          while !batch.empty?
+
+          while rows > 0
+            rows -= batch.size
+
             ActiveRecord::Associations::Preloader.new.preload(batch, includes) if includes
             yield batch
-            break if batch.size < batch_size
+            break if rows <= 0 || batch.size < batch_size
 
             if pluck
               last_value = pluck.length == 1 ? batch.last : batch.last[pluck.index(index)]
@@ -1386,30 +1400,6 @@ ActiveRecord::Migrator.migrations_paths.concat Dir[Rails.root.join('gems', 'plug
 ActiveRecord::Tasks::DatabaseTasks.migrations_paths = ActiveRecord::Migrator.migrations_paths
 
 ActiveRecord::ConnectionAdapters::SchemaStatements.class_eval do
-  # in anticipation of having to re-run migrations due to integrity violations or
-  # killing stuff that is holding locks too long
-  def add_foreign_key_if_not_exists(from_table, to_table, options = {})
-    options[:column] ||= "#{to_table.to_s.singularize}_id"
-    column = options[:column]
-    case self.adapter_name
-    when 'PostgreSQL'
-      foreign_key_name = foreign_key_name(from_table, options)
-      schema = @config[:use_qualified_names] ? quote(shard.name) : 'current_schema()'
-      value = select_value("SELECT convalidated FROM pg_constraint INNER JOIN pg_namespace ON pg_namespace.oid=connamespace WHERE conname='#{foreign_key_name}' AND nspname=#{schema}")
-      if value == 'f'
-        execute("ALTER TABLE #{quote_table_name(from_table)} DROP CONSTRAINT #{quote_table_name(foreign_key_name)}")
-      elsif value
-        return
-      end
-
-      add_foreign_key(from_table, to_table, options)
-    else
-      foreign_key_name = foreign_key_name(from_table, column, options)
-      return if foreign_keys(from_table).find { |k| k.options[:name] == foreign_key_name }
-      add_foreign_key(from_table, to_table, options)
-    end
-  end
-
   def find_foreign_key(from_table, to_table, column: nil)
     column ||= "#{to_table.to_s.singularize}_id"
     foreign_keys(from_table).find do |key|
@@ -1434,9 +1424,44 @@ ActiveRecord::ConnectionAdapters::SchemaStatements.class_eval do
     end
   end
 
-  def remove_foreign_key_if_exists(table, options = {})
-    return unless foreign_key_exists?(table, options)
-    remove_foreign_key(table, options)
+  def foreign_key_for(from_table, options_or_to_table = {})
+    return unless supports_foreign_keys?
+    fks = foreign_keys(from_table).select { |fk| fk.defined_for? options_or_to_table }
+    # prefer a FK on a column named after the table
+    unless options_or_to_table.is_a?(Hash)
+      column = foreign_key_column_for(options_or_to_table) if options_or_to_table
+      return fks.find { |fk| fk.column == column} || fks.first
+    end
+    fks.first
+  end
+
+  def remove_foreign_key(from_table, *args)
+    return unless supports_foreign_keys?
+
+    raise ArgumentError if args.length > 2
+
+    # support remove_foreign_key :table, :table, if_exists: stuff
+    # OR
+    # remove_foreign_key :table, column: :stuff
+    # OR
+    # remove_foreign_key :table, column: :stuff, if_exists: stuff
+    options = args.last
+    options = {} unless options.is_a?(Hash)
+    options_or_to_table = args.first || {}
+
+    # have to account for if options is a hash, if_exists will just get wrapped up
+    # in it
+    if options[:if_exists]
+      fk_name_to_delete = foreign_key_for(from_table, options_or_to_table)&.name
+      return if fk_name_to_delete.nil?
+    else
+      fk_name_to_delete = foreign_key_for!(from_table, options_or_to_table).name
+    end
+
+    at = create_alter_table from_table
+    at.drop_foreign_key fk_name_to_delete
+
+    execute schema_creation.accept(at)
   end
 end
 

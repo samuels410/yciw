@@ -80,6 +80,24 @@ class Account < ActiveRecord::Base
   has_many :sis_batch_errors, foreign_key: :root_account_id, inverse_of: :root_account
   has_one :outcome_proficiency, dependent: :destroy
 
+  has_many :auditor_authentication_records,
+    class_name: "Auditors::ActiveRecord::AuthenticationRecord",
+    dependent: :destroy,
+    inverse_of: :account
+  has_many :auditor_course_records,
+    class_name: "Auditors::ActiveRecord::CourseRecord",
+    dependent: :destroy,
+    inverse_of: :account
+  has_many :auditor_grade_change_records,
+    class_name: "Auditors::ActiveRecord::GradeChangeRecord",
+    dependent: :destroy,
+    inverse_of: :account
+  has_many :auditor_root_grade_change_records,
+    foreign_key: 'root_account_id',
+    class_name: "Auditors::ActiveRecord::GradeChangeRecord",
+    dependent: :destroy,
+    inverse_of: :root_account
+
   def inherited_assessment_question_banks(include_self = false, *additional_contexts)
     sql, conds = [], []
     contexts = additional_contexts + account_chain
@@ -218,6 +236,7 @@ class Account < ActiveRecord::Base
   add_setting :enable_profiles, :boolean => true, :root_only => true, :default => false
   add_setting :enable_turnitin, :boolean => true, :default => false
   add_setting :mfa_settings, :root_only => true
+  add_setting :mobile_qr_login_is_enabled, :boolean => true, :root_only => true, :default => true
   add_setting :admins_can_change_passwords, :boolean => true, :root_only => true, :default => false
   add_setting :admins_can_view_notifications, :boolean => true, :root_only => true, :default => false
   add_setting :canvadocs_prefer_office_online, :boolean => true, :root_only => true, :default => false
@@ -257,7 +276,7 @@ class Account < ActiveRecord::Base
   add_setting :enable_course_catalog, :boolean => true, :root_only => true, :default => false
   add_setting :usage_rights_required, :boolean => true, :default => false, :inheritable => true
   add_setting :limit_parent_app_web_access, boolean: true, default: false
-
+  add_setting :kill_joy, boolean: true, default: false, root_only: true
 
   def settings=(hash)
     if hash.is_a?(Hash) || hash.is_a?(ActionController::Parameters)
@@ -338,7 +357,7 @@ class Account < ActiveRecord::Base
   def enable_canvas_authentication
     return unless root_account?
     # for migrations creating a new db
-    return unless AuthenticationProvider::Canvas.columns_hash.key?('workflow_state')
+    return unless Account.connection.data_source_exists?("authentication_providers")
     return if authentication_providers.active.where(auth_type: 'canvas').exists?
     authentication_providers.create!(auth_type: 'canvas')
   end
@@ -489,6 +508,10 @@ class Account < ActiveRecord::Base
   def root_account
     return self if root_account?
     super
+  end
+
+  def resolved_root_account_id
+    root_account_id || id
   end
 
   def sub_accounts_as_options(indent = 0, preloaded_accounts = nil)
@@ -889,8 +912,11 @@ class Account < ActiveRecord::Base
 
   def self.sub_account_ids_recursive(parent_account_id)
     if connection.adapter_name == 'PostgreSQL'
-      sql = Account.sub_account_ids_recursive_sql(parent_account_id)
-      Account.find_by_sql(sql).map(&:id)
+      shackles_env = Account.connection.open_transactions == 0 ? :slave : Shackles.environment
+      Shackles.activate(shackles_env) do
+        sql = Account.sub_account_ids_recursive_sql(parent_account_id)
+        Account.find_by_sql(sql).map(&:id)
+      end
     else
       account_descendants = lambda do |ids|
         as = Account.where(:parent_account_id => ids).active.pluck(:id)
@@ -1073,7 +1099,7 @@ class Account < ActiveRecord::Base
     raise "must be a root account" unless self.root_account?
     Shard.partition_by_shard(account_chain(include_site_admin: true).uniq) do |accounts|
       next unless user.associated_shards.include?(Shard.current)
-      AccountUser.active.eager_load(:account).where("user_id=? AND (root_account_id IN (?) OR account_id IN (?))", user, accounts, accounts)
+      AccountUser.active.eager_load(:account).where("user_id=? AND (accounts.root_account_id IN (?) OR account_id IN (?))", user, accounts, accounts)
     end
   end
 
@@ -1512,6 +1538,8 @@ class Account < ActiveRecord::Base
       tabs << { :id => TAB_PERMISSIONS, :label => t('#account.tab_permissions', "Permissions"), :css_class => 'permissions', :href => :account_permissions_path } if user && self.grants_right?(user, :manage_role_overrides)
       if user && self.grants_right?(user, :manage_outcomes)
         tabs << { :id => TAB_OUTCOMES, :label => t('#account.tab_outcomes', "Outcomes"), :css_class => 'outcomes', :href => :account_outcomes_path }
+      end
+      if self.can_see_rubrics_tab?(user)
         tabs << { :id => TAB_RUBRICS, :label => t('#account.tab_rubrics', "Rubrics"), :css_class => 'rubrics', :href => :account_rubrics_path }
       end
       tabs << { :id => TAB_GRADING_STANDARDS, :label => t('#account.tab_grading_standards', "Grading"), :css_class => 'grading_standards', :href => :account_grading_standards_path } if user && self.grants_right?(user, :manage_grades)
@@ -1546,6 +1574,14 @@ class Account < ActiveRecord::Base
     tabs << { :id => TAB_SETTINGS, :label => t('#account.tab_settings', "Settings"), :css_class => 'settings', :href => :account_settings_path }
     tabs.delete_if{ |t| t[:visibility] == 'admins' } unless self.grants_right?(user, :manage)
     tabs
+  end
+
+  def can_see_rubrics_tab?(user)
+    if root_account.feature_enabled?(:decouple_rubrics)
+      user && self.grants_right?(user, :manage_rubrics)
+    else
+      user && self.grants_right?(user, :manage_outcomes)
+    end
   end
 
   def can_see_admin_tools_tab?(user)

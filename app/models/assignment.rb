@@ -103,18 +103,18 @@ class Assignment < ActiveRecord::Base
   has_many :moderation_graders, inverse_of: :assignment
   has_many :moderation_grader_users, through: :moderation_graders, source: :user
 
+  has_many :auditor_grade_change_records,
+    class_name: "Auditors::ActiveRecord::GradeChangeRecord",
+    dependent: :destroy,
+    inverse_of: :assignment
+
   scope :anonymous, -> { where(anonymous_grading: true) }
   scope :moderated, -> { where(moderated_grading: true) }
   scope :auditable, -> { anonymous.or(moderated) }
   scope :type_quiz_lti, -> {
-    joins(:external_tool_tag).
-      joins(<<-SQL).
-        INNER JOIN #{ContextExternalTool.quoted_table_name}
-        ON content_tags.content_type='ContextExternalTool'
-        AND context_external_tools.id = content_tags.content_id
-      SQL
-      merge(ContextExternalTool.quiz_lti).
-      distinct
+    where("EXISTS (?)",
+          ContentTag.where("content_tags.context_id=assignments.id").where(context_type: 'Assignment', content_type: 'ContextExternalTool').
+              where("EXISTS (?)", ContextExternalTool.where("context_external_tools.id=content_tags.content_id").quiz_lti))
   }
 
   validates_associated :external_tool_tag, :if => :external_tool?
@@ -125,6 +125,7 @@ class Assignment < ActiveRecord::Base
   validate :assignment_overrides_due_date_ok?
   validate :discussion_group_ok?
   validate :positive_points_possible?
+  validate :reasonable_points_possible?
   validate :moderation_setting_ok?
   validate :assignment_name_length_ok?, :unless => :deleted?
   validates :lti_context_id, presence: true, uniqueness: true
@@ -144,7 +145,7 @@ class Assignment < ActiveRecord::Base
   end
 
   accepts_nested_attributes_for :external_tool_tag, :update_only => true, :reject_if => proc { |attrs|
-    # only accept the url, content_tyupe, content_id, and new_tab params, the other accessible
+    # only accept the url, content_type, content_id, and new_tab params, the other accessible
     # params don't apply to an content tag being used as an external_tool_tag
     content = case attrs['content_type']
               when 'Lti::MessageHandler', 'lti/message_handler'
@@ -184,6 +185,16 @@ class Assignment < ActiveRecord::Base
         "The value of possible points for this assignment must be zero or greater."
       )
     )
+  end
+
+  def reasonable_points_possible?
+    return if self.points_possible.to_i < 1000000000
+    return unless self.points_possible_changed?
+    errors.add(
+      :points_possible,
+      I18n.t(
+        "The value of possible points for this assignment cannot exceed 999999999.")
+      )
   end
 
   def get_potentially_conflicting_titles(title_base)
@@ -1055,7 +1066,10 @@ class Assignment < ActiveRecord::Base
     # ContentTag on the currently bound tool. Presumably you always want correct data in the LineItem, regardless of
     # which Tool it's bound to.
     if lti_1_3_external_tool_tag? && line_items.empty?
-      rl = Lti::ResourceLink.create!(resource_link_id: lti_context_id, context_external_tool: external_tool_tag.content)
+      rl = Lti::ResourceLink.create!(
+        resource_link_id: lti_context_id,
+        context_external_tool: ContextExternalTool.from_content_tag(external_tool_tag, context)
+      )
       line_items.create!(label: title, score_maximum: points_possible, resource_link: rl)
     elsif saved_change_to_title? || saved_change_to_points_possible?
       line_items.
@@ -1066,7 +1080,11 @@ class Assignment < ActiveRecord::Base
   protected :update_line_items
 
   def lti_1_3_external_tool_tag?
-    external_tool? && external_tool_tag&.content_type == "ContextExternalTool" && external_tool_tag&.content&.use_1_3?
+    return false unless external_tool?
+    return false unless external_tool_tag&.content_type == "ContextExternalTool"
+
+    # Lookup the tool and check if the LTI version is 1.3
+    ContextExternalTool.from_content_tag(external_tool_tag, context)&.use_1_3?
   end
   private :lti_1_3_external_tool_tag?
 
@@ -1385,17 +1403,16 @@ class Assignment < ActiveRecord::Base
     Atom::Entry.new do |entry|
       entry.title     = t(:feed_entry_title, "Assignment: %{assignment}", :assignment => self.title) unless opts[:include_context]
       entry.title     = t(:feed_entry_title_with_course, "Assignment, %{course}: %{assignment}", :assignment => self.title, :course => self.context.name) if opts[:include_context]
-      entry.authors  << Atom::Person.new(:name => author_name)
       entry.updated   = self.updated_at.utc
       entry.published = self.created_at.utc
-      entry.id        = "tag:#{HostUrl.default_host},#{self.created_at.strftime("%Y-%m-%d")}:/assignments/#{self.feed_code}_#{self.due_at.strftime("%Y-%m-%d-%H-%M") rescue "none"}"
-      entry.links    << Atom::Link.new(:rel => 'alternate',
-                                    :href => "http://#{HostUrl.context_host(self.context)}/#{context_url_prefix}/assignments/#{self.id}")
+      entry.id        = "tag:#{HostUrl.default_host},#{self.created_at.strftime('%Y-%m-%d')}:/assignments/#{self.feed_code}_#{self.due_at.strftime('%Y-%m-%d-%H-%M') rescue 'none'}"
       entry.content   = Atom::Content::Html.new(before_label(:due, "Due") + " #{datetime_string(self.due_at, :due_date)}<br/>#{self.description}<br/><br/>
         <div>
           #{self.description}
         </div>
       ")
+      entry.links << Atom::Link.new(:rel => 'alternate', :href => direct_link)
+      entry.authors << Atom::Person.new(:name => author_name)
     end
   end
 
@@ -1405,6 +1422,10 @@ class Assignment < ActiveRecord::Base
 
   def end_at
     due_at
+  end
+
+  def direct_link
+    "http://#{HostUrl.context_host(self.context)}/#{context_url_prefix}/assignments/#{self.id}"
   end
 
   def context_prefix
@@ -1594,7 +1615,7 @@ class Assignment < ActiveRecord::Base
     can :submit
 
     given do |user, session|
-      (submittable_type? || submission_types == "discussion_topic") &&
+      (submittable_type? || %w(discussion_topic online_quiz).include?(submission_types)) &&
       context.grants_right?(user, session, :participate_as_student) &&
       visible_to_user?(user)
     end
@@ -2290,30 +2311,6 @@ class Assignment < ActiveRecord::Base
     scope.to_a.sort_by{|a| [a.assessment_type == 'grading' ? CanvasSort::First : CanvasSort::Last, Canvas::ICU.collation_key(a.assessor_name)] }
   end
 
-  def generate_comments_from_files_legacy(filename, commenter)
-    zip_extractor = ZipExtractor.new(filename)
-    # Creates a list of hashes, each one with a :user, :filename, and :submission entry.
-    @ignored_files = []
-    file_map = zip_extractor.unzip_files.map { |f| infer_comment_context_from_filename(f) }.compact
-    files_for_user = file_map.group_by { |f| f[:user] }
-    comments = files_for_user.map do |user, files|
-      attachments = files.map { |g|
-        FileInContext.attach(self, g[:filename], g[:display_name])
-      }
-      comment = {
-        comment: t(:comment_from_files, {one: "See attached file", other: "See attached files"}, count: files.size),
-        author: commenter,
-        attachments: attachments,
-      }
-      group, students = group_students(user)
-      comment[:group_comment_id] = CanvasSlug.generate_securish_uuid if group
-      find_or_create_submissions(students).map do |submission|
-        submission.add_comment(comment.merge(hidden: submission.hide_grade_from_student?))
-      end
-    end
-    [comments.compact, @ignored_files]
-  end
-
   # Takes a zipped file full of assignment comments/annotated assignments
   # and generates comments on each assignment's submission.  Quietly
   # ignore (for now) files that don't make sense to us.  The convention
@@ -2501,14 +2498,16 @@ class Assignment < ActiveRecord::Base
 
   def current_candidate_set(peer_review_params, current_submission, existing)
     candidate_set = peer_review_params[:submission_ids] - existing.map(&:asset_id)
-    if self.group_category_id && !self.intra_group_peer_reviews
-      # don't assign to our group partners
-      group_ids = peer_review_params[:submissions].select{|s| candidate_set.include?(s.id) && current_submission.group_id == s.group_id}.map(&:id)
-      candidate_set -= group_ids
-    else
-      # don't assign to ourselves
-      candidate_set.delete(current_submission.id)
+    # don't assign to ourselves
+    candidate_set.delete(current_submission.id)
 
+    if self.group_category_id && !self.intra_group_peer_reviews
+      if current_submission.group_id
+        # don't assign to our group partners (assuming we have a group)
+        group_ids = peer_review_params[:submissions].select{|s| candidate_set.include?(s.id) && current_submission.group_id == s.group_id}.map(&:id)
+        candidate_set -= group_ids
+      end
+    else
       if self.discussion_topic? && self.discussion_topic.group_category_id
         # only assign to other members in the group discussion
         child_topic = self.discussion_topic.child_topic_for(current_submission.user)
@@ -2749,11 +2748,7 @@ class Assignment < ActiveRecord::Base
   }
 
   scope :quiz_lti, -> {
-    where(:submission_types => "external_tool").joins(:external_tool_tag).
-      where(:content_tags => {:content_type => "ContextExternalTool"}).
-      where("EXISTS (?)", ContextExternalTool.quiz_lti.
-        where("context_external_tools.id=content_tags.content_id").select(:id)
-      )
+    type_quiz_lti.where(submission_types: "external_tool")
   }
 
   def overdue?
@@ -2950,6 +2945,7 @@ class Assignment < ActiveRecord::Base
     end
   end
 
+  attr_accessor :needs_update_cached_due_dates
   def update_cached_due_dates
     return unless update_cached_due_dates?
     self.clear_cache_key(:availability)
@@ -3492,7 +3488,8 @@ class Assignment < ActiveRecord::Base
   end
 
   def due_date_ok?
-    if unlock_at && lock_at && due_at
+    # lock_at OR unlock_at can be empty
+    if (unlock_at || lock_at) && due_at
       unless AssignmentUtil.in_date_range?(due_at, unlock_at, lock_at)
         errors.add(:due_at, I18n.t("must be between availability dates"))
         return false
@@ -3508,7 +3505,7 @@ class Assignment < ActiveRecord::Base
 
     if AssignmentUtil.due_date_required?(self)
       overrides = gather_override_data(overrides)
-      if overrides.select{|o| o[:due_at].nil? && o[:workflow_state] != 'deleted'}.length > 0
+      if overrides.select{|o| !!o[:due_at_overridden] && o[:due_at].blank? && o[:workflow_state] != 'deleted'}.length > 0
         errors.add(:due_at, I18n.t("cannot be blank for any assignees when Post to Sis is checked"))
         return false
       end
@@ -3518,6 +3515,13 @@ class Assignment < ActiveRecord::Base
 
   def gather_override_data(overrides)
     overrides = overrides.values.reject(&:empty?).flatten if overrides.is_a?(Hash)
+    overrides = overrides.map do |o|
+      o = o.to_unsafe_h if o.is_a?(ActionController::Parameters)
+      if o.is_a?(Hash) && o.has_key?(:due_at) && !o.has_key?(:due_at_overridden)
+        o = o.merge(:due_at_overridden => true) # default to true if provided by api
+      end
+      o
+    end
     override_ids = overrides.map{|ele| ele[:id]}.to_set
     self.assignment_overrides.reject{|o| override_ids.include? o[:id]} + overrides
   end

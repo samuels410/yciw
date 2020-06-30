@@ -1,6 +1,7 @@
 {
   "accessibility_checker_b3af1f6c": { "message": "辅助功能检查器" },
   "add_8523c19b": { "message": "添加" },
+  "add_another_f4e50d57": { "message": "新增" },
   "add_cc_subtitles_55f0394e": { "message": "添加抄送/副标题" },
   "align_11050992": { "message": "协调" },
   "align_center_ca078feb": { "message": "居中对齐" },
@@ -12,6 +13,12 @@
   "alt_text_611fb322": { "message": "Alt 文本" },
   "an_error_occurred_generating_the_file_preview_cf259955": {
     "message": "生成文件预览时发生错误"
+  },
+  "an_error_occurred_making_a_network_request_d1bda348": {
+    "message": "发出网络请求时出错"
+  },
+  "an_error_occurred_uploading_your_media_71f1444d": {
+    "message": "上传媒体时出错。"
   },
   "announcement_list_da155734": { "message": "公告列表" },
   "announcements_a4b8ed4a": { "message": "公告" },
@@ -28,6 +35,7 @@
   "automatically_open_an_in_line_preview_preview_disp_ed784ffe": {
     "message": "自动打开在线预览。（预览仅在保存后显示）"
   },
+  "available_folders_694d0436": { "message": "可用文件夹" },
   "cancel_caeb1e68": { "message": "取消" },
   "canvas_plugins_705a5016": { "message": "Canvas 插件" },
   "choose_caption_file_9c45bc4e": { "message": "选择标题文件" },
@@ -65,6 +73,7 @@
   },
   "course_documents_104d76e0": { "message": "课程文件" },
   "course_files_62deb8f8": { "message": "课程文件" },
+  "course_files_a31f97fc": { "message": "课程文件" },
   "course_images_f8511d04": { "message": "课程图像" },
   "course_links_b56959b9": { "message": "课程链接" },
   "course_media_ec759ad": { "message": "课程媒体" },
@@ -79,6 +88,7 @@
   "default_numerical_ordered_list_48dd3548": { "message": "默认数字有序列表" },
   "describe_the_image_e65d2e32": { "message": "（图像说明）" },
   "describe_the_video_2fe8f46a": { "message": "（视频说明）" },
+  "details_98a31b68": { "message": "详情" },
   "dimensions_45ddb7b7": { "message": "尺寸" },
   "directionality_ebcae6d0": { "message": "方向性" },
   "disable_in_line_preview_2a675175": { "message": "禁用在线预览。" },
@@ -113,6 +123,7 @@
   "embed_preview_2d741e1f": { "message": "嵌入预览" },
   "embed_video_a97a64af": { "message": "嵌入视频" },
   "embed_video_code_703e10f2": { "message": "嵌入视频代码" },
+  "embedded_content_aaeb4d3d": { "message": "嵌入内容" },
   "equation_1c5ac93c": { "message": "等式" },
   "error_uploading_video_audio_recording_16d9730a": {
     "message": "上传视频/音频录制文件时出错"
@@ -121,6 +132,8 @@
   "external_links_3d9f074e": { "message": "外部链接" },
   "extra_large_b6cdf1ff": { "message": "超大" },
   "file_name_8fd421ff": { "message": "文件名称" },
+  "file_upload_failed_af22dd91": { "message": "文件上传失败" },
+  "file_uploading_56c9c0c8": { "message": "正在上传文件" },
   "file_url_c12b64be": { "message": "文件URL" },
   "filename_file_icon_602eb5de": { "message": "{ filename }文件图标" },
   "filename_image_preview_6cef8f26": { "message": "{ filename }图像预览" },
@@ -131,6 +144,7 @@
   "focus_the_popup_context_toolbar_7979f4f8": {
     "message": "聚焦弹出窗口内容工具栏"
   },
+  "folder_tree_fbab0726": { "message": "文件夹树" },
   "formatting_5b143aa8": { "message": "格式化" },
   "found_auto_saved_content_3f6e4ca5": { "message": "找到自动保存的内容" },
   "found_count_plural_0_results_one_result_other_resu_46aeaa01": {
@@ -141,6 +155,7 @@
   "go_to_the_editor_s_toolbar_a5cb875f": { "message": "前往编辑器的工具栏" },
   "grades_a61eba0a": { "message": "评分" },
   "group_files_4324f3df": { "message": "小组文件" },
+  "group_files_82e5dcdb": { "message": "组文件" },
   "group_navigation_99f191a": { "message": "小组导航" },
   "heading_2_5b84eed2": { "message": "标题 2" },
   "heading_3_2c83de44": { "message": "标题 3" },
@@ -175,7 +190,9 @@
   "loading_bde52856": { "message": "正在加载" },
   "loading_failed_b3524381": { "message": "加载失败……" },
   "loading_failed_e6a9d8ef": { "message": "加载失败。" },
+  "loading_folders_d8b5869e": { "message": "正在加载文件夹" },
   "loading_media_f3455841": { "message": "正在加载媒体" },
+  "locked_762f138b": { "message": "已锁定" },
   "media_af190855": { "message": "媒体" },
   "medium_5a8e9ead": { "message": "中等" },
   "mic_a7f3d311": { "message": "麦克风" },
@@ -184,6 +201,7 @@
   "must_be_at_least_width_x_height_px_41dc825e": {
     "message": "必须至少为 { width } x { height }px"
   },
+  "my_files_2f621040": { "message": "我的文件" },
   "navigate_through_the_menu_or_toolbar_415a4e50": {
     "message": "导航菜单或工具栏"
   },
@@ -192,6 +210,7 @@
     "message": "无 Alt 文字（装饰图像）"
   },
   "no_e16d9132": { "message": "否" },
+  "no_file_chosen_9a880793": { "message": "没有选择文件" },
   "no_results_940393cf": { "message": "无结果。" },
   "no_results_found_for_filterterm_ad1b04c8": {
     "message": "未找到{ filterTerm }的结果"
@@ -222,6 +241,9 @@
   "published_c944a23d": { "message": "已发布" },
   "published_when_302d8e23": { "message": "已发布：{ when }" },
   "quizzes_7e598f57": { "message": "测验" },
+  "reading_a_media_track_file_failed_aborting_be051b20": {
+    "message": "读取媒体跟踪文件失败。正在中止。"
+  },
   "record_7c9448b": { "message": "记录" },
   "record_upload_media_5fdce166": { "message": "记录/上传媒体" },
   "recording_98da6bda": { "message": "录制" },
@@ -248,6 +270,10 @@
   "something_went_wrong_and_i_don_t_know_what_to_show_e0c54ec8": {
     "message": "出错了，我不知道该给您看些什么。"
   },
+  "something_went_wrong_check_your_connection_and_try_2a7b2d13": {
+    "message": "遇到一些问题，请检查连接并重试。"
+  },
+  "something_went_wrong_d238c551": { "message": "出了些问题" },
   "something_went_wrong_try_again_after_refreshing_th_e094eb8d": {
     "message": "出现错误，请刷新页面后重试"
   },
@@ -261,7 +287,11 @@
   "styles_2aa721ef": { "message": "样式" },
   "submit_a3cc6859": { "message": "提交" },
   "subscript_59744f96": { "message": "下标" },
+  "success_file_uploaded_8174e93f": { "message": "成功：文件已上传" },
   "superscript_8cb349a2": { "message": "上标" },
+  "supported_file_types_srt_or_webvtt_7d827ed": {
+    "message": "支持的文件类型：SRT或WebVTT"
+  },
   "switch_to_raw_html_editor_4c9ac7de": { "message": "切换至原始 html 编辑器" },
   "switch_to_rich_text_editor_35822d26": { "message": "切换至富文本编辑器" },
   "syllabus_f191f65b": { "message": "教学大纲" },
@@ -289,10 +319,12 @@
   "unpublished_dfd8801": { "message": "取消发布" },
   "untitled_16aa4f2b": { "message": "无标题" },
   "upload_document_253f0478": { "message": "上传文档" },
-  "upload_error_f9c00e27": { "message": "上传错误" },
   "upload_file_fd2361b8": { "message": "上传文件" },
   "upload_image_6120b609": { "message": "上传图像" },
   "upload_media_ce31135a": { "message": "上传媒体" },
+  "upload_not_available_for_this_folder_8f8623c6": {
+    "message": "无法上传此文件"
+  },
   "upload_record_media_e4207d72": { "message": "上传/录制媒体" },
   "uppercase_alphabetic_ordered_list_3f5aa6b2": {
     "message": "大写字母有序列表"

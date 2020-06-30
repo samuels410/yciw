@@ -31,8 +31,6 @@ describe Assignment do
   end
 
   before :once do
-    PostPolicy.enable_feature!
-
     course_with_teacher(active_all: true)
     @initial_student = student_in_course(active_all: true, user_name: 'a student').user
   end
@@ -3360,6 +3358,36 @@ describe Assignment do
     end
   end
 
+  describe "dates" do
+    before :once do
+      @assignment = assignment_model(course: @course)
+    end
+
+    it "should not allow lock_at date to be before due_date" do
+      @assignment.due_at = Time.zone.today
+      @assignment.lock_at = Time.zone.today-2.days
+      expect {
+        @assignment.save!
+      }.to raise_error(ActiveRecord::RecordInvalid)
+    end
+
+    it "should not allow unlock_at date to be after due_date" do
+      @assignment.due_at = Time.zone.today
+      @assignment.unlock_at = Time.zone.today+2.days
+      expect {
+        @assignment.save!
+      }.to raise_error(ActiveRecord::RecordInvalid)
+    end
+
+    it "should not allow unlock_at date to be after lock_at date" do
+      @assignment.lock_at = Time.zone.today
+      @assignment.unlock_at = Time.zone.today+1.day
+      expect {
+        @assignment.save!
+      }.to raise_error(ActiveRecord::RecordInvalid)
+    end
+  end
+
   it "should destroy group overrides when the group category changes" do
     @assignment = assignment_model(course: @course)
     @assignment.group_category = group_category(context: @assignment.context)
@@ -3643,6 +3671,29 @@ describe Assignment do
 
         res = @a.assign_peer_reviews
         expect(res.length).to be 0
+      end
+
+      it "disabling intra group peer review shouldn't gum things up if some people don't have a group" do
+        # i.e. people with no group shouldn't be considered by the selection algorithm to be in the same group
+        @submissions = []
+        gc = @course.group_categories.create! name: "Groupy McGroupface"
+        @a.update group_category_id: gc.id,
+          grade_group_students_individually: false
+        users = create_users_in_course(@course, 12.times.map{ |i| {name: "user #{i}"} }, return_type: :record)
+
+        ["group_1", "group_2"].each do |group_name|
+          group = gc.groups.create! name: group_name, context: @course
+          users.pop(3).each{|user| group.add_user(user)} # only put half of the class in a group
+          @a.submit_homework(group.users.first, :submission_type => "online_url", :url => "http://www.google.com")
+        end
+        users.each do |u| # submit for each of the remaining groupless
+          @a.submit_homework(u, :submission_type => "online_url", :url => "http://www.google.com")
+        end
+
+        @a.peer_review_count = 2
+        srand(1) # this isn't really necessary but given the random nature i wanted to make it fail consistently without the code fix
+        res = @a.assign_peer_reviews
+        expect(res.group_by(&:user_id).map{|k, v| v.count}.uniq).to eq [2] # everybody should get 2 reviews
       end
 
       it "should assign peer reviews to members of the same group when enabled" do
@@ -4084,8 +4135,17 @@ describe Assignment do
 
     context "to attach submission comment files" do
       it 'is true when a student can read an assignment but the assignment is locked' do
-        @assignment.lock_at = 1.week.ago
+        @assignment.due_at = 2.days.ago
+        @assignment.lock_at = 1.day.ago
         @assignment.submission_types = 'online_upload'
+        @assignment.save!
+        expect(@assignment.grants_right?(@student, :attach_submission_comment_files)).to be true
+      end
+
+      it 'is true when an assignment is an online_quiz' do
+        @assignment.due_at = 8.days.ago
+        @assignment.lock_at = 1.week.ago
+        @assignment.submission_types = 'online_quiz'
         @assignment.save!
         expect(@assignment.grants_right?(@student, :attach_submission_comment_files)).to be true
       end
@@ -5590,62 +5650,6 @@ describe Assignment do
       expect(@assignment.send(:infer_comment_context_from_filename, ignore_file)).to be_nil
       expect(@assignment.instance_variable_get(:@ignored_files)).to eq [ignore_file]
     end
-
-    describe "newly-created comments" do
-      before(:each) do
-        @assignment = @course.assignments.create!(name: "Mute Comment Test", submission_types: %w(online_upload))
-      end
-
-      let(:zip) { zip_submissions_legacy }
-      let(:added_comment) { @assignment.submission_for_student(@student).submission_comments.last }
-
-      context "for a manually-posted assignment" do
-        before(:each) do
-          @assignment.post_policy.update!(post_manually: true)
-        end
-
-        it "hides new comments if the submission is not posted" do
-          submit_homework(@student)
-
-          @assignment.generate_comments_from_files_legacy(zip.open.path, @user)
-          expect(added_comment).to be_hidden
-        end
-
-        it "shows new comments if the submission is posted" do
-          submit_homework(@student)
-          @assignment.post_submissions
-
-          @assignment.generate_comments_from_files_legacy(zip.open.path, @user)
-          expect(added_comment).not_to be_hidden
-        end
-      end
-
-      context "for a automatically-posted assignment" do
-        it "shows new comments if the submission is posted" do
-          submit_homework(@student)
-          @assignment.post_submissions
-
-          @assignment.generate_comments_from_files_legacy(zip.open.path, @user)
-          expect(added_comment).not_to be_hidden
-        end
-
-        it "hides new comments if the submission is graded but not posted" do
-          submit_homework(@student)
-          @assignment.grade_student(@student, grade: 1, grader: @teacher)
-          @assignment.hide_submissions
-
-          @assignment.generate_comments_from_files_legacy(zip.open.path, @user)
-          expect(added_comment).to be_hidden
-        end
-
-        it "shows new comments if the submission is neither graded nor posted" do
-          submit_homework(@student)
-
-          @assignment.generate_comments_from_files_legacy(zip.open.path, @user)
-          expect(added_comment).not_to be_hidden
-        end
-      end
-    end
   end
 
   context "attribute freezing" do
@@ -5785,23 +5789,26 @@ describe Assignment do
     it "should include assignments with no locks" do
       @quiz.save!
       list = Assignment.not_locked.to_a
-      expect(list.size).to eql 1
+      expect(list.size).to be 1
       expect(list.first.title).to eql 'Test Assignment'
     end
+
     it "should include assignments with unlock_at in the past" do
       @quiz.unlock_at = 1.day.ago
       @quiz.save!
       list = Assignment.not_locked.to_a
-      expect(list.size).to eql 1
+      expect(list.size).to be 1
       expect(list.first.title).to eql 'Test Assignment'
     end
+
     it "should include assignments where lock_at is future" do
-      @quiz.lock_at = 1.day.from_now
+      @quiz.lock_at = 3.days.from_now
       @quiz.save!
       list = Assignment.not_locked.to_a
-      expect(list.size).to eql 1
+      expect(list.size).to be 1
       expect(list.first.title).to eql 'Test Assignment'
     end
+
     it "should include assignments where unlock_at is in the past and lock_at is future" do
       @quiz.unlock_at = 1.day.ago
       @quiz.due_at = 1.hour.ago
@@ -5811,15 +5818,18 @@ describe Assignment do
       expect(list.size).to be 1
       expect(list.first.title).to eql 'Test Assignment'
     end
+
     it "should not include assignments where unlock_at is in future" do
-      @quiz.unlock_at = 1.hour.from_now
+      @quiz.unlock_at = 1.day.from_now
       @quiz.save!
-      expect(Assignment.not_locked.count).to eq 0
+      expect(Assignment.not_locked.count).to be 0
     end
+
     it "should not include assignments where lock_at is in past" do
-      @quiz.lock_at = 1.hours.ago
+      @quiz.lock_at = 1.hour.ago
+      @quiz.due_at = 1.day.ago
       @quiz.save!
-      expect(Assignment.not_locked.count).to eq 0
+      expect(Assignment.not_locked.count).to be 0
     end
   end
 
@@ -6345,75 +6355,10 @@ describe Assignment do
     end
   end
 
-  describe '#generate_comments_from_files_legacy' do
-    before :once do
-      @students = create_users_in_course(@course, 3, return_type: :record)
-
-      @assignment = @course.assignments.create! :name => "zip upload test",
-                                                :submission_types => %w(online_upload)
-    end
-
-    it "should work for individuals" do
-      s1 = @students.first
-      submit_homework(s1)
-
-      zip = zip_submissions_legacy
-
-      comments, ignored = @assignment.generate_comments_from_files_legacy(
-        zip.open.path,
-        @teacher)
-
-      expect(comments.map { |g| g.map { |c| c.submission.user } }).to eq [[s1]]
-      expect(ignored).to be_empty
-    end
-
-    it "should work for groups" do
-      s1, s2 = @students
-
-      gc = @course.group_categories.create! name: "Homework Groups"
-      @assignment.update group_category_id: gc.id,
-                                    grade_group_students_individually: false
-      g1, g2 = 2.times.map { |i| gc.groups.create! name: "Group #{i}", context: @course }
-      g1.add_user(s1)
-      g1.add_user(s2)
-
-      submit_homework(s1)
-      zip = zip_submissions_legacy
-
-      comments, _ = @assignment.generate_comments_from_files_legacy(
-        zip.open.path,
-        @teacher)
-
-      expect(comments.map { |g|
-        g.map { |c| c.submission.user }.sort_by(&:id)
-      }).to eq [[s1, s2]]
-    end
-
-    it "excludes student names from filenames when anonymous grading is enabled" do
-      @assignment.update!(anonymous_grading: true)
-
-      s1 = @students.first
-      att = submit_homework(s1)
-      sub = @assignment.submissions.where(:user_id => s1).first
-
-      zip = zip_submissions_legacy
-      filename = Zip::File.new(zip.open).entries.map(&:name).first
-      expect(filename).to eq "anon_#{sub.anonymous_id}_#{att.id}_homework.pdf"
-
-      comments, ignored = @assignment.generate_comments_from_files_legacy(
-        zip.open.path,
-        @teacher)
-
-      expect(comments.map { |g| g.map { |c| c.submission.user } }).to eq [[s1]]
-      expect(ignored).to be_empty
-    end
-  end
-
   describe "generating comments from files" do
     let(:attachment_data) { {uploaded_data: stub_file_data("submissions.zip", "", "application/zip")} }
 
     before :once do
-      Account.site_admin.enable_feature!(:submissions_reupload_status_page)
       @students = create_users_in_course(@course, 3, return_type: :record)
 
       @assignment = @course.assignments.create! name: "zip upload test",
@@ -6883,6 +6828,12 @@ describe Assignment do
         expect(assignment.errors.keys.include?(:points_possible)).to be_truthy
       end
 
+      it "does not allow a 1000000000 value" do
+        assignment = Assignment.new(points_possible: 1000000000)
+        expect(assignment).not_to be_valid
+        expect(assignment.errors.keys.include?(:points_possible)).to be_truthy
+      end
+
       it "allows a nil value" do
         assignment = Assignment.new(points_possible: nil)
         assignment.valid?
@@ -7018,17 +6969,6 @@ describe Assignment do
   end
 
   describe "validate_overrides_for_sis" do
-    def api_create_assignment_in_course(course,assignment_params)
-      api_call(:post,
-               "/api/v1/courses/#{course.id}/assignments.json",
-               {
-                 :controller => 'assignments_api',
-                 :action => 'create',
-                 :format => 'json',
-                 :course_id => course.id.to_s
-               }, {:assignment => assignment_params })
-    end
-
     let(:assignment) do
       @course.assignments.new(assignment_valid_attributes)
     end
@@ -7043,8 +6983,27 @@ describe Assignment do
     it "raises an invalid record error if overrides are invalid" do
       overrides = [{
           'course_section_id' => @course.default_section.id,
-          'due_at' => nil
-      }]
+          'due_at' => nil,
+          'due_at_overridden' => true
+      }.with_indifferent_access]
+      expect{assignment.validate_overrides_for_sis(overrides)}.to raise_error(ActiveRecord::RecordInvalid)
+    end
+
+    it "does not raise an invalid record error if overrides do not override due_at" do
+      overrides = [{
+        'course_section_id' => @course.default_section.id,
+        'due_at' => nil,
+        'due_at_overridden' => false
+      }.with_indifferent_access]
+      assignment.validate_overrides_for_sis(overrides)
+      expect(assignment.errors.full_messages).to be_blank
+    end
+
+    it "raises an invalid record error if a provided override (from api) does not specify due_at_overriddenness" do
+      overrides = [{
+        'course_section_id' => @course.default_section.id,
+        'due_at' => nil
+      }.with_indifferent_access]
       expect{assignment.validate_overrides_for_sis(overrides)}.to raise_error(ActiveRecord::RecordInvalid)
     end
   end
@@ -7088,9 +7047,14 @@ describe Assignment do
         expect{@assignment.validate_overrides_for_sis(@overrides)}.to raise_error(ActiveRecord::RecordInvalid)
       end
 
-      it "is invalid if an active existing override does not have a due date" do
-        create_section_override_for_assignment(@assignment, due_at: nil, due_at_overridden: false)
+      it "is invalid if an active existing override does not have a due date and overrides due_at" do
+        create_section_override_for_assignment(@assignment, due_at: nil, due_at_overridden: true)
         expect{@assignment.validate_overrides_for_sis(@overrides)}.to raise_error(ActiveRecord::RecordInvalid)
+      end
+
+      it "is valid if an active existing override does not have a due date but does not override due_at" do
+        create_section_override_for_assignment(@assignment, due_at: nil, due_at_overridden: false)
+        expect{@assignment.validate_overrides_for_sis(@overrides)}.not_to raise_error
       end
 
       it "is valid if a deleted existing override does not have a due date" do

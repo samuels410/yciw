@@ -25,10 +25,16 @@ def getImageTagVersion() {
 
 pipeline {
   agent { label 'canvas-docker' }
-  options { ansiColor('xterm') }
+  options {
+    ansiColor('xterm')
+    timestamps()
+  }
 
   environment {
-    COMPOSE_FILE = 'docker-compose.new-jenkins.yml'
+    DISABLE_SPRING = 'true'
+    COMPOSE_FILE = 'docker-compose.new-jenkins.yml:docker-compose.new-jenkins.vendored-gems.yml'
+
+    POSTGRES_PASSWORD = 'sekret'
   }
 
   stages {
@@ -39,7 +45,7 @@ pipeline {
           sh 'build/new-jenkins/print-env-excluding-secrets.sh'
           sh 'build/new-jenkins/docker-compose-pull.sh'
           sh 'build/new-jenkins/docker-compose-build-up.sh'
-          sh 'build/new-jenkins/docker-compose-create-database.sh'
+          sh 'build/new-jenkins/docker-compose-setup-cassandra-keyspaces.sh'
         }
       }
     }
@@ -78,7 +84,7 @@ pipeline {
     }
 
     cleanup {
-      sh 'rm -rf ./spec_results/'
+      sh 'rm -vrf ./spec_results/'
       sh 'build/new-jenkins/docker-cleanup.sh --allow-failure'
     }
   }

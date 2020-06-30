@@ -20,6 +20,7 @@
 class SubmissionComment < ActiveRecord::Base
   include SendToStream
   include HtmlTextHelper
+  include Workflow
 
   AUDITABLE_ATTRIBUTES = %w[
     comment
@@ -39,6 +40,7 @@ class SubmissionComment < ActiveRecord::Base
   attr_writer :updating_user
   attr_accessor :grade_posting_in_progress
 
+  belongs_to :root_account, class_name: 'Account'
   belongs_to :submission
   belongs_to :author, :class_name => 'User'
   belongs_to :assessment_request
@@ -58,8 +60,10 @@ class SubmissionComment < ActiveRecord::Base
       record.errors.add(attr, 'attempt must not be larger than number of submission attempts')
     end
   end
+  validates :workflow_state, inclusion: {in: ["active"]}, allow_nil: true
 
   before_save :infer_details
+  before_save :set_root_account_id
   before_save :set_edited_at
   after_save :update_participation
   after_save :check_for_media_object
@@ -84,6 +88,10 @@ class SubmissionComment < ActiveRecord::Base
   scope :for_assignment_id, lambda { |assignment_id| where(:submissions => { :assignment_id => assignment_id }).joins(:submission) }
   scope :for_groups, -> { where.not(group_comment_id: nil) }
   scope :not_for_groups, -> { where(group_comment_id: nil) }
+
+  workflow do
+    state :active
+  end
 
   def delete_other_comments_in_this_group
     update_other_comments_in_this_group(&:destroy)
@@ -177,9 +185,8 @@ class SubmissionComment < ActiveRecord::Base
   set_broadcast_policy do |p|
     p.dispatch :submission_comment
     p.to do
-      course_id = /\d+/.match(submission.context_code).to_s.to_i
       active_participant =
-        Enrollment.where(user_id: submission.user.id, :course_id => course_id).active_by_date.exists?
+        Enrollment.where(user_id: submission.user.id, :course_id => submission.course_id).active_by_date.exists?
       if active_participant
         ([submission.user] + User.observing_students_in_course(submission.user, submission.assignment.context)) - [author]
       end
@@ -268,6 +275,7 @@ class SubmissionComment < ActiveRecord::Base
 
   def can_read_author?(user, session)
     RequestCache.cache('user_can_read_author', self, user, session) do
+      return false if self.submission.assignment.anonymize_students?
       (!self.anonymous? && !self.submission.assignment.anonymous_peer_reviews?) ||
           self.author == user ||
           self.submission.assignment.context.grants_right?(user, session, :view_all_grades) ||
@@ -329,6 +337,12 @@ class SubmissionComment < ActiveRecord::Base
     self.author_name ||= self.author.short_name rescue t(:unknown_author, "Someone")
     self.cached_attachments = self.attachments.map{|a| OpenObject.build('attachment', a.attributes) }
     self.context = self.read_attribute(:context) || self.submission.assignment.context rescue nil
+
+    self.workflow_state ||= "active"
+  end
+
+  def set_root_account_id
+    self.root_account_id ||= context.root_account_id
   end
 
   def force_reload_cached_attachments

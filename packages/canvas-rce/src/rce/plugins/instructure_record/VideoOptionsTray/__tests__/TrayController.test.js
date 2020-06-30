@@ -189,12 +189,12 @@ describe('RCE "Videos" Plugin > VideoOptionsTray > TrayController', () => {
 
   describe('#_applyVideoOptions', () => {
     it('updates the video', () => {
-      const updateMediaObject = jest.fn()
+      const updateMediaObject = jest.fn().mockResolvedValue()
       trayController.showTrayForEditor(editors[0])
       trayController._applyVideoOptions({
         displayAs: 'embed',
         appliedHeight: '101',
-        appliedWidth: '201',
+        appliedWidth: '321',
         titleText: 'new title',
         updateMediaObject
       })
@@ -204,12 +204,12 @@ describe('RCE "Videos" Plugin > VideoOptionsTray > TrayController', () => {
       expect(videoContainer.getAttribute('data-mce-p-title')).toBe('new title')
       expect(videoIframe.getAttribute('title')).toBe('new title')
       expect(videoContainer.style.height).toBe('101px')
-      expect(videoContainer.style.width).toBe('201px')
+      expect(videoContainer.style.width).toBe('321px')
       expect(updateMediaObject).toHaveBeenCalled()
     })
 
     it('replaces the video with a link', () => {
-      const updateMediaObject = jest.fn()
+      const updateMediaObject = jest.fn().mockResolvedValue()
       const ed = editors[0]
       trayController.showTrayForEditor(ed)
       trayController._applyVideoOptions({

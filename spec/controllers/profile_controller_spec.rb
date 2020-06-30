@@ -97,7 +97,6 @@ describe ProfileController do
 
     describe "personal pronouns" do
       before :once do
-        @user.account.enable_feature!(:account_pronouns)
         @user.account.settings = { :can_add_pronouns => true }
         @user.account.save!
       end
@@ -296,6 +295,47 @@ describe ProfileController do
         teacher_in_course(:active_all => true)
         user_session(@teacher)
         get 'content_shares', params: {user_id: @teacher.id}
+        expect(response).to be_not_found
+      end
+    end
+  end
+
+  describe "GET #qr_mobile_login" do
+    context "mobile_qr_login setting is enabled" do
+      before :once do
+        Account.default.settings[:mobile_qr_login_is_enabled] = true
+        Account.default.save
+      end
+
+      it "should render empty html layout" do
+        user_session(@user)
+        get "qr_mobile_login"
+        expect(response).to render_template "layouts/application"
+        expect(response.body).to eq ""
+      end
+
+      it "should redirect to login if no active session" do
+        get "qr_mobile_login"
+        expect(response).to redirect_to "/login"
+      end
+
+      it "should 404 if IMP is missing" do
+        allow_any_instance_of(ProfileController).to receive(:instructure_misc_plugin_available?).and_return(false)
+        user_session(@user)
+        get "qr_mobile_login"
+        expect(response).to be_not_found
+      end
+    end
+
+    context "mobile_qr_login setting is disabled" do
+      before :once do
+        Account.default.settings[:mobile_qr_login_is_enabled] = false
+        Account.default.save
+      end
+
+      it "should 404" do
+        user_session(@user)
+        get "qr_mobile_login"
         expect(response).to be_not_found
       end
     end

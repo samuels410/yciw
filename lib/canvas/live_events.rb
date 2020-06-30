@@ -45,6 +45,21 @@ module Canvas::LiveEvents
     ctx
   end
 
+  def self.conversation_created(conversation)
+    post_event_stringified('conversation_created', {
+      conversation_id: conversation.id,
+      updated_at: conversation.updated_at
+    })
+  end
+
+  def self.conversation_forwarded(conversation)
+    post_event_stringified('conversation_forwarded', {
+      conversation_id: conversation.id,
+      updated_at: conversation.updated_at
+      },
+      amended_context(nil))
+  end
+
   def self.get_course_data(course)
     {
       course_id: course.global_id,
@@ -70,6 +85,15 @@ module Canvas::LiveEvents
       course_id: course.global_id,
       syllabus_body: LiveEvents.truncate(course.syllabus_body),
       old_syllabus_body: LiveEvents.truncate(old_syllabus_body)
+    })
+  end
+
+  def self.conversation_message_created(conversation_message)
+    post_event_stringified('conversation_message_created', {
+      author_id: conversation_message.author_id,
+      conversation_id: conversation_message.conversation_id,
+      created_at: conversation_message.created_at,
+      message_id: conversation_message.id
     })
   end
 
@@ -247,6 +271,10 @@ module Canvas::LiveEvents
 
   def self.assignments_bulk_updated(assignment_ids)
     Assignment.where(:id => assignment_ids).each{|a| assignment_updated(a)}
+  end
+
+  def self.submissions_bulk_updated(submissions)
+    Submission.where(id: submissions).preload(:assignment).find_each { |submission| submission_updated(submission) }
   end
 
   def self.get_assignment_override_data(override)
@@ -501,7 +529,9 @@ module Canvas::LiveEvents
       grader_id = submission.global_grader_id
     end
 
-    sis_pseudonym = SisPseudonym.for(submission.user, submission.assignment.context, type: :trusted, require_sis: false)
+    sis_pseudonym = Shackles.activate(:slave) do
+      SisPseudonym.for(submission.user, submission.assignment.context, type: :trusted, require_sis: false)
+    end
 
     post_event_stringified('grade_change', {
       submission_id: submission.global_id,

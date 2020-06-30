@@ -600,11 +600,26 @@ class Message < ActiveRecord::Base
       return nil
     end
 
+    check_acct = root_account || user&.account || Account.site_admin
+    if path_type == 'sms' && !check_acct.settings[:sms_allowed] && Account.site_admin.feature_enabled?(:deprecate_sms)
+      if Notification.types_to_send_in_sms(check_acct).exclude?(notification_name)
+        InstStatsd::Statsd.increment("message.skip.#{path_type}.#{notification_name}",
+                                     short_stat: 'message.skip',
+                                     tags: {path_type: path_type, notification_name: notification_name})
+        self.destroy
+        return nil
+      end
+    end
+
     InstStatsd::Statsd.increment("message.deliver.#{path_type}.#{notification_name}",
                                  short_stat: 'message.deliver',
                                  tags: {path_type: path_type, notification_name: notification_name})
 
-    check_acct = user&.account || Account.site_admin
+    global_account_id = Shard.global_id_for(root_account_id, self.shard)
+    InstStatsd::Statsd.increment("message.deliver.#{path_type}.#{global_account_id}",
+                                 short_stat: 'message.deliver_per_account',
+                                 tags: {path_type: path_type, root_account_id: global_account_id})
+
     if check_acct.feature_enabled?(:notification_service)
       enqueue_to_sqs
     else
@@ -916,7 +931,7 @@ class Message < ActiveRecord::Base
   def deliver_via_sms
     if to =~ /^\+[0-9]+$/
       begin
-        unless user.account.feature_enabled?(:international_sms)
+        unless Account.site_admin.feature_enabled?(:international_sms)
           raise "International SMS is currently disabled for this user's account"
         end
         if Canvas::Twilio.enabled?

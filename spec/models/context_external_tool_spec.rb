@@ -81,7 +81,7 @@ describe ContextExternalTool do
     let(:user) { course.teachers.first }
     let(:context) { course }
 
-    subject { tool.permission_given?(launch_type, user, context) } 
+    subject { tool.permission_given?(launch_type, user, context) }
 
     context 'when the placement does not require a specific permission' do
       let(:launch_type) { 'course_navigation' }
@@ -565,6 +565,37 @@ describe ContextExternalTool do
       end
 
       it { is_expected.to be false }
+    end
+  end
+
+  describe "from_content_tag" do
+    subject { ContextExternalTool.from_content_tag(*arguments) }
+
+    let(:arguments) { [content_tag, tool.context] }
+    let(:tool) { external_tool_model }
+    let(:content_tag_opts) { { url: tool.url, content_type: 'ContextExternalTool' } }
+    let(:content_tag) { ContentTag.new(content_tag_opts) }
+
+    it { is_expected.to eq tool }
+
+    context 'when the tool is linked to the tag by id (hard association)' do
+      let(:content_tag_opts) { super().merge({ content_id: tool.id }) }
+
+      it { is_expected.to eq tool }
+    end
+
+    context 'when there are blank arguments' do
+      context 'when the content tag argument is blank' do
+        let(:arguments) { [nil, tool.context] }
+
+        it { is_expected.to eq nil }
+      end
+
+      context 'when the context argument is blank' do
+        let(:arguments) { [nil, tool.context] }
+
+        it { is_expected.to eq nil }
+      end
     end
   end
 
@@ -1862,6 +1893,61 @@ describe ContextExternalTool do
         json = ContextExternalTool.editor_button_json([tool], @course, user_with_pseudonym)
         expect(json[0][:description]).to eq "<p><a href=\"http://the.url\" target=\"_blank\">link text</a></p>\n"
       end
+    end
+  end
+
+  describe 'is_rce_favorite' do
+    def tool_in_context(context)
+      ContextExternalTool.create!(
+        context: context,
+        consumer_key: 'key',
+        shared_secret: 'secret',
+        name: 'test tool',
+        url: 'http://www.tool.com/launch',
+      )
+    end
+
+    it 'saves is_rce_favorite if can_be_rce_favorite?' do
+      tool = tool_in_context(@root_account)
+      tool.editor_button = {url: 'http://example.com'}
+      tool.is_rce_favorite = true
+      tool.save!
+      expect(tool.is_rce_favorite).to be true
+    end
+
+    it 'does not save is_rce_favorite if no editor_button placement' do
+      tool = tool_in_context(@root_account)
+      tool.is_rce_favorite = true
+      tool.save!
+      expect(tool.is_rce_favorite).to be false
+    end
+
+    it 'does not set is_rce_favorite if context is not a root account' do
+      sub_account = @root_account.sub_accounts.create!
+      tool = tool_in_context(sub_account)
+      tool.editor_button = {url: 'http://example.com'}
+      tool.is_rce_favorite = true
+      tool.save!
+      expect(tool.is_rce_favorite).to be false
+    end
+
+    it 'does not set is_rce_favorite if context is not an account' do
+      tool = tool_in_context(@course)
+      tool.editor_button = {url: 'http://example.com'}
+      tool.is_rce_favorite = true
+      tool.save!
+      expect(tool.is_rce_favorite).to be false
+    end
+
+    it 'resets is_rce_favorite if editor_button placement is removed' do
+      tool = tool_in_context(@root_account)
+      tool.editor_button = {url: 'http://example.com'}
+      tool.is_rce_favorite = true
+      tool.save!
+      expect(tool.is_rce_favorite).to be true
+      tool.editor_button = nil
+      tool.save!
+      expect(tool.is_rce_favorite).to be false
     end
   end
 end

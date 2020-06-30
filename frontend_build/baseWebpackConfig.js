@@ -68,8 +68,6 @@ module.exports = {
         'canvas-rce-async-chunk',
         'canvas-rce-old-async-chunk',
         'permissions_index',
-        // The Gradebook bundles will be reduced in size as a part of GRADE-942.
-        'gradebook',
         'screenreader_gradebook',
         // This bundle got pushed over the limit by translations being added and
         // the simplest fix was to ignore it at the moment, to unblock selenium
@@ -298,6 +296,10 @@ module.exports = {
       this.plugin('done', ({compilation}) => {
         if (compilation.warnings && compilation.warnings.length) {
           console.error(compilation.warnings)
+          // If there's a bad import, webpack doesn't say where.
+          // Only if we let the compilation complete do we get
+          // the callstack where the import happenes
+          // If you're having problems, comment out the throw
           throw new Error('webpack build had warnings. Failing.')
         }
       })

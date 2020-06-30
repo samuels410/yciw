@@ -54,6 +54,10 @@ class FeatureFlag < ActiveRecord::Base
     if self.context
       self.class.connection.after_transaction_commit { self.context.feature_flag_cache.delete(self.context.feature_flag_cache_key(feature)) }
       self.context.touch if Feature.definitions[feature].try(:touch_context)
+      self.context.clear_cache_key(:feature_flags) if self.context.is_a?(Account)
+      if ::Rails.env.development? && self.context.is_a?(Account) && Account.all_special_accounts.include?(self.context)
+        Account.clear_special_account_cache!(true)
+      end
     end
   end
 
@@ -64,7 +68,11 @@ class FeatureFlag < ActiveRecord::Base
   end
 
   def feature_applies
-    errors.add(:feature, "is not valid in context") unless Feature.feature_applies_to_object(feature, context)
+    if !Feature.exists?(feature)
+      errors.add(:feature, "does not exist")
+    elsif !Feature.feature_applies_to_object(feature, context)
+      errors.add(:feature, "does not apply to context")
+    end
   end
 
   def check_cache

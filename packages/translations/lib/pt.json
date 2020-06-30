@@ -5,6 +5,9 @@
     "add_8523c19b": {
         "message": "Adicionar"
     },
+    "add_another_f4e50d57": {
+        "message": "Adicionar outro"
+    },
     "add_cc_subtitles_55f0394e": {
         "message": "Adicionar Legenda/Legendas"
     },
@@ -52,6 +55,12 @@
     },
     "an_error_occurred_generating_the_file_preview_cf259955": {
         "message": "Ocorreu um erro ao gerar a visualização do ficheiro"
+    },
+    "an_error_occurred_making_a_network_request_d1bda348": {
+        "message": "Ocorreu um erro ao fazer uma solicitação de rede"
+    },
+    "an_error_occurred_uploading_your_media_71f1444d": {
+        "message": "Ocorreu um erro ao carregar seu multimédia."
     },
     "announcement_fb4cb645": {
         "message": "Anúncio"
@@ -118,6 +127,9 @@
     },
     "automatically_open_an_in_line_preview_preview_disp_ed784ffe": {
         "message": "Abra automaticamente uma pré-visualização em linha. (A pré-visualização é exibida somente após salvar)"
+    },
+    "available_folders_694d0436": {
+        "message": "Pastas disponíveis"
     },
     "beginning_of_your_to_do_history_61ef2dce": {
         "message": "Início do seu histórico de tarefas"
@@ -211,6 +223,9 @@
     },
     "course_files_62deb8f8": {
         "message": "Ficheiros de disciplinas"
+    },
+    "course_files_a31f97fc": {
+        "message": "Ficheiros de disciplina"
     },
     "course_images_f8511d04": {
         "message": "Imagens da disciplina"
@@ -380,6 +395,9 @@
     "embed_video_code_703e10f2": {
         "message": "Incorporar código de vídeo"
     },
+    "embedded_content_aaeb4d3d": {
+        "message": "conteúdo incorporado"
+    },
     "equation_1c5ac93c": {
         "message": "Equação"
     },
@@ -425,6 +443,12 @@
     "file_name_8fd421ff": {
         "message": "Nome do ficheiro"
     },
+    "file_upload_failed_af22dd91": {
+        "message": "Carregamento de ficheiro falhou"
+    },
+    "file_uploading_56c9c0c8": {
+        "message": "Carregamento de ficheiros"
+    },
     "file_url_c12b64be": {
         "message": "URL do ficheiro"
     },
@@ -446,8 +470,8 @@
     "finish_bc343002": {
         "message": "Terminar"
     },
-    "focus_the_popup_context_toolbar_7979f4f8": {
-        "message": "Focar a barra de ferramentas do contexto pop-up"
+    "folder_tree_fbab0726": {
+        "message": "Árvore de pastas"
     },
     "formatting_5b143aa8": {
         "message": "Formatação"
@@ -484,6 +508,9 @@
     },
     "group_files_4324f3df": {
         "message": "Arquivos de grupo"
+    },
+    "group_files_82e5dcdb": {
+        "message": "Ficheiros de grupo"
     },
     "group_navigation_99f191a": {
         "message": "Navegação do grupo"
@@ -602,6 +629,9 @@
     "loading_failed_e6a9d8ef": {
         "message": "O carregamento falhou."
     },
+    "loading_folders_d8b5869e": {
+        "message": "A carregar pastas"
+    },
     "loading_grades_c842c887": {
         "message": "A carregar classificações"
     },
@@ -616,6 +646,9 @@
     },
     "location_3b6ff307": {
         "message": "Local:"
+    },
+    "locked_762f138b": {
+        "message": "Bloqueado"
     },
     "looks_like_there_isn_t_anything_here_d9bcef49": {
         "message": "Parece que não há nada aqui"
@@ -643,6 +676,9 @@
     },
     "must_be_at_least_width_x_height_px_41dc825e": {
         "message": "Deve ter pelo menos { width } x { height }px"
+    },
+    "my_files_2f621040": {
+        "message": "Os meus ficheiros"
     },
     "my_grades_98834476": {
         "message": "Minhas classificações"
@@ -676,6 +712,9 @@
     },
     "no_e16d9132": {
         "message": "Não"
+    },
+    "no_file_chosen_9a880793": {
+        "message": "Nenhum ficheiro escolhido"
     },
     "no_grade_3b4d7f3e": {
         "message": "Sem classificação"
@@ -806,6 +845,9 @@
     "quizzes_7e598f57": {
         "message": "Testes"
     },
+    "reading_a_media_track_file_failed_aborting_be051b20": {
+        "message": "A leitura de um ficheiro de pista de vídeo correu mal. Abortamento."
+    },
     "record_7c9448b": {
         "message": "Gravar"
     },
@@ -890,6 +932,12 @@
     "something_went_wrong_and_i_don_t_know_what_to_show_e0c54ec8": {
         "message": "Algo deu errado e eu não sei o que mostrar."
     },
+    "something_went_wrong_check_your_connection_and_try_2a7b2d13": {
+        "message": "Algo correu mal, verifique a sua ligação e tente novamente."
+    },
+    "something_went_wrong_d238c551": {
+        "message": "Algo deu errado"
+    },
     "something_went_wrong_try_again_after_refreshing_th_e094eb8d": {
         "message": "Ocorreu um erro. Tente novamente depois de atualizar a página"
     },
@@ -932,11 +980,17 @@
     "subscript_59744f96": {
         "message": "Assinatura"
     },
+    "success_file_uploaded_8174e93f": {
+        "message": "Sucesso: Ficheiro carregado"
+    },
     "success_to_do_created_e34ed395": {
         "message": "Sucesso: Tarefa criada"
     },
     "superscript_8cb349a2": {
         "message": "Superescrito"
+    },
+    "supported_file_types_srt_or_webvtt_7d827ed": {
+        "message": "Tipos de ficheiros suportados: SRT ou WebVTT"
     },
     "switch_to_raw_html_editor_4c9ac7de": {
         "message": "Mudar para o editor html bruto"
@@ -1028,9 +1082,6 @@
     "upload_document_253f0478": {
         "message": "Carregar documento"
     },
-    "upload_error_f9c00e27": {
-        "message": "Erro ao carregar"
-    },
     "upload_file_fd2361b8": {
         "message": "Carregar ficheiro"
     },
@@ -1039,6 +1090,9 @@
     },
     "upload_media_ce31135a": {
         "message": "Carregar Multimédia"
+    },
+    "upload_not_available_for_this_folder_8f8623c6": {
+        "message": "Carregamento não disponível para esta pasta"
     },
     "upload_record_media_e4207d72": {
         "message": "Carregar/Gravar Mídia"

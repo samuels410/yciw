@@ -39,6 +39,49 @@ class Notification < ActiveRecord::Base
     "Show In Feed",
   ].freeze
 
+  ALLOWED_SMS_NOTIFICATION_CATEGORIES = [
+    'announcement',
+    'grading'
+  ].freeze
+
+  ALLOWED_SMS_NOTIFICATION_TYPES = [
+    'Assignment Graded',
+    'Confirm SMS Communication Channel',
+    'New Announcement',
+    'Submission Grade Changed',
+    'Submission Graded'
+  ].freeze
+
+  COURSE_TYPES = [
+    # Course Activities
+    'Due Date',
+    'Grading Policies',
+    'Course Content',
+    'Files',
+    'Announcement',
+    'Announcement Created By You',
+    'Grading',
+    'Invitation',
+    'All Submissions',
+    'Late Grading',
+    'Submission Comment',
+    'Blueprint',
+
+    # Discussions
+    'Discussion',
+    'DiscussionEntry',
+
+    # Scheduling
+    'Student Appointment Signups',
+    'Appointment Signups',
+    'Appointment Cancelations',
+    'Appointment Availability',
+    'Calendar',
+
+    # Conferences
+    'Recording Ready'
+  ].freeze
+
   FREQ_IMMEDIATELY = 'immediately'
   FREQ_DAILY = 'daily'
   FREQ_WEEKLY = 'weekly'
@@ -151,12 +194,20 @@ class Notification < ActiveRecord::Base
      TYPES_TO_SHOW_IN_FEED
   end
 
-  def self.categories_to_send_in_sms
-    Setting.get('allowed_sms_notification_categories', 'announcement,grading').split(',')
+  def self.categories_to_send_in_sms(root_account)
+    root_account.settings[:allowed_sms_notification_categories] || Setting.get('allowed_sms_notification_categories', ALLOWED_SMS_NOTIFICATION_CATEGORIES.join(',')).split(',')
+  end
+
+  def self.types_to_send_in_sms(root_account)
+    root_account.settings[:allowed_sms_notification_types] || Setting.get('allowed_sms_notification_types', ALLOWED_SMS_NOTIFICATION_TYPES.join(',')).split(',')
   end
 
   def show_in_feed?
     self.category == "TestImmediately" || Notification.types_to_show_in_feed.include?(self.name)
+  end
+
+  def is_course_type?
+    COURSE_TYPES.include? self.category
   end
 
   def registration?
@@ -291,6 +342,8 @@ class Notification < ActiveRecord::Base
     t 'names.manually_created_access_token_created', 'Manually Created Access Token Created'
     t 'names.account_user_notification', 'Account User Notification'
     t 'names.account_user_registration', 'Account User Registration'
+    t 'Annotation Notification'
+    t 'Annotation Teacher Notification'
     t 'names.assignment_changed', 'Assignment Changed'
     t 'names.assignment_created', 'Assignment Created'
     t 'names.assignment_due_date_changed', 'Assignment Due Date Changed'
