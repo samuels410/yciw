@@ -2078,7 +2078,7 @@ class Attachment < ActiveRecord::Base
   def set_root_account_id
     # needed to do it this way since root_account_id is a method in this class
     unless read_attribute(:root_account_id)
-      self.root_account_id = 
+      self.root_account_id =
         case self.context
         when Account
           self.context.resolved_root_account_id
