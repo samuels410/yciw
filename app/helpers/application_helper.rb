@@ -236,7 +236,7 @@ module ApplicationHelper
     @rendered_js_bundles += new_js_bundles
 
     @rendered_preload_chunks ||= []
-    preload_chunks = new_js_bundles.map do |(bundle, plugin)|
+    preload_chunks = new_js_bundles.map do |(bundle, plugin, *)|
       key = "#{plugin ? "#{plugin}-" : ''}#{bundle}"
       Canvas::Cdn::RevManifest.all_webpack_chunks_for(key)
     end.flatten.uniq - @script_chunks - @rendered_preload_chunks # subtract out the ones we already preloaded in the <head>
@@ -250,8 +250,12 @@ module ApplicationHelper
       # to load that "js_bundle". And by the time that runs, the browser will have already
       # started downloading those script urls because of those preload tags above,
       # so it will not cause a new request to be made.
-      concat javascript_tag new_js_bundles.map { |(bundle, plugin)|
-        "(window.bundles || (window.bundles = [])).push('#{plugin ? "#{plugin}-" : ''}#{bundle}');"
+      #
+      # preloading works similarily for window.deferredBundles only that their
+      # execution is delayed until the DOM is ready.
+      concat javascript_tag new_js_bundles.map { |(bundle, plugin, defer)|
+        container = defer ? 'window.deferredBundles' : 'window.bundles'
+        "(#{container} || (#{container} = [])).push('#{plugin ? "#{plugin}-" : ''}#{bundle}');"
       }.join("\n") if new_js_bundles.present?
     end
   end
@@ -912,7 +916,7 @@ module ApplicationHelper
     end
 
     # set this if you want android users of your site to be prompted to install an android app
-    # you can see an example of the one that instructure uses in public/web-app-manifest/manifest.json
+    # you can see an example of the one that instructure uses in InfoController#web_app_manifest
     manifest_url = Setting.get('web_app_manifest_url', '')
     output << tag("link", rel: 'manifest', href: manifest_url) if manifest_url.present?
 
@@ -1052,8 +1056,7 @@ module ApplicationHelper
   end
 
   def planner_enabled?
-    !!(@current_user && @domain_root_account&.feature_enabled?(:student_planner) &&
-      @current_user.has_student_enrollment?)
+    !!(@current_user&.has_student_enrollment?)
   end
 
   def will_paginate(collection, options = {})
@@ -1226,6 +1229,18 @@ module ApplicationHelper
     )
   end
 
+  def file_location_mode?
+    in_app? && request.headers["X-Canvas-File-Location"] == "True"
+  end
+
+  def render_file_location(location)
+    headers["X-Canvas-File-Location"] = "True"
+    render json: {
+      location: location,
+      token: file_authenticator.instfs_bearer_token
+    }
+  end
+
   def authenticated_download_url(attachment)
     file_authenticator.download_url(attachment)
   end
@@ -1263,5 +1278,17 @@ module ApplicationHelper
       }
     }.deep_merge(options)
     javascript_tag "(window.prefetched_xhrs = (window.prefetched_xhrs || {}))[#{id.to_json}] = fetch(#{url.to_json}, #{opts.to_json})"
+  end
+
+  def mastery_scales_js_env
+    if @domain_root_account.feature_enabled?(:account_level_mastery_scales)
+      js_env(
+        ACCOUNT_LEVEL_MASTERY_SCALES: true,
+        MASTERY_SCALE: {
+          outcome_proficiency: @context.resolved_outcome_proficiency&.as_json,
+          outcome_calculation_method: @context.resolved_outcome_calculation_method&.as_json
+        }
+      )
+    end
   end
 end

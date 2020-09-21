@@ -98,7 +98,7 @@ module CanvasRails
     end
 
     # Activate observers that should always be running
-    config.active_record.observers = [:cacher, :stream_item_cache, :live_events_observer, :conditional_release_observer ]
+    config.active_record.observers = [:cacher, :stream_item_cache, :live_events_observer ]
     config.active_record.allow_unsafe_raw_sql = :disabled
 
     config.active_support.encode_big_decimal_as_string = false
@@ -275,6 +275,17 @@ module CanvasRails
     def validate_secret_key_config!
       # no validation; we don't use Rails' CookieStore session middleware, so we
       # don't care about secret_key_base
+    end
+
+    initializer "canvas.init_dynamic_settings", before: "canvas.extend_shard" do
+      settings = ConfigFile.load("consul")
+      if settings.present?
+        begin
+          Canvas::DynamicSettings.config = settings
+        rescue Imperium::UnableToConnectError
+          Rails.logger.warn("INITIALIZATION: can't reach consul, attempts to load DynamicSettings will fail")
+        end
+      end
     end
 
     initializer "canvas.extend_shard", before: "active_record.initialize_database" do

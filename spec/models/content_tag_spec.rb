@@ -549,6 +549,14 @@ describe ContentTag do
     expect(@module.reload.updated_at.to_i).to eq yesterday.to_i
   end
 
+  it "should update outcome root account ids after save" do
+    outcome = LearningOutcome.create! title: 'foo', context: nil
+    course = course_factory
+    expect(outcome.root_account_ids).to eq []
+    ContentTag.create(tag_type: "learning_outcome_association", content: outcome, context: course)
+    expect(outcome.root_account_ids).to eq [course.account.id]
+  end
+
   describe "visible_to_students_in_course_with_da" do
     before do
       course_with_student(active_all: true)
@@ -762,5 +770,42 @@ describe ContentTag do
     att.save!
     tag.reload
     expect(tag.unpublished?).to be_truthy
+  end
+
+  describe 'after_save' do
+    describe 'set_root_account' do
+      it 'should set root_account when context is Account' do
+        account = Account.default
+        tag = ContentTag.create!(context: account)
+        expect(tag.root_account).to eq account.root_account
+      end
+
+      it 'should set root_account when context is Assignment' do
+        course_factory
+        assignment = @course.assignments.create!(title: "test")
+        tag = ContentTag.create!(context: assignment)
+        expect(tag.root_account).to eq assignment.root_account
+      end
+
+      it 'should set root_account when context is Course' do
+        course_factory
+        tag = ContentTag.create!(context: @course)
+        expect(tag.root_account).to eq @course.root_account
+      end
+
+      it 'should set root_account when context is LearningOutcomeGroup' do
+        account = Account.default
+        group = LearningOutcomeGroup.create!(title: "test", context: account)
+        tag = ContentTag.create!(context: group)
+        expect(tag.root_account).to eq account.root_account
+      end
+
+      it 'should set root_account when context is Quiz' do
+        course_factory
+        quiz = @course.quizzes.create!
+        tag = ContentTag.create!(context: quiz)
+        expect(tag.root_account).to eq @course.root_account
+      end
+    end
   end
 end

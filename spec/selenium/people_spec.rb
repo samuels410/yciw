@@ -288,14 +288,13 @@ describe "people" do
     end
 
     it "should delete a student group" do
-      get "/courses/#{@course.id}/users"
-      create_student_group
+      group_category = GroupCategory.create(:name => "new student group", :context => @course)
+
+      get "/courses/#{@course.id}/groups#tab-#{group_category.id}"
       fj('.group-category-actions:visible a:visible').click
-      wait_for(method: nil, timeout: 2) { f('.delete-category').displayed? } # simple wait for option to be visible
       f('.delete-category').click
       accept_alert
       wait_for_ajaximations
-      refresh_page
       expect(f('.empty-groupset-instructions')).to be_displayed
     end
 
@@ -789,7 +788,6 @@ describe "people" do
 
     context "student tray" do
       before :once do
-        preload_graphql_schema
         @account = Account.default
         @account.enable_feature!(:student_context_cards)
         @student = create_user('student@test.com')

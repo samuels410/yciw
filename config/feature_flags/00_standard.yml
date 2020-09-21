@@ -27,6 +27,16 @@ high_contrast:
       distinct and easier to identify. Note: Institution branding will be disabled.
   applies_to: User
   autoexpand: true
+disable_alert_timeouts:
+  state: allowed
+  display_name:
+    features.disable_alert_timeouts: Disable Alert Notification Timeouts
+  description:
+    disable_alert_timeouts_description: |-
+      Enabling this feature gets rid of the timeout for alert notifications that pop up, giving the
+      user as much time as they need to read the notification over and dismiss it when they are finished.
+  applies_to: User
+  autoexpand: true
 disable_celebrations:
   state: hidden
   display_name:
@@ -117,12 +127,6 @@ k12:
       Update the icons in the Global Navigation Menu that make more sense specifically in a K-12 environment.
   applies_to: RootAccount
   root_opt_in: true
-recurring_calendar_events:
-  state: hidden
-  display_name: Duplicating Calendar Events
-  description: Allows the duplication of Calendar Events
-  applies_to: Course
-  root_opt_in: true
 duplicate_modules:
   state: allowed
   display_name: Duplicate Modules
@@ -200,12 +204,6 @@ notification_service:
   description: Allow the ability to send notifications through our dispatch queue
   applies_to: RootAccount
   root_opt_in: true
-better_scheduler:
-  state: hidden
-  display_name: Use the new scheduler
-  description: Uses the new scheduler and its functionality
-  applies_to: RootAccount
-  root_opt_in: true
 course_card_images:
   state: allowed
   display_name: Enable Dashboard Images for Courses
@@ -222,6 +220,14 @@ responsive_layout:
   environments:
     development:
       state: 'on'
+disable_keyboard_shortcuts:
+  state: hidden
+  display_name: Disable Keyboard Shortcuts
+  description: |-
+      Disable Canvas keyboard shortcuts. Some users using screenreaders or keyboard navigation
+      will have an improved experience with these shortcuts turned off.
+  applies_to: User
+  autoexpand: true
 enable_i18n_features_in_outcomes_exports:
   state: hidden
   display_name: Enable i18n features in outcomes exports
@@ -253,16 +259,8 @@ international_sms:
   display_name: International SMS
   description: Allows users with international phone numbers to receive text messages
     from Canvas.
-  applies_to: SiteAdmin
+  applies_to: RootAccount
   root_opt_in: true
-course_user_search:
-  state: 'on'
-  display_name: Account Course and User Search
-  description: Updated UI for searching and displaying users and courses within an
-    account.
-  applies_to: Account
-  root_opt_in: true
-  touch_context: true
 conditional_release:
   state: allowed
   display_name: Mastery Paths
@@ -270,7 +268,6 @@ conditional_release:
     results.
   applies_to: Course
   root_opt_in: true
-  after_state_change_proc: conditional_release_after_state_change_hook
 wrap_calendar_event_titles:
   state: allowed
   display_name: Wrap event titles in Calendar month view
@@ -296,12 +293,6 @@ new_user_tutorial:
   state: allowed
   display_name: New User Tutorial
   description: Provide tutorial information for new users in a flyout tray.
-  applies_to: RootAccount
-  root_opt_in: true
-student_planner:
-  state: 'on'
-  display_name: To Do List Dashboard
-  description: Provides users with a To Do List Dashboard option.
   applies_to: RootAccount
   root_opt_in: true
 rubric_criterion_range:
@@ -436,13 +427,6 @@ new_gradebook_plagiarism_indicator:
   display_name: New Gradebook Plagiarism Indicator
   description: Enables display of plagiarism reports and similarity scores in
     the New Gradebook submission tray.
-unfavorite_course_from_dashboard:
-  state: hidden
-  applies_to: RootAccount
-  display_name: Course Favorites From Dashboard
-  description: This allows the user to unfavorite a course directly from its
-    dashboard card.
-  root_opt_in: true
 commons_favorites:
   state: hidden
   applies_to: RootAccount
@@ -460,3 +444,8 @@ timer_without_autosubmission:
   description: Presents the quiz setting to avoid automatic submission of a timed quiz when the available time has ended.
   applies_to: RootAccount
   state: hidden
+recent_history:
+  state: allowed
+  applies_to: RootAccount
+  display_name: Recent History
+  description: Show a list of recently visited pages in the Canvas global navigation

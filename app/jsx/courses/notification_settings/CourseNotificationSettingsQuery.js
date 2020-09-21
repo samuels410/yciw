@@ -28,7 +28,10 @@ import {useQuery} from 'react-apollo'
 
 export default function CourseNotificationSettingsQuery(props) {
   const {loading, error, data} = useQuery(COURSE_NOTIFICATIONS_QUERY, {
-    variables: {courseId: props.courseId}
+    variables: {
+      courseId: props.courseId,
+      userId: props.userId
+    }
   })
 
   if (loading) return <LoadingIndicator />
@@ -43,14 +46,17 @@ export default function CourseNotificationSettingsQuery(props) {
 
   return (
     <CourseNotificationSettingsManager
+      userId={props.userId}
       courseId={props.courseId}
-      courseName={data?.course?.name}
-      enabled={data?.course?.notificationPreferencesEnabled}
-      notificationPreferences={data?.course?.notificationPreferences}
+      courseName={props.courseName}
+      enabled={data?.legacyNode?.notificationPreferencesEnabled}
+      notificationPreferences={data?.legacyNode?.notificationPreferences}
     />
   )
 }
 
 CourseNotificationSettingsQuery.propTypes = {
-  courseId: string.isRequired
+  courseId: string.isRequired,
+  courseName: string.isRequired,
+  userId: string.isRequired
 }

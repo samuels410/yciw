@@ -95,6 +95,28 @@ module Types
       load_association(:account)
     end
 
+    # TODO: restore when OUT-3878 is complete
+    # field :outcome_proficiency, OutcomeProficiencyType, null: true
+    # def outcome_proficiency
+    #   # This does a recursive lookup of parent accounts, not sure how we could
+    #   # batch load it in a reasonable way.
+    #   course.resolved_outcome_proficiency
+    # end
+
+    # field :proficiency_ratings_connection, ProficiencyRatingType.connection_type, null: true
+    # def proficiency_ratings_connection
+    #   # This does a recursive lookup of parent accounts, not sure how we could
+    #   # batch load it in a reasonable way.
+    #   outcome_proficiency&.outcome_proficiency_ratings
+    # end
+
+    field :outcome_calculation_method, OutcomeCalculationMethodType, null: true
+    def outcome_calculation_method
+      # This does a recursive lookup of parent accounts, not sure how we could
+      # batch load it in a reasonable way.
+      course.resolved_outcome_calculation_method
+    end
+
     field :sections_connection, SectionType.connection_type, null: true
     def sections_connection
       course.active_course_sections.
@@ -278,16 +300,10 @@ module Types
       end
     end
 
-    field :notification_preferences_enabled, Boolean, null: false
-    def notification_preferences_enabled
-      NotificationPolicyOverride.enabled_for(current_user, course)
-    end
-
-    field :notification_preferences, NotificationPreferencesType, null: true
-    def notification_preferences
-      Loaders::AssociationLoader.for(User, :communication_channels).load(current_user).then do |comm_channels|
-        {channels: comm_channels.unretired}
-      end
+    field :sis_id, String, null: true
+    def sis_id
+      return nil unless course.grants_any_right?(current_user, :read_sis, :manage_sis)
+      course.sis_course_id
     end
   end
 end

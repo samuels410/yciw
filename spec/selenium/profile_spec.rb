@@ -110,7 +110,7 @@ describe "profile" do
     end
 
     it "should add a new email address on profile settings page" do
-      Account.site_admin.enable_feature!(:international_sms)
+      @user.account.enable_feature!(:international_sms)
       notification_model(:category => 'Grading')
       notification_policy_model(:notification_id => @notification.id)
 
@@ -137,9 +137,7 @@ describe "profile" do
 
     it "should change default email address" do
       @user.communication_channel.confirm!
-      channel = @user.communication_channels.create!(:path_type => 'email',
-                                                     :path => 'walter_white@example.com')
-      channel.confirm!
+      channel = communication_channel(@user, {username: 'walter_white@example.com', active_cc: true})
 
       get '/profile/settings'
       row = f("#channel_#{channel.id}")
@@ -191,7 +189,7 @@ describe "profile" do
     end
 
     it "should add another contact method - sms" do
-      Account.site_admin.enable_feature!(:international_sms)
+      @user.account.enable_feature!(:international_sms)
       test_cell_number = '8017121011'
       get "/profile/settings"
       f('.add_contact_link').click

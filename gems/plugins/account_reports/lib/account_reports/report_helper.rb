@@ -262,7 +262,7 @@ module AccountReports::ReportHelper
     if account_report.value_for_param "extra_text"
       options = account_report.parameters["extra_text"]
     end
-    AccountReports.message_recipient(
+    AccountReports.finalize_report(
       account_report,
       I18n.t(
         'account_reports.default.message',
@@ -360,11 +360,11 @@ module AccountReports::ReportHelper
       @account_report.add_report_runner(batch)
       ids_so_far += batch.length
       if ids_so_far >= Setting.get("ids_per_report_runner_batch", 10_000).to_i
-        @account_report.write_report_runners
+        Shackles.activate(:master) { @account_report.write_report_runners }
         ids_so_far = 0
       end
     end
-    @account_report.write_report_runners
+    Shackles.activate(:master) { @account_report.write_report_runners }
   end
 
   def activate_report_db(&block)
@@ -425,7 +425,8 @@ module AccountReports::ReportHelper
 
   def fail_with_error(error)
     Shackles.activate(:master) do
-      @account_report.account_report_runners.incomplete.update_all(workflow_state: 'aborted')
+      # this should leave the runner that caused a failure to be in running or error state.
+      @account_report.account_report_runners.in_progress.update_all(workflow_state: 'aborted')
       @account_report.delete_account_report_rows
       Canvas::Errors.capture_exception(:account_report, error)
       @account_report.workflow_state = 'error'

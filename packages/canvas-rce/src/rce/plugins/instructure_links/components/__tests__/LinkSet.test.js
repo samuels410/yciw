@@ -26,6 +26,7 @@ function renderComponent(props) {
       fetchInitialPage={() => {}}
       fetchNextPage={() => {}}
       onLinkClick={() => {}}
+      contextType="course"
       suppressRenderEmpty={false}
       type="assignments"
       collection={{links: [], hasMore: false, isLoading: false}}

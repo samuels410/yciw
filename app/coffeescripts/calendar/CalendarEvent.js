@@ -17,7 +17,7 @@
 
 import React from 'react'
 import ReactDOM from 'react-dom'
-import {Spinner} from '@instructure/ui-elements'
+import {Spinner} from '@instructure/ui-spinner'
 import $ from 'jquery'
 import _ from 'underscore'
 import Backbone from 'Backbone'
@@ -129,7 +129,6 @@ export default class CalendarEvent extends Backbone.Model {
   }
 
   static mergeSectionsIntoCalendarEvent(eventData = {}, sections) {
-    eventData.recurring_calendar_events = ENV.RECURRING_CALENDAR_EVENTS_ENABLED
     eventData.include_conference_selection = ENV.CALENDAR?.CONFERENCES_ENABLED
     eventData.course_sections = sections
     eventData.use_section_dates = !!(eventData.child_events && eventData.child_events.length)

@@ -21,6 +21,7 @@ require File.expand_path(File.dirname(__FILE__) + '/../lti_1_3_spec_helper')
 
 describe ExternalToolsController do
   include ExternalToolsSpecHelper
+  include Lti::RedisMessageClient
 
   before :once do
     course_with_teacher(:active_all => true)
@@ -145,6 +146,17 @@ describe ExternalToolsController do
       it 'sets the "canvas_domain" to the request domain' do
         message_hint = JSON::JWT.decode(assigns[:lti_launch].params['lti_message_hint'], :skip_verification)
         expect(message_hint['canvas_domain']).to eq 'localhost'
+      end
+
+      context 'current user is a student view user' do
+        before do
+          user_session(@course.student_view_student)
+        end
+
+        it 'returns the TestUser claim when viewing as a student' do
+          get :show, params: {:course_id => @course.id, id: tool.id}
+          expect(cached_launch["https://purl.imsglobal.org/spec/lti/claim/roles"]).to include("http://purl.imsglobal.org/vocab/lti/system/person#TestUser")
+        end
       end
     end
 
@@ -662,16 +674,24 @@ describe ExternalToolsController do
     end
 
     context "LTI 1.3" do
-      let(:developer_key) { DeveloperKey.create! }
-      let(:lti_1_3_tool) do
-        @course.context_external_tools.create!(
-          name: "bob",
-          consumer_key: "key",
-          shared_secret: "secret",
-          developer_key: developer_key,
-          url: "http://www.example.com/basic_lti",
-          settings: { 'use_1_3' => true }
+      let(:developer_key) do
+        key = DeveloperKey.create!(account: @course.account)
+        key.generate_rsa_keypair!
+        key.developer_key_account_bindings.first.update!(
+          workflow_state: 'on'
         )
+        key.save!
+        key
+      end
+
+      let(:lti_1_3_tool) do
+        tool = @course.context_external_tools.new(:name => "test", :consumer_key => "key",
+          :shared_secret => "secret")
+        tool.url = "http://www.example.com/launch"
+        tool.use_1_3 = true
+        tool.developer_key = developer_key
+        tool.save!
+        tool
       end
 
       before do
@@ -680,9 +700,26 @@ describe ExternalToolsController do
       end
 
       it 'does stuff' do
-        get 'retrieve', params: {:course_id => @course.id, :url => "http://www.example.com/basic_lti?do_not_use"}
+        get 'retrieve', params: {:course_id => @course.id, :url => "http://www.example.com/launch"}
         expect(assigns[:lti_launch].resource_url).to eq lti_1_3_tool.url
       end
+      context 'tool is used for assignment_selection' do
+        it 'uses secure params to pass along lti_assignment_id for 1.3' do
+          lti_1_3_tool.assignment_selection = { enable: true }
+          lti_1_3_tool.custom_fields = { assignment_id: "$com.instructure.Assignment.lti.id"}
+          lti_1_3_tool.save!
+
+          lti_assignment_id = SecureRandom.uuid
+          jwt = Canvas::Security.create_jwt({ lti_assignment_id: lti_assignment_id })
+          get :show, params: { course_id: @course.id, id: lti_1_3_tool.id, secure_params: jwt, launch_type: "assignment_selection"}
+          lti_launch = assigns[:lti_launch]
+          decoded_jwt = Canvas::Security.decode_jwt(lti_launch.params["lti_message_hint"])
+          cached_launch = fetch_and_delete_launch(@course, decoded_jwt["verifier"])
+          launch_hash = JSON.parse(cached_launch)
+          expect(launch_hash["https://purl.imsglobal.org/spec/lti/claim/custom"]["assignment_id"]).to eq(lti_assignment_id)
+        end
+      end
+
     end
 
     it "should require authentication" do

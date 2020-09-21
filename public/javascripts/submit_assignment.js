@@ -44,6 +44,7 @@ import 'jqueryui/tabs'
 import React from 'react'
 import ReactDOM from 'react-dom'
 import FileBrowser from 'jsx/shared/rce/FileBrowser'
+import {ProgressCircle} from '@instructure/ui-progress'
 
 var SubmitAssignment = {
   // This ensures that the tool links in the "More" tab (which only appears with 4
@@ -53,6 +54,9 @@ var SubmitAssignment = {
 
     const tool = $(this).data('tool')
     const url = `/courses/${ENV.COURSE_ID}/external_tools/${tool.id}/resource_selection?homework=1&assignment_id=${ENV.SUBMIT_ASSIGNMENT.ID}`
+
+    // create return view and attach postMessage listener for tools launched in dialog from the More tab
+    SubmitAssignment.homeworkSubmissionLtiContainer.embedLtiLaunch(tool.get('id'))
 
     const width = tool.get('homework_submission').selection_width || tool.get('selection_width')
     const height = tool.get('homework_submission').selection_height || tool.get('selection_height')
@@ -130,6 +134,9 @@ $(document).ready(function() {
     '#submit_from_external_tool_form'
   )
 
+  // store for launching of tools from the More tab
+  SubmitAssignment.homeworkSubmissionLtiContainer = homeworkSubmissionLtiContainer
+
   // Add the Keyboard shortcuts info button
   if (!ENV.use_rce_enhancements) {
     const keyboardShortcutsView = new RCEKeyboardShortcuts()
@@ -189,6 +196,7 @@ $(document).ready(function() {
     $(this)
       .find('button')
       .attr('disabled', true)
+
     if ($(this).attr('id') == 'submit_online_upload_form') {
       event.preventDefault() && event.stopPropagation()
       const fileElements = $(this)
@@ -212,6 +220,28 @@ $(document).ready(function() {
           .find('button[type=submit]')
           .text(I18n.t('#button.submit_assignment', 'Submit Assignment'))
           .prop('disabled', false)
+      }
+
+      const progressIndicator = function(event) {
+        if (event.lengthComputable) {
+          const mountPoint = document.getElementById('progress_indicator')
+
+          if (mountPoint) {
+            ReactDOM.render(
+              <ProgressCircle
+                screenReaderLabel={I18n.t('Uploading Progress')}
+                size="x-small"
+                valueMax={event.total}
+                valueNow={event.loaded}
+                meterColor="info"
+                formatScreenReaderValue={({valueNow, valueMax}) =>
+                  I18n.t('%{percent}% complete', {percent: Math.round((valueNow * 100) / valueMax)})
+                }
+              />,
+              mountPoint
+            )
+          }
+        }
       }
 
       // warn user if they haven't uploaded any files
@@ -278,6 +308,7 @@ $(document).ready(function() {
         formData: $(this).getFormData(),
         formDataTarget: 'url',
         url: $(this).attr('action'),
+        onProgress: progressIndicator,
         success(data) {
           submitting = true
           const url = new URL(window.location.href)

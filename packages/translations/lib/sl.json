@@ -32,9 +32,6 @@
     "align_right_9bad3ac1": {
         "message": "Poravnaj desno"
     },
-    "alignment_and_indentation_f7de34bf": {
-        "message": "Poravnava in zamik"
-    },
     "all_4321c3a1": {
         "message": "Vse"
     },
@@ -50,11 +47,11 @@
     "alt_text_611fb322": {
         "message": "Nadomestno besedilo"
     },
+    "an_error_occured_reading_the_file_ff48558b": {
+        "message": "Pri branju datoteke je prišlo do napake"
+    },
     "an_error_occurred_attempting_to_dismiss_the_opport_f86e0667": {
         "message": "Prišlo je do napake pri poskusu opuščanja priložnosti."
-    },
-    "an_error_occurred_generating_the_file_preview_cf259955": {
-        "message": "Pri ustvarjanju predogleda datoteke je prišlo do napake"
     },
     "an_error_occurred_making_a_network_request_d1bda348": {
         "message": "Med podajanjem omrežne zahteve je prišlo do napake."
@@ -146,9 +143,6 @@
     "canvas_planner_98ed106": {
         "message": "Orodje Canvas Planner"
     },
-    "canvas_plugins_705a5016": {
-        "message": "Vtičniki sistema Canvas"
-    },
     "choose_caption_file_9c45bc4e": {
         "message": "Izberite datoteko spremnega besedila"
     },
@@ -160,9 +154,6 @@
     },
     "clear_selected_file_filename_2fe8a58e": {
         "message": "Počisti izbrano datoteko: { filename }"
-    },
-    "click_any_page_to_insert_a_link_to_that_page_ac920c02": {
-        "message": "Kliknite katero koli stran, da vstavite povezavo na to stran."
     },
     "click_to_embed_imagename_c41ea8df": {
         "message": "Kliknite, da vdelate { imageName }."
@@ -266,6 +257,9 @@
     "date_time_d9fbf2d7": {
         "message": "Datum in čas:"
     },
+    "decorative_image_3c28aa7d": {
+        "message": "Dekorativna slika"
+    },
     "decrease_indent_de6343ab": {
         "message": "Povečaj zamik"
     },
@@ -293,8 +287,8 @@
     "dimensions_45ddb7b7": {
         "message": "Mere"
     },
-    "directionality_ebcae6d0": {
-        "message": "usmerjenost"
+    "directionality_26ae9e08": {
+        "message": "Usmerjenost"
     },
     "disable_in_line_preview_2a675175": {
         "message": "Onemogoči predogled v vrstici."
@@ -470,8 +464,14 @@
     "finish_bc343002": {
         "message": "Dokončaj"
     },
+    "focus_element_options_toolbar_18d993e": {
+        "message": "Orodna vrstica za izostritev možnosti elementov"
+    },
     "folder_tree_fbab0726": {
         "message": "Drevo map"
+    },
+    "format_4247a9c5": {
+        "message": "Oblika zapisa"
     },
     "formatting_5b143aa8": {
         "message": "Oblikovanje"
@@ -572,20 +572,14 @@
     "late_2be42b88": {
         "message": "Zamuda"
     },
-    "left_to_right_d6da6d7e": {
-        "message": "iz leve proti desni"
+    "left_to_right_e9b4fd06": {
+        "message": "Od leve proti desni"
     },
     "link_7262adec": {
         "message": "Povezava"
     },
     "link_options_a16b758b": {
         "message": "Možnosti povezave"
-    },
-    "link_to_other_content_in_the_course_879163b5": {
-        "message": "Povezava na drugo vsebino v predmetu."
-    },
-    "link_to_other_content_in_the_group_3fe25379": {
-        "message": "Povezava na drugo vsebino v skupini."
     },
     "links_14b70841": {
         "message": "Povezave"
@@ -662,9 +656,6 @@
     "mic_a7f3d311": {
         "message": "Mikrofon"
     },
-    "miscellaneous_and_apps_f450a387": {
-        "message": "Razno in aplikacije"
-    },
     "missing_1a256b3b": {
         "message": "Manjkajoče"
     },
@@ -682,6 +673,9 @@
     },
     "my_grades_98834476": {
         "message": "Moje ocene"
+    },
+    "my_media_82bade11": {
+        "message": "Moji mediji"
     },
     "navigate_through_the_menu_or_toolbar_415a4e50": {
         "message": "Navigirajte skozi meni ali orodno vrstico"
@@ -703,9 +697,6 @@
     },
     "next_page_d2a39853": {
         "message": "Naslednja stran"
-    },
-    "no_alt_text_decorative_image_f318fc0e": {
-        "message": "Brez nadomestnega besedila (dekorativna slika)"
     },
     "no_due_dates_assigned_e8f5bac8": {
         "message": "Ni dodeljenih rokov."
@@ -872,8 +863,8 @@
     "rich_content_editor_2708ef21": {
         "message": "Urejevalnik"
     },
-    "right_to_left_ec223c81": {
-        "message": "z desne proti levi"
+    "right_to_left_9cfb092a": {
+        "message": "Od desne proti levi"
     },
     "save_11a80ec3": {
         "message": "Shrani"
@@ -919,6 +910,9 @@
     },
     "size_b30e1077": {
         "message": "Velikost"
+    },
+    "size_of_file_is_greater_than_the_maximum_max_mb_al_6eb3fa9a": {
+        "message": "Velikost { file } je večja od največje dovoljene velikosti datoteke { max } MB."
     },
     "small_b070434a": {
         "message": "Majhna"
@@ -1174,6 +1168,9 @@
     },
     "you_have_media_feedback_f5f9aba8": {
         "message": "Imate povratne informacije o medijih."
+    },
+    "you_may_not_upload_an_empty_file_11c31eb2": {
+        "message": "Prazne datoteke ne smete naložiti."
     },
     "you_must_provide_a_date_and_time_a86839d2": {
         "message": "Predložiti morate datum in čas."

@@ -24,11 +24,7 @@ class RubricsController < ApplicationController
   include Api::V1::Outcome
 
   def index
-    permission = if @domain_root_account.feature_enabled?(:rubrics_in_course_navigation)
-      @context.is_a?(User) ? :manage : [:manage_rubrics, :read_rubrics]
-    else
-      @context.is_a?(User) ? :manage : :manage_rubrics
-    end
+    permission = @context.is_a?(User) ? :manage : [:manage_rubrics, :read_rubrics]
     return unless authorized_action(@context, @current_user, permission)
     js_env :ROOT_OUTCOME_GROUP => get_root_outcome,
       :PERMISSIONS => {
@@ -37,6 +33,7 @@ class RubricsController < ApplicationController
       },
       :NON_SCORING_RUBRICS => @domain_root_account.feature_enabled?(:non_scoring_rubrics)
 
+    mastery_scales_js_env
     set_tutorial_js_env
 
     @rubric_associations = @context.rubric_associations.bookmarked.include_rubric.to_a
@@ -46,17 +43,14 @@ class RubricsController < ApplicationController
   end
 
   def show
-    permission = if @domain_root_account.feature_enabled?(:rubrics_in_course_navigation)
-      @context.is_a?(User) ? :manage : [:manage_rubrics, :read_rubrics]
-    else
-      @context.is_a?(User) ? :manage : :manage_rubrics
-    end
+    permission = @context.is_a?(User) ? :manage : [:manage_rubrics, :read_rubrics]
     return unless authorized_action(@context, @current_user, permission)
     if (id = params[:id]) =~ Api::ID_REGEX
       js_env :ROOT_OUTCOME_GROUP => get_root_outcome,
         :PERMISSIONS => {
           manage_rubrics: @context.grants_right?(@current_user, session, :manage_rubrics)
         }
+      mastery_scales_js_env
       @rubric_association = @context.rubric_associations.bookmarked.where(rubric_id: params[:id]).first
       raise ActiveRecord::RecordNotFound unless @rubric_association
       @actual_rubric = @rubric_association.rubric

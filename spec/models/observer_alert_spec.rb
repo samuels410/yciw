@@ -245,6 +245,11 @@ describe ObserverAlert do
       expect(alert.title).to include('Assignment missing:')
     end
 
+    it 'deletes the alert if the submission is deleted' do
+      submission = ObserverAlert.active.where(student: @student1, alert_type: 'assignment_missing').first.context
+      expect { submission.destroy }.to change { ObserverAlert.count }.by(-1)
+    end
+
     it 'doesnt create another alert if one already exists' do
       alert = ObserverAlert.active.where(student: @student2, alert_type: 'assignment_missing').first
       expect(alert).to be_nil
@@ -383,7 +388,7 @@ describe ObserverAlert do
     end
 
     it 'doesnt create an alert if the roles dont include student or observer' do
-      role_ids = ["TeacherEnrollment", "AccountAdmin"].map{|name| Role.get_built_in_role(name).id}
+      role_ids = ["TeacherEnrollment", "AccountAdmin"].map{|name| Role.get_built_in_role(name, root_account_id: @course.root_account_id).id}
       notification = account_notification(account: @account, role_ids: role_ids)
       alert = ObserverAlert.where(context: notification).first
       expect(alert).to be_nil
@@ -405,14 +410,14 @@ describe ObserverAlert do
     end
 
     it 'creates an alert if student role is selected but not observer' do
-      role_ids = ["StudentEnrollment", "AccountAdmin"].map{|name| Role.get_built_in_role(name).id}
+      role_ids = ["StudentEnrollment", "AccountAdmin"].map{|name| Role.get_built_in_role(name, root_account_id: @course.root_account_id).id}
       notification = account_notification(account: @account, role_ids: role_ids)
       alert = ObserverAlert.where(context: notification).first
       expect(alert.context).to eq notification
     end
 
     it 'creates an alert if observer role is selected but not student' do
-      role_ids = ["ObserverEnrollment", "AccountAdmin"].map{|name| Role.get_built_in_role(name).id}
+      role_ids = ["ObserverEnrollment", "AccountAdmin"].map{|name| Role.get_built_in_role(name, root_account_id: @course.root_account_id).id}
       notification = account_notification(account: @account, role_ids: role_ids)
       alert = ObserverAlert.where(context: notification).first
       expect(alert.context).to eq notification

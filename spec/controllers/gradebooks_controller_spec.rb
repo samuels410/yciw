@@ -232,15 +232,55 @@ describe GradebooksController do
     context "final grade override" do
       before(:once) do
         @course.update!(grading_standard_enabled: true)
-        @course.enable_feature!(:final_grades_override)
         @course.assignments.create!(title: "an assignment")
         @student_enrollment.scores.find_by(course_score: true).update!(override_score: 99)
       end
 
-      it "includes the effective final score in the ENV" do
-        user_session(@teacher)
-        get :grade_summary, params: { course_id: @course.id, id: @student.id }
-          expect(assigns[:js_env][:effective_final_score]).to eq 99
+      context "when the feature is enabled" do
+        before(:once) do
+          @course.enable_feature!(:final_grades_override)
+          @course.update!(allow_final_grade_override: true)
+        end
+
+        it "includes the effective final score in the ENV if course setting is enabled" do
+          user_session(@teacher)
+          get :grade_summary, params: { course_id: @course.id, id: @student.id }
+            expect(assigns[:js_env][:effective_final_score]).to eq 99
+        end
+
+        it "does not include the effective final score in the ENV if the course setting is not enabled" do
+          @course.update!(allow_final_grade_override: false)
+          @student_enrollment.scores.find_by(course_score: true).update!(override_score: nil)
+          user_session(@teacher)
+          get :grade_summary, params: { course_id: @course.id, id: @student.id }
+            expect(assigns[:js_env].key?(:effective_final_score)).to be false
+        end
+
+        it "does not include the effective final score in the ENV if there is no score" do
+          invited_student = @course.enroll_user(User.create!, "StudentEnrollment", enrollment_state: "invited").user
+          user_session(@teacher)
+          get :grade_summary, params: { course_id: @course.id, id: invited_student.id }
+            expect(assigns[:js_env].key?(:effective_final_score)).to be false
+        end
+
+        it "takes the effective final score for the grading period, if present" do
+          grading_period_group = @course.grading_period_groups.create!
+          grading_period = grading_period_group.grading_periods.create!(
+            title: "a grading period",
+            start_date: 1.day.ago,
+            end_date: 1.day.from_now
+          )
+          @student_enrollment.scores.find_by(grading_period: grading_period).update!(override_score: 84)
+          user_session(@teacher)
+          get :grade_summary, params: { course_id: @course.id, id: @student.id }
+            expect(assigns[:js_env][:effective_final_score]).to eq 84
+        end
+
+        it "takes the effective final score for the course score, if viewing all grading periods" do
+          user_session(@teacher)
+          get :grade_summary, params: { course_id: @course.id, id: @student.id, grading_period_id: 0 }
+            expect(assigns[:js_env][:effective_final_score]).to eq 99
+        end
       end
 
       it "does not include the effective final score in the ENV if the feature is disabled" do
@@ -248,39 +288,6 @@ describe GradebooksController do
         user_session(@teacher)
         get :grade_summary, params: { course_id: @course.id, id: @student.id }
           expect(assigns[:js_env].key?(:effective_final_score)).to be false
-      end
-
-      it "does not include the effective final score in the ENV if there is no override score" do
-        @student_enrollment.scores.find_by(course_score: true).update!(override_score: nil)
-        user_session(@teacher)
-        get :grade_summary, params: { course_id: @course.id, id: @student.id }
-          expect(assigns[:js_env].key?(:effective_final_score)).to be false
-      end
-
-      it "does not include the effective final score in the ENV if there is no score" do
-        invited_student = @course.enroll_user(User.create!, "StudentEnrollment", enrollment_state: "invited").user
-        user_session(@teacher)
-        get :grade_summary, params: { course_id: @course.id, id: invited_student.id }
-          expect(assigns[:js_env].key?(:effective_final_score)).to be false
-      end
-
-      it "takes the effective final score for the grading period, if present" do
-        grading_period_group = @course.grading_period_groups.create!
-        grading_period = grading_period_group.grading_periods.create!(
-          title: "a grading period",
-          start_date: 1.day.ago,
-          end_date: 1.day.from_now
-        )
-        @student_enrollment.scores.find_by(grading_period: grading_period).update!(override_score: 84)
-        user_session(@teacher)
-        get :grade_summary, params: { course_id: @course.id, id: @student.id }
-          expect(assigns[:js_env][:effective_final_score]).to eq 84
-      end
-
-      it "takes the effective final score for the course score, if viewing all grading periods" do
-        user_session(@teacher)
-        get :grade_summary, params: { course_id: @course.id, id: @student.id, grading_period_id: 0 }
-          expect(assigns[:js_env][:effective_final_score]).to eq 99
       end
     end
 
@@ -1698,11 +1705,52 @@ describe GradebooksController do
   end
 
   describe "POST 'submissions_zip_upload'" do
+    before(:once) do
+      @course = course_factory(active_all: true)
+      @assignment = assignment_model(course: @course)
+    end
+
+    let(:zip_params) do
+      {
+        assignment_id: @assignment.id,
+        course_id: @course.id,
+        submissions_zip: fixture_file_upload("docs/txt.txt", "text/plain", true)
+      }
+    end
+
     it "requires authentication" do
-      course_factory
-      assignment_model
-      post 'submissions_zip_upload', params: {:course_id => @course.id, :assignment_id => @assignment.id, :submissions_zip => 'dummy'}
+      post "submissions_zip_upload", params: zip_params
       assert_unauthorized
+    end
+
+    context "with an authenticated user" do
+      before(:each) do
+        user_session(@teacher)
+      end
+
+      it "redirects to the assignment page if the course does not allow score uploads" do
+        @course.update!(large_roster: true)
+        post "submissions_zip_upload", params: zip_params
+        expect(response).to redirect_to(course_assignment_url(@course, @assignment))
+        expect(flash[:error]).to eq "This course does not allow score uploads."
+      end
+
+      it "redirects to the assignment page if the submissions_zip param is invalid (and no attachment_id param)" do
+        post "submissions_zip_upload", params: zip_params.merge(submissions_zip: "an invalid zip")
+        expect(response).to redirect_to(course_assignment_url(@course, @assignment))
+        expect(flash[:error]).to eq "Could not find file to upload."
+      end
+
+      it "redirects to the submission upload page" do
+        post "submissions_zip_upload", params: zip_params
+        expect(response).to redirect_to(show_submissions_upload_course_gradebook_url(@course, @assignment))
+      end
+
+      it "accepts an attachment_id param in place of a submissions_zip param" do
+        attachment = @teacher.attachments.create!(uploaded_data: zip_params[:submissions_zip])
+        post "submissions_zip_upload", params: zip_params.merge(attachment_id: attachment.id).except(:submissions_zip)
+        expect(response).to redirect_to(show_submissions_upload_course_gradebook_url(@course, @assignment))
+      end
     end
   end
 
@@ -1719,13 +1767,6 @@ describe GradebooksController do
     it "assigns the @assignment variable for the template" do
       get :show_submissions_upload, params: {course_id: @course.id, assignment_id: @assignment.id}
       expect(assigns[:assignment]).to eql(@assignment)
-    end
-
-    it "assigns the @progress variable for the template" do
-      progress = Progress.new(context: @assignment, completion: 100)
-      allow_any_instance_of(Assignment).to receive(:submission_reupload_progress).and_return(progress)
-      get :show_submissions_upload, params: {course_id: @course.id, assignment_id: @assignment.id}
-      expect(assigns[:progress]).to eql(progress)
     end
 
     it "redirects to the assignment page when the course does not allow gradebook uploads" do
@@ -2781,6 +2822,35 @@ describe GradebooksController do
         json = json_parse(response.body)
         expect(json.first["rubric_association"]["rubric_id"]).to eq @rubric.global_id.to_s
         expect(json.first["rubric_association"]["context_code"]).to eq @cs_course.global_asset_string
+      end
+    end
+
+    context "access control" do
+      it "allows users with the appropriate permissions to view rubrics" do
+        user_session(@teacher)
+
+        get "grading_rubrics", params: {course_id: @course}
+        expect(response).to be_successful
+      end
+
+      it "allows admins to view rubrics" do
+        user_session(account_admin_user)
+
+        get "grading_rubrics", params: {course_id: @course}
+        expect(response).to be_successful
+      end
+
+      it "forbids viewing if the user lacks appropriate permissions" do
+        user_session(@student)
+
+        get "grading_rubrics", params: {course_id: @course}
+        expect(response).to be_unauthorized
+      end
+
+      it "requires a logged-in user" do
+        get "grading_rubrics", params: {course_id: @course}
+
+        expect(response).to redirect_to(login_url)
       end
     end
   end

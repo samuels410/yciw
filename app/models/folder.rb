@@ -32,7 +32,7 @@ class Folder < ActiveRecord::Base
   MY_FILES_FOLDER_NAME = "my files"
   CONVERSATION_ATTACHMENTS_FOLDER_NAME = "conversation attachments"
 
-  belongs_to :context, polymorphic: [:user, :group, :account, :course]
+  belongs_to :context, polymorphic: [:user, :group, :account, :course], optional: false
   belongs_to :cloned_item
   belongs_to :parent_folder, :class_name => "Folder"
   has_many :file_attachments, :class_name => "Attachment"
@@ -43,6 +43,7 @@ class Folder < ActiveRecord::Base
 
   acts_as_list :scope => :parent_folder
 
+  before_create :populate_root_account_id
   before_save :infer_full_name
   after_save :update_sub_folders
   after_destroy :clean_up_children
@@ -60,6 +61,10 @@ class Folder < ActiveRecord::Base
     else
       self.visible_file_attachments.not_locked
     end
+  end
+
+  def populate_root_account_id
+    self.root_account_id = self.context.root_account_id if self.context_type != "User"
   end
 
   def protect_root_folder_name
@@ -258,6 +263,9 @@ class Folder < ActiveRecord::Base
     self.attributes.delete_if{|k,v| [:id, :full_name, :parent_folder_id].include?(k.to_sym) }.each do |key, val|
       dup.send("#{key}=", val)
     end
+    if self.unique_type && context.folders.active.where(:unique_type => self.unique_type).exists?
+      dup.unique_type = nil # we'll just copy the folder as a normal one and leave the existing unique_type'd one alone
+    end
     dup.context = context
     if options[:include_subcontent] != false
       dup.save!
@@ -444,8 +452,9 @@ class Folder < ActiveRecord::Base
   end
 
   def currently_locked
-    self.locked || (self.lock_at && Time.now > self.lock_at) || (self.unlock_at && Time.now < self.unlock_at) || self.workflow_state == 'hidden'
+    self.locked || (self.lock_at && Time.zone.now > self.lock_at) || (self.unlock_at && Time.zone.now < self.unlock_at) || self.workflow_state == 'hidden'
   end
+  alias currently_locked? currently_locked
 
   set_policy do
     given { |user, session| self.visible? && self.context.grants_right?(user, session, :read) }

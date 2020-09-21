@@ -35,7 +35,7 @@ QUnit.module('GradebookGrid TotalGradeOverrideCellFormatter', suiteHooks => {
         ['B', 0.8],
         ['C', 0.7],
         ['D', 0.6],
-        ['F', 0.0]
+        ['<b>F</b>', 0.0]
       ]
     })
     finalGradeOverrides = {
@@ -80,6 +80,11 @@ QUnit.module('GradebookGrid TotalGradeOverrideCellFormatter', suiteHooks => {
     QUnit.module('when using a grading scheme', () => {
       test('displays the scheme grade', () => {
         equal(getGrade(), 'A')
+      })
+
+      test('escapes the scheme grade', () => {
+        finalGradeOverrides[1101].courseGrade.percentage = 10.0
+        equal(getGrade(), '<b>F</b>')
       })
 
       test('renders "–" (en dash) when the student has no grade overrides', () => {
@@ -129,6 +134,11 @@ QUnit.module('GradebookGrid TotalGradeOverrideCellFormatter', suiteHooks => {
     QUnit.module('when using a grading scheme', () => {
       test('displays the scheme grade', () => {
         equal(getGrade(), 'B')
+      })
+
+      test('escapes the scheme grade', () => {
+        finalGradeOverrides[1101].gradingPeriodGrades[1501].percentage = 10.0
+        equal(getGrade(), '<b>F</b>')
       })
 
       test('renders "–" (en dash) when the student has no grade overrides', () => {

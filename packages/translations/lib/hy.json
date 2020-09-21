@@ -38,12 +38,6 @@
     "cancel_caeb1e68": {
         "message": "Չեղյալ համարել"
     },
-    "canvas_plugins_705a5016": {
-        "message": "Canvas  միացվող մոդուլներ"
-    },
-    "click_any_page_to_insert_a_link_to_that_page_ac920c02": {
-        "message": "Սեղմեք ցանկացած էջ՝ այդ էջին հղում տեղադրելու համար:"
-    },
     "click_to_embed_imagename_c41ea8df": {
         "message": "Click to embed { imageName }"
     },
@@ -55,6 +49,9 @@
     },
     "collaborations_5c56c15f": {
         "message": "Համատեղ աշխատանքներ"
+    },
+    "content_1440204b": {
+        "message": "Բովանդակություն"
     },
     "content_type_2cf90d95": {
         "message": "Բովանդակության տեսակ"
@@ -122,11 +119,17 @@
     "excused_cf8792eb": {
         "message": "Ներված է"
     },
+    "external_tools_6e77821": {
+        "message": "Արտաքին գործիքներ"
+    },
     "files_c300e900": {
         "message": "Ֆայլեր"
     },
     "files_index_af7c662b": {
         "message": "Ֆայլերի ցուցիչ"
+    },
+    "format_4247a9c5": {
+        "message": "Ֆորմատ"
     },
     "generating_preview_45b53be0": {
         "message": "Կարծիքը գեներացվում է ..."
@@ -167,17 +170,14 @@
     "invalid_file_type_881cc9b2": {
         "message": "Ֆայլի անընդունելի տեսակ"
     },
+    "invalid_url_cbde79f": {
+        "message": "Սխալ URL"
+    },
     "keyboard_shortcuts_ed1844bd": {
         "message": "Արագ հասանելիության ստեղներ"
     },
     "link_7262adec": {
         "message": "Հղում"
-    },
-    "link_to_other_content_in_the_course_879163b5": {
-        "message": "Կապակցել դասընթացի այլ բովանդակության հետ:"
-    },
-    "link_to_other_content_in_the_group_3fe25379": {
-        "message": "Հղում խմբի մյուս բովանդակությանը:"
     },
     "links_14b70841": {
         "message": "Հղումներ"

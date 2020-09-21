@@ -22,7 +22,7 @@ import closedCaptionLanguages from '../../../../shared/closedCaptionLanguages'
 import elideString from '../../../../shared/helpers/elideString'
 import I18n from 'i18n!assignments_2_media_attempt'
 import {IconTrashLine, IconAttachMediaLine} from '@instructure/ui-icons'
-import LoadingIndicator from '../../../shared/LoadingIndicator'
+import LoadingIndicator from 'jsx/shared/LoadingIndicator'
 import React from 'react'
 import {ScreenReaderContent} from '@instructure/ui-a11y'
 import {Submission} from '../../graphqlData/Submission'
@@ -32,7 +32,7 @@ import {UploadMediaStrings, MediaCaptureStrings} from '../../../../shared/Upload
 import {Billboard} from '@instructure/ui-billboard'
 import {Button} from '@instructure/ui-buttons'
 import {Flex} from '@instructure/ui-flex'
-import {VideoPlayer} from '@instructure/ui-media-player'
+import {MediaPlayer} from '@instructure/ui-media-player'
 import {View} from '@instructure/ui-layout'
 
 const languages = Object.keys(closedCaptionLanguages).map(key => {
@@ -122,7 +122,7 @@ export default class MediaAttempt extends React.Component {
               />
             </div>
           ) : (
-            <VideoPlayer tracks={mediaTracks} sources={mediaObject.mediaSources} />
+            <MediaPlayer tracks={mediaTracks} sources={mediaObject.mediaSources} />
           )}
         </Flex.Item>
         <Flex.Item overflowY="visible" margin="medium 0">

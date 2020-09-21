@@ -20,6 +20,7 @@ require File.expand_path(File.dirname(__FILE__) + '/../../spec_helper')
 require_relative "../graphql_spec_helper"
 
 describe Types::UserType do
+
   before(:once) do
     student = student_in_course(active_all: true).user
     course = @course
@@ -34,8 +35,14 @@ describe Types::UserType do
     @teacher = teacher
   end
 
-  let(:user_type) { GraphQLTypeTester.new(@student, current_user: @teacher, domain_root_account: @course.account.root_account, request: ActionDispatch::TestRequest.create ) }
-  let(:user) { @student }
+  let(:user_type) do
+     GraphQLTypeTester.new(
+        @student,
+        current_user: @teacher,
+        domain_root_account: @course.account.root_account,
+        request: ActionDispatch::TestRequest.create
+      )
+  end
 
   context "node" do
     it "works" do
@@ -45,6 +52,13 @@ describe Types::UserType do
 
     it "works for users in the same course" do
       expect(user_type.resolve("_id", current_user: @other_student)).to eq @student.id.to_s
+    end
+
+    it "works for users without a current enrollment" do
+      user = user_model
+      type = GraphQLTypeTester.new(user, current_user: user, domain_root_account: user.account, request: ActionDispatch::TestRequest.create)
+      expect(type.resolve("_id")).to eq user.id.to_s
+      expect(type.resolve("name")).to eq user.name
     end
 
     it "doesn't work for just anyone" do
@@ -70,13 +84,13 @@ describe Types::UserType do
     end
 
     it "returns an avatar url when avatars are enabled" do
-      user.account.enable_service(:avatars)
+      @student.account.enable_service(:avatars)
       expect(user_type.resolve("avatarUrl")).to match(/avatar.*png/)
     end
 
     it "returns nil when a user has no avatar" do
-      user.account.enable_service(:avatars)
-      user.update! avatar_image_url: nil
+      @student.account.enable_service(:avatars)
+      @student.update! avatar_image_url: nil
       expect(user_type.resolve("avatarUrl")).to be_nil
     end
   end
@@ -91,6 +105,30 @@ describe Types::UserType do
     end
   end
 
+  context "sisId" do
+    before(:once) do
+      @student.pseudonyms.create!(
+        account: @course.account,
+        unique_id: "alex@columbia.edu",
+        workflow_state: 'active',
+        sis_user_id: "a.ham"
+      )
+    end
+
+    let(:admin) { account_admin_user }
+    let(:user_type_as_admin) do
+      GraphQLTypeTester.new(@student, current_user: admin, domain_root_account: @course.account.root_account,
+        request: ActionDispatch::TestRequest.create)
+    end
+
+    it "returns the sis user id if the user has permissions to read it" do
+      expect(user_type_as_admin.resolve("sisId")).to eq "a.ham"
+    end
+
+    it "returns null if the user does not have permission to read the sis user id" do
+      expect(user_type.resolve("sisId")).to be_nil
+    end
+  end
 
   context "enrollments" do
     before(:once) do
@@ -129,22 +167,45 @@ describe Types::UserType do
   end
 
   context "email" do
+    let!(:read_email_override) do
+      RoleOverride.create!(
+        context: @teacher.account,
+        permission: 'read_email_addresses',
+        role: teacher_role,
+        enabled: true
+      )
+    end
+
+    let!(:account_user) do
+      AccountUser.create!(
+        account: @teacher.account,
+        user: @teacher,
+        role: teacher_role
+      )
+    end
+
     before(:once) do
       @student.update! email: "cooldude@example.com"
     end
 
     it "returns email for teachers/admins" do
-      expect(user_type.resolve("email")).to eq user.email
+      expect(user_type.resolve("email")).to eq @student.email
 
       # this is for the cached branch
-      allow(user).to receive(:email_cached?) { true }
-      expect(user_type.resolve("email")).to eq user.email
+      allow(@student).to receive(:email_cached?) { true }
+      expect(user_type.resolve("email")).to eq @student.email
     end
 
     it "doesn't return email for others" do
       expect(user_type.resolve("email", current_user: nil)).to be_nil
       expect(user_type.resolve("email", current_user: @other_student)).to be_nil
       expect(user_type.resolve("email", current_user: @random_person)).to be_nil
+    end
+
+    it "respects :read_email_addresses permission" do
+      read_email_override.update!(enabled: false)
+
+      expect(user_type.resolve("email")).to be_nil
     end
   end
 
@@ -171,6 +232,47 @@ describe Types::UserType do
       expect(
         user_type.resolve('groups { _id }', current_user: @teacher)
       ).to be_nil
+    end
+  end
+
+  context 'trophies' do
+    it 'returns empty values for the trophies the user has not unlocked' do
+      response = user_type.resolve('trophies { displayName }', current_user: @student)
+      expect(response[0]).to be_nil
+    end
+
+    it 'returns values for the trophies the user has unlocked' do
+      @student.trophies.create!(name: 'balloon')
+      response = user_type.resolve('trophies { displayName }', current_user: @student)
+      expect(response.include?('Balloon')).to be true
+    end
+  end
+
+  context 'notificationPreferences' do
+    it 'returns the users notification preferences' do
+      Notification.delete_all
+      @student.communication_channels.create!(path: 'test@test.com').confirm!
+      notification_model(:name => 'test', :category => 'Announcement')
+
+      expect(
+        user_type.resolve('notificationPreferences { channels { notificationPolicies(contextType: Course) { notification { name } } } }')[0][0]
+      ).to eq 'test'
+    end
+
+    it 'only returns active communication channels' do
+      Notification.delete_all
+      communication_channel = @student.communication_channels.create!(path: 'test@test.com')
+      communication_channel.confirm!
+      notification_model(:name => 'test', :category => 'Announcement')
+
+      expect(
+        user_type.resolve('notificationPreferences { channels { notificationPolicies(contextType: Course) { notification { name } } } }')[0][0]
+      ).to eq 'test'
+
+      communication_channel.destroy
+      expect(
+        user_type.resolve('notificationPreferences { channels { notificationPolicies(contextType: Course) { notification { name } } } }').count
+      ).to eq 0
     end
   end
 end

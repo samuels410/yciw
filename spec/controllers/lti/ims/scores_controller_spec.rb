@@ -173,6 +173,38 @@ module Lti::Ims
             end
           end
 
+          context 'default behavior' do
+            it 'submits homework for module progression' do
+              expect_any_instance_of(Assignment).to receive(:submit_homework)
+              send_request
+            end
+
+            it 'uses submission_type of external_tool' do
+              send_request
+              expect(result.submission.reload.submission_type).to eq 'external_tool'
+            end
+          end
+
+          context 'when "new_submission" extension is false' do
+            let(:params_overrides) { super().merge(Lti::Result::AGS_EXT_SUBMISSION => { new_submission: false }) }
+
+            it 'does not submit homework' do
+              expect_any_instance_of(Assignment).to_not receive(:submit_homework)
+              expect_any_instance_of(Assignment).to receive(:find_or_create_submission)
+              send_request
+            end
+          end
+
+          context 'when "submission_type" extension is none' do
+            let(:params_overrides) { super().merge(Lti::Result::AGS_EXT_SUBMISSION => { submission_type: 'none' }) }
+
+            it 'does not submit homework' do
+              expect_any_instance_of(Assignment).to_not receive(:submit_homework)
+              expect_any_instance_of(Assignment).to receive(:find_or_create_submission)
+              send_request
+            end
+          end
+
           context 'with no scoreGiven' do
             it 'does not update submission' do
               send_request

@@ -217,7 +217,7 @@ module Canvas::LiveEvents
   end
 
   def self.get_assignment_data(assignment)
-    {
+    event = {
       assignment_id: assignment.global_id,
       context_id: assignment.global_context_id,
       context_uuid: assignment.context.uuid,
@@ -236,6 +236,11 @@ module Canvas::LiveEvents
       lti_resource_link_id_duplicated_from: assignment.duplicate_of&.lti_resource_link_id,
       submission_types: assignment.submission_types
     }
+    actl = assignment.assignment_configuration_tool_lookups.take
+    event[:associated_integration_id] = "#{actl.tool_vendor_code}-#{actl.tool_product_code}" if actl
+    domain = assignment.root_account&.domain
+    event[:domain] = domain if domain
+    event
   end
 
   def self.assignment_created(assignment)
@@ -309,7 +314,7 @@ module Canvas::LiveEvents
   end
 
   def self.get_submission_data(submission)
-    {
+    event = {
       submission_id: submission.global_id,
       assignment_id: submission.global_assignment_id,
       user_id: submission.global_user_id,
@@ -326,8 +331,12 @@ module Canvas::LiveEvents
       late: submission.late?,
       missing: submission.missing?,
       lti_assignment_id: submission.assignment.lti_context_id,
-      group_id: submission.group_id
+      group_id: submission.group_id,
+      posted_at: submission.posted_at,
     }
+    actl = submission.assignment.assignment_configuration_tool_lookups.take
+    event[:associated_integration_id] = "#{actl.tool_vendor_code}-#{actl.tool_product_code}" if actl
+    event
   end
 
   def self.get_attachment_data(attachment)
@@ -601,7 +610,7 @@ module Canvas::LiveEvents
     context = content_migration.context
     import_quizzes_next =
       content_migration.migration_settings&.[](:import_quizzes_next) == true
-    {
+    payload = {
       content_migration_id: content_migration.global_id,
       context_id: context.global_id,
       context_type: context.class.to_s,
@@ -609,6 +618,12 @@ module Canvas::LiveEvents
       context_uuid: context.uuid,
       import_quizzes_next: import_quizzes_next
     }
+
+    if context.respond_to?(:root_account)
+      payload[:domain] = context.root_account&.domain
+    end
+
+    payload
   end
 
   def self.course_section_created(section)
@@ -694,8 +709,8 @@ module Canvas::LiveEvents
   def self.get_course_completed_data(course, user)
     {
       progress: CourseProgress.new(course, user, read_only: true).to_json,
-      user: { id: user.id, name: user.name, email: user.email },
-      course: { id: course.id, name: course.name }
+      user: user.slice(%i[id name email]),
+      course: course.slice(%i[id name account_id sis_source_id])
     }
   end
 
@@ -837,5 +852,37 @@ module Canvas::LiveEvents
 
   def self.sis_batch_updated(batch)
     post_event_stringified('sis_batch_updated', sis_batch_payload(batch))
+  end
+
+  def self.outcome_proficiency_created(proficiency)
+    post_event_stringified('outcome_proficiency_created', get_outcome_proficiency_data(proficiency))
+  end
+
+  def self.outcome_proficiency_updated(proficiency)
+    post_event_stringified('outcome_proficiency_updated', get_outcome_proficiency_data(proficiency).merge(updated_at: proficiency.updated_at))
+  end
+
+  def self.get_outcome_proficiency_data(proficiency)
+    ratings = proficiency.outcome_proficiency_ratings.map do |rating|
+      get_outcome_proficiency_rating_data(rating)
+    end
+    {
+      outcome_proficiency_id: proficiency.id,
+      context_type: proficiency.context_type,
+      context_id: proficiency.context_id,
+      workflow_state: proficiency.workflow_state,
+      outcome_proficiency_ratings: ratings
+    }
+  end
+
+  def self.get_outcome_proficiency_rating_data(rating)
+    {
+      outcome_proficiency_rating_id: rating.id,
+      description: rating.description,
+      points: rating.points,
+      mastery: rating.mastery,
+      color: rating.color,
+      workflow_state: rating.workflow_state
+    }
   end
 end

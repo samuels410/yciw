@@ -38,12 +38,6 @@
     "cancel_caeb1e68": {
         "message": "Ακύρωση"
     },
-    "canvas_plugins_705a5016": {
-        "message": "Προσθήκες του Canvas"
-    },
-    "click_any_page_to_insert_a_link_to_that_page_ac920c02": {
-        "message": "Κάντε κλικ σε οποιαδήποτε σελίδα για να εισαγάγετε σύνδεσμο προς αυτή τη σελίδα."
-    },
     "click_to_embed_imagename_c41ea8df": {
         "message": "Κάντε κλικ για να ενσωματώσετε την εικόνα { imageName }"
     },
@@ -55,6 +49,9 @@
     },
     "collaborations_5c56c15f": {
         "message": "Συνεργασίες"
+    },
+    "content_1440204b": {
+        "message": "Περιεχόμενο"
     },
     "content_type_2cf90d95": {
         "message": "Τύπος Περιεχομένου"
@@ -122,11 +119,17 @@
     "excused_cf8792eb": {
         "message": "Δικαιολογημένος/η"
     },
+    "external_tools_6e77821": {
+        "message": "Εξωτερικά Εργαλεία"
+    },
     "files_c300e900": {
         "message": "Αρχεία"
     },
     "files_index_af7c662b": {
         "message": "Ευρετήριο Αρχείων"
+    },
+    "format_4247a9c5": {
+        "message": "Τύπος"
     },
     "generating_preview_45b53be0": {
         "message": "Δημιουργία προεπισκόπησης..."
@@ -167,6 +170,9 @@
     "invalid_file_type_881cc9b2": {
         "message": "Μη έγκυρος τύπος αρχείου"
     },
+    "invalid_url_cbde79f": {
+        "message": "Μη έγκυρο URL"
+    },
     "keyboard_shortcuts_ed1844bd": {
         "message": "Συντομεύσεις πληκτρολογίου"
     },
@@ -175,12 +181,6 @@
     },
     "link_7262adec": {
         "message": "Σύνδεσμος"
-    },
-    "link_to_other_content_in_the_course_879163b5": {
-        "message": "Σύνδεση προς άλλο περιεχόμενο του μαθήματος."
-    },
-    "link_to_other_content_in_the_group_3fe25379": {
-        "message": "Σύνδεση προς άλλο περιεχόμενο της ομάδας."
     },
     "links_14b70841": {
         "message": "Σύνδεσμοι"

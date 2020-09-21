@@ -25,13 +25,13 @@ import themeable from '@instructure/ui-themeable'
 import {IconKeyboardShortcutsLine} from '@instructure/ui-icons'
 import {ScreenReaderContent} from '@instructure/ui-a11y'
 import {Alert} from '@instructure/ui-alerts'
-import {Spinner} from '@instructure/ui-elements'
+import {Spinner} from '@instructure/ui-spinner'
 
 import formatMessage from '../format-message'
 import * as contentInsertion from './contentInsertion'
 import indicatorRegion from './indicatorRegion'
 import indicate from '../common/indicate'
-import Bridge from '../bridge'
+import bridge from '../bridge'
 import CanvasContentTray, {trayProps} from './plugins/shared/CanvasContentTray'
 import StatusBar from './StatusBar'
 import ShowOnFocusButton from './ShowOnFocusButton'
@@ -41,7 +41,6 @@ import KeyboardShortcutModal from './KeyboardShortcutModal'
 import AlertMessageArea from './AlertMessageArea'
 import alertHandler from './alertHandler'
 import {isFileLink, isImageEmbed} from './plugins/shared/ContentSelection'
-import {defaultImageSize} from './plugins/instructure_image/ImageEmbedOptions'
 import {
   VIDEO_SIZE_DEFAULT,
   AUDIO_PLAYER_SIZE
@@ -50,6 +49,7 @@ import {
 const RestoreAutoSaveModal = React.lazy(() => import('./RestoreAutoSaveModal'))
 
 const ASYNC_FOCUS_TIMEOUT = 250
+const DEFAULT_RCE_HEIGHT = '400'
 
 // we  `require` instead of `import` these 2 css files because the ui-themeable babel require hook only works with `require`
 const styles = require('../skins/skin-delta.css')
@@ -93,14 +93,6 @@ function injectTinySkin() {
 
 const editorWrappers = new WeakMap()
 
-function showMenubar(el, show) {
-  const $menubar = el.querySelector('.tox-menubar')
-  $menubar && ($menubar.style.display = show ? '' : 'none')
-  if (show) {
-    focusFirstMenuButton(el)
-  }
-}
-
 function focusToolbar(el) {
   const $firstToolbarButton = el.querySelector('.tox-tbtn')
   $firstToolbarButton && $firstToolbarButton.focus()
@@ -124,7 +116,7 @@ function isElementWithinTable(node) {
 
 // determines if localStorage is available for our use.
 // see https://developer.mozilla.org/en-US/docs/Web/API/Web_Storage_API/Using_the_Web_Storage_API
-function storageAvailable() {
+export function storageAvailable() {
   let storage
   try {
     storage = window.localStorage
@@ -172,6 +164,7 @@ class RCEWrapper extends React.Component {
     defaultContent: PropTypes.string,
     editorOptions: PropTypes.object,
     handleUnmount: PropTypes.func,
+    id: PropTypes.string,
     language: PropTypes.string,
     onFocus: PropTypes.func,
     onBlur: PropTypes.func,
@@ -185,7 +178,8 @@ class RCEWrapper extends React.Component {
       })
     ),
     tinymce: PropTypes.object,
-    trayProps
+    trayProps,
+    instRecordDisabled: PropTypes.bool
   }
 
   static defaultProps = {
@@ -223,10 +217,13 @@ class RCEWrapper extends React.Component {
       messages: [],
       announcement: null,
       confirmAutoSave: false,
-      autoSavedContent: ''
+      autoSavedContent: '',
+      id: this.props.id || this.props.textareaId || `${Date.now()}`
     }
 
     alertHandler.alertFunc = this.addAlert
+
+    this.handleContentTrayClosing = this.handleContentTrayClosing.bind(this)
   }
 
   // getCode and setCode naming comes from tinyMCE
@@ -331,6 +328,10 @@ class RCEWrapper extends React.Component {
 
   insertEmbedCode(code) {
     const editor = this.mceInstance()
+
+    // don't replace selected text, but embed after
+    editor.selection.collapse()
+
     // tinymce treats iframes uniquely, and doesn't like adding attributes
     // once it's in the editor, and I'd rather not parse the incomming html
     // string with a regex, so let's create a temp copy, then add a title
@@ -379,12 +380,11 @@ class RCEWrapper extends React.Component {
       image.src = fileMetaProps.domObject.preview
       width = image.width
       height = image.height
-      if (width > defaultImageSize && image.width > image.height) {
-        width = defaultImageSize
-        height = (image.height * width) / image.width
-      } else if (height > defaultImageSize) {
-        height = defaultImageSize
-        width = (image.width * height) / image.height
+      // we constrain the <img> to max-width: 100%, so scale the size down if necessary
+      const maxWidth = this.iframe.contentDocument.body.clientWidth
+      if (width > maxWidth) {
+        height = Math.round((maxWidth / width) * height)
+        width = maxWidth
       }
       width = `${width}px`
       height = `${height}px`
@@ -402,7 +402,7 @@ class RCEWrapper extends React.Component {
     <img
       alt="${formatMessage('Loading...')}"
       src="data:image/gif;base64,R0lGODlhAQABAIAAAMLCwgAAACH5BAAAAAAALAAAAAABAAEAAAICRAEAOw=="
-      data-placeholder-for="${fileMetaProps.name}"
+      data-placeholder-for="${encodeURIComponent(fileMetaProps.name)}"
       style="width: ${width}; height: ${height}; border: solid 1px #8B969E;"
     />`
 
@@ -422,15 +422,17 @@ class RCEWrapper extends React.Component {
   }
 
   removePlaceholders(name) {
-    const placeholder = this.mceInstance().dom.doc.querySelector(`[data-placeholder-for="${name}"]`)
+    const placeholder = this.mceInstance().dom.doc.querySelector(
+      `[data-placeholder-for="${encodeURIComponent(name)}"]`
+    )
     if (placeholder) {
       placeholder.remove()
     }
   }
 
-  insertLink(link, isNew) {
+  insertLink(link) {
     const editor = this.mceInstance()
-    const element = contentInsertion.insertLink(editor, link, isNew)
+    const element = contentInsertion.insertLink(editor, link)
     this.contentInserted(element)
   }
 
@@ -470,7 +472,7 @@ class RCEWrapper extends React.Component {
   }
 
   onRemove = () => {
-    Bridge.detachEditor(this)
+    bridge.detachEditor(this)
     this.props.onRemove && this.props.onRemove(this)
   }
 
@@ -480,6 +482,10 @@ class RCEWrapper extends React.Component {
 
   textareaValue() {
     return this.getTextarea().value
+  }
+
+  get id() {
+    return this.state.id
   }
 
   toggle = () => {
@@ -526,7 +532,7 @@ class RCEWrapper extends React.Component {
   handleFocus(_event) {
     if (!this.state.focused) {
       this.setState({focused: true})
-      Bridge.focusEditor(this)
+      bridge.focusEditor(this)
       this._forceCloseFloatingToolbar()
       this.props.onFocus && this.props.onFocus(this)
     }
@@ -534,7 +540,7 @@ class RCEWrapper extends React.Component {
 
   contentTrayClosing = false
 
-  handleContentTrayClosing = isClosing => {
+  handleContentTrayClosing(isClosing) {
     this.contentTrayClosing = isClosing
   }
 
@@ -627,40 +633,29 @@ class RCEWrapper extends React.Component {
     return this[methodName](...args)
   }
 
-  initKeyboardShortcuts(el, editor) {
-    // hide the menubar
-    showMenubar(el, false)
-
-    // when typed w/in the editor's edit area
-    editor.addShortcut('Alt+F9', '', () => {
-      showMenubar(el, true)
-    })
-    // when typed somewhere else w/in RCEWrapper
-    el.addEventListener('keydown', event => {
-      if (event.altKey && event.code === 'F9') {
-        event.preventDefault()
-        event.stopPropagation()
-        showMenubar(el, true)
-      }
-    })
-
-    // toolbar help
-    el.addEventListener('keydown', event => {
-      if (event.altKey && event.code === 'F10') {
-        event.preventDefault()
-        event.stopPropagation()
-        focusToolbar(el)
-      }
-    })
-
-    editor.on('keydown', this.handleShortcutKeyShortcut)
+  handleKey = event => {
+    if (event.code === 'F9' && event.altKey) {
+      event.preventDefault()
+      event.stopPropagation()
+      focusFirstMenuButton(this._elementRef)
+    } else if (event.code === 'F10' && event.altKey) {
+      event.preventDefault()
+      event.stopPropagation()
+      focusToolbar(this._elementRef)
+    } else if ((event.code === 'F8' || event.code === 'Digit0') && event.altKey) {
+      event.preventDefault()
+      event.stopPropagation()
+      this.openKBShortcutModal()
+    } else if (event.code === 'Escape') {
+      // ESC
+      this._forceCloseFloatingToolbar()
+    }
   }
 
   onInit = (_event, editor) => {
     editor.rceWrapper = this
     this.editor = editor
 
-    this.initKeyboardShortcuts(this._elementRef, editor)
     if (document.body.classList.contains('Underline-All-Links__enabled')) {
       this.iframe.contentDocument.body.classList.add('Underline-All-Links__enabled')
     }
@@ -672,9 +667,8 @@ class RCEWrapper extends React.Component {
     }
     // Probably should do this in tinymce.scss, but we only want it in new rce
     this.getTextarea().style.resize = 'none'
-    editor.on('Change', this.doAutoResize)
-
     editor.on('ExecCommand', this._forceCloseFloatingToolbar)
+    editor.on('keydown', this.handleKey)
 
     this.announceContextToolbars(editor)
 
@@ -738,25 +732,12 @@ class RCEWrapper extends React.Component {
     })
   }
 
-  doAutoResize = e => {
-    const ifr = this.iframe
-    if (ifr) {
-      const contentElm = ifr.contentDocument.documentElement
-      if (contentElm.scrollHeight > contentElm.clientHeight) {
-        this.onResize(e, {deltaY: contentElm.scrollHeight - contentElm.clientHeight})
-      }
-    }
-  }
-
   /* ********** autosave support *************** */
   initAutoSave = editor => {
     this.storage = window.localStorage
     if (this.storage) {
       editor.on('change', this.doAutoSave)
       editor.on('blur', this.doAutoSave)
-      window.addEventListener('unload', e => {
-        this.doAutoSave(e)
-      })
 
       this.cleanupAutoSave()
 
@@ -776,6 +757,7 @@ class RCEWrapper extends React.Component {
         }
       } catch (ex) {
         // log and ignore
+        // eslint-disable-next-line no-console
         console.error('Failed initializing rce autosave', ex)
       }
     }
@@ -784,16 +766,18 @@ class RCEWrapper extends React.Component {
   // remove any autosaved value that's too old
 
   cleanupAutoSave = (deleteAll = false) => {
-    const expiry = deleteAll
-      ? Date.now()
-      : Date.now() - this.props.autosave.rce_auto_save_max_age_ms
-    let i = 0
-    let key
-    while ((key = this.storage.key(i++))) {
-      if (/^rceautosave:/.test(key)) {
-        const autosaved = this.getAutoSaved(key)
-        if (autosaved && autosaved.autosaveTimestamp < expiry) {
-          this.storage.removeItem(key)
+    if (this.storage) {
+      const expiry = deleteAll
+        ? Date.now()
+        : Date.now() - this.props.autosave.rce_auto_save_max_age_ms
+      let i = 0
+      let key
+      while ((key = this.storage.key(i++))) {
+        if (/^rceautosave:/.test(key)) {
+          const autosaved = this.getAutoSaved(key)
+          if (autosaved && autosaved.autosaveTimestamp < expiry) {
+            this.storage.removeItem(key)
+          }
         }
       }
     }
@@ -825,7 +809,7 @@ class RCEWrapper extends React.Component {
   getAutoSaved(key) {
     let autosaved = null
     try {
-      autosaved = JSON.parse(this.storage.getItem(key))
+      autosaved = this.storage && JSON.parse(this.storage.getItem(key))
     } catch (_ex) {
       this.storage.removeItem(this.autoSaveKey)
     }
@@ -836,8 +820,14 @@ class RCEWrapper extends React.Component {
   // the latter condition is necessary because the popup RestoreAutoSaveModal
   // is lousey UX when there are >1
   get isAutoSaving() {
+    // If the editor is invisible for some reason, don't show the autosave modal
+    // This doesn't apply if the editor is off-screen or has visibility:hidden;
+    // only if it isn't rendered or has display:none;
+    const editorVisible = this.editor.container.offsetParent
+
     return (
       this.props.autosave.enabled &&
+      editorVisible &&
       document.querySelectorAll('.rce-wrapper').length === 1 &&
       storageAvailable()
     )
@@ -848,35 +838,31 @@ class RCEWrapper extends React.Component {
   }
 
   doAutoSave = (e, retry = false) => {
-    const editor = this.mceInstance()
-    // if the editor is empty don't save
-    if (editor.dom.isEmpty(editor.getBody())) {
-      return
-    }
-    // if no changes have been made,
-    // delete and don't save
-    if (!editor.isDirty()) {
-      this.storage.removeItem(this.autoSaveKey)
-      return
-    }
+    if (this.storage) {
+      const editor = this.mceInstance()
+      // if the editor is empty don't save
+      if (editor.dom.isEmpty(editor.getBody())) {
+        return
+      }
 
-    const content = editor.getContent({no_events: true})
-    try {
-      this.storage.setItem(
-        this.autoSaveKey,
-        JSON.stringify({
-          autosaveTimestamp: Date.now(),
-          content
-        })
-      )
-    } catch (ex) {
-      if (!retry) {
-        // probably failed because there's not enough space
-        // delete up all the other entries and try again
-        this.cleanupAutoSave(true)
-        this.doAutoSave(e, true)
-      } else {
-        console.error('Autosave failed:', ex) // eslint-disable-line no-console
+      const content = editor.getContent({no_events: true})
+      try {
+        this.storage.setItem(
+          this.autoSaveKey,
+          JSON.stringify({
+            autosaveTimestamp: Date.now(),
+            content
+          })
+        )
+      } catch (ex) {
+        if (!retry) {
+          // probably failed because there's not enough space
+          // delete up all the other entries and try again
+          this.cleanupAutoSave(true)
+          this.doAutoSave(e, true)
+        } else {
+          console.error('Autosave failed:', ex) // eslint-disable-line no-console
+        }
       }
     }
   }
@@ -924,19 +910,11 @@ class RCEWrapper extends React.Component {
     this.onTinyMCEInstance('openAccessibilityChecker', {skip_focus: true})
   }
 
-  handleShortcutKeyShortcut = event => {
-    if (event.altKey && (event.keyCode === 48 || event.keyCode === 119)) {
-      event.preventDefault()
-      event.stopPropagation()
-      this.openKBShortcutModal()
-    } else if (event.keyCode === 27) {
-      // ESC
-      this._forceCloseFloatingToolbar()
-    }
-  }
-
   openKBShortcutModal = () => {
-    this.setState({KBShortcutModalOpen: true})
+    this.setState({
+      KBShortcutModalOpen: true,
+      KBShortcutFocusReturn: document.activeElement
+    })
   }
 
   closeKBShortcutModal = () => {
@@ -944,9 +922,12 @@ class RCEWrapper extends React.Component {
   }
 
   KBShortcutModalClosed = () => {
-    // when the modal is opened from the showOnFocus button, focus doesn't
-    // get automatically returned to the button like it should.
-    if (this._showOnFocusButton && document.activeElement === document.body) {
+    if (this.state.KBShortcutFocusReturn === this.iframe) {
+      // if the iframe has focus, we need to forward it on to tinymce
+      this.editor.focus(false)
+    } else if (this._showOnFocusButton && document.activeElement === document.body) {
+      // when the modal is opened from the showOnFocus button, focus doesn't
+      // get automatically returned to the button like it should.
       this._showOnFocusButton.focus()
     }
   }
@@ -956,17 +937,28 @@ class RCEWrapper extends React.Component {
     if (!this._destroyCalled) {
       this.destroy()
     }
-    this._elementRef.removeEventListener('keyup', this.handleShortcutKeyShortcut, true)
+    this._elementRef.removeEventListener('keydown', this.handleKey, true)
   }
+
+  // Get top 2 favorited LTI Tools
+  ltiToolFavorites =
+    window.INST?.editorButtons
+      .filter(e => e.favorite)
+      .map(e => `instructure_external_button_${e.id}`)
+      .slice(0, 2) || []
 
   wrapOptions(options = {}) {
     const setupCallback = options.setup
-    options.toolbar = options.toolbar || []
-    const lti_tool_dropdown = options.toolbar.some(str => str.includes('lti_tool_dropdown'))
-      ? 'lti_tool_dropdown'
-      : ''
+
+    const canvasPlugins = ['instructure_links', 'instructure_image', 'instructure_documents']
+    if (!this.props.instRecordDisabled) {
+      canvasPlugins.splice(2, 0, 'instructure_record')
+    }
+
     return {
       ...options,
+
+      height: options.height || DEFAULT_RCE_HEIGHT,
 
       block_formats: [
         `${formatMessage('Heading 2')}=h2`,
@@ -983,8 +975,8 @@ class RCEWrapper extends React.Component {
           brandColor: this.theme.canvasBrandColor,
           ...this.props.trayProps
         }
-        Bridge.trayProps.set(editor, trayPropsWithColor)
-        Bridge.languages = this.props.languages
+        bridge.trayProps.set(editor, trayPropsWithColor)
+        bridge.languages = this.props.languages
         if (typeof setupCallback === 'function') {
           setupCallback(editor)
         }
@@ -1009,31 +1001,31 @@ class RCEWrapper extends React.Component {
             'underline',
             'forecolor',
             'backcolor',
-            'superscript',
-            'subscript'
+            'inst_subscript',
+            'inst_superscript'
           ]
         },
         {
-          name: formatMessage('Alignment and Indentation'),
-          items: ['align', 'bullist', 'outdent', 'indent', 'directionality']
+          name: formatMessage('Content'),
+          items: canvasPlugins
         },
         {
-          name: formatMessage('Canvas Plugins'),
-          items: [
-            'instructure_links',
-            'instructure_image',
-            'instructure_record',
-            'instructure_documents'
-          ]
+          name: formatMessage('External Tools'),
+          items: [...this.ltiToolFavorites, 'lti_tool_dropdown', 'lti_mru_button']
         },
         {
-          name: formatMessage('Miscellaneous and Apps'),
-          items: ['removeformat', 'table', 'instructure_equation', `${lti_tool_dropdown}`]
+          name: formatMessage('Alignment and Lists'),
+          items: ['align', 'bullist', 'inst_indent', 'inst_outdent']
+        },
+        {
+          name: formatMessage('Miscellaneous'),
+          items: ['removeformat', 'table', 'instructure_equation']
         }
       ],
       contextmenu: '', // show the browser's native context menu
 
       toolbar_drawer: 'floating',
+      toolbar_sticky: true,
 
       // tiny's external link create/edit dialog config
       target_list: false, // don't show the target list when creating/editing links
@@ -1050,6 +1042,7 @@ class RCEWrapper extends React.Component {
   handleTextareaChange = () => {
     if (this.isHidden()) {
       this.setCode(this.textareaValue())
+      this.doAutoSave()
     }
   }
 
@@ -1077,9 +1070,14 @@ class RCEWrapper extends React.Component {
 
   componentDidMount() {
     this.registerTextareaChange()
-    this._elementRef.addEventListener('keyup', this.handleShortcutKeyShortcut, true)
+    this._elementRef.addEventListener('keydown', this.handleKey, true)
     // give the textarea its initial size
     this.onResize(null, {deltaY: 0})
+    // Preload the LTI Tools modal
+    // This helps with loading the favorited external tools
+    if (this.ltiToolFavorites.length > 0) {
+      import('./plugins/instructure_external_tools/components/LtiToolsModal')
+    }
   }
 
   componentDidUpdate(_prevProps, prevState) {
@@ -1088,14 +1086,19 @@ class RCEWrapper extends React.Component {
     if (prevState.isHtmlView !== this.state.isHtmlView) {
       if (this.state.isHtmlView) {
         this.getTextarea().removeAttribute('aria-hidden')
+        // Also make the label visible
+        this.getTextarea().labels?.[0]?.removeAttribute('aria-hidden')
+
         this.mceInstance().hide()
         document.getElementById(mceProps.textareaId).focus()
       } else {
         this.setCode(this.textareaValue())
         this.getTextarea().setAttribute('aria-hidden', true)
+        // Also make the label hidden
+        this.getTextarea().labels?.[0]?.setAttribute('aria-hidden', true)
+
         this.mceInstance().show()
         this.mceInstance().focus()
-        this.doAutoResize()
       }
     }
   }
@@ -1131,6 +1134,7 @@ class RCEWrapper extends React.Component {
 
     return (
       <div
+        key={this.id}
         className={`${styles.root} rce-wrapper`}
         ref={el => (this._elementRef = el)}
         onFocus={this.handleFocusRCE}
@@ -1176,7 +1180,9 @@ class RCEWrapper extends React.Component {
           onA11yChecker={this.onA11yChecker}
         />
         <CanvasContentTray
-          bridge={Bridge}
+          key={this.id}
+          bridge={bridge}
+          editor={this}
           onTrayClosing={this.handleContentTrayClosing}
           {...trayProps}
         />

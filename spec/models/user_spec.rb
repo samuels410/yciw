@@ -400,6 +400,109 @@ describe User do
     expect(user.associated_root_accounts.to_a).to eql [account2]
   end
 
+  describe 'update_root_account_ids' do
+    let_once(:root_account) { Account.default }
+    let_once(:sub_account) { Account.create(parent_account: root_account, name: 'sub') }
+
+    let(:user) { user_model }
+
+    let(:root_account_association) do
+      user.user_account_associations.create!(account: root_account)
+      user.user_account_associations.find_by(account: root_account)
+    end
+
+    let(:sub_account_association) do
+      user.user_account_associations.create!(account: sub_account)
+      user.user_account_associations.find_by(account: sub_account)
+    end
+
+    before do
+      root_account_association
+      sub_account_association
+    end
+
+    context 'when there is a single root account association' do
+      it 'updates root_account_ids with the root account' do
+        expect {
+          user.update_root_account_ids
+        }.to change {
+          user.root_account_ids
+        }.from(nil).to([root_account.global_id])
+      end
+
+      context 'and communication channels for the user exist' do
+        let(:communication_channel) { user.communication_channels.create!(path: 'test@test.com') }
+
+        before { communication_channel.update_attribute(:root_account_ids, []) }
+
+        it 'updates root_account_ids on associated communication channels' do
+          expect {
+            user.update_root_account_ids
+          }.to change {
+            user.communication_channels.first.root_account_ids
+          }.from([]).to([root_account.id])
+        end
+      end
+    end
+
+    context 'when there cross-shard root account associations' do
+      specs_require_sharding
+
+      let(:shard_two_root_account) { account_model }
+
+      before do
+        @shard2.activate do
+          user.user_account_associations.create!(
+            account: shard_two_root_account
+          )
+          user.associate_with_shard(@shard2)
+        end
+      end
+
+      it 'updates root_account_ids with all root accounts' do
+        expect {
+          user.update_root_account_ids
+        }.to change {
+          user.root_account_ids&.sort
+        }.from(nil).to(
+          [root_account.id, shard_two_root_account.global_id].sort
+        )
+      end
+
+      context 'and communication channels exist on each shard' do
+        let(:shard_one_channel) do
+          CommunicationChannel.create!(user: user, path: 'test@test.com')
+        end
+
+        let(:shard_two_channel) do
+          @shard2.activate { CommunicationChannel.create!(user: user, path: 'test@test.com') }
+        end
+
+        before do
+          shard_one_channel.update_attribute(:root_account_ids, [])
+          shard_two_channel.update_attribute(:root_account_ids, [])
+          user.update_root_account_ids
+        end
+
+        it 'populates root_account_ids on the local communication channel' do
+          expect(shard_one_channel.reload.root_account_ids).to match_array [
+            root_account.id,
+            shard_two_root_account.id
+          ]
+        end
+
+        it 'populates root_account_ids on the foreign communication channel' do
+          @shard2.activate {
+            expect(shard_two_channel.reload.root_account_ids).to match_array [
+              root_account.id,
+              shard_two_root_account.id
+            ]
+          }
+        end
+      end
+    end
+  end
+
   describe "update_account_associations" do
     it "should support incrementally adding to account associations" do
       user = User.create!
@@ -1527,7 +1630,7 @@ describe User do
       user_factory
       @user2 = @user
       @user2.update_attribute(:workflow_state, 'creation_pending')
-      @user2.communication_channels.create!(:path => @cc.path)
+      communication_channel(@user2, {username: @cc.path})
       course_factory(active_all: true)
       @course.enroll_user(@user2)
 
@@ -1609,7 +1712,7 @@ describe User do
       user_factory
       @user2 = @user
       @user2.update_attribute(:workflow_state, 'creation_pending')
-      @user2.communication_channels.create!(:path => @cc.path)
+      communication_channel(@user2, {username: @cc.path})
       course_factory(active_all: true)
       @enrollment = @course.enroll_user(@user2)
 
@@ -1776,9 +1879,9 @@ describe User do
   describe "email_channel" do
     it "should not return retired channels" do
       u = User.create!
-      retired = u.communication_channels.create!(:path => 'retired@example.com', :path_type => 'email') { |cc| cc.workflow_state = 'retired'}
+      communication_channel(u, {username: 'retired@example.com', cc_state: 'retired'})
       expect(u.email_channel).to be_nil
-      active = u.communication_channels.create!(:path => 'active@example.com', :path_type => 'email') { |cc| cc.workflow_state = 'active'}
+      active = communication_channel(u, {username: 'active@example.com', active_cc: true})
       expect(u.email_channel).to eq active
     end
   end
@@ -1800,7 +1903,7 @@ describe User do
     it "restores retired channels" do
       @user = User.create!
       path = 'john@example.com'
-      @user.communication_channels.create!(:path => path, :workflow_state => "retired")
+      communication_channel(@user, {username: path, cc_state: 'retired'})
       @user.email = path
       expect(@user.communication_channels.first).to be_unconfirmed
       expect(@user.email).to eq 'john@example.com'
@@ -2324,6 +2427,38 @@ describe User do
     end
   end
 
+  describe "send_scores_in_emails" do
+    before :once do
+      course_with_student(:active_all => true)
+    end
+
+    it "returns false if the root account setting is disabled" do
+      root_account = @course.root_account
+      root_account.settings[:allow_sending_scores_in_emails] = false
+      root_account.save!
+
+      expect(@student.send_scores_in_emails?(@course)).to be false
+    end
+
+    it "uses the user preference setting if no course overrides are available" do
+      @student.preferences[:send_scores_in_emails] = true
+      expect(@student.send_scores_in_emails?(@course)).to be true
+
+      @student.preferences[:send_scores_in_emails] = false
+      expect(@student.send_scores_in_emails?(@course)).to be false
+    end
+
+    it "uses course overrides if available" do
+      @student.preferences[:send_scores_in_emails] = false
+      @student.set_preference(:send_scores_in_emails_override, "course_" + @course.global_id.to_s, true)
+      expect(@student.send_scores_in_emails?(@course)).to be true
+
+      @student.preferences[:send_scores_in_emails] = true
+      @student.set_preference(:send_scores_in_emails_override, "course_" + @course.global_id.to_s, false)
+      expect(@student.send_scores_in_emails?(@course)).to be false
+    end
+  end
+
   describe "preferred_gradebook_version" do
     subject { user.preferred_gradebook_version }
 
@@ -2637,9 +2772,9 @@ describe User do
         # create account on another shard
         account = @shard1.activate{ Account.create! }
         # associate target user with that account
-        account_admin_user(user: target, account: account, role: Role.get_built_in_role('AccountMembership'))
+        account_admin_user(user: target, account: account, role: Role.get_built_in_role('AccountMembership', root_account_id: account.id))
         # create seeking user as admin on that account
-        seeker = account_admin_user(account: account, role: Role.get_built_in_role('AccountAdmin'))
+        seeker = account_admin_user(account: account, role: Role.get_built_in_role('AccountAdmin', root_account_id: account.id))
         # ensure seeking user gets permissions it should on target user
         expect(target.grants_right?(seeker, :view_statistics)).to be_truthy
       end
@@ -2649,9 +2784,9 @@ describe User do
         # create account on another shard
         account = @shard1.activate{ Account.create! }
         # associate target user with that account
-        account_admin_user(user: target, account: account, role: Role.get_built_in_role('AccountMembership'))
+        account_admin_user(user: target, account: account, role: Role.get_built_in_role('AccountMembership', root_account_id: account.id))
         # create seeking user as admin on that account
-        seeker = account_admin_user(account: account, role: Role.get_built_in_role('AccountAdmin'))
+        seeker = account_admin_user(account: account, role: Role.get_built_in_role('AccountAdmin', root_account_id: account.id))
         allow(seeker).to receive(:associated_shards).and_return([])
         # ensure seeking user gets permissions it should on target user
         expect(target.grants_right?(seeker, :view_statistics)).to eq true
@@ -2880,7 +3015,7 @@ describe User do
 
     it "includes 'student' if the user has a student view student enrollment" do
       @user = @course.student_view_student
-      expect(@user.roles(@account)).to eq %w[user student]
+      expect(@user.roles(@account)).to eq %w[user student fake_student]
     end
 
     it "includes 'teacher' if the user has a teacher enrollment" do
@@ -3270,6 +3405,19 @@ describe User do
       it "returns true" do
         expect(user.prefers_no_celebrations?).to eq true
       end
+    end
+  end
+
+  describe "#prefers_no_keyboard_shortcuts?" do
+    let(:user) { user_model }
+
+    it "returns false by default" do
+      expect(user.prefers_no_keyboard_shortcuts?).to eq false
+    end
+
+    it "returns true if user disables keyboard shortcuts" do
+      user.enable_feature!(:disable_keyboard_shortcuts)
+      expect(user.prefers_no_keyboard_shortcuts?).to eq true
     end
   end
 

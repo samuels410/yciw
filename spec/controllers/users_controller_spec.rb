@@ -271,6 +271,82 @@ describe UsersController do
       expect(courses.map { |c| c['label'] }).to eq %w(a B c d)
     end
 
+    it "should not include courses that an admin doesn't have rights to see" do
+      @role1 = custom_account_role('subadmin', :account => Account.default)
+      account_admin_user_with_role_changes(:role => @role1, :role_changes => {})
+      user_session(@admin)
+
+      course_with_teacher(:course_name => "A", :active_all => true, :user => @admin)
+      course_with_teacher(:course_name => "B", :active_all => true)
+      course_with_teacher(:course_name => "C", :active_all => true, :user => @admin)
+      course_with_teacher(:course_name => "D", :active_all => true)
+
+      get 'manageable_courses', params: {:user_id => @admin.id}
+      expect(response).to be_successful
+
+      courses = json_parse
+      expect(courses.map { |c| c['label'] }).to eq %w(A C)
+    end
+
+    context "query matching" do
+      before :each do
+        course_with_teacher_logged_in(:course_name => "Extra course", :active_all => 1)
+      end
+
+      it "should match query to course id" do
+        course_with_teacher(:course_name => "Biology", :user => @teacher, :active_all => 1)
+        get 'manageable_courses', params: {:user_id => @teacher.id, :term => @course.id}
+        expect(response).to be_successful
+        courses = json_parse
+        expect(courses.map { |c| c['id'] }).to eq [@course.id]
+      end
+
+      it "should match query to course code" do
+        course_code = "BIO 12239"
+        course_with_teacher(:course_name => "Biology", :user => @teacher, :active_all => 1)
+        @course.course_code = course_code
+        @course.save
+        get 'manageable_courses', params: {:user_id => @teacher.id, :term => course_code}
+        expect(response).to be_successful
+        courses = json_parse
+        expect(courses.map { |c| c['course_code'] }).to eq [course_code]
+      end
+    end
+
+    context "concluded courses" do
+      before :each do
+        course_with_teacher_logged_in(:course_name => "MyCourse1", :active_all => 1)
+        course1 = @course
+        course1.workflow_state = 'completed'
+        course1.save!
+
+        course_with_teacher(:course_name => "MyCourse2", :user => @teacher, :active_all => 1)
+        course2 = @course
+        course2.start_at = 7.days.ago
+        course2.conclude_at = 1.day.ago
+        course2.save!
+
+        course_with_teacher(:course_name => "MyCourse3", :user => @teacher, :active_all => 1)
+      end
+
+      it "should not include soft or hard concluded courses for teachers" do
+        get 'manageable_courses', params: {:user_id => @teacher.id, :term => "MyCourse"}
+        expect(response).to be_successful
+        courses = json_parse
+        expect(courses.map { |c| c['id'] }).to eq [@course.id]
+      end
+
+      it "should not include soft or hard concluded courses for admins" do
+        account_admin_user
+        user_session(@admin)
+
+        get 'manageable_courses', params: {:user_id => @admin.id, :term => "MyCourse"}
+        expect(response).to be_successful
+        courses = json_parse
+        expect(courses.map { |c| c['id'] }).to eq [@course.id]
+      end
+    end
+
     context "sharding" do
       specs_require_sharding
 
@@ -491,9 +567,9 @@ describe UsersController do
 
       it "should not complain about conflicting ccs, in any state" do
         user1, user2, user3 = User.create!, User.create!, User.create!
-        cc1 = user1.communication_channels.create!(:path => 'jacob@instructure.com', :path_type => 'email')
-        cc2 = user2.communication_channels.create!(:path => 'jacob@instructure.com', :path_type => 'email') { |cc| cc.workflow_state == 'confirmed' }
-        cc3 = user3.communication_channels.create!(:path => 'jacob@instructure.com', :path_type => 'email') { |cc| cc.workflow_state == 'retired' }
+        cc1 = communication_channel(user1, {username: 'jacob@instructure.com'})
+        cc2 = communication_channel(user2, {username: 'jacob@instructure.com', cc_state: 'confirmed'})
+        cc3 = communication_channel(user3, {username: 'jacob@instructure.com', cc_state: 'retired'})
 
         post 'create', params: {:pseudonym => { :unique_id => 'jacob@instructure.com' }, :user => { :name => 'Jacob Fugal', :terms_of_use => '1' }}
         expect(response).to be_successful
@@ -735,12 +811,21 @@ describe UsersController do
         user_session(@user, @pseudonym)
         @admin = @user
 
-        u = User.create! { |u| u.workflow_state = 'registered' }
-        u.communication_channels.create!(:path => 'jacob@instructure.com', :path_type => 'email') { |cc| cc.workflow_state = 'active' }
+        u = User.create! { |user| user.workflow_state = 'registered' }
+        communication_channel(u, {username: 'jacob@instructure.com', active_cc: true})
         u.pseudonyms.create!(:unique_id => 'jon@instructure.com')
         notification = Notification.create(:name => 'Merge Email Communication Channel', :category => 'Registration')
 
-        post 'create', params: {:account_id => account.id, :pseudonym => { :unique_id => 'jacob@instructure.com', :send_confirmation => '0' }, :user => { :name => 'Jacob Fugal' }}, format: 'json'
+        post 'create', params: {
+          :account_id => account.id,
+          :pseudonym => {
+            :unique_id => 'jacob@instructure.com',
+            :send_confirmation => '0'
+          },
+          :user => {
+            :name => 'Jacob Fugal'
+          }
+        }, format: 'json'
         expect(response).to be_successful
         p = Pseudonym.where(unique_id: 'jacob@instructure.com').first
         expect(Message.where(:communication_channel_id => p.user.email_channel, :notification_id => notification).first).to be_present
@@ -755,13 +840,88 @@ describe UsersController do
         user_session(@user, @pseudonym)
         @admin = @user
 
-        u = User.create! { |u| u.workflow_state = 'registered' }
-        u.communication_channels.create!(:path => 'jacob@instructure.com', :path_type => 'email') { |cc| cc.workflow_state = 'active' }
-        post 'create', params: {:account_id => account.id, :pseudonym => { :unique_id => 'jacob@instructure.com', :send_confirmation => '0' }, :user => { :name => 'Jacob Fugal' }}, format: 'json'
+        u = User.create! { |user| user.workflow_state = 'registered' }
+        communication_channel(u, {username: 'jacob@instructure.com', active_cc: true})
+        post 'create', params: {
+          :account_id => account.id,
+          :pseudonym => {
+            :unique_id => 'jacob@instructure.com',
+            :send_confirmation => '0'
+          },
+          :user => {
+            :name => 'Jacob Fugal'
+          }
+        }, format: 'json'
         expect(response).to be_successful
         p = Pseudonym.where(unique_id: 'jacob@instructure.com').first
         expect(Message.where(:communication_channel_id => p.user.email_channel, :notification_id => notification).first).to be_nil
       end
+    end
+  end
+
+  describe '#validate_recaptcha' do
+    # Let's make sure we never actually hit recaptcha in specs
+    before do
+      WebMock.disable_net_connect!
+      Account.default.canvas_authentication_provider.enable_captcha = true
+      subject.instance_variable_set(:@domain_root_account, Account.default)
+
+      subject.request = ActionController::TestRequest.create(subject.class)
+      subject.request.host = 'canvas.docker'
+
+      WebMock.stub_request(:post, "https://www.google.com/recaptcha/api/siteverify").
+        with(
+          body: {"secret"=>"test-token", "response"=>"valid-submit-key"}
+        ).
+        to_return(status: 200, body: { success: true, challenge_ts: Time.zone.now.to_s, hostname: 'canvas.docker' }.to_json)
+
+      WebMock.stub_request(:post, "https://www.google.com/recaptcha/api/siteverify").
+        with(
+          body: {"secret"=>"test-token", "response"=>"invalid-submit-key"}
+        ).
+        to_return(status: 200, body: {
+          success: false,
+          challenge_ts: Time.zone.now.to_s,
+          hostname: 'canvas.docker',
+          "error-codes" => ['invalid-input-response']
+        }.to_json)
+
+      WebMock.stub_request(:post, "https://www.google.com/recaptcha/api/siteverify").
+        with(
+          body: {"secret"=>"test-token", "response"=>nil}
+        ).
+        to_return(status: 200, body: {
+          success: false,
+          challenge_ts: Time.zone.now.to_s,
+          hostname: 'canvas.docker',
+          "error-codes" => ['missing-input-response']
+        }.to_json)
+      # Fallback for any dynamicsettings call that isn't mocked below
+      allow(Canvas::DynamicSettings).to receive(:find).with(any_args).and_call_original
+    end
+
+    after do
+      WebMock.enable_net_connect!
+    end
+
+    it 'should return nil if there is no token' do
+      allow(Canvas::DynamicSettings).to receive(:find).with(tree: :private).and_return({ 'recaptcha_server_key' => nil })
+      expect(subject.send(:validate_recaptcha, nil)).to be_nil
+    end
+
+    it 'should return nil for valid recaptcha submissions' do
+      allow(Canvas::DynamicSettings).to receive(:find).with(tree: :private).and_return({ 'recaptcha_server_key' => 'test-token' })
+      expect(subject.send(:validate_recaptcha, 'valid-submit-key')).to be_nil
+    end
+
+    it 'should return an error for missing recaptcha submissions' do
+      allow(Canvas::DynamicSettings).to receive(:find).with(tree: :private).and_return({ 'recaptcha_server_key' => 'test-token' })
+      expect(subject.send(:validate_recaptcha, nil)).not_to be_nil
+    end
+
+    it 'should return an error for invalid recaptcha submissions' do
+      allow(Canvas::DynamicSettings).to receive(:find).with(tree: :private).and_return({ 'recaptcha_server_key' => 'test-token' })
+      expect(subject.send(:validate_recaptcha, 'invalid-submit-key')).not_to be_nil
     end
   end
 
@@ -1275,7 +1435,8 @@ describe UsersController do
 
     context "as an observer requesting an observed student's grades" do
       let_once(:observer) { user_with_pseudonym(active_all: true) }
-      let(:grade) { assigns[:grades][:observed_enrollments][course_1.id][student.id] }
+      let(:observed_grades) { assigns[:grades][:observed_enrollments] }
+      let(:grade) { observed_grades[course_1.id][student.id] }
 
       before(:once) do
         add_linked_observer(student, observer)
@@ -1429,6 +1590,27 @@ describe UsersController do
         it "sets the selected grading period to '0' (All Grading Periods)" do
           get_grades!
           expect(selected_period_id).to be 0
+        end
+      end
+
+      context "with cross-shard enrollments" do
+        specs_require_sharding
+
+        it "returns grades for enrollments in other shards" do
+          @shard1.activate do
+            other_account = Account.create
+            @cs_course = course_factory(active_all: true, account: other_account)
+            course_with_user("TeacherEnrollment", course: @cs_course, user: teacher, active_all: true)
+            course_with_user("StudentEnrollment", course: @cs_course, user: student, active_all: true)
+            cs_observer = course_with_observer(course: @cs_course, user: observer, active_all: true)
+            cs_observer.update!(associated_user: student)
+            assignment = @cs_course.assignments.create!(title: "Homework", points_possible: 10)
+            assignment.grade_student(student, grade: 8, grader: teacher)
+          end
+
+          get_grades!
+          cross_course_grade = observed_grades.dig(@cs_course.id, student.id)
+          expect(cross_course_grade).to eq 80.0
         end
       end
     end
@@ -2079,7 +2261,6 @@ describe UsersController do
     context "with student planner feature enabled" do
       before(:once) do
         @account = Account.default
-        @account.enable_feature! :student_planner
       end
 
       it "sets ENV.STUDENT_PLANNER_ENABLED to false when user has no student enrollments" do
@@ -2125,7 +2306,6 @@ describe UsersController do
       end
 
       it "should load favorites" do
-        Account.default.enable_feature!(:unfavorite_course_from_dashboard)
         @user.favorites.where(:context_type => 'Course', :context_id => @course1).first_or_create!
         get 'user_dashboard'
         course_data = assigns[:js_env][:STUDENT_PLANNER_COURSES]

@@ -80,7 +80,7 @@ class Attachment < ActiveRecord::Base
   has_one :canvadoc
   belongs_to :usage_rights
 
-  before_create :set_root_account_id
+  before_save :set_root_account_id
   before_save :infer_display_name
   before_save :default_values
   before_save :set_need_notify
@@ -311,6 +311,12 @@ class Attachment < ActiveRecord::Base
     excluded_atts += ["locked", "hidden"] if dup == existing && !options[:migration]&.for_master_course_import?
     dup.assign_attributes(self.attributes.except(*excluded_atts))
     dup.context = context
+    if self.usage_rights && self.shard != context.shard
+      attrs = self.usage_rights.attributes.slice('use_justification', 'license', 'legal_copyright')
+      new_rights = context.usage_rights.detect{|ur| attrs.all?{|k, v| ur.attributes[k] == v}}
+      new_rights ||= context.usage_rights.create(attrs)
+      dup.usage_rights = new_rights
+    end
     # avoid cycles (a -> b -> a) and self-references (a -> a) in root_attachment_id pointers
     if dup.new_record? || ![self.id, self.root_attachment_id].include?(dup.id)
       if self.shard == dup.shard
@@ -331,7 +337,7 @@ class Attachment < ActiveRecord::Base
       context.log_merge_result("File \"#{dup.folder && dup.folder.full_name}/#{dup.display_name}\" created")
     end
     dup.shard.activate do
-      if Attachment.s3_storage? && !instfs_hosted? && context.respond_to?(:root_account_id) && self.namespace != context.root_account.file_namespace
+      if Attachment.s3_storage? && !instfs_hosted? && context.try(:root_account) && self.namespace != context.root_account.file_namespace
         dup.save_without_broadcasting!
         dup.make_rootless
         dup.change_namespace(context.root_account.file_namespace)
@@ -502,7 +508,11 @@ class Attachment < ActiveRecord::Base
   end
   protected :default_values
 
-  def root_account_id
+  def set_root_account_id
+    self.root_account_id = infer_root_account_id if namespace_changed? || new_record?
+  end
+
+  def infer_root_account_id
     # see note in infer_namespace below
     splits = namespace.try(:split, /_/)
     return nil if splits.blank?
@@ -532,8 +542,8 @@ class Attachment < ActiveRecord::Base
       # attachment's account id. Look for anybody who is accessing namespace and
       # splitting the string, etc.
       #
-      # I've added the root_account_id accessor above, but I didn't verify there
-      # isn't any code still accessing the namespace for the account id directly.
+      # The infer_root_account_id accessor is still present above, but I didn't verify there
+      # isn't any code still accessing the namespace for the account id directly. d
       ns = root_attachment.try(:namespace) if root_attachment_id
       ns ||= Attachment.current_namespace
       ns ||= self.context.root_account.file_namespace rescue nil
@@ -664,7 +674,7 @@ class Attachment < ActiveRecord::Base
     policy = JSON.parse(Base64.decode64(policy_str))
     return nil unless Time.zone.parse(policy['expiration']) >= Time.now
     attachment = Attachment.find(policy['attachment_id'])
-    return nil unless attachment.try(:state) == :unattached
+    return nil unless [:unattached, :unattached_temporary].include?(attachment.try(:state))
     return policy, attachment
   end
 
@@ -1019,6 +1029,10 @@ class Attachment < ActiveRecord::Base
         folder && folder.visible?
   end
 
+  def notify_only_admins?
+    context.is_a?(Course) && (folder.currently_locked? || currently_locked? || context.tab_hidden?(Course::TAB_FILES))
+  end
+
   # generate notifications for recent file operations
   # (this should be run in a delayed job)
   def self.do_notifications
@@ -1047,7 +1061,7 @@ class Attachment < ActiveRecord::Base
         # now generate the notification
         record = Attachment.find(attachment_id)
         next if record.context.is_a?(Course) && (!record.context.available? || record.context.concluded?)
-        if record.context.is_a?(Course) && (record.folder.locked? || record.locked? || record.context.tab_hidden?(Course::TAB_FILES))
+        if record.notify_only_admins?
           # only notify course students if they are able to access it
           to_list = record.context.participating_admins - [record.user]
         elsif record.context.respond_to?(:participants)
@@ -1143,6 +1157,7 @@ class Attachment < ActiveRecord::Base
   end
 
   def mime_class
+    # NOTE: keep this list in sync with what's in packages/canvas-rce/src/common/mimeClass.js
     {
       'text/html' => 'html',
       "text/x-csharp" => "code",
@@ -1167,6 +1182,8 @@ class Attachment < ActiveRecord::Base
       "image/png" => "image",
       "image/gif" => "image",
       "image/bmp" => "image",
+      "image/svg+xml" => "image",
+      # "image/webp" => "image", not supported by safari as of Version 13.1.1
       "image/vnd.microsoft.icon" => "image",
       "application/x-rar" => "zip",
       "application/x-rar-compressed" => "zip",
@@ -1183,6 +1200,8 @@ class Attachment < ActiveRecord::Base
       "audio/x-mpegurl" => "audio",
       "audio/x-pn-realaudio" => "audio",
       "audio/x-wav" => "audio",
+      "audio/mp4" => "audio",
+      "audio/webm" => "audio",
       "video/mpeg" => "video",
       "video/quicktime" => "video",
       "video/x-la-asf" => "video",
@@ -1191,6 +1210,7 @@ class Attachment < ActiveRecord::Base
       "video/x-sgi-movie" => "video",
       "video/3gpp" => "video",
       "video/mp4" => "video",
+      "video/webm": "video",
       "application/x-shockwave-flash" => "flash"
     }[content_type] || "file"
   end
@@ -1305,8 +1325,9 @@ class Attachment < ActiveRecord::Base
   end
 
   def currently_locked
-    self.locked || (self.lock_at && Time.now > self.lock_at) || (self.unlock_at && Time.now < self.unlock_at) || self.file_state == 'hidden'
+    self.locked || (self.lock_at && Time.zone.now > self.lock_at) || (self.unlock_at && Time.zone.now < self.unlock_at) || self.file_state == 'hidden'
   end
+  alias currently_locked? currently_locked
 
   def hidden
     hidden?
@@ -1972,6 +1993,22 @@ class Attachment < ActiveRecord::Base
     false
   end
 
+  def self.copy_attachments_to_submissions_folder(assignment_context, attachments)
+    attachments.map do |attachment|
+      if attachment.folder && attachment.folder.for_submissions? &&
+          !attachment.associated_with_submission?
+        # if it's already in a submissions folder and has not been submitted previously, we can leave it there
+        attachment
+      elsif attachment.context.respond_to?(:submissions_folder)
+        # if it's not in a submissions folder, or has previously been submitted, we need to make a copy
+        attachment.copy_to_folder!(attachment.context.submissions_folder(assignment_context))
+      else
+        attachment # in a weird context; leave it alone
+      end
+    end
+  end
+
+
   def set_publish_state_for_usage_rights
     if self.context &&
        (!self.folder || !self.folder.for_submissions?) &&
@@ -2072,19 +2109,6 @@ class Attachment < ActiveRecord::Base
           end
         end
       end
-    end
-  end
-
-  def set_root_account_id
-    # needed to do it this way since root_account_id is a method in this class
-    unless read_attribute(:root_account_id)
-      self.root_account_id =
-        case self.context
-        when Account
-          self.context.resolved_root_account_id
-        else
-          self.context.root_account_id if self.context.respond_to?(:root_account_id)
-        end
     end
   end
 end

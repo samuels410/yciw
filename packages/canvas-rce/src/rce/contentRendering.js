@@ -66,16 +66,20 @@ export function renderLinkedImage(linkElem, image) {
 }
 
 export function constructJSXImageElement(image, opts = {}) {
-  const {href, url, title, display_name, alt_text, link, ...otherAttributes} = image
+  const {
+    href,
+    url,
+    title,
+    display_name,
+    alt_text,
+    isDecorativeImage,
+    link,
+    ...otherAttributes
+  } = image
   const src = href || url
-  let altText = title || display_name
-  if (alt_text) {
-    if (alt_text.decorativeSelected) {
-      altText = ''
-      otherAttributes['data-is-decorative'] = 'true'
-    } else {
-      altText = alt_text.altText
-    }
+  const altText = alt_text || title || display_name || ''
+  if (isDecorativeImage) {
+    otherAttributes.role = 'presentation'
   }
 
   const ret = (
@@ -104,50 +108,40 @@ export function mediaIframeSrcFromFile(fileProps) {
   return `/media_objects_iframe?mediahref=${encodeURIComponent(fileProps.href)}&type=${type}`
 }
 
-function constructJSXVideoEmbedding(video) {
-  const src = mediaIframeSrcFromFile(video)
-  return (
-    <iframe
-      allow="fullscreen"
-      allowFullScreen
-      data-media-id={`${video.media_id || video.id || video.file_id}`}
-      data-media-type="video"
-      src={src}
-      style={{
-        width: VIDEO_SIZE_DEFAULT.width,
-        height: VIDEO_SIZE_DEFAULT.height,
-        display: 'inline-block'
-      }}
-      title={formatMessage('Video player for {title}', {
-        title: video.title || video.name || video.text
-      })}
-    />
-  )
-}
-
 export function renderVideo(video) {
-  return renderToStaticMarkup(constructJSXVideoEmbedding(video))
-}
-
-function constructJSXAudioEmbedding(audio) {
-  const src = mediaIframeSrcFromFile(audio)
-  return (
-    <iframe
-      data-media-id={`${audio.media_id || audio.id || audio.file_id}`}
-      data-media-type="audio"
-      src={src}
-      style={{
-        width: AUDIO_PLAYER_SIZE.width,
-        height: AUDIO_PLAYER_SIZE.height,
-        display: 'inline-block'
-      }}
-      title={formatMessage('Audio player for {title}', {
-        title: audio.title || audio.name || audio.text
-      })}
-    />
-  )
+  const src = mediaIframeSrcFromFile(video)
+  return `
+  <iframe
+      allow="fullscreen"
+      allowfullscreen
+      data-media-id="${video.media_id || video.id || video.file_id}"
+      data-media-type="video"
+      src="${src}"
+      style="width:${VIDEO_SIZE_DEFAULT.width};height:${
+    VIDEO_SIZE_DEFAULT.height
+  };display:inline-block;"
+      title="${formatMessage('Video player for {title}', {
+        title: video.title || video.name || video.text
+      })}"></iframe>&nbsp;
+  `
+    .trim()
+    .replace(/\s+/g, ' ')
 }
 
 export function renderAudio(audio) {
-  return renderToStaticMarkup(constructJSXAudioEmbedding(audio))
+  const src = mediaIframeSrcFromFile(audio)
+  return `
+  <iframe
+      data-media-id="${audio.media_id || audio.id || audio.file_id}"
+      data-media-type="audio"
+      src="${src}"
+      style="width:${AUDIO_PLAYER_SIZE.width};height:${
+    AUDIO_PLAYER_SIZE.height
+  };display:inline-block;"
+      title="${formatMessage('Audio player for {title}', {
+        title: audio.title || audio.name || audio.text
+      })}"></iframe>&nbsp;
+  `
+    .trim()
+    .replace(/\s+/g, ' ')
 }

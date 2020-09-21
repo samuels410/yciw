@@ -32,6 +32,7 @@ describe('RCE "Images" Plugin > ImageOptionsTray', () => {
         altText: '',
         appliedHeight: 300,
         appliedWidth: 150,
+        isLinked: false,
         isDecorativeImage: false,
         naturalHeight: 200,
         naturalWidth: 100,
@@ -83,18 +84,6 @@ describe('RCE "Images" Plugin > ImageOptionsTray', () => {
       renderComponent()
       expect(tray.altTextDisabled).toEqual(false)
     })
-
-    it('is disabled when .isDecorativeImage is true in the given image options', () => {
-      props.imageOptions.isDecorativeImage = true
-      renderComponent()
-      expect(tray.altTextDisabled).toEqual(true)
-    })
-
-    it('is not disabled when displaying the image as a link', () => {
-      renderComponent()
-      tray.setDisplayAs('link')
-      expect(tray.altTextDisabled).toEqual(false)
-    })
   })
 
   describe('"No Alt Text" Checkbox', () => {
@@ -125,6 +114,7 @@ describe('RCE "Images" Plugin > ImageOptionsTray', () => {
   describe('"Display Options" field', () => {
     it('is set to "embed" by default', () => {
       renderComponent()
+      expect(tray.isDisplayAsDisabled).toBe(false)
       expect(tray.displayAs).toEqual('embed')
     })
 
@@ -139,6 +129,12 @@ describe('RCE "Images" Plugin > ImageOptionsTray', () => {
       tray.setDisplayAs('link')
       tray.setDisplayAs('embed')
       expect(tray.displayAs).toEqual('embed')
+    })
+
+    it('is hidden when image is already linked', () => {
+      props.imageOptions.isLinked = true
+      renderComponent()
+      expect(tray.isDisplayAsDisabled).toBe(true)
     })
   })
 
@@ -193,28 +189,6 @@ describe('RCE "Images" Plugin > ImageOptionsTray', () => {
       })
     })
 
-    describe('when Alt Text is not present', () => {
-      beforeEach(() => {
-        renderComponent()
-        tray.setAltText('')
-      })
-
-      it('is disabled when "No Alt Text" is unchecked', () => {
-        tray.setIsDecorativeImage(false)
-        expect(tray.doneButtonDisabled).toEqual(true)
-      })
-
-      it('is enabled when "No Alt Text" is checked', () => {
-        tray.setIsDecorativeImage(true)
-        expect(tray.doneButtonDisabled).toEqual(false)
-      })
-
-      it('is enabled when "Display Text Link" is selected', () => {
-        tray.setDisplayAs('link')
-        expect(tray.doneButtonDisabled).toEqual(false)
-      })
-    })
-
     describe('when clicked', () => {
       beforeEach(() => {
         renderComponent()
@@ -248,19 +222,27 @@ describe('RCE "Images" Plugin > ImageOptionsTray', () => {
           expect(altText).toEqual('A turtle in a party suit.')
         })
 
-        it('includes the "No Alt Text" setting', () => {
+        it('includes the "Is Decorative" setting', () => {
           tray.setIsDecorativeImage(true)
           tray.$doneButton.click()
           const [{isDecorativeImage}] = props.onSave.mock.calls[0]
           expect(isDecorativeImage).toEqual(true)
         })
 
-        it('clears the Alt Text when the "No Alt Text" setting is true', () => {
+        it('leaves the Alt Text when the "is decorative" setting is true', () => {
           tray.setAltText('A turtle in a party suit.')
           tray.setIsDecorativeImage(true)
           tray.$doneButton.click()
           const [{altText}] = props.onSave.mock.calls[0]
-          expect(altText).toEqual('')
+          expect(altText).toEqual('A turtle in a party suit.')
+        })
+
+        it('ensures there is an Alt Text when the "is decorative" setting is true', () => {
+          tray.setAltText('')
+          tray.setIsDecorativeImage(true)
+          tray.$doneButton.click()
+          const [{altText}] = props.onSave.mock.calls[0]
+          expect(altText).toEqual(' ')
         })
 
         it('includes the "Display As" setting', () => {

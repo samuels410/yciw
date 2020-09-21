@@ -114,6 +114,41 @@ describe RoleOverride do
     expect(old_updated_at).not_to eq(new_updated_at)
   end
 
+  describe "root_account_id" do
+    before :once do
+      @account = account_model(parent_account: Account.default)
+      @role = @account.roles.new(name: "SomeRole")
+      @role.base_role_type = "AccountMembership"
+      @role.save!
+    end
+
+    it "assigns root_account_id if it is not set" do
+      override = RoleOverride.create!(
+        context: @account,
+        permission: 'moderate_forum',
+        role: @role,
+        enabled: false
+        )
+
+      expect(override.root_account_id).to eq(@account.root_account_id)
+    end
+
+    it "does not try to reassign it on save if it is already set" do
+      override = RoleOverride.create!(
+        context: @account,
+        permission: 'moderate_forum',
+        role: @role,
+        enabled: false
+        )
+      altered_id = @account.root_account_id + 1
+      override.root_account_id = altered_id
+
+      override.enabled = true
+      override.save!
+      expect(override.root_account_id).to eq(altered_id) # it is not overridden
+    end
+  end
+
   describe "student view permissions" do
     it "should mirror student permissions" do
       permission = 'moderate_forum'
@@ -323,7 +358,7 @@ describe RoleOverride do
         context "#{base_role[:name]} enrollments" do
           before do
             @base_role_name = base_role[:name]
-            @base_role = Role.get_built_in_role(@base_role_name)
+            @base_role = Role.get_built_in_role(@base_role_name, root_account_id: @account.resolved_root_account_id)
             @role_name = 'course role'
             @default_perm = RoleOverride.permissions[@permission][:true_for].include?(@base_role_name)
             @parent_account = @account
@@ -344,7 +379,7 @@ describe RoleOverride do
 
           it "should not find override for base type of role" do
             create_override(@role, @default_perm)
-            create_override(Role.get_built_in_role(@base_role_name), !@default_perm)
+            create_override(Role.get_built_in_role(@base_role_name, root_account_id: @account.resolved_root_account_id), !@default_perm)
 
             check_permission(@role, @default_perm)
             check_permission(@base_role, !@default_perm)
@@ -628,6 +663,15 @@ describe RoleOverride do
       @sub_account1.update_attribute(:parent_account, @sub_account2)
       @student.touch
       expect(Course.find(course.id).grants_right?(@student, :read_forum)).to eq false
+    end
+
+    it "does not try to hit caches inside permission_for if no_caching == true" do
+      account = Account.default
+      role = teacher_role
+      cache_key = "role_override_calculation/#{Shard.global_id_for(role)}"
+      expect(RoleOverride).to receive(:uncached_permission_for).once.and_call_original
+      expect(RequestCache).not_to receive(:cache).with(cache_key, account)
+      permissions = RoleOverride.permission_for(account, :moderate_forum, role, account, true)
     end
   end
 end

@@ -281,6 +281,11 @@ module PostgreSQLAdapterExtensions
     super(table_name, column_name, type, **options)
   end
 
+  def remove_column(table_name, column_name, type = nil, options = {})
+    return if options.is_a?(Hash) && options[:if_exists] && !column_exists?(table_name, column_name)
+    super
+  end
+
   def quote(*args)
     value = args.first
     return value if value.is_a?(QuotedValue)
@@ -415,6 +420,41 @@ module PostgreSQLAdapterExtensions
     ensure
       @nested_primary_keys = false
     end
+  end
+
+  def icu_collations
+    return [] if postgresql_version < 120000
+    @collations ||= select_rows <<-SQL, "SCHEMA"
+      SELECT nspname, collname
+      FROM pg_collation
+      INNER JOIN pg_namespace ON collnamespace=pg_namespace.oid
+      WHERE
+        collprovider='i' AND
+        NOT collisdeterministic AND
+        collcollate LIKE '%-u-kn-true'
+    SQL
+  end
+
+  def create_icu_collations
+    return if postgresql_version < 120000
+    original_locale = I18n.locale
+
+    collation = "und-u-kn-true"
+    unless icu_collations.find { |_schema, extant_collation| extant_collation == collation }
+      update("CREATE COLLATION public.#{quote_column_name(collation)} (LOCALE=#{quote(collation)}, PROVIDER='icu', DETERMINISTIC=false)")
+    end
+
+    I18n.available_locales.each do |locale|
+      next if locale =~ /-x-/
+      I18n.locale = locale
+      next if Canvas::ICU.collator.rules.empty?
+      collation = "#{locale}-u-kn-true"
+      next if icu_collations.find { |_schema, extant_collation| extant_collation == collation }
+      update("CREATE COLLATION public.#{quote_column_name(collation)} (LOCALE=#{quote(collation)}, PROVIDER='icu', DETERMINISTIC=false)")
+    end
+  ensure
+    @collations = nil
+    I18n.locale = original_locale
   end
 end
 

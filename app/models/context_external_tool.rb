@@ -59,6 +59,7 @@ class ContextExternalTool < ActiveRecord::Base
   QUIZ_LTI = 'Quizzes 2'.freeze
   ANALYTICS_2 = 'fd75124a-140e-470f-944c-114d2d93bb40'.freeze
   TOOL_FEATURE_MAPPING = { ANALYTICS_2 => :analytics_2 }.freeze
+  PREFERRED_LTI_VERSION = '1_3'.freeze
 
   workflow do
     state :anonymous
@@ -684,31 +685,93 @@ end
   # the teacher).
   #
   # Tools with exclude_tool_id as their ID will never be returned.
-  def self.find_external_tool(url, context, preferred_tool_id=nil, exclude_tool_id=nil)
+  def self.find_external_tool(url, context, preferred_tool_id=nil, exclude_tool_id=nil, preferred_client_id=nil)
     Shackles.activate(:slave) do
       contexts = contexts_to_search(context)
       preferred_tool = ContextExternalTool.active.where(id: preferred_tool_id).first if preferred_tool_id
+
       if preferred_tool && contexts.member?(preferred_tool.context) && (url == nil || preferred_tool.matches_domain?(url))
         return preferred_tool
       end
 
       return nil unless url
 
-      all_external_tools = ContextExternalTool.shard(context.shard).polymorphic_where(context: contexts).active.to_a
-      sorted_external_tools = all_external_tools.sort_by { |t| [contexts.index { |c| c.id == t.context_id && c.class.name == t.context_type }, t.precedence, t.id == preferred_tool_id ? CanvasSort::First : CanvasSort::Last] }
+      query = ContextExternalTool.shard(context.shard).polymorphic_where(context: contexts).active
+      query = query.where(developer_key_id: preferred_client_id) if preferred_client_id
 
-      res = sorted_external_tools.detect{ |tool| tool.url && tool.matches_url?(url) && tool.id != exclude_tool_id }
-      return res if res
+      all_external_tools = query.to_a
+      sorted_external_tools = all_external_tools.sort_by do |t|
+        [contexts.index { |c| c.id == t.context_id && c.class.name == t.context_type }, t.precedence, t.id == preferred_tool_id ? CanvasSort::First : CanvasSort::Last]
+      end
+
+      search_options = {
+        exclude_tool_id: exclude_tool_id,
+        lti_version: PREFERRED_LTI_VERSION
+      }
+
+      # Check for a tool that exactly matches the given URL
+      match = find_tool_match(
+        url,
+        sorted_external_tools,
+        -> (t, u) { t.matches_url?(u) },
+        -> (t) { t.url.present? },
+        search_options
+      )
 
       # If exactly match doesn't work, try to match by ignoring extra query parameters
-      res = sorted_external_tools.detect{ |tool| tool.url && tool.matches_url?(url, false) && tool.id != exclude_tool_id }
-      return res if res
+      match ||= find_tool_match(
+        url,
+        sorted_external_tools,
+        -> (t, u) { t.matches_url?(u, false) },
+        -> (t) { t.url.present? },
+        search_options
+      )
 
-      res = sorted_external_tools.detect{ |tool| tool.domain && tool.matches_tool_domain?(url) && tool.id != exclude_tool_id }
-      return res if res
+      # If still no matches, use domain matching to try to find a tool
+      match ||= find_tool_match(
+        url,
+        sorted_external_tools,
+        -> (t, _u) { t.matches_tool_domain?(url) },
+        -> (t) { t.domain.present? },
+        search_options
+      )
 
-      nil
+      match
     end
+  end
+
+  # Given a collection of tools, finds the first tool that exactly
+  # matches the given URL.
+  #
+  # If a preferred LTI version is specified, this method will use
+  # LTI version as a tie-breaker.
+  def self.find_tool_match(url, sorted_tool_collection, matcher, matcher_condition, opts)
+    exclude_tool_id, lti_version = opts.values_at(:exclude_tool_id, :lti_version)
+
+    # Find tools that match the given matcher
+    exact_matches = sorted_tool_collection.select do |tool|
+      matcher_condition.call(tool) && matcher.call(tool, url) && tool.id != exclude_tool_id
+    end
+
+    # There was only a single match, so return it
+    return exact_matches.first if exact_matches.count == 1
+    
+    version_match = find_exact_version_match(exact_matches, lti_version)
+
+    # There is no LTI version preference or no matching
+    # version was found. Return the first matched tool
+    return exact_matches.first if version_match.blank?
+
+    # An LTI version is preferred and found, return it
+    version_match
+  end
+
+  # Given a collection of tools, finds the first with the given LTI version
+  # If no matches were detected, returns nil
+  def self.find_exact_version_match(sorted_tool_collection, lti_version)
+    return nil if lti_version.blank?
+
+    sorted_tool_collection.find { |t| t.send("use_#{lti_version}?") }
   end
 
   scope :having_setting, lambda { |setting| setting ? joins(:context_external_tool_placements).
@@ -992,6 +1055,7 @@ end
       {
           :name => tool.label_for(:editor_button, I18n.locale),
           :id => tool.id,
+          :favorite => tool.is_rce_favorite,
           :url => tool.editor_button(:url),
           :icon_url => tool.editor_button(:icon_url),
           :canvas_icon_class => tool.editor_button(:canvas_icon_class),

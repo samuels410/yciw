@@ -16,14 +16,7 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-import {
-  fireEvent,
-  getByLabelText,
-  getByText,
-  getAllByText,
-  queryByLabelText,
-  wait
-} from '@testing-library/dom'
+import {fireEvent, getByLabelText, getAllByText, queryByLabelText, wait} from '@testing-library/dom'
 
 function getSizeOptions($sizeSelect) {
   const controlledId = $sizeSelect.getAttribute('aria-controls')
@@ -55,8 +48,8 @@ export default class ImageOptionsTrayDriver {
     return this.$element.querySelector('textarea')
   }
 
-  get $noAltTextCheckbox() {
-    return getByLabelText(this.$element, 'No Alt Text', {exact: false})
+  get $isDecorativeCheckbox() {
+    return getByLabelText(this.$element, 'Decorative Image', {exact: false})
   }
 
   get $displayAsField() {
@@ -82,15 +75,19 @@ export default class ImageOptionsTrayDriver {
   }
 
   get isDecorativeImage() {
-    return this.$noAltTextCheckbox.checked
+    return this.$isDecorativeCheckbox.checked
   }
 
   get isDecorativeImageDisabled() {
-    return this.$noAltTextCheckbox.disabled
+    return this.$isDecorativeCheckbox.disabled
   }
 
   get displayAs() {
     return this.$displayAsField.querySelector('input[type="radio"]:checked').value
+  }
+
+  get isDisplayAsDisabled() {
+    return this.$displayAsField.querySelectorAll('input[disabled]').length === 2
   }
 
   get size() {
@@ -107,7 +104,7 @@ export default class ImageOptionsTrayDriver {
 
   setIsDecorativeImage(isDecorativeImage) {
     if (this.isDecorativeImage !== isDecorativeImage) {
-      this.$noAltTextCheckbox.click()
+      this.$isDecorativeCheckbox.click()
     }
   }
 

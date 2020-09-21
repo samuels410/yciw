@@ -551,6 +551,33 @@ describe MasterCourses::MasterMigration do
       expect(@new_assmt.reload).to_not be_deleted
     end
 
+    it "should delete an assignment group when all assignments are moved out in the same sync" do
+      @copy_to = course_factory
+      sub = @template.add_child_course!(@copy_to)
+
+      ag1 = @copy_from.assignment_groups.create!(:name => "group1")
+      a1 = @copy_from.assignments.create!(:title => "assmt1", :assignment_group => ag1)
+      ag2 = @copy_from.assignment_groups.create!(:name => "group2")
+      a2 = @copy_from.assignments.create!(:title => "assmt2", :assignment_group => ag2)
+
+      run_master_migration
+
+      ag1_to = @copy_to.assignment_groups.where(:migration_id => mig_id(ag1)).first
+      ag2_to = @copy_to.assignment_groups.where(:migration_id => mig_id(ag2)).first
+      a2_to = ag2_to.assignments.first
+
+      Timecop.freeze(30.seconds.from_now) do
+        a2.update_attribute(:assignment_group, ag1)
+        ag2.reload.destroy
+      end
+
+      run_master_migration
+
+      expect(ag2_to.reload).to be_deleted # should still delete
+      expect(a2_to.reload.assignment_group).to eq ag1_to
+      expect(a2_to).to be_active
+    end
+
     it "shouldn't change assignment group weights and rules if changed downstream" do
       @copy_to = course_factory
       sub = @template.add_child_course!(@copy_to)
@@ -582,6 +609,27 @@ describe MasterCourses::MasterMigration do
       run_master_migration
       expect(ag1_to.reload.group_weight).to eq 25 # should not have reverted from downstream change
       expect(ag1_to.rules).to eq "drop_lowest:3\n"
+    end
+
+    it "doesn't overwrite weights and rules of an assignment group with a similar name on initial sync" do
+      @copy_to = course_factory
+      sub = @template.add_child_course!(@copy_to)
+
+      ag1 = @copy_from.assignment_groups.create!(:name => "group1", :group_weight => 50)
+      a1 = @copy_from.assignments.create!(:title => "assmt1", :assignment_group => ag1)
+      ag1.update_attribute(:rules, "drop_lowest:1\nnever_drop:#{a1.id}\n")
+
+      ag1_assimilation_target = @copy_to.assignment_groups.create!(:name => "group1", :group_weight => 33)
+      ag1_assimilation_target.update_attribute(:rules, "drop_highest:1\n")
+
+      run_master_migration
+
+      ag1_to = @copy_to.assignment_groups.where(:migration_id => mig_id(ag1)).first
+      expect(ag1_to).to eq ag1_assimilation_target
+      expect(ag1_to.group_weight).to eq 33
+      expect(ag1_to.rules).to eq "drop_highest:1\n"
+      a1_to = ag1_to.assignments.first
+      expect(a1_to).to be
     end
 
     it "should sync unpublished quiz points possible" do
@@ -846,6 +894,32 @@ describe MasterCourses::MasterMigration do
 
       expect(att1_to.reload).to be_available # should be restored because it's locked now
       expect(att2_to.reload).to be_available # should be restored because it hadn't been deleted manually
+    end
+
+    it "doesn't sync new files into an old deleted folder with the same name" do
+      @copy_to = course_factory
+      @template.add_child_course!(@copy_to)
+
+      @root_folder = Folder.root_folders(@copy_from).first
+      @folder_to_delete = @root_folder.sub_folders.create!(:name => "nowyouseeme", :context => @copy_from)
+      @att1 = Attachment.create!(:filename => 'file1.txt', :uploaded_data => StringIO.new('1'),
+        :folder => @folder_to_delete, :context => @copy_from)
+
+      run_master_migration
+      @att1_to = @copy_to.attachments.where(:migration_id => mig_id(@att1)).first
+      expect(@att1_to).to be_present
+
+      Timecop.freeze(1.minute.from_now) do
+        @att1.update_attribute(:folder, @root_folder)
+        @folder_to_delete.destroy
+        @replacement_folder = @root_folder.sub_folders.create!(:name => "nowyouseeme", :context => @copy_from)
+        @att1.update_attribute(:folder, @replacement_folder)
+      end
+      run_master_migration
+
+      @att1_to.reload
+      expect(@att1_to).to_not be_deleted
+      expect(@att1_to.folder).to_not be_deleted
     end
 
     it "limits the number of items to track" do
@@ -1334,6 +1408,20 @@ describe MasterCourses::MasterMigration do
 
       expect(copied_quiz_assmt.reload.due_at.to_i).to eq new_master_due_at.to_i # should have gotten overwritten
       expect(copied_topic_assmt.reload.due_at.to_i).to eq new_master_due_at.to_i
+    end
+
+    it "should not copy only_visible_to_overrides for quizzes by default" do
+      @copy_to = course_factory
+      sub = @template.add_child_course!(@copy_to)
+
+      quiz_assmt = @copy_from.assignments.create!(:submission_types => 'online_quiz').reload
+      quiz = quiz_assmt.quiz
+      quiz.update_attribute(:only_visible_to_overrides, true)
+
+      run_master_migration
+
+      copied_quiz = @copy_to.quizzes.where(:migration_id => mig_id(quiz)).first
+      expect(copied_quiz.only_visible_to_overrides).to eq false
     end
 
     it "allows a minion course's change of the graded status of a discussion topic to stick" do
@@ -2358,6 +2446,28 @@ describe MasterCourses::MasterMigration do
       expect(@copy_to2.reload).to be_available
     end
 
+    it "should update quiz assignment cached due dates" do
+      course_with_student(:active_all => true)
+      @copy_to = @course
+      @sub = @template.add_child_course!(@copy_to)
+
+      q = @copy_from.quizzes.create!(:title => "some quiz")
+      q.publish!
+
+      run_master_migration
+      q_to = @copy_to.quizzes.where(:migration_id => mig_id(q)).first
+      sub = @student.submissions.where(:assignment_id => q_to.assignment).first
+      expect(sub.cached_due_date).to be_nil
+
+      due_at = 1.day.from_now
+      Timecop.freeze(1.minute.from_now) do
+        q.update_attribute(:due_at, due_at)
+        run_master_migration
+      end
+
+      expect(sub.reload.cached_due_date.to_i).to eq due_at.to_i
+    end
+
     context "caching" do
       specs_require_cache(:redis_cache_store)
 
@@ -2428,11 +2538,9 @@ describe MasterCourses::MasterMigration do
       n1 = Notification.create(:name => "Blueprint Content Added")
       @admin = @user
       course_with_teacher :active_all => true
-      sub = @template.add_child_course!(@course)
-      cc0 = @admin.communication_channels.create(:path => "test_#{@admin.id}@example.com", :path_type => "email")
-      cc0.confirm
-      cc1 = @user.communication_channels.create(:path => "test_#{@user.id}@example.com", :path_type => "email")
-      cc1.confirm
+      @template.add_child_course!(@course)
+      cc0 = communication_channel(@admin, {username: "test_#{@admin.id}@example.com", active_cc: true})
+      cc1 = communication_channel(@user, {username: "test_#{@user.id}@example.com", active_cc: true})
       run_master_migration :comment => "ohai eh", :send_notification => true
       expect(DelayedMessage.where(notification_id: n0, communication_channel_id: cc0).last.summary).to include "ohai eh"
       expect(DelayedMessage.where(notification_id: n1, communication_channel_id: cc1).last.summary).to include "ohai eh"

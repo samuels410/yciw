@@ -18,7 +18,8 @@
 
 import React, {useReducer, useCallback} from 'react'
 import I18n from 'i18n!csp_violation_tray'
-import {Heading, Spinner} from '@instructure/ui-elements'
+import {Heading} from '@instructure/ui-elements'
+import {Spinner} from '@instructure/ui-spinner'
 import {Alert} from '@instructure/ui-alerts'
 import {CloseButton} from '@instructure/ui-buttons'
 import {View} from '@instructure/ui-layout'
@@ -68,7 +69,7 @@ export default function ViolationTray({handleClose, accountId, addDomain, whitel
           {state.isLoading && <Spinner renderTitle={() => I18n.t('Loading')} />}
           {state.isError && (
             <Alert variant="error" margin="small">
-              {I18n.t('Something went wrong loading the violations, try reloading the page.')}
+              {I18n.t('Something went wrong loading the violations. Try reloading the page.')}
             </Alert>
           )}
           {!state.isLoading && !state.isError && state.violations.length === 0 && (

@@ -126,34 +126,60 @@ RSpec.describe ApplicationController do
       expect(@controller.js_env[:TIMEZONE]).to eq 'America/Juneau'
     end
 
+    describe "user flags" do
+      context "eventAlertTimeout" do
+        before(:each) do
+          user_factory
+          controller.instance_variable_set(:@domain_root_account, Account.default)
+          controller.instance_variable_set(:@current_user, @user)
+          allow(controller).to receive(:user_display_json).and_return({})
+        end
+
+        it 'is not set if the feature flag is off' do
+          expect(controller.js_env[:flashAlertTimeout]).to be_nil
+        end
+
+        it 'is 86400000 (1 day in milliseconds) if the feature flag is on' do
+          @user.enable_feature!(:disable_alert_timeouts)
+          expect(controller.js_env[:flashAlertTimeout]).to eq(1.day.in_milliseconds)
+        end
+      end
+    end
+
     describe "DIRECT_SHARE_ENABLED feature flag" do
-      it "sets the env var to true when FF is enabled" do
-        root_account = double(global_id: 1, open_registration?: true, settings: {}, cache_key: "key")
-        allow(root_account).to receive(:kill_joy?)
-        allow(root_account).to receive(:feature_enabled?).and_return(false)
-        allow(root_account).to receive(:feature_enabled?).with(:direct_share).and_return(true)
-        allow(HostUrl).to receive_messages(file_host: 'files.example.com')
-        controller.instance_variable_set(:@domain_root_account, root_account)
+      before :each do
+        allow(controller).to receive(:user_display_json)
+        controller.instance_variable_set(:@domain_root_account, Account.default)
+      end
+
+      it "sets the env var to true when FF is enabled and the user can use it" do
+        Account.default.enable_feature!(:direct_share)
+
+        course_with_teacher(:active_all => true)
+        controller.instance_variable_set(:@current_user, @teacher)
         expect(controller.js_env[:DIRECT_SHARE_ENABLED]).to be_truthy
       end
 
+      it "sets the env var to false when FF is enabled but the user can't use it" do
+        Account.default.enable_feature!(:direct_share)
+
+        course_with_student(:active_all => true)
+        controller.instance_variable_set(:@current_user, @student)
+        expect(controller.js_env[:DIRECT_SHARE_ENABLED]).to be_falsey
+      end
+
       it "sets the env var to false when the context is a group" do
-        root_account = double(global_id: 1, open_registration?: true, settings: {}, cache_key: "key")
-        allow(root_account).to receive(:kill_joy?)
-        allow(root_account).to receive(:feature_enabled?).and_return(false)
-        allow(root_account).to receive(:feature_enabled?).with(:direct_share).and_return(true)
-        allow(HostUrl).to receive_messages(file_host: 'files.example.com')
-        controller.instance_variable_set(:@domain_root_account, root_account)
+        Account.default.enable_feature!(:direct_share)
+
+        course_with_teacher(:active_all => true)
+        controller.instance_variable_set(:@current_user, @teacher)
         controller.instance_variable_set(:@context, group_model)
         expect(controller.js_env[:DIRECT_SHARE_ENABLED]).to be_falsey
       end
 
       it "sets the env var to false when FF is disabled" do
-        root_account = double(global_id: 1, open_registration?: true, settings: {}, cache_key: "key")
-        allow(root_account).to receive(:kill_joy?)
-        allow(root_account).to receive(:feature_enabled?).and_return(false)
-        allow(HostUrl).to receive_messages(file_host: 'files.example.com')
-        controller.instance_variable_set(:@domain_root_account, root_account)
+        course_with_teacher(:active_all => true)
+        controller.instance_variable_set(:@current_user, @teacher)
         expect(controller.js_env[:DIRECT_SHARE_ENABLED]).to be_falsey
       end
     end
@@ -199,106 +225,121 @@ RSpec.describe ApplicationController do
       expect(controller.js_env[:KILL_JOY]).to be_truthy
     end
 
-    context "canvas_k6_theme" do
-      before(:each) do
-        controller.instance_variable_set(:@context, @course)
+    context "feature/release flags" do
+      context "canvas_k6_theme" do
+        before(:each) do
+          controller.instance_variable_set(:@context, @course)
+        end
+
+        it 'should populate js_env with elementary theme setting' do
+          expect(controller.js_env[:FEATURES]).to include(:canvas_k6_theme)
+        end
       end
 
-      it 'should populate js_env with elementary theme setting' do
-        expect(controller.js_env[:FEATURES]).to include(:canvas_k6_theme)
-      end
-    end
+      context "responsive_awareness" do
+        before(:each) do
+          controller.instance_variable_set(:@domain_root_account, Account.default)
+        end
 
-    context "responsive_admin_settings" do
-      before(:each) do
-        controller.instance_variable_set(:@domain_root_account, Account.default)
-      end
+        it 'is false if the feature flag is off' do
+          expect(controller.js_env[:FEATURES][:responsive_awareness]).to be_falsey
+        end
 
-      it 'is false if the feature flag is off' do
-        expect(controller.js_env[:FEATURES][:responsive_admin_settings]).to be_falsey
-      end
-
-      it 'is true if the feature flag is on' do
-        Account.default.enable_feature!(:responsive_admin_settings)
-        expect(controller.js_env[:FEATURES][:responsive_admin_settings]).to be_truthy
-      end
-    end
-
-    context "responsive_awareness" do
-      before(:each) do
-        controller.instance_variable_set(:@domain_root_account, Account.default)
+        it 'is true if the feature flag is on' do
+          Account.default.enable_feature!(:responsive_awareness)
+          expect(controller.js_env[:FEATURES][:responsive_awareness]).to be_truthy
+        end
       end
 
-      it 'is false if the feature flag is off' do
-        expect(controller.js_env[:FEATURES][:responsive_awareness]).to be_falsey
+      context "responsive_misc" do
+        before(:each) do
+          controller.instance_variable_set(:@domain_root_account, Account.default)
+        end
+
+        it 'is false if the feature flag is off' do
+          expect(controller.js_env[:FEATURES][:responsive_misc]).to be_falsey
+        end
+
+        it 'is true if the feature flag is on' do
+          Account.default.enable_feature!(:responsive_misc)
+          expect(controller.js_env[:FEATURES][:responsive_misc]).to be_truthy
+        end
       end
 
-      it 'is true if the feature flag is on' do
-        Account.default.enable_feature!(:responsive_awareness)
-        expect(controller.js_env[:FEATURES][:responsive_awareness]).to be_truthy
-      end
-    end
+      context "module_dnd" do
+        before(:each) do
+          controller.instance_variable_set(:@domain_root_account, Account.default)
+        end
 
-    context "responsive_misc" do
-      before(:each) do
-        controller.instance_variable_set(:@domain_root_account, Account.default)
-      end
+        it 'is false if the feature flag is off' do
+          Account.default.disable_feature!(:module_dnd)
+          expect(controller.js_env[:FEATURES][:module_dnd]).to be_falsey
+        end
 
-      it 'is false if the feature flag is off' do
-        expect(controller.js_env[:FEATURES][:responsive_misc]).to be_falsey
-      end
-
-      it 'is true if the feature flag is on' do
-        Account.default.enable_feature!(:responsive_misc)
-        expect(controller.js_env[:FEATURES][:responsive_misc]).to be_truthy
-      end
-    end
-
-    context "module_dnd" do
-      before(:each) do
-        controller.instance_variable_set(:@domain_root_account, Account.default)
+        it 'is true if the feature flag is on' do
+          Account.default.enable_feature!(:module_dnd)
+          expect(controller.js_env[:FEATURES][:module_dnd]).to be_truthy
+        end
       end
 
-      it 'is false if the feature flag is off' do
-        Account.default.disable_feature!(:module_dnd)
-        expect(controller.js_env[:FEATURES][:module_dnd]).to be_falsey
+      context "files_dnd" do
+        before(:each) do
+          controller.instance_variable_set(:@domain_root_account, Account.default)
+        end
+
+        it 'is false if the feature flag is off' do
+          Account.default.disable_feature!(:files_dnd)
+          expect(controller.js_env[:FEATURES][:files_dnd]).to be_falsey
+        end
+
+        it 'is true if the feature flag is on' do
+          Account.default.enable_feature!(:files_dnd)
+          expect(controller.js_env[:FEATURES][:files_dnd]).to be_truthy
+        end
       end
 
-      it 'is true if the feature flag is on' do
-        Account.default.enable_feature!(:module_dnd)
-        expect(controller.js_env[:FEATURES][:module_dnd]).to be_truthy
-      end
-    end
+      context "bulk_delete_pages" do
+        before(:each) do
+          controller.instance_variable_set(:@domain_root_account, Account.default)
+        end
 
-    context "files_dnd" do
-      before(:each) do
-        controller.instance_variable_set(:@domain_root_account, Account.default)
-      end
+        it 'is false if the feature flag is off' do
+          Account.default.disable_feature!(:bulk_delete_pages)
+          expect(controller.js_env[:FEATURES][:bulk_delete_pages]).to be_falsey
+        end
 
-      it 'is false if the feature flag is off' do
-        Account.default.disable_feature!(:files_dnd)
-        expect(controller.js_env[:FEATURES][:files_dnd]).to be_falsey
-      end
-
-      it 'is true if the feature flag is on' do
-        Account.default.enable_feature!(:files_dnd)
-        expect(controller.js_env[:FEATURES][:files_dnd]).to be_truthy
-      end
-    end
-
-    context "unpublished_courses" do
-      before(:each) do
-        controller.instance_variable_set(:@domain_root_account, Account.default)
+        it 'is true if the feature flag is on' do
+          Account.default.enable_feature!(:bulk_delete_pages)
+          expect(controller.js_env[:FEATURES][:bulk_delete_pages]).to be_truthy
+        end
       end
 
-      it 'is false if the feature flag is off' do
-        Account.default.disable_feature!(:unpublished_courses)
-        expect(controller.js_env[:FEATURES][:unpublished_courses]).to be_falsey
+      context "unpublished_courses" do
+        before(:each) do
+          controller.instance_variable_set(:@domain_root_account, Account.default)
+        end
+
+        it 'is false if the feature flag is off' do
+          Account.default.disable_feature!(:unpublished_courses)
+          expect(controller.js_env[:FEATURES][:unpublished_courses]).to be_falsey
+        end
+
+        it 'is true if the feature flag is on' do
+          Account.default.enable_feature!(:unpublished_courses)
+          expect(controller.js_env[:FEATURES][:unpublished_courses]).to be_truthy
+        end
       end
 
-      it 'is true if the feature flag is on' do
-        Account.default.enable_feature!(:unpublished_courses)
-        expect(controller.js_env[:FEATURES][:unpublished_courses]).to be_truthy
+      context "rce_lti_favorites" do
+        it 'is false if the feature flag is off' do
+          Account.site_admin.disable_feature!(:rce_lti_favorites)
+          expect(controller.js_env[:FEATURES][:rce_lti_favorites]).to be_falsey
+        end
+
+        it 'is true if the feature flag is on' do
+          Account.site_admin.enable_feature!(:rce_lti_favorites)
+          expect(controller.js_env[:FEATURES][:rce_lti_favorites]).to be_truthy
+        end
       end
     end
 
@@ -332,6 +373,18 @@ RSpec.describe ApplicationController do
       # the accept header. I don't think we can simulate this in a test, so
       # this test just verifies the condition in js_env works across updates
       expect(Mime::Type.new("*/*") == "*/*").to be_truthy
+    end
+
+    context "disable_keyboard_shortcuts" do
+      it "is false by default" do
+        expect(@controller.js_env[:disable_keyboard_shortcuts]).to be_falsey
+      end
+
+      it "is true if user disables keyboard shortcuts" do
+        user = user_model
+        user.enable_feature!(:disable_keyboard_shortcuts)
+        expect(user.prefers_no_keyboard_shortcuts?).to be_truthy
+      end
     end
   end
 
@@ -520,6 +573,30 @@ RSpec.describe ApplicationController do
     end
   end
 
+  describe '#log_asset_access' do
+    before :once do
+      course_model
+      user_model
+    end
+
+    before do
+      controller.instance_variable_set(:@current_user, @user)
+      controller.instance_variable_set(:@context, @user)
+    end
+
+    it 'sets @accessed_asset[asset_for_root_account_id] when asset is an array' do
+      controller.send(:log_asset_access, ["assignments", @course], "assignments", "other")
+      accessed_asset = controller.instance_variable_get(:@accessed_asset)
+      expect(accessed_asset[:asset_for_root_account_id]).to eq(@course)
+    end
+
+    it 'sets @accessed_asset[asset_for_root_account_id] when asset is not an array' do
+      controller.send(:log_asset_access, @course, "assignments", "other")
+      accessed_asset = controller.instance_variable_get(:@accessed_asset)
+      expect(accessed_asset[:asset_for_root_account_id]).to eq(@course)
+    end
+  end
+
   describe 'log_participation' do
     before :once do
       course_model
@@ -549,6 +626,44 @@ RSpec.describe ApplicationController do
       @attachment.context = @assignment
       @attachment.save!
       expect {controller.send(:log_participation, @student)}.not_to raise_error
+    end
+  end
+
+  describe '#add_interaction_seconds' do
+    let(:params) do
+      {
+        interaction_seconds: '62',
+        authenticity_token: 'auth token',
+        page_view_token: 'page view token',
+        id: '379b0dbc-f01c-4dc4-ae05-15f23588cefb'
+      }
+    end
+    let(:page_view_info) do
+      {
+        request_id: '379b0dbc-f01c-4dc4-ae05-15f23588cefb',
+        user_id: 10000000000004,
+        created_at: '2020-06-12T17:02:44.14Z'
+      }
+    end
+    let(:page_view) do
+      {
+        request_id: "379b0dbc-f01c-4dc4-ae05-15f23588cefb",
+        session_id: "fc85ce4458c27360893cb7fa01632d85",
+        interaction_seconds: 5.0
+      }
+    end
+
+    before :once do
+      student_in_course
+    end
+
+    it 'should update for HTTP PUT requests that are not generated by hand' do
+      allow(controller.request).to receive(:xhr?).and_return(0)
+      allow(controller.request).to receive(:put?).and_return(true)
+      allow(RequestContextGenerator).to receive(:store_interaction_seconds_update).and_return(true)
+      allow(PageView).to receive(:decode_token).and_return(page_view_info)
+      allow(PageView).to receive(:find_for_update).and_return(page_view)
+      expect {controller.send(:add_interaction_seconds)}.not_to raise_error
     end
   end
 
@@ -590,67 +705,77 @@ RSpec.describe ApplicationController do
   end
 
   describe 'content_tag_redirect' do
+    def create_tag(overrides)
+      ContentTag.create!(
+        {
+          id: 42,
+          content_id: 44,
+          tag_type: 'context_module',
+          context_type: 'Account',
+          context_id: 1
+        }.merge(overrides)
+      )
+    end
 
     it 'redirects for lti_message_handler' do
-      tag = double()
-      allow(tag).to receive_messages(id: 42, content_id: 44, content_type_quiz?: false, content_type: 'Lti::MessageHandler')
-      expect(controller).to receive(:named_context_url).with(Account.default, :context_basic_lti_launch_request_url, 44, {:module_item_id => 42, resource_link_fragment: 'ContentTag:42'}).and_return('nil')
+      tag = create_tag(content_type: 'Lti::MessageHandler')
+      expect(controller).to receive(:named_context_url).with(Account.default, :context_basic_lti_launch_request_url, 44, {module_item_id: 42, resource_link_fragment: 'ContentTag:42'}).and_return('nil')
       allow(controller).to receive(:redirect_to)
       controller.send(:content_tag_redirect, Account.default, tag, nil)
     end
 
     it 'redirects for an assignment' do
-      tag = double()
-      allow(tag).to receive_messages(id: 42, content_id: 44, content_type_quiz?: false, content_type: 'Assignment')
-      expect(controller).to receive(:named_context_url).with(Account.default, :context_assignment_url, 44, {:module_item_id => 42}).and_return('nil')
+      tag = create_tag(content_type: 'Assignment')
+      expect(controller).to receive(:named_context_url).with(Account.default, :context_assignment_url, 44, {module_item_id: 42}).and_return('nil')
       allow(controller).to receive(:redirect_to)
       controller.send(:content_tag_redirect, Account.default, tag, nil)
     end
 
     it 'redirects for a quiz' do
-      tag = double()
-      allow(tag).to receive_messages(id: 42, content_id: 44, content_type_quiz?: true, content_type: 'Quizzes::Quiz')
-      expect(controller).to receive(:named_context_url).with(Account.default, :context_quiz_url, 44, {:module_item_id => 42}).and_return('nil')
+      tag = create_tag(content_type: 'Quizzes::Quiz')
+      expect(controller).to receive(:named_context_url).with(Account.default, :context_quiz_url, 44, {module_item_id: 42}).and_return('nil')
       allow(controller).to receive(:redirect_to)
       controller.send(:content_tag_redirect, Account.default, tag, nil)
     end
 
     it 'redirects for a discussion topic' do
-      tag = double()
-      allow(tag).to receive_messages(id: 42, content_id: 44, content_type_quiz?: false, content_type: 'DiscussionTopic')
-      expect(controller).to receive(:named_context_url).with(Account.default, :context_discussion_topic_url, 44, {:module_item_id => 42}).and_return('nil')
+      tag = create_tag(content_type: 'DiscussionTopic')
+      expect(controller).to receive(:named_context_url).with(Account.default, :context_discussion_topic_url, 44, {module_item_id: 42}).and_return('nil')
       allow(controller).to receive(:redirect_to)
       controller.send(:content_tag_redirect, Account.default, tag, nil)
     end
 
     it 'redirects for a wikipage' do
-      tag = double()
-      allow(tag).to receive_messages(id: 42, content_id: 44, content_type_quiz?: false, content_type: 'WikiPage', content: {})
-      expect(controller).to receive(:polymorphic_url).with([Account.default, tag.content], {:module_item_id => 42}).and_return('nil')
+      tag = create_tag(content_type: 'WikiPage')
+      expect(controller).to receive(:polymorphic_url).with([Account.default, tag.content], {module_item_id: 42}).and_return('nil')
       allow(controller).to receive(:redirect_to)
       controller.send(:content_tag_redirect, Account.default, tag, nil)
     end
 
     it 'redirects for a rubric' do
-      tag = double()
-      allow(tag).to receive_messages(id: 42, content_id: 44, content_type_quiz?: false, content_type: 'Rubric')
-      expect(controller).to receive(:named_context_url).with(Account.default, :context_rubric_url, 44, {:module_item_id => 42}).and_return('nil')
+      tag = create_tag(content_type: 'Rubric')
+      expect(controller).to receive(:named_context_url).with(Account.default, :context_rubric_url, 44, {module_item_id: 42}).and_return('nil')
       allow(controller).to receive(:redirect_to)
       controller.send(:content_tag_redirect, Account.default, tag, nil)
     end
 
     it 'redirects for a question bank' do
-      tag = double()
-      allow(tag).to receive_messages(id: 42, content_id: 44, content_type_quiz?: false, content_type: 'AssessmentQuestionBank')
-      expect(controller).to receive(:named_context_url).with(Account.default, :context_question_bank_url, 44, {:module_item_id => 42}).and_return('nil')
+      tag = create_tag(content_type: 'AssessmentQuestionBank')
+      expect(controller).to receive(:named_context_url).with(Account.default, :context_question_bank_url, 44, {module_item_id: 42}).and_return('nil')
       allow(controller).to receive(:redirect_to)
       controller.send(:content_tag_redirect, Account.default, tag, nil)
     end
 
     it 'redirects for an attachment' do
-      tag = double()
-      allow(tag).to receive_messages(id: 42, content_id: 44, content_type_quiz?: false, content_type: 'Attachment')
-      expect(controller).to receive(:named_context_url).with(Account.default, :context_file_url, 44, {:module_item_id => 42}).and_return('nil')
+      tag = create_tag(content_type: 'Attachment')
+      expect(controller).to receive(:named_context_url).with(Account.default, :context_file_url, 44, {module_item_id: 42}).and_return('nil')
+      allow(controller).to receive(:redirect_to)
+      controller.send(:content_tag_redirect, Account.default, tag, nil)
+    end
+
+    it 'redirects for an alignment' do
+      tag = create_tag(content_type: 'Assignment', tag_type: 'learning_outcome')
+      expect(controller).to receive(:named_context_url).with(Account.default, :context_assignment_url, 44, {}).and_return('nil')
       allow(controller).to receive(:redirect_to)
       controller.send(:content_tag_redirect, Account.default, tag, nil)
     end
@@ -1903,5 +2028,49 @@ RSpec.describe ApplicationController, '#teardown_live_events_context' do
     get :index, format: :html
 
     expect(Thread.current[:live_events_ctx]).to be_nil
+  end
+end
+
+RSpec.describe ApplicationController, '#compute_http_cost' do
+  include WebMock::API
+
+  controller do
+    def index
+      if params[:do_http].to_i > 0
+        CanvasHttp.get("http://www.example.com/test")
+      end
+      if params[:do_error].to_i > 0
+        raise StandardError, "Test Error Handling"
+      end
+      render json: [{}]
+    end
+  end
+
+  it "has no cost for non http actions" do
+    get :index, params: { do_http: 0, do_error: 0 }
+    expect(response).to have_http_status :success
+    expect(CanvasHttp.cost).to eq(0)
+    expect(controller.request.env['extra-request-cost']).to be_nil
+  end
+
+  it "has some cost for http actions (in seconds)" do
+    stub_request(:get, "http://www.example.com/test").
+      to_return(status: 200, body: "", headers: {})
+    start_time = Time.now
+    get :index, params: { do_http: 1, do_error: 0 }
+    expect(response).to have_http_status :success
+    end_time = Time.now
+    expect(CanvasHttp.cost > 0).to be_truthy
+    expect(CanvasHttp.cost <= (end_time - start_time)).to be_truthy
+    expect(controller.request.env['extra-request-cost']).to eq(CanvasHttp.cost)
+  end
+
+  it "tracks costs through errors" do
+    stub_request(:get, "http://www.example.com/test").
+      to_return(status: 200, body: "", headers: {})
+    get :index, params: { do_http: 1, do_error: 1 }
+    expect(response).to have_http_status 500
+    expect(CanvasHttp.cost > 0).to be_truthy
+    expect(controller.request.env['extra-request-cost']).to eq(CanvasHttp.cost)
   end
 end

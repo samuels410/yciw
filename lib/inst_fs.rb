@@ -26,6 +26,10 @@ module InstFS
       rand < Canvas::Plugin.find('inst_fs').settings[:migration_rate].to_f / 100.0
     end
 
+    def service_worker_enabled?
+      Canvas::Plugin.value_to_boolean(Canvas::Plugin.find('inst_fs').settings[:service_worker])
+    end
+
     def migrate_attachment?(attachment)
       enabled? && !attachment.instfs_hosted? && Attachment.s3_storage? && check_migration_rate?
     end
@@ -45,6 +49,15 @@ module InstFS
       CanvasHttp.delete(logout_url(user))
     rescue CanvasHttp::Error => e
       Canvas::Errors.capture_exception(:page_view, e)
+    end
+
+    def bearer_token(options)
+      expires_in = options[:expires_in] || Setting.get('instfs.session_token.expiration_minutes', '5').to_i.minutes
+      claims = {
+        iat: Time.now.utc.to_i,
+        user_id: options[:user]&.global_id&.to_s
+      }
+      Canvas::Security.create_jwt(claims, expires_in.from_now, self.jwt_secret, :HS512)
     end
 
     def authenticated_url(attachment, options={})
@@ -242,10 +255,41 @@ module InstFS
 
     private
     def setting(key)
-      Canvas::DynamicSettings.find(service: "inst-fs", default_ttl: 5.minutes)[key]
+      unsafe_setting(key)
     rescue Imperium::TimeoutError => e
+      # capture this to make sure that we have SOME
+      # signal that the problem is continuing, even if our
+      # retries are all successful.
       Canvas::Errors.capture_exception(:inst_fs, e)
-      nil
+      Rails.logger.warn("[INST_FS] Consul timeout hit during settings #{e}, entering retry handling...")
+      retry_limit = Setting.get("inst_fs_config_retry_count", "5").to_i
+      retry_base = Setting.get("inst_fs_config_retry_base_interval", "1.4").to_i
+      retry_count = 1
+      return_value = nil
+      currently_in_job = Delayed::Worker.current_job.present?
+      while retry_count <= retry_limit
+        begin
+          return_value = unsafe_setting(key)
+          break
+        rescue Imperium::TimeoutError => e
+          retry_count += 1
+          # if we're not currently in a job, one retry is all you get,
+          # fail for the user and move on.
+          raise e if !currently_in_job || retry_count > retry_limit
+          backoff_interval = retry_base ** retry_count
+          Rails.logger.warn("[INST_FS] Consul timeout hit during settings, retrying in #{backoff_interval} seconds...")
+          sleep(backoff_interval)
+        end
+      end
+      return_value
+    end
+
+    # this is just to provide a convenient way to wrap
+    # accessing a setting in retries (see #setting),
+    # it should not be used by the rest of the code,
+    # inside this class or otherwise.
+    def unsafe_setting(key)
+      Canvas::DynamicSettings.find(service: "inst-fs", default_ttl: 5.minutes)[key]
     end
 
     def service_url(path, query_params=nil)

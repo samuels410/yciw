@@ -426,7 +426,9 @@ class ActiveRecord::Base
         @collkey ||= {}
         @collkey[Shard.current.database_server.id] = connection.extension_installed?(:pg_collkey)
       end
-      if (schema = @collkey[Shard.current.database_server.id])
+      if (collation = Canvas::ICU.choose_pg12_collation(connection.icu_collations) && false)
+        "(#{col} COLLATE #{collation})"
+      elsif (schema = @collkey[Shard.current.database_server.id])
         # The collation level of 3 is the default, but is explicitly specified here and means that
         # case, accents and base characters are all taken into account when creating a collation key
         # for a string - more at https://pgxn.org/dist/pg_collkey/0.5.1/
@@ -688,8 +690,19 @@ class ActiveRecord::Base
       end
     end
 
-    transaction do
-      connection.bulk_insert(table_name, records)
+    if self.respond_to?(:attrs_in_partition_groups)
+      # this model is partitioned, we need to send a separate
+      # insert statement for each partition represented
+      # in the input records
+      self.attrs_in_partition_groups(records) do |partition_name, partition_records|
+        transaction do
+          connection.bulk_insert(partition_name, partition_records)
+        end
+      end
+    else
+      transaction do
+        connection.bulk_insert(table_name, records)
+      end
     end
   end
 
@@ -701,7 +714,24 @@ class ActiveRecord::Base
     end
   end
 
-  scope :non_shadow, ->(key = primary_key) { where("#{key}<=?", Shard::IDS_PER_SHARD) }
+  scope :non_shadow, ->(key = primary_key) { where("#{key}<=? AND #{key}>?", Shard::IDS_PER_SHARD, 0) }
+
+  # skips validations, callbacks, and a transaction
+  # do _NOT_ improve in the future to handle validations and callbacks - make
+  # it a separate method or optional functionality. some callers explicitly
+  # rely on no callbacks or validations
+  def save_without_transaction(touch: true)
+    return unless changed?
+    self.updated_at = Time.now.utc if touch
+    if new_record?
+      self.created_at = updated_at if touch
+      self.id = self.class._insert_record(attributes_with_values(changed_attribute_names_to_save))
+      @new_record = false
+    else
+      update_columns(attributes_with_values(changed_attribute_names_to_save))
+    end
+    changes_applied
+  end
 end
 
 module UsefulFindInBatches
@@ -711,6 +741,8 @@ module UsefulFindInBatches
     # see the contents of our current transaction)
     if connection.open_transactions == 0 && !start && eager_load_values.empty? && !ActiveRecord::Base.in_migration && !strategy || strategy == :copy
       self.activate { |r| r.find_in_batches_with_copy(**kwargs, &block) }
+    elsif strategy == :pluck_ids
+      self.activate { |r| r.find_in_batches_with_pluck_ids(**kwargs, &block) }
     elsif should_use_cursor? && !start && eager_load_values.empty? && !strategy || strategy == :cursor
       self.activate { |r| r.find_in_batches_with_cursor(**kwargs, &block) }
     elsif find_in_batches_needs_temp_table? && !strategy || strategy == :temp_table
@@ -869,6 +901,25 @@ ActiveRecord::Relation.class_eval do
     end
   end
 
+  # in some cases we're doing a lot of work inside
+  # the yielded block, and holding open a transaction
+  # or even a connection while we do all that work can
+  # be a problem for the database, especially if a lot
+  # of these are happening at once.  This strategy
+  # makes one query to hold onto all the IDs needed for the
+  # iteration (make sure they'll fit in memory, or you could be sad)
+  # and yields the objects in batches in the same order as the scope specified
+  # so the DB connection can be fully recycled during each block.
+  def find_in_batches_with_pluck_ids(options = {})
+    batch_size = options[:batch_size] || 1000
+    all_object_ids = pluck(:id)
+    current_order_values = order_values
+    all_object_ids.in_groups_of(batch_size) do |id_batch|
+      object_batch = klass.unscoped.where(id: id_batch).order(current_order_values)
+      yield object_batch
+    end
+  end
+
   def find_in_batches_with_temp_table(options = {})
     Shard.current.database_server.unshackle do
       can_do_it = Rails.env.production? ||
@@ -1002,16 +1053,21 @@ ActiveRecord::Relation.class_eval do
     scope
   end
 
-  def lock_in_order
-    lock(:no_key_update).order(:id).pluck(:id)
+  def update_all_locked_in_order(updates)
+    locked_scope = lock(:no_key_update).order(:id)
+    if Setting.get("update_all_locked_in_order_subquery", "true") == "true"
+      unscoped.where(id: locked_scope).update_all(updates)
+    else
+      transaction do
+        ids = locked_scope.pluck(:id)
+        unscoped.where(id: ids).update_all(updates) unless ids.empty?
+      end
+    end
   end
 
   def touch_all
     self.activate do |relation|
-      relation.transaction do
-        ids_to_touch = relation.not_recently_touched.lock_in_order
-        unscoped.where(id: ids_to_touch).update_all(updated_at: Time.now.utc) if ids_to_touch.any?
-      end
+      relation.update_all_locked_in_order(updated_at: Time.now.utc)
     end
   end
 
@@ -1107,7 +1163,7 @@ module UpdateAndDeleteWithJoins
     join_conditions = []
     joins_sql.strip.split('INNER JOIN')[1..-1].each do |join|
       # this could probably be improved
-      raise "PostgreSQL update_all/delete_all only supports INNER JOIN" unless join.strip =~ /([a-zA-Z0-9'"_\.]+(?:(?:\s+[aA][sS])?\s+[a-zA-Z0-9'"_]+)?)\s+ON\s+(.*)/
+      raise "PostgreSQL update_all/delete_all only supports INNER JOIN" unless join.strip =~ /([a-zA-Z0-9'"_\.]+(?:(?:\s+[aA][sS])?\s+[a-zA-Z0-9'"_]+)?)\s+ON\s+(.*)/m
       tables << $1
       join_conditions << $2
     end
@@ -1451,7 +1507,7 @@ ActiveRecord::ConnectionAdapters::SchemaStatements.class_eval do
 
     # have to account for if options is a hash, if_exists will just get wrapped up
     # in it
-    if options[:if_exists]
+    if options.delete(:if_exists)
       fk_name_to_delete = foreign_key_for(from_table, options_or_to_table)&.name
       return if fk_name_to_delete.nil?
     else

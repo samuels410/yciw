@@ -36,11 +36,15 @@ class EventStream::Stream
   end
 
   def available?
-    !!database && database.available?
+    current_backend.available?
   end
 
   def database_name
-    database && database.keyspace
+    current_backend.database_name
+  end
+
+  def database_fingerprint
+    current_backend.database_fingerprint
   end
 
   def on_insert(&callback)
@@ -125,15 +129,6 @@ class EventStream::Stream
   def reset_backend!
     @backends = {}
   end
-
-  # these methods are included to keep the interface with plugins
-  # until they can be updated or removed to no longer
-  # depend no a cassandra-specific implementation.
-  # --- start ---
-  def fetch_cql
-    backend_for(:cassandra).fetch_cql
-  end
-  # --- end ---
 
   private
 

@@ -116,7 +116,7 @@ module Csp::AccountHelper
   end
 
   def csp_whitelisted_domains(request = nil, include_files:, include_tools:)
-    # first, get the whitelist from the enabled csp account
+    # first, get the allowed domain list from the enabled csp account
     # then get the list of domains extracted from external tools
     domains = ::Csp::Domain.get_cached_domains_for_account(self.csp_account_id)
     domains += cached_tool_domains if include_tools
@@ -159,7 +159,8 @@ module Csp::AccountHelper
       end
     end
     canvadocs_host = Canvadocs.enabled?.presence && URI.parse(Canvadocs.config['base_url']).host
-    [files_host, canvadocs_host].compact
+    inst_fs_host = InstFS.enabled?.presence && URI.parse(InstFS.app_host).host
+    [files_host, canvadocs_host, inst_fs_host].compact
   end
 
   def csp_logging_config

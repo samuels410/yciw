@@ -49,7 +49,6 @@ class CalendarEventsController < ApplicationController
     @event = @context.calendar_events.temp_record
     add_crumb(t('crumbs.new', "New Calendar Event"), named_context_url(@context, :new_context_calendar_event_url))
     @event.assign_attributes(permit_params(params, [:title, :start_at, :end_at, :location_name, :location_address, web_conference: strong_anything]))
-    js_env(:RECURRING_CALENDAR_EVENTS_ENABLED => feature_context.feature_enabled?(:recurring_calendar_events))
     add_conference_types_to_js_env([@context])
     authorized_action(@event, @current_user, :create) && authorize_user_for_conference(@current_user, @event.web_conference)
   end
@@ -73,7 +72,7 @@ class CalendarEventsController < ApplicationController
   end
 
   def edit
-    @event = @context.calendar_events.find(params[:id])
+    @event = CalendarEvent.find(params[:id])
     event_params = permit_params(params, [:title, :start_at, :end_at, :location_name, :location_address, web_conference: strong_anything])
     return unless authorize_user_for_conference(@current_user, event_params[:web_conference])
     if @event.grants_right?(@current_user, session, :update)
@@ -86,7 +85,7 @@ class CalendarEventsController < ApplicationController
   end
 
   def update
-    @event = @context.calendar_events.find(params[:id])
+    @event = CalendarEvent.find(params[:id])
     if authorized_action(@event, @current_user, :update)
       respond_to do |format|
         params_for_update = calendar_event_params

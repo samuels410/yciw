@@ -66,7 +66,7 @@ describe Message do
     it "should have a sane body" do
       @au = AccountUser.create(:account => account_model)
       msg = generate_message(:account_user_notification, :email, @au)
-      expect(msg.html_body.scan(/<html>/).length).to eq 1
+      expect(msg.html_body.scan(/<html dir="ltr" lang="en">/).length).to eq 1
       expect(msg.html_body.index('<!DOCTYPE')).to eq 0
     end
 
@@ -149,7 +149,8 @@ describe Message do
     it "displays a custom logo when configured" do
       account = account_model
       account.settings[:email_logo] = 'awesomelogo.jpg'
-      @au = AccountUser.create(:account => account)
+      account.save!
+      @au = AccountUser.create!(:account => account, user: user_model)
       msg = generate_message(:account_user_notification, :email, @au)
       expect(msg.html_body).to include('awesomelogo.jpg')
     end
@@ -351,7 +352,7 @@ describe Message do
     context 'SMS' do
       before :once do
         user_model
-        Account.site_admin.enable_feature!(:international_sms)
+        @user.account.enable_feature!(:international_sms)
       end
 
       before do
@@ -752,6 +753,22 @@ describe Message do
       dt = discussion_topic_model
       message = Message.new(context: dt)
       expect(message.context_context).to eq dt.context
+    end
+  end
+
+  describe 'Message.in_partition' do
+    let(:partition) { { 'created_at' => DateTime.new(2020, 8, 25) } }
+
+    it 'uses the specific partition table' do
+      expect(Message.in_partition(partition).to_sql).to match(/^SELECT "messages_2020_35"\.\* FROM .*"messages_2020_35"$/)
+    end
+
+    it 'can be chained' do
+      expect(Message.in_partition(partition).where(id: 3).to_sql).to match(/^SELECT "messages_2020_35"\.\* FROM .*"messages_2020_35" WHERE "messages_2020_35"."id" = 3$/)
+    end
+
+    it 'has no side-effects on other scopes' do
+      expect(Message.in_partition(partition).unscoped.to_sql).to match(/^SELECT "messages"\.\* FROM .*"messages"$/)
     end
   end
 end

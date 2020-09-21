@@ -18,6 +18,8 @@
 class AccessToken < ActiveRecord::Base
   include Workflow
 
+  extend RootAccountResolver
+
   workflow do
     state :active
     state :deleted
@@ -37,17 +39,14 @@ class AccessToken < ActiveRecord::Base
 
   before_validation -> { self.developer_key ||= DeveloperKey.default }
 
+  resolves_root_account through: -> (instance) { instance.developer_key.root_account_id }
+
   has_a_broadcast_policy
 
   set_broadcast_policy do |p|
     p.dispatch :manually_created_access_token_created
     p.to(&:user)
     p.whenever do |access_token|
-      # Rescuse here to get past places where unit tests have the Features
-      # mocked out but are still creating an access token to make api calls
-      # with which triggers this block. This whole line can be removed when
-      # we remove the release flag.
-      next false unless Account.site_admin.feature_enabled?(:notify_for_manually_created_access_tokens) rescue false
       access_token.crypted_token_previously_changed? && access_token.manually_created?
     end
   end
@@ -270,7 +269,7 @@ class AccessToken < ActiveRecord::Base
   end
 
   def manually_created?
-    cached_developer_key == DeveloperKey.default
+    developer_key_id == DeveloperKey.default.id
   end
 
   private

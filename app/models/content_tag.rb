@@ -42,6 +42,9 @@ class ContentTag < ActiveRecord::Base
   # This allows doing a has_many_through relationship on ContentTags for linked LearningOutcomes. (see LearningOutcomeContext)
   belongs_to :learning_outcome_content, :class_name => 'LearningOutcome', :foreign_key => :content_id
   has_many :learning_outcome_results
+  belongs_to :root_account, class_name: 'Account'
+
+  after_create :clear_stream_items_if_module_is_unpublished
 
   # This allows bypassing loading context for validation if we have
   # context_id and context_type set, but still allows validating when
@@ -51,10 +54,14 @@ class ContentTag < ActiveRecord::Base
   validates_length_of :comments, :maximum => maximum_text_length, :allow_nil => true, :allow_blank => true
   before_save :associate_external_tool
   before_save :default_values
+  before_save :set_root_account
   after_save :update_could_be_locked
   after_save :touch_context_module_after_transaction
   after_save :touch_context_if_learning_outcome
   after_save :run_due_date_cacher_for_quizzes_next
+  after_save :clear_discussion_stream_items
+  after_save :send_items_to_stream
+  after_create :update_outcome_contexts
 
   include CustomValidations
   validates_as_url :url
@@ -113,6 +120,13 @@ class ContentTag < ActiveRecord::Base
     end
   end
 
+  def update_outcome_contexts
+    return unless self.tag_type == 'learning_outcome_association'
+    if self.context_type == 'Account' || self.context_type == 'Course'
+      self.content.add_root_account_id_for_context!(self.context)
+    end
+  end
+
   def associate_external_tool
     return if content.present? || content_type != 'ContextExternalTool' || context.blank? || url.blank?
     content = ContextExternalTool.find_external_tool(url, context)
@@ -153,9 +167,7 @@ class ContentTag < ActiveRecord::Base
       next unless klass < ActiveRecord::Base
       next if klass < Tableless
       if klass.new.respond_to?(:could_be_locked=)
-        klass.transaction do
-          klass.where(id: klass.where(id: ids).lock_in_order).update_all(could_be_locked: true)
-        end
+        klass.where(id: ids).update_all_locked_in_order(could_be_locked: true)
       end
     end
   end
@@ -185,6 +197,18 @@ class ContentTag < ActiveRecord::Base
     else
       false
     end
+  end
+
+  def direct_shareable?
+    content_id.to_i > 0 && direct_share_type
+  end
+
+  def direct_share_type
+    ContentShare::CLASS_NAME_TO_TYPE[content_type]
+  end
+
+  def direct_share_select_class
+    direct_share_type.pluralize
   end
 
   def content_type_class(is_student=false)
@@ -331,7 +355,8 @@ class ContentTag < ActiveRecord::Base
           alignment_conditions[:context_type] = self.context_type
         end
 
-        if ContentTag.learning_outcome_alignments.active.where(alignment_conditions).exists?
+        @active_alignment_tags = ContentTag.learning_outcome_alignments.active.where(alignment_conditions)
+        if @active_alignment_tags.exists?
           # then don't let them delete the link
           return false
         end
@@ -343,7 +368,8 @@ class ContentTag < ActiveRecord::Base
   alias_method :destroy_permanently!, :destroy
   def destroy
     unless can_destroy?
-      raise LastLinkToOutcomeNotDestroyed.new('Link is the last link to an aligned outcome. Remove the alignment and then try again')
+      aligned_outcome = @active_alignment_tags.map(&:learning_outcome).first.short_description
+      raise LastLinkToOutcomeNotDestroyed.new "Outcome '#{aligned_outcome}' cannot be deleted because it is aligned to content."
     end
 
     context_module.remove_completion_requirement(id) if context_module
@@ -371,6 +397,28 @@ class ContentTag < ActiveRecord::Base
 
   def available_for?(user, opts={})
     self.context_module.available_for?(user, opts.merge({:tag => self}))
+  end
+
+  def send_items_to_stream
+    if self.content_type == "DiscussionTopic" && self.saved_change_to_workflow_state? && self.workflow_state == 'active'
+      content.send_items_to_stream
+    end
+  end
+
+  def clear_discussion_stream_items
+    if self.content_type == "DiscussionTopic"
+      if self.saved_change_to_workflow_state? &&
+        ['active', nil].include?(self.workflow_state_before_last_save) &&
+        self.workflow_state == 'unpublished'
+          content.clear_stream_items
+      end
+    end
+  end
+
+  def clear_stream_items_if_module_is_unpublished
+    if self.content_type == "DiscussionTopic" && context_module&.workflow_state == 'unpublished'
+      content.clear_stream_items
+    end
   end
 
   def self.update_for(asset, exclude_tag: nil)
@@ -604,5 +652,16 @@ class ContentTag < ActiveRecord::Base
     # assignment.  Let's ignore any other contexts.
     return unless context_type == "Assignment"
     DueDateCacher.recompute(context) if content.try(:quiz_lti?) && (force || workflow_state != 'deleted')
+  end
+
+  def set_root_account
+    return if self.root_account_id.present?
+
+    case self.context
+    when Account
+      self.root_account_id = self.context.resolved_root_account_id
+    else
+      self.root_account_id = self.context&.root_account_id
+    end
   end
 end

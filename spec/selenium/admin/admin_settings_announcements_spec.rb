@@ -59,7 +59,7 @@ describe "settings tabs" do
     def edit_announcement(notification)
       f("#notification_edit_#{notification.id}").click
       replace_content f("#account_notification_subject_#{notification.id}"), "edited subject"
-      f("#account_notification_icon .warning").click
+      f("#account_notification_icon_#{notification.id} .warning").click
       textarea_selector = "textarea#account_notification_message_#{notification.id}"
       type_in_tiny(textarea_selector, "edited message", clear: true)
 
@@ -75,7 +75,6 @@ describe "settings tabs" do
 
     before do
       course_with_admin_logged_in
-
     end
 
     it "should add and delete an announcement" do
@@ -115,10 +114,6 @@ describe "settings tabs" do
     end
 
     context "messages" do
-      before do
-        Account.default.enable_feature!(:notification_for_global_announcement)
-      end
-
       it "should let you mark the checkbox to send messages for a new announcement" do
         get "/accounts/#{Account.default.id}/settings"
         wait_for_ajaximations
@@ -180,15 +175,6 @@ describe "settings tabs" do
         wait_for_ajaximations
         f("#notification_edit_#{notification.id}").click
         expect(is_checked("#account_notification_send_message_#{notification.id}")).to be_truthy # checked still
-
-        input = f("#account_notification_start_at_#{notification.id}")
-        input.clear
-        input.send_keys(3.days.from_now.to_date.to_s) # change date
-
-        f("#edit_notification_form_#{notification.id}").submit
-        wait_for_ajax_requests
-        expect(notification.reload.start_at.to_i).to_not eq old_start_at.to_i
-        expect(job.reload.run_at.to_i).to_not eq old_start_at.to_i # changed job run date
       end
 
       it "should be able to re-send messages for an announcement" do

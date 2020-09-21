@@ -995,6 +995,25 @@ module Lti
           variable_expander.expand_variables!(exp_hash)
           expect(exp_hash[:test]).to eq course.course_code
         end
+          context 'when the course has multiple sections' do
+            # User.new leads to empty/null columns, which causes yet more AR
+            # complaints. The user_factory takes care of this.
+            let(:user) { user_factory }
+
+            before(:each) do
+              # AR complains if you don't save the course to the database first.
+              course.save!
+              enrolled_section = add_section("section one", { course: course })
+              add_section("section two", { course: course })
+              create_enrollment(course, user, { section: enrolled_section })
+            end
+
+            it 'has a substitution for com.instructure.User.sectionNames' do
+              exp_hash = { test: '$com.instructure.User.sectionNames' }
+              variable_expander.expand_variables!(exp_hash)
+              expect(exp_hash[:test]).to match_array ['section one']
+            end
+          end
 
         context 'when the course has groups' do
           let(:course_with_groups) do
@@ -1072,6 +1091,18 @@ module Lti
                 Lti::Asset.opaque_identifier_for(student)
               ]
             end
+
+            context 'the tool in use is an LTI 1.3 tool' do
+              before do
+                allow(tool).to receive(:use_1_3?).and_return(true)
+              end
+
+              it "returns the users' lti id instead of lti 1.1 user_id" do
+                expect(subject.split(',')).to match_array [
+                  student.lti_id
+                ]
+              end
+            end
           end
 
           context 'when the current user is not observing users in the context' do
@@ -1082,6 +1113,18 @@ module Lti
 
       context 'context is a course and there is a user' do
         let(:variable_expander) { VariableExpander.new(root_account, course, controller, current_user: user, tool: tool) }
+        let(:user) { user_factory }
+
+        it 'has substitution for com.instructure.User.sectionNames' do
+            course.save!
+            first_section = add_section('1', { course: course })
+            second_section = add_section('2', { course: course })
+            create_enrollment(course, user, { section: first_section })
+            create_enrollment(course, user, { section: second_section })
+            exp_hash = { test: '$com.instructure.User.sectionNames' }
+            variable_expander.expand_variables!(exp_hash)
+            expect(exp_hash[:test]).to match_array ['1', '2']
+        end
 
         it 'has substitution for $Canvas.xapi.url' do
           allow(Lti::XapiService).to receive(:create_token).and_return('abcd')
@@ -1297,6 +1340,37 @@ module Lti
           exp_hash = {test: '$Canvas.assignment.published'}
           variable_expander.expand_variables!(exp_hash)
           expect(exp_hash[:test]).to eq true
+        end
+
+        describe '$Canvas.assignment.lockdownEnabled' do
+          it 'returns true when lockdown is enabled' do
+            allow(assignment).to receive(:settings).and_return({
+              'lockdown_browser' => {
+                'require_lockdown_browser' => true
+              }
+            })
+            exp_hash = {test: '$Canvas.assignment.lockdownEnabled'}
+            variable_expander.expand_variables!(exp_hash)
+            expect(exp_hash[:test]).to eq true
+          end
+
+          it 'returns false when lockdown is disabled' do
+            allow(assignment).to receive(:settings).and_return({
+              'lockdown_browser' => {
+                'require_lockdown_browser' => false
+              }
+            })
+            exp_hash = {test: '$Canvas.assignment.lockdownEnabled'}
+            variable_expander.expand_variables!(exp_hash)
+            expect(exp_hash[:test]).to eq false
+          end
+
+          it 'returns false as default' do
+            allow(assignment).to receive(:settings).and_return({})
+            exp_hash = {test: '$Canvas.assignment.lockdownEnabled'}
+            variable_expander.expand_variables!(exp_hash)
+            expect(exp_hash[:test]).to eq false
+          end
         end
 
         context 'iso8601' do

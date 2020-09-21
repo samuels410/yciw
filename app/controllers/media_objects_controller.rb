@@ -72,7 +72,7 @@ class MediaObjectsController < ApplicationController
   include Api::V1::MediaObject
 
   before_action :load_media_object, :except => [:index, :update_media_object]
-  before_action :require_user, :except => [:show]
+  before_action :require_user, :except => [:show, :iframe_media_player]
 
   # @{not an}API Show Media Object Details
   # This isn't an API because it needs to work for non-logged in users (video in public course)
@@ -90,9 +90,9 @@ class MediaObjectsController < ApplicationController
 
   # @API List Media Objects
   #
-  # Returns Media Objects created by the user making the request. When
-  # using the second version, returns
-  # only those Media Objects associated with the given course.
+  # Returns media objects created by the user making the request. When
+  # using the second version, returns media objects associated with
+  # the given course.
   #
   # @argument sort [String, "title"|"created_at"]
   #   Field to sort on. Default is "title"
@@ -120,18 +120,21 @@ class MediaObjectsController < ApplicationController
   #
   # @returns [MediaObject]
   def index
-    scope = MediaObject.active.where(user: @current_user)
     if params[:course_id]
       course = Course.find(params[:course_id])
       root_folder = Folder.root_folders(course).first
       if root_folder.grants_right?(@current_user, :read_contents)
-        # return all media objects with one visible matching attachment in course
-        scope = scope.where(:context => course).
-          where("EXISTS (?)", Attachments::ScopedToUser.new(course, @current_user).scope.
-            where("attachments.media_entry_id=media_objects.media_id"))
+        # if the user has access to the course's root folder, let's
+        # assume they have access to the course's media, even if it's
+        # media not associated with an Attachment in there
+        scope = MediaObject.active.where(:context => course)
+        url = api_v1_course_media_objects_url
       else
         return render_unauthorized_action # not allowed to view files in the course
       end
+    else
+      scope = MediaObject.active.where(context: @current_user)
+      url = api_v1_media_objects_url
     end
 
     order_dir = params[:order] == "desc" ? "desc" : "asc"
@@ -140,7 +143,7 @@ class MediaObjectsController < ApplicationController
     scope = scope.order(order_by => order_dir)
 
     exclude = params[:exclude] || []
-    media_objects = Api.paginate(scope, self, api_v1_media_objects_url).
+    media_objects = Api.paginate(scope, self, url).
       map{ |mo| media_object_api_json(mo, @current_user, session, exclude)}
     render :json => media_objects
   end
@@ -168,10 +171,13 @@ class MediaObjectsController < ApplicationController
   end
 
   def iframe_media_player
+    # Exclude all global includes from this page
+    @exclude_account_js = true
+
     js_env media_object: media_object_api_json(@media_object, @current_user, session)
     js_bundle :media_player_iframe_content
     css_bundle :media_player
-    render html: "<div><div>#{I18n.t('Loading...')}</div></div>".html_safe, layout: 'layouts/bare'
+    render html: "<div id='player_container'>#{I18n.t('Loading...')}</div>".html_safe, layout: 'layouts/bare'
   end
 
   private

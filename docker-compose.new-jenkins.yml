@@ -3,14 +3,15 @@ version: "2.3"
 services:
   canvas:
     image: $PATCHSET_TAG
-    links:
+    depends_on:
       - postgres
-      - redis
       - cassandra
+      - redis
       - dynamodb
     environment:
       ENCRYPTION_KEY: facdd3a131ddd8988b14f6e4e01039c93cfa0160
       RAILS_ENV: test
+      POSTGRES_PASSWORD: $POSTGRES_PASSWORD
       RANDOMIZE_SEQUENCES: 1
       DISABLE_SPRING: 'true'
       RERUNS_RETRY:
@@ -24,28 +25,29 @@ services:
       DOCKER_PROCESSES:
       EXCLUDE_TESTS:
       TEST_PATTERN:
+      # rspec-parallel-log build
+      RSPEC_LOG:
     # this will stop passenger from booting so the container isn't running anything at all once up
-    command: /tini -- sleep infinity
+    command: sleep infinity
+    init: true
 
   redis:
     image: starlord.inscloudgate.net/jenkins/redis:alpine
+    init: true
 
   postgres:
-    build:
-      context: build/docker-compose/postgres/
+    image: $POSTGRES_IMAGE_TAG
     environment:
       POSTGRES_PASSWORD: $POSTGRES_PASSWORD
-
-      # parallel_tests
-      DOCKER_PROCESSES:
+    init: true
 
   cassandra:
-    build:
-      context: build/docker-compose/cassandra/
+    image: $CASSANDRA_IMAGE_TAG
     environment:
       CASSANDRA_START_RPC: 'true'
+    init: true
 
   dynamodb:
-    build:
-      context: build/docker-compose/dynamodb/
-    command: -jar DynamoDBLocal.jar #-dbPath /home/dynamodblocal
+    image: $DYNAMODB_IMAGE_TAG
+    command: -jar DynamoDBLocal.jar
+    init: true

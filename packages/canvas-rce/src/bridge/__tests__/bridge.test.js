@@ -74,6 +74,7 @@ describe('Editor/Sidebar bridge', () => {
     beforeEach(() => {
       jest.spyOn(console, 'warn')
       editor = {
+        id: 'editor_id',
         addAlert: jest.fn(),
         insertLink: jest.fn(),
         insertVideo: jest.fn(),
@@ -102,7 +103,7 @@ describe('Editor/Sidebar bridge', () => {
       it('insertLink with an active editor forwards the link to createLink', () => {
         Bridge.focusEditor(editor)
         Bridge.insertLink(link)
-        expect(editor.insertLink).toHaveBeenCalledWith(link, undefined)
+        expect(editor.insertLink).toHaveBeenCalledWith(link)
       })
 
       it('insertLink with no active editor is a no-op, but warns', () => {
@@ -114,20 +115,18 @@ describe('Editor/Sidebar bridge', () => {
       it('adds selectionDetails to links', () => {
         Bridge.focusEditor(editor)
         Bridge.insertLink({})
-        expect(editor.insertLink).toHaveBeenCalledWith(
-          {
-            selectionDetails: {
-              node: 'some-node',
-              range: 'some-range'
-            }
-          },
-          undefined
-        )
+        expect(editor.insertLink).toHaveBeenCalledWith({
+          selectionDetails: {
+            node: 'some-node',
+            range: 'some-range'
+          }
+        })
       })
 
       it('calls hideTray after inserting a link', () => {
         const hideTray = jest.fn()
-        Bridge.attachController({hideTray})
+        Bridge.focusEditor({id: 'editor_id'})
+        Bridge.attachController({hideTray}, 'editor_id')
         Bridge.focusEditor(editor)
         Bridge.insertLink({})
         expect(hideTray).toHaveBeenCalledTimes(1)
@@ -147,11 +146,39 @@ describe('Editor/Sidebar bridge', () => {
       })
     })
 
+    describe('insertFileLink', () => {
+      it('inserts a link', () => {
+        const insertLinkSpy = jest.spyOn(Bridge, 'insertLink')
+        Bridge.insertFileLink({content_type: 'plain/text'})
+        expect(insertLinkSpy).toHaveBeenCalled()
+      })
+
+      it('embeds an image', () => {
+        const insertLinkSpy = jest.spyOn(Bridge, 'insertLink')
+        const insertImageSpy = jest.spyOn(Bridge, 'insertImage')
+        Bridge.insertFileLink({content_type: 'image/png'})
+        expect(insertLinkSpy).not.toHaveBeenCalled()
+        expect(insertImageSpy).toHaveBeenCalled()
+      })
+
+      it('embeds media', () => {
+        const insertLinkSpy = jest.spyOn(Bridge, 'insertLink')
+        const embedMediaSpy = jest.spyOn(Bridge, 'embedMedia')
+        Bridge.insertFileLink({content_type: 'video/mp4', href: 'here/i/am'})
+        expect(insertLinkSpy).not.toHaveBeenCalled()
+        expect(embedMediaSpy).toHaveBeenCalledWith({
+          content_type: 'video/mp4',
+          href: 'here/i/am',
+          embedded_iframe_url: 'here/i/am'
+        })
+      })
+    })
+
     describe('embedMedia', () => {
       let hideTray
       beforeEach(() => {
         hideTray = jest.fn()
-        Bridge.attachController({hideTray})
+        Bridge.attachController({hideTray}, 'editor_id')
         Bridge.focusEditor(editor)
       })
 

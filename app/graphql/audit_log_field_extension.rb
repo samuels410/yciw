@@ -31,7 +31,7 @@ class AuditLogFieldExtension < GraphQL::Schema::FieldExtension
 
     def log(entry, field_name)
       @dynamo.put_item(
-        table_name: "graphql_mutations",
+        table_name: AuditLogFieldExtension.ddb_table_name,
         item: {
           # TODO: this is where you redirect
           "object_id" => log_entry_id(entry, field_name),
@@ -72,7 +72,7 @@ class AuditLogFieldExtension < GraphQL::Schema::FieldExtension
       end
 
       if entry.respond_to? :root_account_id
-        return entry.root_account
+        return entry.root_account if entry.root_account.present?
       end
 
       case entry
@@ -124,11 +124,17 @@ class AuditLogFieldExtension < GraphQL::Schema::FieldExtension
     Canvas::DynamoDB::DatabaseBuilder.configured?(:auditors)
   end
 
+  def self.ddb_table_name
+    Setting.get("graphql_mutations_ddb_table_name", "graphql_mutations")
+  end
+
   def resolve(object:, arguments:, context:, **rest)
     yield(object, arguments).tap do |value|
       next unless AuditLogFieldExtension.enabled?
 
       mutation = field.mutation
+      # TODO: figure out how to resolve root account for user and communication channels
+      next if mutation == Mutations::UpdateNotificationPreferences
 
       logger = Logger.new(mutation, context, arguments)
 

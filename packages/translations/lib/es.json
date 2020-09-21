@@ -32,9 +32,6 @@
     "align_right_9bad3ac1": {
         "message": "Alinear a la derecha"
     },
-    "alignment_and_indentation_f7de34bf": {
-        "message": "Alineación y sangría"
-    },
     "all_4321c3a1": {
         "message": "Todo"
     },
@@ -50,11 +47,11 @@
     "alt_text_611fb322": {
         "message": "Texto alternativo"
     },
+    "an_error_occured_reading_the_file_ff48558b": {
+        "message": "Hubo un error al leer el archivo"
+    },
     "an_error_occurred_attempting_to_dismiss_the_opport_f86e0667": {
         "message": "Ocurrió un error al intentar descartar la oportunidad."
-    },
-    "an_error_occurred_generating_the_file_preview_cf259955": {
-        "message": "Ocurrió un error al generar la vista previa del archivo"
     },
     "an_error_occurred_making_a_network_request_d1bda348": {
         "message": "Se produjo un error al realizar una solicitud de red"
@@ -146,9 +143,6 @@
     "canvas_planner_98ed106": {
         "message": "Planificador de Canvas"
     },
-    "canvas_plugins_705a5016": {
-        "message": "Complementos de Canvas"
-    },
     "choose_caption_file_9c45bc4e": {
         "message": "Elegir archivo de subtítulos"
     },
@@ -160,9 +154,6 @@
     },
     "clear_selected_file_filename_2fe8a58e": {
         "message": "Eliminar archivo seleccionado: { filename }"
-    },
-    "click_any_page_to_insert_a_link_to_that_page_ac920c02": {
-        "message": "Haga clic en cualquier página para insertar un enlace a esa página."
     },
     "click_to_embed_imagename_c41ea8df": {
         "message": "Haga clic para incluir { imageName }"
@@ -266,6 +257,9 @@
     "date_time_d9fbf2d7": {
         "message": "Fecha y hora:"
     },
+    "decorative_image_3c28aa7d": {
+        "message": "Imagen decorativa"
+    },
     "decrease_indent_de6343ab": {
         "message": "Reducir sangría"
     },
@@ -293,8 +287,8 @@
     "dimensions_45ddb7b7": {
         "message": "Dimensiones"
     },
-    "directionality_ebcae6d0": {
-        "message": "direccionalidad"
+    "directionality_26ae9e08": {
+        "message": "Direccionalidad"
     },
     "disable_in_line_preview_2a675175": {
         "message": "Desactivar vista previa directa."
@@ -470,8 +464,14 @@
     "finish_bc343002": {
         "message": "Terminar"
     },
+    "focus_element_options_toolbar_18d993e": {
+        "message": "Barra de herramientas de opciones para enfocarse en un elemento"
+    },
     "folder_tree_fbab0726": {
         "message": "Árbol de carpetas"
+    },
+    "format_4247a9c5": {
+        "message": "Formato"
     },
     "formatting_5b143aa8": {
         "message": "Formato"
@@ -572,7 +572,7 @@
     "late_2be42b88": {
         "message": "Atrasado"
     },
-    "left_to_right_d6da6d7e": {
+    "left_to_right_e9b4fd06": {
         "message": "Izquierda a derecha"
     },
     "link_7262adec": {
@@ -580,12 +580,6 @@
     },
     "link_options_a16b758b": {
         "message": "Opciones de enlace"
-    },
-    "link_to_other_content_in_the_course_879163b5": {
-        "message": "Enlazar a otro contenido en el curso."
-    },
-    "link_to_other_content_in_the_group_3fe25379": {
-        "message": "Vincular a otro contenido en el grupo."
     },
     "links_14b70841": {
         "message": "Enlaces"
@@ -662,9 +656,6 @@
     "mic_a7f3d311": {
         "message": "Micrófono"
     },
-    "miscellaneous_and_apps_f450a387": {
-        "message": "Varios y aplicaciones"
-    },
     "missing_1a256b3b": {
         "message": "Faltante"
     },
@@ -682,6 +673,9 @@
     },
     "my_grades_98834476": {
         "message": "Mis calificaciones"
+    },
+    "my_media_82bade11": {
+        "message": "Mis multimedia"
     },
     "navigate_through_the_menu_or_toolbar_415a4e50": {
         "message": "Navegar por el menú o la barra de herramientas"
@@ -703,9 +697,6 @@
     },
     "next_page_d2a39853": {
         "message": "Próxima página"
-    },
-    "no_alt_text_decorative_image_f318fc0e": {
-        "message": "No hay texto alternativo (imagen decorativa)"
     },
     "no_due_dates_assigned_e8f5bac8": {
         "message": "No hay fechas de entrega asignadas"
@@ -872,8 +863,8 @@
     "rich_content_editor_2708ef21": {
         "message": "Editor de Contenido Enriquecido"
     },
-    "right_to_left_ec223c81": {
-        "message": "derecha a izquierda"
+    "right_to_left_9cfb092a": {
+        "message": "Derecha a izquierda"
     },
     "save_11a80ec3": {
         "message": "Guardar"
@@ -919,6 +910,9 @@
     },
     "size_b30e1077": {
         "message": "Tamaño"
+    },
+    "size_of_file_is_greater_than_the_maximum_max_mb_al_6eb3fa9a": {
+        "message": "El tamaño de { file } es mayor que el tamaño máximo permitido para archivos, que es de { max } MB."
     },
     "small_b070434a": {
         "message": "Pequeño"
@@ -1174,6 +1168,9 @@
     },
     "you_have_media_feedback_f5f9aba8": {
         "message": "Tiene una valoración de multimedia."
+    },
+    "you_may_not_upload_an_empty_file_11c31eb2": {
+        "message": "No puede cargar un archivo vacío."
     },
     "you_must_provide_a_date_and_time_a86839d2": {
         "message": "Debe brindar una fecha y una hora."

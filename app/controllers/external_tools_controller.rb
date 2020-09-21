@@ -143,7 +143,7 @@ class ExternalToolsController < ApplicationController
   end
 
   def retrieve
-    @tool = ContextExternalTool.find_external_tool(params[:url], @context)
+    @tool = ContextExternalTool.find_external_tool(params[:url], @context, nil, nil, params[:client_id])
     if !@tool
       flash[:error] = t "#application.errors.invalid_external_tool", "Couldn't find valid settings for this link"
       redirect_to named_context_url(@context, :context_url)
@@ -507,7 +507,10 @@ class ExternalToolsController < ApplicationController
     opts = default_opts.merge(opts)
 
     assignment = api_find(@context.assignments.active, params[:assignment_id]) if params[:assignment_id]
-    expander = variable_expander(assignment: assignment, tool: tool, launch: lti_launch, post_message_token: opts[:launch_token])
+    expander = variable_expander(assignment: assignment,
+      tool: tool, launch: lti_launch,
+      post_message_token: opts[:launch_token],
+      secure_params: params[:secure_params])
 
     adapter = if tool.use_1_3?
       a = Lti::LtiAdvantageAdapter.new(

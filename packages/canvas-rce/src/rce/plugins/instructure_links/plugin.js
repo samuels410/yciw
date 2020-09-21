@@ -16,25 +16,63 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
+/*
+ * here's how linking works
+ * Creation:
+ * 1. No text is selected, user clicks create link button:
+ *    - display the create link dialog with text and URL input
+ *    - insert an <a> at the caret, linked to the URL with the text content
+ * 2. Text is selected, user clicks create link button:
+ *    - display the create link dialog with text and URL input
+ *    - the text input displays the plain-text content of the selection
+ *    - on saving, if the plain-text has not changed, leave it unchanged in the RCE,
+ *      if it has changed, replace the selection with the new plain-text.
+ *      Wrap the text in an <a>, linked to the URL
+ * 3. An image + optional text is selected, user clicks create link button
+ *    - display the create link dialog with URL input only
+ *    - on saving, the selection is wrapped in an <a>, linked to the URL
+ * 4. An iframe is w/in the selection
+ *    - disable the create link function
+ *
+ * Editing:
+ * 1. the caret is w/in a text link, but nothing is selected or
+ *    some subset of the link's text is selected
+ *    - display the link Options popup button. when clicked...
+ *    - expand the selection to be the whole link text
+ *    - display the tray with the link's plain-text in the text input and the href
+ *      in the URL input
+ *    - on saving, if the plain-text is unchanged, leave the text unchanged in the RCE,
+ *      if it has changed, replace the link text with the new plain-text.
+ *      Update the <a>'s href to the new URL
+ * 2. An image w/in a link is selected, or the caret is on the image, or the image
+ *    plus some surrounding text that's all part of the existing link is selected, or
+ *    the caret is w/in a link that contains an image
+ *    a. for now: show the link and image Options buttons in a popup toolbar
+ *       - on clicking the link Options...
+ *       - expand the selection to be the whole link contents
+ *       - show the link options tray, with no text input
+ *       - on saving, update the link's href
+ *    b. new-improved: show a single Options button, when clicked...
+ *       - expand the selection to be the whole link contents
+ *       - show the options tray with Image Options and Link Options sections
+ *         the link text input is empty.
+ *       - on saving, if the link text input is still empty, replace the link's
+ *         href with the new URL.  if the link text is updated, replace the link's
+ *         content with the new plain text (deleting the image)
+ */
+
 import formatMessage from '../../../format-message'
 import clickCallback from './clickCallback'
 import bridge from '../../../bridge'
 import {isFileLink, asLink} from '../shared/ContentSelection'
+import {getAnchorElement, isOKToLink} from '../../contentInsertionUtils'
 import LinkOptionsTrayController from './components/LinkOptionsTray/LinkOptionsTrayController'
 import {CREATE_LINK, EDIT_LINK} from './components/LinkOptionsDialog/LinkOptionsDialogController'
 
 const trayController = new LinkOptionsTrayController()
 
-const PLUGIN_KEY = 'links'
-
-const getLink = function(editor, elm) {
-  return editor.dom.getParent(elm, 'a[href]')
-}
-
-const getAnchorElement = function(editor, node) {
-  const link = node.nodeName.toLowerCase() === 'a' ? node : getLink(editor, node)
-  return link && link.href ? link : null
-}
+const COURSE_PLUGIN_KEY = 'course_links'
+const GROUP_PLUGIN_KEY = 'group_links'
 
 tinymce.create('tinymce.plugins.InstructureLinksPlugin', {
   init(ed) {
@@ -44,7 +82,7 @@ tinymce.create('tinymce.plugins.InstructureLinksPlugin', {
     ed.addCommand('instructureLinkCreate', clickCallback.bind(this, ed, CREATE_LINK))
     ed.addCommand('instructureLinkEdit', clickCallback.bind(this, ed, EDIT_LINK))
     ed.addCommand('instructureTrayForLinks', (ui, plugin_key) => {
-      bridge.showTrayForPlugin(plugin_key)
+      bridge.showTrayForPlugin(plugin_key, ed.id)
     })
     ed.addCommand('instructureTrayToEditLink', (ui, editor) => {
       trayController.showTrayForEditor(editor)
@@ -57,7 +95,11 @@ tinymce.create('tinymce.plugins.InstructureLinksPlugin', {
     ed.ui.registry.addNestedMenuItem('instructure_links', {
       text: formatMessage('Link'),
       icon: 'link',
-      getSubmenuItems: () => ['instructure_external_link', 'instructure_course_link']
+      getSubmenuItems: () => [
+        'instructure_external_link',
+        'instructure_course_link',
+        'instructure_group_link'
+      ]
     })
     ed.ui.registry.addMenuItem('instructure_external_link', {
       text: formatMessage('External Links'),
@@ -69,7 +111,15 @@ tinymce.create('tinymce.plugins.InstructureLinksPlugin', {
         text: formatMessage('Course Links'),
         onAction: () => {
           ed.focus(true) // activate the editor without changing focus
-          ed.execCommand('instructureTrayForLinks', false, PLUGIN_KEY)
+          ed.execCommand('instructureTrayForLinks', false, COURSE_PLUGIN_KEY)
+        }
+      })
+    } else if (contextType === 'group') {
+      ed.ui.registry.addMenuItem('instructure_group_link', {
+        text: formatMessage('Group Links'),
+        onAction: () => {
+          ed.focus(true) // activate the editor without changing focus
+          ed.execCommand('instructureTrayForLinks', false, GROUP_PLUGIN_KEY)
         }
       })
     }
@@ -94,6 +144,9 @@ tinymce.create('tinymce.plugins.InstructureLinksPlugin', {
               type: 'menuitem',
               text: formatMessage('Remove Link'),
               onAction() {
+                const selectedElm = ed.selection.getNode()
+                const anchorElm = getAnchorElement(ed, selectedElm)
+                ed.selection.select(anchorElm)
                 ed.execCommand('unlink')
               }
             }
@@ -110,12 +163,21 @@ tinymce.create('tinymce.plugins.InstructureLinksPlugin', {
           ]
 
           if (contextType === 'course') {
-            items.splice(1, 0, {
+            items.push({
               type: 'menuitem',
               text: formatMessage('Course Links'),
               onAction() {
                 ed.focus(true) // activate the editor without changing focus
-                ed.execCommand('instructureTrayForLinks', false, PLUGIN_KEY)
+                ed.execCommand('instructureTrayForLinks', false, COURSE_PLUGIN_KEY)
+              }
+            })
+          } else if (contextType === 'group') {
+            items.push({
+              type: 'menuitem',
+              text: formatMessage('Group Links'),
+              onAction() {
+                ed.focus(true) // activate the editor without changing focus
+                ed.execCommand('instructureTrayForLinks', false, GROUP_PLUGIN_KEY)
               }
             })
           }
@@ -125,12 +187,43 @@ tinymce.create('tinymce.plugins.InstructureLinksPlugin', {
       onSetup(api) {
         function handleNodeChange(e) {
           api.setActive(!!getAnchorElement(ed, e.element))
+          api.setDisabled(!isOKToLink(ed.selection.getContent()))
+        }
+
+        // if the user selects all the content w/in a link and deletes it via the keyboard
+        // make sure the surrounding <a> gets deleted too.
+        function deleteEmptyLink() {
+          let node
+          if (ed.selection.getNode().tagName === 'A') {
+            node = ed.selection.getNode()
+          } else {
+            const rng = ed.selection.getRng()
+            if (
+              rng.commonAncestorContainer === rng.endContainer &&
+              rng.endContainer.nextSibling?.tagName === 'A'
+            ) {
+              node = rng.endContainer.nextSibling
+            } else if (rng.nextSibling?.tagName === 'A') {
+              node = rng.nextSibling
+            }
+          }
+          if (node) {
+            if (node.firstElementChild) {
+              return
+            }
+            const txt = node.textContent?.trim()
+            if (txt.length === 0) {
+              ed.execCommand('Unlink')
+            }
+          }
         }
 
         ed.on('NodeChange', handleNodeChange)
+        ed.on('Change', deleteEmptyLink)
 
         return () => {
           ed.off('NodeChange', handleNodeChange)
+          ed.off('Change', deleteEmptyLink)
         }
       }
     })
@@ -143,7 +236,7 @@ tinymce.create('tinymce.plugins.InstructureLinksPlugin', {
         ed.execCommand('instructureTrayToEditLink', false, ed)
       },
 
-      text: formatMessage('Options'),
+      text: formatMessage('Link Options'),
       tooltip: buttonAriaLabel
     })
 

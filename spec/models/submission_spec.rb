@@ -1646,10 +1646,10 @@ describe Submission do
       end
 
       it "should create a message when the assignment has been graded and published" do
-        @cc = @user.communication_channels.create(:path => "somewhere")
+        communication_channel(@user, {username: 'somewhere@test.com'})
         @submission.reload
         expect(@submission.assignment).to eql(@assignment)
-        expect(@submission.assignment.state).to eql(:published)
+        expect(@submission.assignment.state).to be(:published)
         @submission = @assignment.grade_student(@student, grader: @teacher, score: 5).first
         expect(@submission.messages_sent).to include('Submission Graded')
       end
@@ -1660,10 +1660,10 @@ describe Submission do
         @course.restrict_enrollments_to_course_dates = true
         @course.save!
 
-        @cc = @user.communication_channels.create(:path => "somewhere")
+        communication_channel(@user, {username: 'somewhere@test.com'})
         @submission.reload
         expect(@submission.assignment).to eql(@assignment)
-        expect(@submission.assignment.state).to eql(:published)
+        expect(@submission.assignment.state).to be(:published)
         @submission = @assignment.grade_student(@student, grader: @teacher, score: 5).first
         expect(@submission.messages_sent).to_not include('Submission Graded')
       end
@@ -1675,17 +1675,17 @@ describe Submission do
       end
 
       it "should not create a message when a muted assignment has been graded and published" do
-        @cc = @user.communication_channels.create(:path => "somewhere")
+        communication_channel(@user, {username: 'somewhere@test.com'})
         @assignment.ensure_post_policy(post_manually: true)
         @submission.reload
         expect(@submission.assignment).to eql(@assignment)
-        expect(@submission.assignment.state).to eql(:published)
+        expect(@submission.assignment.state).to be(:published)
         @submission = @assignment.grade_student(@student, grader: @teacher, score: 5).first
         expect(@submission.messages_sent).not_to include "Submission Graded"
       end
 
       it "should not create a message when this is a quiz submission" do
-        @cc = @user.communication_channels.create(:path => "somewhere")
+        communication_channel(@user, {username: 'somewhere@test.com'})
         @quiz = Quizzes::Quiz.create!(:context => @course)
         @submission.quiz_submission = @quiz.generate_submission(@user)
         @submission.save!
@@ -1697,7 +1697,7 @@ describe Submission do
       end
 
       it "should create a hidden stream_item_instance when muted, graded, and published" do
-        @cc = @user.communication_channels.create :path => "somewhere"
+        communication_channel(@user, {username: 'somewhere@test.com'})
         @assignment.ensure_post_policy(post_manually: true)
         expect {
           @assignment.grade_student(@user, grade: 10, grader: @teacher).first
@@ -1706,7 +1706,7 @@ describe Submission do
       end
 
       it "should hide any existing stream_item_instances when grades are hidden" do
-        @cc = @user.communication_channels.create :path => "somewhere"
+        communication_channel(@user, {username: 'somewhere@test.com'})
         expect {
           @assignment.grade_student(@student, grader: @teacher, score: 5).first
         }.to change StreamItemInstance, :count
@@ -1716,7 +1716,7 @@ describe Submission do
       end
 
       it "should show hidden stream_item_instances when grades are posted" do
-        @cc = @user.communication_channels.create :path => "somewhere"
+        communication_channel(@user, {username: 'somewhere@test.com'})
         @assignment.ensure_post_policy(post_manually: true)
         expect {
           @assignment.update_submission(@student, :author => @teacher, :comment => "some comment")
@@ -1730,7 +1730,7 @@ describe Submission do
       end
 
       it "should not create hidden stream_item_instances for instructors when muted, graded, and published" do
-        @cc = @teacher.communication_channels.create :path => "somewhere"
+        communication_channel(@teacher, {username: 'somewhere@test.com'})
         @assignment.mute!
         expect {
           @submission.add_comment(:author => @student, :comment => "some comment")
@@ -1739,7 +1739,7 @@ describe Submission do
       end
 
       it "should not hide any existing stream_item_instances for instructors when muted" do
-        @cc = @teacher.communication_channels.create :path => "somewhere"
+        communication_channel(@teacher, {username: 'somewhere@test.com'})
         expect {
           @submission.add_comment(:author => @student, :comment => "some comment")
         }.to change StreamItemInstance, :count
@@ -1761,12 +1761,12 @@ describe Submission do
         quiz.workflow_state = 'available'
         quiz.save!
 
-        user       = account_admin_user
-        user.communication_channels.create!(:path => 'admin@example.com')
+        user = account_admin_user
+        communication_channel(user, {username: 'admin@example.com'})
         submission = quiz.generate_submission(user, false)
         Quizzes::SubmissionGrader.new(submission).grade_submission
 
-        @teacher.communication_channels.create!(:path => 'chang@example.com')
+        communication_channel(@teacher, {username: 'chang@example.com'})
         submission2 = quiz.generate_submission(@teacher, false)
         Quizzes::SubmissionGrader.new(submission2).grade_submission
 
@@ -1778,7 +1778,7 @@ describe Submission do
     it "should create a stream_item_instance when graded and published" do
       Notification.create :name => "Submission Graded"
       submission_spec_model
-      @cc = @user.communication_channels.create :path => "somewhere"
+      communication_channel(@user, {username: 'somewhere@test.com'})
       expect {
         @assignment.grade_student(@user, grade: 10, grader: @teacher)
       }.to change StreamItemInstance, :count
@@ -1787,7 +1787,7 @@ describe Submission do
     it "should create a stream_item_instance when graded, and then made it visible when unmuted" do
       Notification.create :name => "Submission Graded"
       submission_spec_model
-      @cc = @user.communication_channels.create :path => "somewhere"
+      communication_channel(@user, {username: 'somewhere@test.com'})
       @assignment.mute!
       expect {
         @assignment.grade_student(@user, grade: 10, grader: @teacher)
@@ -1807,10 +1807,10 @@ describe Submission do
       it "creates a message when the score is changed and the grades were already published" do
         Notification.create(:name => 'Submission Grade Changed')
         allow(@assignment).to receive(:score_to_grade).and_return("10.0")
-        allow(@assignment).to receive(:due_at).and_return(Time.now  - 100)
+        allow(@assignment).to receive(:due_at).and_return(Time.zone.now - 100)
         submission_spec_model
 
-        @cc = @user.communication_channels.create(:path => "somewhere")
+        communication_channel(@user, {username: 'somewhere@test.com'})
         s = @assignment.grade_student(@user, grade: 10, grader: @teacher)[0] # @submission
         s.graded_at = Time.zone.parse("Jan 1 2000")
         s.save
@@ -1828,7 +1828,7 @@ describe Submission do
         @quiz = Quizzes::Quiz.create!(:context => @course)
         @submission.quiz_submission = @quiz.generate_submission(@user)
         @submission.save!
-        @cc = @user.communication_channels.create(:path => "somewhere")
+        communication_channel(@user, {username: 'somewhere@test.com'})
         s = @assignment.grade_student(@user, grade: 10, grader: @teacher)[0] # @submission
         s.graded_at = Time.zone.parse("Jan 1 2000")
         s.save
@@ -1841,10 +1841,10 @@ describe Submission do
         @assignment.ensure_post_policy(post_manually: true)
         Notification.create(:name => 'Submission Grade Changed')
         allow(@assignment).to receive(:score_to_grade).and_return("10.0")
-        allow(@assignment).to receive(:due_at).and_return(Time.now  - 100)
+        allow(@assignment).to receive(:due_at).and_return(Time.zone.now - 100)
         submission_spec_model
 
-        @cc = @user.communication_channels.create(:path => "somewhere")
+        communication_channel(@user, {username: 'somewhere@test.com'})
         s = @assignment.grade_student(@user, grade: 10, grader: @teacher)[0] # @submission
         s.graded_at = Time.zone.parse("Jan 1 2000")
         s.save
@@ -1856,10 +1856,10 @@ describe Submission do
       it "does not create a message when the submission was recently graded" do
         Notification.create(:name => 'Submission Grade Changed')
         allow(@assignment).to receive(:score_to_grade).and_return("10.0")
-        allow(@assignment).to receive(:due_at).and_return(Time.now  - 100)
+        allow(@assignment).to receive(:due_at).and_return(Time.zone.now - 100)
         submission_spec_model
 
-        @cc = @user.communication_channels.create(:path => "somewhere")
+        communication_channel(@user, {username: 'somewhere@test.com'})
         s = @assignment.grade_student(@user, grade: 10, grader: @teacher)[0] # @submission
         @submission = @assignment.grade_student(@user, grade: 9, grader: @teacher)[0]
         expect(@submission).to eql(s)
@@ -3985,6 +3985,53 @@ describe Submission do
     end
   end
 
+  describe "capturing screenshots for online_url submissions" do
+    let_once(:course) { Course.create! }
+    let_once(:student) { course.enroll_student(User.create!, active_all: true).user }
+    let(:assignment) { course.assignments.create!(submission_types: ["online_url"]) }
+    let(:sub) { assignments.find_by(user: student) }
+    let(:submitted_url) { "https://example.com" }
+    let(:get_web_snapshot_jobs) { Delayed::Job.where(tag: "Submission#get_web_snapshot").order(:id) }
+
+    before do
+      allow(CutyCapt).to receive(:enabled?).and_return(true)
+    end
+
+    it "calls #get_web_snapshot when it's the first submission attempt" do
+      expect {
+        assignment.submit_homework(student, submission_type: "online_url", url: submitted_url)
+      }.to change {
+        get_web_snapshot_jobs.count
+      }.by(1)
+    end
+
+    it "calls #get_web_snapshot when it's not the first submission attempt" do
+      assignment.submit_homework(student, submission_type: "online_url", url: submitted_url)
+      expect {
+        assignment.submit_homework(student, submission_type: "online_url", url: "https://example.com/different")
+      }.to change {
+        get_web_snapshot_jobs.count
+      }.by(1)
+    end
+
+    it "calls #get_web_snapshot when it's not the first submission attempt and the url hasn't changed" do
+      assignment.submit_homework(student, submission_type: "online_url", url: submitted_url)
+      expect {
+        assignment.submit_homework(student, submission_type: "online_url", url: submitted_url)
+      }.to change {
+        get_web_snapshot_jobs.count
+      }.by(1)
+    end
+
+    it "does not call #get_web_snapshot when a url is not included" do
+      expect {
+        assignment.submit_homework(student, submission_type: "online_url", url: nil)
+      }.not_to change {
+        get_web_snapshot_jobs.count
+      }
+    end
+  end
+
   describe '#submit_attachments_to_canvadocs' do
     it 'creates crocodoc documents' do
       allow(Canvas::Crocodoc).to receive(:enabled?).and_return true
@@ -4862,10 +4909,40 @@ describe Submission do
       @student_assessment = @submission.rubric_assessments.where(assessor_id: @student).first
     end
 
-    it "returns empty if submission is unposted and user cannot :read_grade" do
-      @assignment.ensure_post_policy(post_manually: true)
-      @viewing_user = @student
-      expect(subject).to be_empty
+    context "when the submission is unposted and the viewing user cannot :read_grade" do
+      before(:once) do
+        @assignment.post_policy.update!(post_manually: true)
+        @viewing_user = @student
+      end
+
+      it "excludes assessments by other users" do
+        expect(subject).not_to include(@teacher_assessment)
+      end
+
+      it "includes assessments authored by the viewing user" do
+        course = Course.create!
+        assessed_student = course.enroll_student(User.create!, workflow_state: "active").user
+        assessing_student = course.enroll_student(User.create!, workflow_state: "active").user
+
+        assignment = course.assignments.create!(peer_reviews: true)
+        rubric_association = rubric_association_model(context: course, association_object: assignment, purpose: "grading")
+
+        submission = assignment.submission_for_student(assessed_student)
+        submission.assessment_requests.create!(
+          user: assessed_student,
+          assessor: assessing_student,
+          assessor_asset: assignment.submission_for_student(assessing_student)
+        )
+        peer_review_assessment = rubric_association.rubric_assessments.create!({
+          artifact: submission,
+          assessment_type: "grading",
+          assessor: assessing_student,
+          rubric: rubric_association.rubric,
+          user: assessed_student
+        })
+
+        expect(submission.visible_rubric_assessments_for(assessing_student)).to include(peer_review_assessment)
+      end
     end
 
     it "returns the rubric assessments if user can :read_grade" do
@@ -4911,6 +4988,14 @@ describe Submission do
       it 'can find historic rubric assessments of older attempts' do
         expect(
           @submission2.visible_rubric_assessments_for(@viewing_user, attempt: @submission.attempt)
+        ).to contain_exactly(@teacher_assessment, @student_assessment)
+      end
+
+      it "returns assessments for every attempt if attempt is nil" do
+        @teacher_assessment.update!(artifact_attempt: 0)
+        @student_assessment.update!(artifact_attempt: 1)
+        expect(
+          @submission2.visible_rubric_assessments_for(@viewing_user, attempt: nil)
         ).to contain_exactly(@teacher_assessment, @student_assessment)
       end
     end
@@ -6965,6 +7050,18 @@ describe Submission do
       @shard1.activate do
         expect(@assignment.submissions.postable.to_sql).to_not include(@shard1.name)
       end
+    end
+  end
+
+  describe "root account ID" do
+    let_once(:root_account) { Account.create! }
+    let_once(:subaccount) { Account.create!(root_account: root_account) }
+    let_once(:course) { Course.create!(account: subaccount) }
+    let_once(:student) { course.enroll_student(User.create!, workflow_state: "active").user }
+
+    it "is set to the root account ID of the owning course" do
+      assignment = course.assignments.create!
+      expect(assignment.submission_for_student(student).root_account_id).to eq root_account.id
     end
   end
 end

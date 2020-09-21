@@ -6,14 +6,16 @@ namespace :js do
   task :build_client_apps do
     require 'config/initializers/client_app_symlinks'
 
+    npm_install = ENV["COMPILE_ASSETS_NPM_INSTALL"] != "0"
+
     Dir.glob('./client_apps/*/').each do |app_dir|
       app_name = File.basename(app_dir)
 
       Dir.chdir(app_dir) do
         puts "Building client app '#{app_name}'"
 
-        if File.exists?('./package.json')
-          output = `yarn install`
+        if npm_install && File.exists?('./package.json')
+          output = system 'yarn install --pure-lockfile || yarn install --pure-lockfile --network-concurrency 1'
           unless $?.exitstatus == 0
             puts "INSTALL FAILURE:\n#{output}"
             raise "Package installation failure for client app #{app_name}"
@@ -53,7 +55,7 @@ namespace :js do
   desc "Ensure up-to-date node environment"
   task :yarn_install do
     puts "node is: #{`node -v`.strip} (#{`which node`.strip})"
-    system "yarn install --frozen-lockfile"
+    system 'yarn install --pure-lockfile || yarn install --pure-lockfile --network-concurrency 1'
     unless $?.success?
       raise 'error running yarn install'
     end

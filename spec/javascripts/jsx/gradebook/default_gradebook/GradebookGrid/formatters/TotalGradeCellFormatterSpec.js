@@ -38,7 +38,7 @@ QUnit.module('GradebookGrid TotalGradeCellFormatter', hooks => {
         ['B', 0.8],
         ['C', 0.7],
         ['D', 0.6],
-        ['F', 0.0]
+        ['<b>F</b>', 0.0]
       ],
       show_total_grade_as_points: true
     })
@@ -192,6 +192,11 @@ QUnit.module('GradebookGrid TotalGradeCellFormatter', hooks => {
 
   test('renders a letter grade when using a grading standard', () => {
     equal(renderCell().querySelector('.letter-grade-points').innerText, 'B')
+  })
+
+  test('escapes the value of the letter grade when using a grading standard', () => {
+    grade = {score: 1, possible: 10}
+    equal(renderCell().querySelector('.letter-grade-points').innerText, '<b>F</b>')
   })
 
   test('does not render a letter grade when not using a grading standard', () => {

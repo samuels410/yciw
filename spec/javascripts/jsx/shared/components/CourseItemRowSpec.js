@@ -78,7 +78,7 @@ test('renders clickable children inside content link', () => {
     />
   )
   ok(tree.find('.ic-item-row__content-col .ic-item-row__content-link .find-me').exists())
-  ok(tree.find('.ic-item-row__content-col .ic-item-row__content-link .find-me2').exists())
+  ok(tree.find('.ic-item-row__content-col .ic-item-row__content-container .find-me2').exists())
   ok(!tree.find('.ic-item-row__content-col .ic-item-row__content-link .find-me3').exists())
   ok(tree.find('.ic-item-row__content-col .ic-item-row__content-link .find-me4').exists())
 })
@@ -121,9 +121,9 @@ test('renders no checkbox if selectable: false', () => {
   notOk(node.exists())
 })
 
-test('renders an avatar if showAvatar: true', () => {
+test('renders an accessible avatar if showAvatar: true', () => {
   const tree = mount(<CourseItemRow {...props} showAvatar />)
-  const node = tree.find('Avatar')
+  const node = tree.find('Avatar').find("img[alt='John Smith']")
   ok(node.exists())
 })
 

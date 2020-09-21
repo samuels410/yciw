@@ -264,6 +264,7 @@ class AssignmentsController < ApplicationController
           ROOT_OUTCOME_GROUP: outcome_group_json(@context.root_outcome_group, @current_user, session),
           SIMILARITY_PLEDGE: @similarity_pledge,
           CONFETTI_ENABLED: @domain_root_account&.feature_enabled?(:confetti_for_assignments),
+          USER_ASSET_STRING: @current_user&.asset_string,
         })
 
         set_master_course_js_env_data(@assignment, @context)
@@ -464,8 +465,6 @@ class AssignmentsController < ApplicationController
 
       hash = {
         CONTEXT_ACTION_SOURCE: :syllabus,
-        # don't check for student enrollments because we want this to show for the teacher as well
-        STUDENT_PLANNER_ENABLED: @domain_root_account&.feature_enabled?(:student_planner)
       }
       append_sis_data(hash)
       js_env(hash)
@@ -647,7 +646,8 @@ class AssignmentsController < ApplicationController
 
       hash[:SUBMISSION_TYPE_SELECTION_TOOLS] =
         @domain_root_account&.feature_enabled?(:submission_type_tool_placement) ?
-        external_tools_display_hashes(:submission_type_selection, @context, [:base_title, :external_url]) : []
+        external_tools_display_hashes(:submission_type_selection, @context,
+          [:base_title, :external_url, :selection_width, :selection_height]) : []
 
       append_sis_data(hash)
       if context.is_a?(Course)

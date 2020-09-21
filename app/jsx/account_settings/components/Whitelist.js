@@ -21,7 +21,9 @@ import I18n from 'i18n!security_panel'
 import {connect} from 'react-redux'
 import {arrayOf, bool, func, objectOf, oneOf, shape, string, number, element} from 'prop-types'
 import {Alert} from '@instructure/ui-alerts'
-import {Heading, List, Table, Spinner} from '@instructure/ui-elements'
+import {Heading, List} from '@instructure/ui-elements'
+import {Spinner} from '@instructure/ui-spinner'
+import {Table} from '@instructure/ui-table'
 import {TextInput} from '@instructure/ui-forms'
 import {Flex, View} from '@instructure/ui-layout'
 import {Button} from '@instructure/ui-buttons'
@@ -150,8 +152,8 @@ export class Whitelist extends Component {
             <Flex.Item>
               <Heading margin="small" level="h4" as="h3">
                 {this.props.inherited
-                  ? I18n.t('Whitelist')
-                  : I18n.t('Whitelist (%{count}/%{max})', {
+                  ? I18n.t('Domains')
+                  : I18n.t('Domains (%{count}/%{max})', {
                       count: this.props.whitelistedDomains.account.length,
                       max: this.props.maxDomains
                     })}
@@ -176,7 +178,7 @@ export class Whitelist extends Component {
           {domainLimitReached && (
             <Alert variant="error" margin="small 0">
               {I18n.t(
-                `You have reached the domain limit.  You can add more domains by deleting existing domains in your whitelist.`
+                `You have reached the domain limit. You can add more domains by deleting existing domains in your allowed list.`
               )}
             </Alert>
           )}
@@ -184,7 +186,7 @@ export class Whitelist extends Component {
           {this.props.inherited && this.props.isSubAccount && (
             <Alert variant="info" margin="small 0">
               {I18n.t(
-                `Whitelist editing is disabled when security settings are inherited from a parent account.`
+                `Domain editing is disabled when security settings are inherited from a parent account.`
               )}
             </Alert>
           )}
@@ -217,28 +219,24 @@ export class Whitelist extends Component {
           </Flex>
         </form>
         {whitelistToShow.length <= 0 ? (
-          <Billboard
-            size="small"
-            heading={I18n.t('No domains whitelisted')}
-            hero={<EmptyDesert />}
-          />
+          <Billboard size="small" heading={I18n.t('No allowed domains')} hero={<EmptyDesert />} />
         ) : (
-          <Table
-            caption={<ScreenReaderContent>{I18n.t('Whitelisted Domains')}</ScreenReaderContent>}
-          >
-            <thead>
-              <tr>
-                <th scope="col">Domain Name</th>
-                <th scope="col">
+          <Table caption={I18n.t('Allowed Domains')}>
+            <Table.Head>
+              <Table.Row>
+                <Table.ColHeader id="allowed-domain-name">
+                  {I18n.t('Allowed Domains')}
+                </Table.ColHeader>
+                <Table.ColHeader id="allowed-domain-actions">
                   <ScreenReaderContent>{I18n.t('Actions')}</ScreenReaderContent>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
+                </Table.ColHeader>
+              </Table.Row>
+            </Table.Head>
+            <Table.Body>
               {whitelistToShow.map(domain => (
-                <tr key={domain}>
-                  <td>{domain}</td>
-                  <td style={{textAlign: 'end'}}>
+                <Table.Row key={domain}>
+                  <Table.Cell>{domain}</Table.Cell>
+                  <Table.Cell textAlign="end">
                     <Button
                       ref={c => (this.deleteButtons[domain] = c)}
                       variant="icon"
@@ -248,24 +246,23 @@ export class Whitelist extends Component {
                       disabled={this.props.inherited && this.props.isSubAccount}
                     >
                       <ScreenReaderContent>
-                        {I18n.t('Remove %{domain} from the whitelist', {domain})}
+                        {I18n.t('Remove %{domain} as an allowed domain', {domain})}
                       </ScreenReaderContent>
                     </Button>
-                  </td>
-                </tr>
+                  </Table.Cell>
+                </Table.Row>
               ))}
-            </tbody>
+            </Table.Body>
           </Table>
         )}
         {toolsWhitelistKeys && toolsWhitelistKeys.length > 0 && (
           <View as="div" margin="large 0">
             <Heading level="h4" as="h3">
-              {I18n.t('Whitelisted Tool Domains')}
+              {I18n.t('Associated Tool Domains')}
             </Heading>
             <p>
               {I18n.t(
-                `The following domains have automatically been added to your
-                 whitelist from tools already existing in your account.
+                `The following domains have automatically been allowed from tools that already exist in your account.
                  To remove these domains, remove the associated tools.`
               )}
             </p>
@@ -277,29 +274,29 @@ export class Whitelist extends Component {
             </p>
             <Table
               caption={
-                <ScreenReaderContent>{I18n.t('Whitelisted Tool Domains')}</ScreenReaderContent>
+                <ScreenReaderContent>{I18n.t('Associated Tool Domains')}</ScreenReaderContent>
               }
             >
-              <thead>
-                <tr>
-                  <th scope="col">Domain Name</th>
-                  <th scope="col">Associated Tools</th>
-                </tr>
-              </thead>
-              <tbody>
+              <Table.Head>
+                <Table.Row>
+                  <Table.ColHeader id="whitelisted-tools-domain-name">Domain Name</Table.ColHeader>
+                  <Table.ColHeader id="whitelisted-tools-tools">Associated Tools</Table.ColHeader>
+                </Table.Row>
+              </Table.Head>
+              <Table.Body>
                 {toolsWhitelistKeys.map(domain => (
-                  <tr key={domain}>
-                    <td>{domain}</td>
-                    <td>
+                  <Table.Row key={domain}>
+                    <Table.Cell>{domain}</Table.Cell>
+                    <Table.Cell>
                       <List variant="unstyled">
                         {this.props.whitelistedDomains.tools[domain].map(associatedTool => (
                           <List.Item key={associatedTool.id}>{associatedTool.name}</List.Item>
                         ))}
                       </List>
-                    </td>
-                  </tr>
+                    </Table.Cell>
+                  </Table.Row>
                 ))}
-              </tbody>
+              </Table.Body>
             </Table>
           </View>
         )}

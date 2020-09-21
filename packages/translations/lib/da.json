@@ -32,9 +32,6 @@
     "align_right_9bad3ac1": {
         "message": "Juster til højre"
     },
-    "alignment_and_indentation_f7de34bf": {
-        "message": "Justering og indrykning"
-    },
     "all_4321c3a1": {
         "message": "Alle"
     },
@@ -50,11 +47,11 @@
     "alt_text_611fb322": {
         "message": "Alt-tekst"
     },
+    "an_error_occured_reading_the_file_ff48558b": {
+        "message": "Der opstod en fejl, da filen skulle læses"
+    },
     "an_error_occurred_attempting_to_dismiss_the_opport_f86e0667": {
         "message": "Der opstod en fejl under forsøg på at afvise muligheden."
-    },
-    "an_error_occurred_generating_the_file_preview_cf259955": {
-        "message": "Der opstod en fejl under generering af filforhåndsvisning"
     },
     "an_error_occurred_making_a_network_request_d1bda348": {
         "message": "Der opstod en fejl under oprettelse af en netværksanmodning"
@@ -146,9 +143,6 @@
     "canvas_planner_98ed106": {
         "message": "Canvas-planlægger"
     },
-    "canvas_plugins_705a5016": {
-        "message": "Canvas-plugins"
-    },
     "choose_caption_file_9c45bc4e": {
         "message": "Vælg billedtekstfil"
     },
@@ -160,9 +154,6 @@
     },
     "clear_selected_file_filename_2fe8a58e": {
         "message": "Ryd valgt fil: { filename }"
-    },
-    "click_any_page_to_insert_a_link_to_that_page_ac920c02": {
-        "message": "Klik på en vilkårlig side for at indsætte et link til den pågældende side."
     },
     "click_to_embed_imagename_c41ea8df": {
         "message": "Klik for at integrere { imageName }"
@@ -266,6 +257,9 @@
     "date_time_d9fbf2d7": {
         "message": "Dato og tid"
     },
+    "decorative_image_3c28aa7d": {
+        "message": "Dekorativt billede"
+    },
     "decrease_indent_de6343ab": {
         "message": "Formindsk indrykning"
     },
@@ -293,8 +287,8 @@
     "dimensions_45ddb7b7": {
         "message": "Dimensioner"
     },
-    "directionality_ebcae6d0": {
-        "message": "retningsbestemthed"
+    "directionality_26ae9e08": {
+        "message": "Retningsbestemthed"
     },
     "disable_in_line_preview_2a675175": {
         "message": "Deaktiver in-line forhåndsvisning."
@@ -470,8 +464,14 @@
     "finish_bc343002": {
         "message": "Færdig"
     },
+    "focus_element_options_toolbar_18d993e": {
+        "message": "Værktøjslinje med indstillinger for fokuselement"
+    },
     "folder_tree_fbab0726": {
         "message": "Mappetræ"
+    },
+    "format_4247a9c5": {
+        "message": "Format"
     },
     "formatting_5b143aa8": {
         "message": "Formatering"
@@ -572,20 +572,14 @@
     "late_2be42b88": {
         "message": "Sen"
     },
-    "left_to_right_d6da6d7e": {
-        "message": "venstre til højre"
+    "left_to_right_e9b4fd06": {
+        "message": "Venstre til højre"
     },
     "link_7262adec": {
         "message": "Link"
     },
     "link_options_a16b758b": {
         "message": "Link-muligheder"
-    },
-    "link_to_other_content_in_the_course_879163b5": {
-        "message": "Link til andet indhold i faget."
-    },
-    "link_to_other_content_in_the_group_3fe25379": {
-        "message": "Link til andet indhold i gruppen."
     },
     "links_14b70841": {
         "message": "Links"
@@ -662,9 +656,6 @@
     "mic_a7f3d311": {
         "message": "Mikrofon"
     },
-    "miscellaneous_and_apps_f450a387": {
-        "message": "Diverse og apps"
-    },
     "missing_1a256b3b": {
         "message": "Mangler"
     },
@@ -682,6 +673,9 @@
     },
     "my_grades_98834476": {
         "message": "Mine karakterer"
+    },
+    "my_media_82bade11": {
+        "message": "Mine medier"
     },
     "navigate_through_the_menu_or_toolbar_415a4e50": {
         "message": "Naviger gennem menuen eller værktøjslinjen"
@@ -703,9 +697,6 @@
     },
     "next_page_d2a39853": {
         "message": "Næste side"
-    },
-    "no_alt_text_decorative_image_f318fc0e": {
-        "message": "Ingen alt-tekst (dekorativt billede)"
     },
     "no_due_dates_assigned_e8f5bac8": {
         "message": "Ingen afleveringsdatoer tildelt"
@@ -872,8 +863,8 @@
     "rich_content_editor_2708ef21": {
         "message": "Rich Content Editor"
     },
-    "right_to_left_ec223c81": {
-        "message": "højre til venstre"
+    "right_to_left_9cfb092a": {
+        "message": "Højre mod venstre"
     },
     "save_11a80ec3": {
         "message": "Gem"
@@ -919,6 +910,9 @@
     },
     "size_b30e1077": {
         "message": "Størrelse"
+    },
+    "size_of_file_is_greater_than_the_maximum_max_mb_al_6eb3fa9a": {
+        "message": "Størrelsen på { file } er større end maks. { max } MB tilladte filstørrelse."
     },
     "small_b070434a": {
         "message": "Lille"
@@ -1174,6 +1168,9 @@
     },
     "you_have_media_feedback_f5f9aba8": {
         "message": "Du har mediefeedback."
+    },
+    "you_may_not_upload_an_empty_file_11c31eb2": {
+        "message": "Du må ikke uploade en tom fil."
     },
     "you_must_provide_a_date_and_time_a86839d2": {
         "message": "Du skal angive en dato og klokkeslæt."

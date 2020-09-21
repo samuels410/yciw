@@ -32,9 +32,6 @@
     "align_right_9bad3ac1": {
         "message": "Rechts uitlijnen"
     },
-    "alignment_and_indentation_f7de34bf": {
-        "message": "Uitlijning en inspringing"
-    },
     "all_4321c3a1": {
         "message": "Alle"
     },
@@ -50,11 +47,11 @@
     "alt_text_611fb322": {
         "message": "Alt tekst"
     },
+    "an_error_occured_reading_the_file_ff48558b": {
+        "message": "Er is een fout opgetreden bij het lezen van het bestand"
+    },
     "an_error_occurred_attempting_to_dismiss_the_opport_f86e0667": {
         "message": "Er is een fout opgetreden bij het afwijzen van de mogelijkheid."
-    },
-    "an_error_occurred_generating_the_file_preview_cf259955": {
-        "message": "Er is een fout opgetreden tijdens het genereren van het bestandsvoorbeeld"
     },
     "an_error_occurred_making_a_network_request_d1bda348": {
         "message": "Er is een fout opgetreden bij het maken van een netwerkaanvraag"
@@ -146,9 +143,6 @@
     "canvas_planner_98ed106": {
         "message": "Canvas planner"
     },
-    "canvas_plugins_705a5016": {
-        "message": "Canvas-invoegtoepassingen"
-    },
     "choose_caption_file_9c45bc4e": {
         "message": "Ondertitelingsbestand kiezen"
     },
@@ -160,9 +154,6 @@
     },
     "clear_selected_file_filename_2fe8a58e": {
         "message": "Verwijder geselecteerd bestand: { filename }"
-    },
-    "click_any_page_to_insert_a_link_to_that_page_ac920c02": {
-        "message": "Klik op een pagina om een link op die pagina in te voegen."
     },
     "click_to_embed_imagename_c41ea8df": {
         "message": "Klikken om { imageName } in te sluiten"
@@ -266,6 +257,9 @@
     "date_time_d9fbf2d7": {
         "message": "Datum en tijd:"
     },
+    "decorative_image_3c28aa7d": {
+        "message": "Decoratieve afbeelding"
+    },
     "decrease_indent_de6343ab": {
         "message": "Inspringen verkleinen"
     },
@@ -293,7 +287,7 @@
     "dimensions_45ddb7b7": {
         "message": "Afmetingen"
     },
-    "directionality_ebcae6d0": {
+    "directionality_26ae9e08": {
         "message": "richting"
     },
     "disable_in_line_preview_2a675175": {
@@ -470,8 +464,14 @@
     "finish_bc343002": {
         "message": "Voltooien"
     },
+    "focus_element_options_toolbar_18d993e": {
+        "message": "Werkbalk met focus-elementopties"
+    },
     "folder_tree_fbab0726": {
         "message": "Mappenstructuur"
+    },
+    "format_4247a9c5": {
+        "message": "Formaat"
     },
     "formatting_5b143aa8": {
         "message": "Opmaak"
@@ -572,20 +572,14 @@
     "late_2be42b88": {
         "message": "Te laat"
     },
-    "left_to_right_d6da6d7e": {
-        "message": "links naar rechts"
+    "left_to_right_e9b4fd06": {
+        "message": "Links-rechts"
     },
     "link_7262adec": {
         "message": "Link"
     },
     "link_options_a16b758b": {
         "message": "Linkopties"
-    },
-    "link_to_other_content_in_the_course_879163b5": {
-        "message": "Koppeling naar andere inhoud in de cursus."
-    },
-    "link_to_other_content_in_the_group_3fe25379": {
-        "message": "Link naar andere inhoud in de groep."
     },
     "links_14b70841": {
         "message": "Koppelingen"
@@ -662,9 +656,6 @@
     "mic_a7f3d311": {
         "message": "Mic"
     },
-    "miscellaneous_and_apps_f450a387": {
-        "message": "Diversen en apps"
-    },
     "missing_1a256b3b": {
         "message": "Ontbrekend"
     },
@@ -682,6 +673,9 @@
     },
     "my_grades_98834476": {
         "message": "Mijn cijfers"
+    },
+    "my_media_82bade11": {
+        "message": "Mijn media"
     },
     "navigate_through_the_menu_or_toolbar_415a4e50": {
         "message": "Navigeer door het menu of de werkbalk"
@@ -703,9 +697,6 @@
     },
     "next_page_d2a39853": {
         "message": "Volgende pagina"
-    },
-    "no_alt_text_decorative_image_f318fc0e": {
-        "message": "Geen Alt-tekst (decoratieve afbeelding)"
     },
     "no_due_dates_assigned_e8f5bac8": {
         "message": "Geen inleverdatums toegewezen"
@@ -872,8 +863,8 @@
     "rich_content_editor_2708ef21": {
         "message": "Rich Content Editor"
     },
-    "right_to_left_ec223c81": {
-        "message": "rechts naar links"
+    "right_to_left_9cfb092a": {
+        "message": "Rechts-links"
     },
     "save_11a80ec3": {
         "message": "Opslaan"
@@ -919,6 +910,9 @@
     },
     "size_b30e1077": {
         "message": "Grootte"
+    },
+    "size_of_file_is_greater_than_the_maximum_max_mb_al_6eb3fa9a": {
+        "message": "{ file } is groter dan de maximaal toegestane bestandsgrootte van { max } MB."
     },
     "small_b070434a": {
         "message": "Klein"
@@ -1174,6 +1168,9 @@
     },
     "you_have_media_feedback_f5f9aba8": {
         "message": "Er is feedback via media."
+    },
+    "you_may_not_upload_an_empty_file_11c31eb2": {
+        "message": "Je kunt geen leeg bestand uploaden."
     },
     "you_must_provide_a_date_and_time_a86839d2": {
         "message": "Je moet een datum en tijd opgeven."

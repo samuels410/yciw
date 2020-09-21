@@ -66,7 +66,7 @@ describe "/users/name" do
     before :once do
       course_with_teacher :active_all => true
       student_in_course :active_all => true
-      @student.communication_channels.create!(:path_type => 'email', :path => 'secret@example.com').confirm!
+      communication_channel(@student, {username: 'secret@example.com', active_cc: true})
     end
 
     it "includes email address for teachers by default" do
@@ -79,7 +79,7 @@ describe "/users/name" do
 
     it "does not include it if the permission is denied" do
       RoleOverride.create!(:context => Account.default, :permission => 'read_email_addresses',
-                     :role => Role.get_built_in_role('TeacherEnrollment'), :enabled => false)
+                     :role => teacher_role, :enabled => false)
       view_context(@course, @teacher)
       assign(:user, @student)
       assign(:enrollments, [])

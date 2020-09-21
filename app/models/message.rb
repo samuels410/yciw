@@ -46,7 +46,7 @@ class Message < ActiveRecord::Base
 
     delegate :deliver, :dispatch_at, :to => :message
     def message
-      @message ||= Message.where(:id => @id, :created_at => @created_at).first || Message.where(:id => @id).first
+      @message ||= Message.in_partition('id' => id, 'created_at' => @created_at).where(:id => @id, :created_at => @created_at).first || Message.where(:id => @id).first
     end
   end
 
@@ -179,7 +179,7 @@ class Message < ActiveRecord::Base
     self.shard.activate do
       self.updated_at = Time.now.utc
       updates = Hash[self.changes_to_save.map{|k, v| [k, v.last]}]
-      self.class.where(:id => self.id, :created_at => self.created_at).update_all(updates)
+      self.class.in_partition(attributes).where(:id => self.id, :created_at => self.created_at).update_all(updates)
       self.clear_changes_information
     end
   end
@@ -217,6 +217,29 @@ class Message < ActiveRecord::Base
   scope :in_state, lambda { |state| where(:workflow_state => Array(state).map(&:to_s)) }
 
   scope :at_timestamp, lambda { |timestamp| where("created_at >= ? AND created_at < ?", Time.at(timestamp.to_i), Time.at(timestamp.to_i + 1)) }
+
+  # an optimization for queries that would otherwise target the main table to
+  # make them target the specific partition table. Naturally this only works if
+  # the records all reside within the same partition!!!
+  #
+  # for example, this takes us from:
+  #
+  #     Message.where(id: 3)
+  #     => SELECT "messages".* FROM "messages" WHERE "messages"."id" = 3
+  # to:
+  #
+  #     Message.in_partition(Message.last.attributes).where(id: 3)
+  #     => SELECT "messages_2020_35".* FROM "messages_2020_35" WHERE "messages_2020_35"."id" = 3
+  #
+  scope :in_partition, lambda { |attrs|
+    dup.instance_eval do
+      tap do
+        @table = klass.arel_table_from_key_values(attrs)
+        @predicate_builder = predicate_builder.dup
+        @predicate_builder.instance_variable_set('@table', ActiveRecord::TableMetadata.new(klass, @table))
+      end
+    end
+  }
 
   #Public: Helper methods for grabbing a user via the "from" field and using it to
   #populate the avatar, name, and email in the conversation email notification
@@ -363,6 +386,7 @@ class Message < ActiveRecord::Base
   #
   # Returns nothing.
   def stage_without_dispatch!
+    return if state == :bounced
     self.dispatch_at = Time.now.utc + self.delay_for
     self.workflow_state = 'staged'
   end
@@ -638,9 +662,14 @@ class Message < ActiveRecord::Base
   def enqueue_to_sqs
     targets = notification_targets
     if targets.empty?
+      # Log no_targets_specified error to DataDog
+      InstStatsd::Statsd.increment("message.no_targets_specified",
+                                   short_stat: 'message.no_targets_specified',
+                                   tags: {path_type: path_type})
+
       self.transmission_errors = "No notification targets specified"
       self.set_transmission_error
-    else
+  else
       targets.each do |target|
         Services::NotificationService.process(
           notification_service_id,
@@ -931,7 +960,7 @@ class Message < ActiveRecord::Base
   def deliver_via_sms
     if to =~ /^\+[0-9]+$/
       begin
-        unless Account.site_admin.feature_enabled?(:international_sms)
+        unless user.account.feature_enabled?(:international_sms)
           raise "International SMS is currently disabled for this user's account"
         end
         if Canvas::Twilio.enabled?

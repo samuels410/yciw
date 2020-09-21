@@ -20,7 +20,8 @@ import React, {Component} from 'react'
 import I18n from 'i18n!security_panel'
 import {connect} from 'react-redux'
 import {bool, oneOf, string, func, number, arrayOf, element} from 'prop-types'
-import {Heading, Text, Spinner} from '@instructure/ui-elements'
+import {Heading, Text} from '@instructure/ui-elements'
+import {Spinner} from '@instructure/ui-spinner'
 import {View, Grid} from '@instructure/ui-layout'
 import {Checkbox} from '@instructure/ui-forms'
 import {
@@ -81,7 +82,7 @@ export class SecurityPanel extends Component {
             {I18n.t(
               `The Content Security Policy allows you to restrict custom
                JavaScript that runs in your instance of Canvas. You can manually add
-               up to %{max_domains} domains to your whitelist. Wild cards are recommended
+               up to %{max_domains} allowed domains. Wild cards are recommended
                (e.g. *.instructure.com). Canvas and Instructure domains are included
                automatically and do not count against your 50 domain limit.`,
               {

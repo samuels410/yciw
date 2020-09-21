@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -x -o errexit -o errtrace -o nounset -o pipefail
+set -o errexit -o errtrace -o nounset -o pipefail -o xtrace
 
 GIT_SSH_COMMAND='ssh -i "$SSH_KEY_PATH" -l "$SSH_USERNAME"' \
     git fetch --no-tags origin "$GERRIT_BRANCH":"$GERRIT_BRANCH"
@@ -31,7 +31,7 @@ export GERGICH_REVIEW_LABEL="Lint-Review"
 # when parent is not in \$GERRIT_BRANCH (i.e. master)
 if ! git merge-base --is-ancestor HEAD~1 \$GERRIT_BRANCH; then
   message="This commit is built upon commits not currently merged in \$GERRIT_BRANCH. Ensure that your dependent patchsets are merged first!\\n"
-  gergich comment "{\"path\":\"/COMMIT_MSG\",\"position\":1,\"severity\":\"error\",\"message\":\"\$message\"}"
+  gergich comment "{\"path\":\"/COMMIT_MSG\",\"position\":1,\"severity\":\"warn\",\"message\":\"\$message\"}"
 fi
 
 # we need to remove the hooks because compile_assets calls yarn install which will

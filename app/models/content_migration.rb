@@ -36,7 +36,6 @@ class ContentMigration < ActiveRecord::Base
   after_save :handle_import_in_progress_notice
   after_save :check_for_blocked_migration
   before_create :set_root_account_id
-  attr_accessor :skip_root_account_assignment
 
   DATE_FORMAT = "%m/%d/%Y"
 
@@ -120,7 +119,7 @@ class ContentMigration < ActiveRecord::Base
   end
 
   def content_export
-    if !association(:content_export).loaded? && source_course_id && Shard.shard_for(source_course_id) != self.shard
+    if self.persisted? && !association(:content_export).loaded? && source_course_id && Shard.shard_for(source_course_id) != self.shard
       association(:content_export).target = Shard.shard_for(source_course_id).activate { ContentExport.where(:content_migration_id => self).first }
     end
     super
@@ -337,7 +336,7 @@ class ContentMigration < ActiveRecord::Base
     if self.job_progress
       p = self.job_progress
     else
-      p = Progress.new(:context => self, :tag => "content_migration")
+      p = self.shard.activate { Progress.new(:context => self, :tag => "content_migration") }
       self.job_progress = p
     end
     p.workflow_state = wf_state
@@ -538,9 +537,10 @@ class ContentMigration < ActiveRecord::Base
             end
           end
         end
+        # sync the existing folders first in case someone did something weird like deleted and replaced a folder in the same sync
+        MasterCourses::FolderHelper.update_folder_names_and_states(self.context, source_export)
         self.context.copy_attachments_from_course(source_export.context, :content_export => source_export, :content_migration => self)
         MasterCourses::FolderHelper.recalculate_locked_folders(self.context)
-        MasterCourses::FolderHelper.update_folder_names_and_states(self.context, source_export)
 
         data = JSON.parse(self.exported_attachment.open, :max_nesting => 50)
         data = prepare_data(data)
@@ -563,11 +563,11 @@ class ContentMigration < ActiveRecord::Base
       end
 
       migration_settings[:migration_ids_to_import] ||= {:copy=>{}}
-      if self.for_master_course_import?
-        process_master_deletions(data['deletions']) if data['deletions'].present?
-      end
+      deletions = self.for_master_course_import? && data['deletions'].presence
+      process_master_deletions(deletions.except('AssignmentGroup')) if deletions # wait until after the import to do AssignmentGroups
       import!(data)
 
+      process_master_deletions(deletions.slice('AssignmentGroup')) if deletions
       if !self.import_immediately?
         update_import_progress(100)
       end
@@ -984,13 +984,15 @@ class ContentMigration < ActiveRecord::Base
   end
 
   def set_root_account_id
-    return if skip_root_account_assignment
     case self.context
     when Course, Group
-      self.root_account_id = self.context.root_account_id
+      self.root_account_id ||= self.context.root_account_id
     when Account
-      self.root_account_id = self.context.resolved_root_account_id
+      self.root_account_id ||= self.context.resolved_root_account_id
+    when User
+      self.root_account_id ||= 0
     end
+    Account.ensure_dummy_root_account if root_account_id == 0
   end
 
   def notification_link_anchor

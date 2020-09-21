@@ -178,9 +178,18 @@ export default class CourseItemRow extends Component {
 
     return (
       <a className="ic-item-row__content-link" ref={refFn} href={this.props.itemUrl}>
-        <div className="ic-item-row__content-link-container">{component}</div>
+        <div
+          className="ic-item-row__content-link-container"
+          data-testId="single-announcement-test-id"
+        >
+          {component}
+        </div>
       </a>
     )
+  }
+
+  renderDiv(component) {
+    return <div className="ic-item-row__content-container">{component}</div>
   }
 
   render() {
@@ -223,6 +232,7 @@ export default class CourseItemRow extends Component {
             <div className="ic-item-row__author-col">
               <Avatar
                 size="small"
+                alt={this.props.author.display_name || I18n.t('Unknown')}
                 name={this.props.author.display_name || I18n.t('Unknown')}
                 src={this.props.author.avatar_image_url}
                 data-fs-exclude
@@ -240,7 +250,7 @@ export default class CourseItemRow extends Component {
               '_titleElement'
             )}
             {this.props.sectionToolTip}
-            {this.props.body ? this.renderClickableDiv(this.props.body) : null}
+            {this.props.body ? this.renderDiv(this.props.body) : null}
             {this.props.replyButton ? this.renderClickableDiv(this.props.replyButton) : null}
           </div>
           <div className="ic-item-row__meta-col">

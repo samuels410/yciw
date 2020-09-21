@@ -21,6 +21,7 @@ import bridge from '../../../bridge'
 import formatMessage from '../../../format-message'
 import TrayController from './VideoOptionsTray/TrayController'
 import {isVideoElement} from '../shared/ContentSelection'
+import {isOKToLink} from '../../contentInsertionUtils'
 
 const trayController = new TrayController()
 
@@ -33,7 +34,7 @@ tinymce.create('tinymce.plugins.InstructureRecord', {
 
     ed.addCommand('instructureRecord', clickCallback.bind(this, ed, document))
     ed.addCommand('instructureTrayForMedia', (ui, plugin_key) => {
-      bridge.showTrayForPlugin(plugin_key)
+      bridge.showTrayForPlugin(plugin_key, ed.id)
     })
 
     // Register menu items
@@ -104,6 +105,15 @@ tinymce.create('tinymce.plugins.InstructureRecord', {
         }
 
         callback(items)
+      },
+      onSetup(api) {
+        function handleNodeChange(_e) {
+          api.setDisabled(!isOKToLink(ed.selection.getContent()))
+        }
+        ed.on('NodeChange', handleNodeChange)
+        return () => {
+          ed.off('NodeChange', handleNodeChange)
+        }
       }
     })
 
@@ -118,7 +128,7 @@ tinymce.create('tinymce.plugins.InstructureRecord', {
         trayController.showTrayForEditor(ed)
       },
 
-      text: formatMessage('Options'),
+      text: formatMessage('Video Options'),
       tooltip: buttonAriaLabel
     })
 

@@ -15,16 +15,18 @@
  * You should have received a copy of the GNU Affero General Public License along
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-import React, {useState} from 'react'
+import React, {useEffect, useState} from 'react'
 import {bool, func, object, oneOf, shape, string} from 'prop-types'
 import {Button, CloseButton} from '@instructure/ui-buttons'
 
-import {Heading} from '@instructure/ui-elements'
+import {Alert} from '@instructure/ui-alerts'
+import {Heading} from '@instructure/ui-heading'
 import {FormFieldGroup} from '@instructure/ui-form-field'
 import {Checkbox} from '@instructure/ui-forms'
 import {TextInput} from '@instructure/ui-text-input'
 import {Flex} from '@instructure/ui-layout'
 import {Tray} from '@instructure/ui-overlays'
+import validateURL from '../../validateURL'
 import formatMessage from '../../../../../format-message'
 import {
   DISPLAY_AS_LINK,
@@ -34,14 +36,27 @@ import {
 
 export default function LinkOptionsTray(props) {
   const content = props.content || {}
-  const textToLink =
-    (content.$element?.tagName === 'A' ? content.$element?.textContent : content.text) || ''
+  const textToLink = content.text || ''
+  const showText = content.onlyTextSelected
   const [text, setText] = useState(textToLink || '')
   const [url, setUrl] = useState(content.url || '')
+  const [err, setErr] = useState(null)
+  const [isValidURL, setIsValidURL] = useState(false)
   const [autoOpenPreview, setAutoOpenPreview] = useState(content.displayAs === DISPLAY_AS_EMBED)
   const [disablePreview, setDisablePreview] = useState(
     content.displayAs === DISPLAY_AS_EMBED_DISABLED
   )
+
+  useEffect(() => {
+    try {
+      const v = validateURL(url)
+      setIsValidURL(v)
+      setErr(null)
+    } catch (ex) {
+      setIsValidURL(false)
+      setErr(ex.message)
+    }
+  }, [url])
 
   function handleSave(event) {
     event.preventDefault()
@@ -109,13 +124,15 @@ export default function LinkOptionsTray(props) {
             <Flex.Item grow padding="small" shrink>
               <input type="submit" style={{display: 'none'}} />
               <Flex direction="column">
-                <Flex.Item padding="small">
-                  <TextInput
-                    renderLabel={() => formatMessage('Text')}
-                    onChange={handleTextChange}
-                    value={text}
-                  />
-                </Flex.Item>
+                {showText && (
+                  <Flex.Item padding="small">
+                    <TextInput
+                      renderLabel={() => formatMessage('Text')}
+                      onChange={handleTextChange}
+                      value={text}
+                    />
+                  </Flex.Item>
+                )}
 
                 <Flex.Item padding="small">
                   <TextInput
@@ -124,6 +141,11 @@ export default function LinkOptionsTray(props) {
                     value={url}
                   />
                 </Flex.Item>
+                {err && (
+                  <Flex.Item padding="small" data-testid="url-error">
+                    <Alert variant="error">{err}</Alert>
+                  </Flex.Item>
+                )}
 
                 {content.isPreviewable && (
                   <Flex.Item margin="small none none none" padding="small">
@@ -156,7 +178,11 @@ export default function LinkOptionsTray(props) {
               padding="small medium"
               textAlign="end"
             >
-              <Button disabled={!text || !url} onClick={handleSave} variant="primary">
+              <Button
+                disabled={(showText && !text) || !(url && isValidURL)}
+                onClick={handleSave}
+                variant="primary"
+              >
                 {formatMessage('Done')}
               </Button>
             </Flex.Item>

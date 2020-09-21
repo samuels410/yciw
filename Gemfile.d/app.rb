@@ -74,13 +74,13 @@ gem 'inst_statsd', '2.1.6'
   gem 'statsd-ruby', '1.4.0', require: false
   gem 'aroi', '0.0.7', require: false
   gem 'dogstatsd-ruby', '4.7.0'
-gem 'inst-jobs', '0.15.21'
+gem 'inst-jobs', '0.15.22'
   gem 'fugit', '1.3.3', require: false
     gem 'et-orbi', '1.2.2', require: false
 gem 'inst-jobs-autoscaling', '1.0.5'
   gem 'aws-sdk-autoscaling', '1.32.0', require: false
 gem 'inst-jobs-statsd', '1.4.0'
-gem 'json', '2.3.0'
+gem 'json', '2.3.1'
 gem 'json_schemer', '0.2.10'
 gem 'json-jwt', '1.11.0', require: false
 gem 'link_header', '0.0.8'
@@ -98,12 +98,11 @@ gem 'oj', '3.10.5'
 gem 'parallel', '1.19.1', require: false
   gem 'ruby-progressbar', '1.10.1', require: false # used to show progress of S3Uploader
 gem 'prawn-rails', '1.3.0'
-gem 'rack', '2.2.2'
+gem 'rack', '2.2.3'
 gem 'rack-test', '1.1.0'
 gem 'rake', '13.0.1'
 gem 'rails-observers', '0.1.5'
 gem 'ratom-nokogiri', '0.10.8', require: false
-gem 'rdiscount', '2.2.0.1', require: false
 gem 'redcarpet', '3.5.0', require: false
 gem 'retriable', '1.4.1'
 gem 'ritex', '1.0.1', require: false
@@ -112,16 +111,16 @@ gem 'ruby-duration', '3.2.3', require: false
 gem 'rubycas-client', '2.3.9', require: false
 gem 'rubyzip', '2.2.0', require: 'zip'
 gem 'safe_yaml', '1.0.5', require: false
-gem 'saml2', '3.0.8'
+gem 'saml2', '3.0.9'
   gem 'nokogiri-xmlsec-instructure', '0.9.6', require: false
 gem 'sanitize', '2.1.1', require: false
 gem 'sentry-raven', '2.13.0', require: false
 gem 'shackles', '1.4.2'
 gem 'simple_oauth', '0.3.1', require: false
-gem 'switchman', '1.15.1'
+gem 'switchman', '1.15.2'
   gem 'open4', '1.3.4', require: false
 gem 'switchman-inst-jobs', '1.4.2'
-gem 'twilio-ruby', '5.31.1', require: false
+gem 'twilio-ruby', '5.36.0', require: false
 gem 'tzinfo', '1.2.5'
 gem 'vault', '0.13.0', require: false
 gem 'vericite_api', '1.5.3'
@@ -153,7 +152,6 @@ path 'gems' do
   gem 'canvas_text_helper'
   gem 'canvas_time'
   gem 'canvas_unzip'
-  gem 'csv_diff'
   gem 'diigo'
   gem 'event_stream'
   gem 'google_drive'
@@ -171,3 +169,6 @@ path 'gems' do
   gem 'utf8_cleaner'
   gem 'workflow'
 end
+
+gem 'csv_diff', path: 'gems'
+  gem 'sqlite3', '1.4.2'

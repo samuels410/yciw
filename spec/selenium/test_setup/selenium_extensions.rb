@@ -16,16 +16,47 @@
 # with this program. If not, see <http://www.gnu.org/licenses/>.
 
 require_relative "../../support/call_stack_utils"
+require_relative 'selenium_driver_setup'
 
 module SeleniumExtensions
   class Error < ::RuntimeError; end
   class NestedWaitError < Error; end
 
+  module ElementNotInteractableProtection
+    include SeleniumDriverSetup
+
+    def click(*args)
+      to_fail = false
+
+      begin
+        super
+      rescue Selenium::WebDriver::Error::ElementNotInteractableError => e
+        raise e if to_fail
+
+        to_fail = true
+
+        begin
+          Selenium::WebDriver::Wait.new(timeout: 2).until do
+            displayed? && enabled?
+          end
+          # https://bugs.chromium.org/p/chromedriver/issues/detail?id=3504
+          # bug in chrome, not scrolling to elements before attempting click. This will scroll to element
+          # then retry the click.
+          driver.action.move_to(self).perform
+        rescue
+          raise e
+        end
+
+        retry
+      end
+    end
+  end
+
   module StaleElementProtection
     attr_accessor :finder_proc
 
     (
-      Selenium::WebDriver::Element.instance_methods(false) +
+    Selenium::WebDriver::Element.instance_methods(false) +
       Selenium::WebDriver::SearchContext.instance_methods -
       %i[
         initialize
@@ -60,7 +91,7 @@ module SeleniumExtensions
     attr_accessor :ready_for_interaction
 
     (
-      Selenium::WebDriver::Driver.instance_methods(false) +
+    Selenium::WebDriver::Driver.instance_methods(false) +
       Selenium::WebDriver::SearchContext.instance_methods -
       %i[
         initialize
@@ -151,9 +182,17 @@ module SeleniumExtensions
     def reload!
       replace @finder_proc.call
     end
+
+    def with_stale_element_protection
+      yield(self)
+    rescue Selenium::WebDriver::Error::StaleElementReferenceError
+      reload!
+      retry
+    end
   end
 end
 
+Selenium::WebDriver::Element.prepend(SeleniumExtensions::ElementNotInteractableProtection)
 Selenium::WebDriver::Element.prepend(SeleniumExtensions::StaleElementProtection)
 Selenium::WebDriver::Element.prepend(SeleniumExtensions::FinderWaiting)
 Selenium::WebDriver::Driver.prepend(SeleniumExtensions::PreventEarlyInteraction)

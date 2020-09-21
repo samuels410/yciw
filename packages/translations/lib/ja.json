@@ -32,9 +32,6 @@
     "align_right_9bad3ac1": {
         "message": "右揃え"
     },
-    "alignment_and_indentation_f7de34bf": {
-        "message": "調節と書き出し"
-    },
     "all_4321c3a1": {
         "message": "すべて"
     },
@@ -50,11 +47,11 @@
     "alt_text_611fb322": {
         "message": "Alt テキスト"
     },
+    "an_error_occured_reading_the_file_ff48558b": {
+        "message": "ファイルを読み取る際にエラーが発生しました"
+    },
     "an_error_occurred_attempting_to_dismiss_the_opport_f86e0667": {
         "message": "案件を却下しようとした際にエラーが発生しました。"
-    },
-    "an_error_occurred_generating_the_file_preview_cf259955": {
-        "message": "ファイルプレビューの作成中にエラーが発生しました"
     },
     "an_error_occurred_making_a_network_request_d1bda348": {
         "message": "ネットワーク要求の作成中にエラーが発生しました"
@@ -146,9 +143,6 @@
     "canvas_planner_98ed106": {
         "message": "Canvas プランナー"
     },
-    "canvas_plugins_705a5016": {
-        "message": "Canvas プラグイン"
-    },
     "choose_caption_file_9c45bc4e": {
         "message": "キャプションファイルを選択する"
     },
@@ -160,9 +154,6 @@
     },
     "clear_selected_file_filename_2fe8a58e": {
         "message": "選択されたファイルを削除：{ filename }"
-    },
-    "click_any_page_to_insert_a_link_to_that_page_ac920c02": {
-        "message": "ページをクリックして、そのページにリンクを挿入します。"
     },
     "click_to_embed_imagename_c41ea8df": {
         "message": "クリックして{ imageName }を埋め込みます"
@@ -266,6 +257,9 @@
     "date_time_d9fbf2d7": {
         "message": "日付 & 時間:"
     },
+    "decorative_image_3c28aa7d": {
+        "message": "装飾的なイメージ"
+    },
     "decrease_indent_de6343ab": {
         "message": "インデントを戻す"
     },
@@ -293,8 +287,8 @@
     "dimensions_45ddb7b7": {
         "message": "寸法"
     },
-    "directionality_ebcae6d0": {
-        "message": "方向"
+    "directionality_26ae9e08": {
+        "message": "方向性"
     },
     "disable_in_line_preview_2a675175": {
         "message": "インラインプレビューを無効にします。"
@@ -470,8 +464,14 @@
     "finish_bc343002": {
         "message": "フィニッシュ"
     },
+    "focus_element_options_toolbar_18d993e": {
+        "message": "フォーカス要素オプションツールバー"
+    },
     "folder_tree_fbab0726": {
         "message": "フォルダツリー"
+    },
+    "format_4247a9c5": {
+        "message": "形式"
     },
     "formatting_5b143aa8": {
         "message": "フォーマット"
@@ -572,7 +572,7 @@
     "late_2be42b88": {
         "message": "遅れている"
     },
-    "left_to_right_d6da6d7e": {
+    "left_to_right_e9b4fd06": {
         "message": "左から右"
     },
     "link_7262adec": {
@@ -580,12 +580,6 @@
     },
     "link_options_a16b758b": {
         "message": "リンクオプション"
-    },
-    "link_to_other_content_in_the_course_879163b5": {
-        "message": "コース内の他のコンテンツにリンクします。"
-    },
-    "link_to_other_content_in_the_group_3fe25379": {
-        "message": "グループ内の他のコンテンツにリンクします。"
     },
     "links_14b70841": {
         "message": "リンク"
@@ -662,9 +656,6 @@
     "mic_a7f3d311": {
         "message": "マイク"
     },
-    "miscellaneous_and_apps_f450a387": {
-        "message": "その他とアプリ"
-    },
     "missing_1a256b3b": {
         "message": "欠如"
     },
@@ -682,6 +673,9 @@
     },
     "my_grades_98834476": {
         "message": "私の成績"
+    },
+    "my_media_82bade11": {
+        "message": "マイメディア"
     },
     "navigate_through_the_menu_or_toolbar_415a4e50": {
         "message": "メニューまたはツールバーを移動する"
@@ -703,9 +697,6 @@
     },
     "next_page_d2a39853": {
         "message": "次のページ"
-    },
-    "no_alt_text_decorative_image_f318fc0e": {
-        "message": "別のテキストはありません (装飾画像)"
     },
     "no_due_dates_assigned_e8f5bac8": {
         "message": "期日指定なし"
@@ -872,7 +863,7 @@
     "rich_content_editor_2708ef21": {
         "message": "リッチ コンテンツ エディタ"
     },
-    "right_to_left_ec223c81": {
+    "right_to_left_9cfb092a": {
         "message": "右から左"
     },
     "save_11a80ec3": {
@@ -919,6 +910,9 @@
     },
     "size_b30e1077": {
         "message": "サイズ"
+    },
+    "size_of_file_is_greater_than_the_maximum_max_mb_al_6eb3fa9a": {
+        "message": "{ file } のサイズが、最大許容ファイルサイズ { max } MB を超えています。"
     },
     "small_b070434a": {
         "message": "小"
@@ -1174,6 +1168,9 @@
     },
     "you_have_media_feedback_f5f9aba8": {
         "message": "メディアフィードバックがあります。"
+    },
+    "you_may_not_upload_an_empty_file_11c31eb2": {
+        "message": "空のファイルをアップロードすることはできません。"
     },
     "you_must_provide_a_date_and_time_a86839d2": {
         "message": "日時を指定する必要があります。"

@@ -57,7 +57,7 @@ def publishSpecCoverageToS3(prefix, ci_node_total, coverage_type) {
   sh "mv coverage ${prefix}_coverage"
   archiveArtifacts(artifacts: "${prefix}_coverage_nodes/**")
   archiveArtifacts(artifacts: "${prefix}_coverage/**")
-  
+
   cleanupCoverage(prefix)
 }
 
@@ -85,13 +85,13 @@ def sendFailureMessageIfPresent() {
       echo "build not associated with a PS... not sending message"
     }
     else {
-      load('build/new-jenkins/groovy/credentials.groovy').withGerritCredentials({
+      credentials.withGerritCredentials {
         sh """
           gerrit_message=`cat $message_file`
           ssh -i "\$SSH_KEY_PATH" -l "\$SSH_USERNAME" -p \$GERRIT_PORT \
             \$GERRIT_HOST gerrit review -m "'\$gerrit_message'" \$GERRIT_CHANGE_NUMBER,\$GERRIT_PATCHSET_NUMBER
         """
-      })
+      }
     }
   }
   else {
@@ -104,6 +104,18 @@ def sendFailureMessageIfPresent() {
 def stashSpecFailures(prefix, index) {
   dir("tmp") {
     stash name: "${prefix}_spec_failures_${index}", includes: 'spec_failures/**/*', allowEmpty: true
+  }
+}
+
+def stashSpecResults(prefix, index) {
+  dir("tmp") {
+    stash name: "${prefix}_spec_results_${index}", includes: 'rspec_results/**/*', allowEmpty: true
+  }
+}
+
+def stashParallelLogs(prefix, index) {
+  dir("tmp") {
+    stash name: "${prefix}_spec_parallel_${index}", includes: 'parallel_runtime_rspec_tests/**/*.log'
   }
 }
 
@@ -129,7 +141,6 @@ def publishSpecFailuresAsHTML(prefix, ci_node_total, report_title) {
     buildIndexPage(failureCategories)
     htmlFiles = findFiles glob: '**/index.html'
   }
-  uploadSplunkFailures(failureCategories)
 
   def report_name = "spec-failure-$prefix"
   def report_url = "${BUILD_URL}${report_name}"
@@ -151,7 +162,9 @@ def buildFailureCategories(htmlFiles) {
   Map<String, List<String>> failureCategories = [:]
   if (htmlFiles.size() > 0) {
     htmlFiles.each { file ->
-      def category = file.getPath().split("/")[3]
+      // node_18/spec_failures/canvas__9224fba6fc34/spec_failures/Initial/spec/selenium/force_failure_spec.rb:20/index
+      // split on the 5th to give us the rerun category (Initial, Rerun_1, Rerun_2...)
+      def category = file.getPath().split("/")[4]
       if (!failureCategories.containsKey(category)) {
         failureCategories[category] = []
       }
@@ -178,18 +191,6 @@ def buildIndexPage(failureCategories) {
   writeFile file: "index.html", text: indexHtml
 }
 
-def uploadSplunkFailures(failureCategories) {
-  def splunk = load 'build/new-jenkins/groovy/splunk.groovy'
-  def splunkFailureEvents = []
-  failureCategories.each {category, failures ->
-    failures.each { failure ->
-      def spec = (failure =~ /.*spec_failures\/(.*)\/index/)[0][1]
-      splunkFailureEvents.add(splunk.eventForTestFailure(spec, category))
-    }
-  }
-  splunk.upload(splunkFailureEvents)
-}
-
 def snykCheckDependencies(projectImage, projectDirectory) {
   def projectContainer = sh(script: "docker run -d -it -v snyk_volume:${projectDirectory} ${projectImage}", returnStdout: true).trim()
   runSnyk(
@@ -205,8 +206,7 @@ def snykCheckDependencies(projectImage, projectDirectory) {
 }
 
 def runSnyk(projectContainer, projectDirectory, projectName, snykImage, packageManagerFile, extractedReportsDirectory) {
-  def credentials = load 'build/new-jenkins/groovy/credentials.groovy'
-  credentials.withSnykCredentials({ ->
+  credentials.withSnykCredentials {
     def RC = sh(
       script: """
         set -o errexit -o nounset -o xtrace
@@ -225,7 +225,7 @@ def runSnyk(projectContainer, projectDirectory, projectName, snykImage, packageM
     if(RC != 0 && RC != 1) {
       error "Snyk dependency check for ${projectName} failed with an unrecognized return code: $RC"
     }
-  })
+  }
   this.extractSnykReports(projectContainer, projectDirectory, extractedReportsDirectory)
 }
 
@@ -238,6 +238,48 @@ def extractSnykReports(projectContainer, projectDirectory, destinationDirectory)
     docker cp ${projectContainer}:${projectDirectory}/snyk_report.css ${destinationDirectory}/snyk_report.css
     docker cp ${projectContainer}:${projectDirectory}/snyk_report.html ${destinationDirectory}/snyk_report.html
   """
+}
+
+def publishJunitReport(prefix, total) {
+  def working_dir = "${prefix}_compiled_results"
+  dir("spec_results") {
+    sh "mkdir $working_dir"
+    dir("${working_dir}") {
+      for(int index = 0; index < total; index++) {
+        dir ("node_${index}") {
+          try {
+            unstash "${prefix}_spec_results_${index}"
+          } catch(err) {
+            println (err)
+          }
+        }
+      }
+    }
+  }
+}
+
+def copyParallelLogs(rspecTotal, seleniumTotal) {
+  dir('parallel_logs') {
+    for(int index = 0; index < rspecTotal; index++) {
+      dir("rspec_node_${index}") {
+        try {
+          unstash "rspec_spec_parallel_${index}"
+        } catch(err) {
+          println (err)
+        }
+      }
+    }
+    for(int index = 0; index < seleniumTotal; index++) {
+      dir("selenium_node_${index}") {
+        try {
+          unstash "selenium_spec_parallel_${index}"
+        } catch(err) {
+          println (err)
+        }
+      }
+    }
+    sh '../build/new-jenkins/parallel-log-combine.sh'
+  }
 }
 
 return this

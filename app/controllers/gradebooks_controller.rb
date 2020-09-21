@@ -30,7 +30,7 @@ class GradebooksController < ApplicationController
   include Api::V1::RubricAssessment
 
   before_action :require_context
-  before_action :require_user, only: [:speed_grader, :speed_grader_settings, :grade_summary]
+  before_action :require_user, only: [:speed_grader, :speed_grader_settings, :grade_summary, :grading_rubrics]
 
   batch_jobs_in_actions :only => :update_submission, :batch => { :priority => Delayed::LOW_PRIORITY }
 
@@ -148,7 +148,9 @@ class GradebooksController < ApplicationController
       post_policies_enabled: @context.post_policies_enabled?
     }
 
-    if @context.feature_enabled?(:final_grades_override)
+    # This really means "if the final grade override feature flag is enabled AND
+    # the context in question has enabled the setting in the gradebook"
+    if @context.allow_final_grade_override?
       total_score = if grading_periods? && !view_all_grading_periods?
                       @presenter.student_enrollment.find_score(grading_period_id: @current_grading_period_id)
                     else
@@ -203,6 +205,8 @@ class GradebooksController < ApplicationController
   end
 
   def grading_rubrics
+    return unless authorized_action(@context, @current_user, [:read_rubrics, :manage_rubrics])
+
     @rubric_contexts = @context.rubric_contexts(@current_user)
     if params[:context_code]
       context = @rubric_contexts.detect{|r| r[:context_code] == params[:context_code] }
@@ -226,6 +230,7 @@ class GradebooksController < ApplicationController
 
   def show
     if authorized_action(@context, @current_user, [:manage_grades, :view_all_grades])
+      log_asset_access(['grades', @context], 'grades')
       if requested_gradebook_view.present?
         update_preferred_gradebook_view!(requested_gradebook_view) if requested_gradebook_view != preferred_gradebook_view
         redirect_to polymorphic_url([@context, 'gradebook'])
@@ -477,6 +482,7 @@ class GradebooksController < ApplicationController
       # TODO: remove `submissions_url` with TALLY-831
       submissions_url: api_v1_course_student_submissions_url(@context, grouped: '1'),
       teacher_notes: teacher_notes && custom_gradebook_column_json(teacher_notes, @current_user, session),
+      user_asset_string: @current_user&.asset_string,
       version: params.fetch(:version, nil)
     }
 
@@ -594,6 +600,7 @@ class GradebooksController < ApplicationController
       student_groups: group_categories_json(@context.group_categories.active, @current_user, session, {include: ['groups']}),
       submissions_url: api_v1_course_student_submissions_url(@context, grouped: '1'),
       teacher_notes: teacher_notes && custom_gradebook_column_json(teacher_notes, @current_user, session),
+      user_asset_string: @current_user&.asset_string,
       version: params.fetch(:version, nil)
     }
 
@@ -808,14 +815,14 @@ class GradebooksController < ApplicationController
       return
     end
 
-    if !params[:submissions_zip] || params[:submissions_zip].is_a?(String)
-      flash[:error] = t("Could not find file to upload")
+    unless valid_zip_upload_params?
+      flash[:error] = t("Could not find file to upload.")
       redirect_to named_context_url(@context, :context_assignment_url, assignment.id)
       return
     end
 
     submission_zip_params = {uploaded_data: params[:submissions_zip]}
-    assignment.generate_comments_from_files_later(submission_zip_params, @current_user)
+    assignment.generate_comments_from_files_later(submission_zip_params, @current_user, params[:attachment_id])
 
     redirect_to named_context_url(@context, :submissions_upload_context_gradebook_url, assignment.id)
   end
@@ -831,7 +838,7 @@ class GradebooksController < ApplicationController
       return
     end
 
-    @progress = @assignment.submission_reupload_progress
+    @presenter = Submission::UploadPresenter.for(@context, @assignment)
 
     css_bundle :show_submissions_upload
     render :show_submissions_upload
@@ -891,7 +898,8 @@ class GradebooksController < ApplicationController
           group_comments_per_attempt: @assignment.a2_enabled?,
           can_comment_on_submission: @can_comment_on_submission,
           show_help_menu_item: show_help_link?,
-          help_url: help_link_url
+          help_url: help_link_url,
+          update_submission_grade_url: context_url(@context, :update_submission_context_gradebook_url)
         }
         if grading_role_for_user == :moderator
           env[:provisional_select_url] = api_v1_select_provisional_grade_path(@context.id, @assignment.id, "{{provisional_grade_id}}")
@@ -942,6 +950,14 @@ class GradebooksController < ApplicationController
             env[:selected_student_group] = group_json(updated_group_info.group, @current_user, session)
           end
           env[:student_group_reason_for_change] = updated_group_info.reason_for_change if updated_group_info.reason_for_change.present?
+        end
+
+        if @assignment.rubric_association
+          env[:update_rubric_assessment_url] = context_url(
+            @context,
+            :context_rubric_association_rubric_assessments_url,
+            @assignment.rubric_association
+          )
         end
 
         append_sis_data(env)
@@ -1063,6 +1079,12 @@ class GradebooksController < ApplicationController
   helper_method :student_groups?
 
   private
+
+  def valid_zip_upload_params?
+    return true if params[:attachment_id].present?
+
+    !!params[:submissions_zip] && !params[:submissions_zip].is_a?(String)
+  end
 
   def outcome_proficiency
     if @context.root_account.feature_enabled?(:non_scoring_rubrics)

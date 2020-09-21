@@ -19,22 +19,24 @@ import {func} from 'prop-types'
 import I18n from 'i18n!notification_preferences'
 import NotificationPreferencesSetting from './NotificationPreferencesSetting'
 import NotificationPreferencesShape from './NotificationPreferencesShape'
-import React from 'react'
+import React, {useState} from 'react'
 
+import {Checkbox} from '@instructure/ui-checkbox'
 import {ScreenReaderContent} from '@instructure/ui-a11y-content'
 import {Table} from '@instructure/ui-table'
 import {Text} from '@instructure/ui-text'
 import {Tooltip} from '@instructure/ui-tooltip'
 import {TruncateText} from '@instructure/ui-truncate-text'
+import {View} from '@instructure/ui-view'
 
 const formattedCategoryNames = {
-  courseActivities: I18n.t('Course Activities'),
-  discussions: I18n.t('Discussions'),
-  conversations: I18n.t('Conversations'),
-  scheduling: I18n.t('Scheduling'),
-  groups: I18n.t('Groups'),
-  conferences: I18n.t('Conferences'),
-  alerts: I18n.t('Alerts')
+  courseActivities: () => I18n.t('Course Activities'),
+  discussions: () => I18n.t('Discussions'),
+  conversations: () => I18n.t('Conversations'),
+  scheduling: () => I18n.t('Scheduling'),
+  groups: () => I18n.t('Groups'),
+  conferences: () => I18n.t('Conferences'),
+  alerts: () => I18n.t('Alerts')
 }
 
 const notificationCategories = {
@@ -98,11 +100,13 @@ const renderNotificationCategory = (
   notificationPreferences,
   notificationCategory,
   updatePreferenceCallback,
-  renderChannelHeader
+  renderChannelHeader,
+  sendScoresInEmails,
+  setSendScoresInEmails
 ) => (
   <Table
     caption={I18n.t('%{categoryName} notification preferences', {
-      categoryName: formattedCategoryNames[notificationCategory]
+      categoryName: formattedCategoryNames[notificationCategory]()
     })}
     margin="medium 0"
     layout="fixed"
@@ -111,7 +115,7 @@ const renderNotificationCategory = (
     <Table.Head>
       <Table.Row>
         <Table.ColHeader id={notificationCategory} data-testid={notificationCategory} width="16rem">
-          <Text size="large">{formattedCategoryNames[notificationCategory]}</Text>
+          <Text size="large">{formattedCategoryNames[notificationCategory]()}</Text>
         </Table.ColHeader>
         {notificationPreferences.channels.map(channel => (
           <Table.ColHeader
@@ -123,19 +127,25 @@ const renderNotificationCategory = (
             {renderChannelHeader ? (
               <>
                 <div style={{display: 'block'}}>
-                  <Text transform={channel.pathType === 'sms' ? 'uppercase' : 'capitalize'}>
-                    {I18n.t('%{pathType}', {pathType: channel.pathType})}
-                  </Text>
+                  {channel.pathType === 'push' ? (
+                    <Text>{I18n.t('Push Notification')}</Text>
+                  ) : (
+                    <Text transform={channel.pathType === 'sms' ? 'uppercase' : 'capitalize'}>
+                      {channel.pathType}
+                    </Text>
+                  )}
                 </div>
                 <div style={{display: 'block'}}>
                   <TruncateText>
-                    <Text weight="light">{channel.path}</Text>
+                    <Text weight="light">
+                      {channel.pathType === 'push' ? I18n.t('For All Devices') : channel.path}
+                    </Text>
                   </TruncateText>
                 </div>
               </>
             ) : (
               <ScreenReaderContent>
-                {I18n.t('%{pathType}', {pathType: channel.pathType})}
+                {channel.pathType}
                 {channel.path}
               </ScreenReaderContent>
             )}
@@ -152,7 +162,7 @@ const renderNotificationCategory = (
         )
         .map(category => (
           <Table.Row key={category} data-testid={formatCategoryKey(category)}>
-            <Table.Cell>
+            <Table.RowHeader>
               <Tooltip
                 renderTip={
                   <div
@@ -172,7 +182,13 @@ const renderNotificationCategory = (
                     .notification.categoryDisplayName
                 }
               </Tooltip>
-            </Table.Cell>
+              {category === 'Grading' &&
+                renderSendScoresInEmailsToggle(
+                  sendScoresInEmails,
+                  setSendScoresInEmails,
+                  updatePreferenceCallback
+                )}
+            </Table.RowHeader>
             {notificationPreferences.channels.map(channel => (
               <Table.Cell textAlign="center" key={category + channel.path}>
                 <NotificationPreferencesSetting
@@ -183,9 +199,9 @@ const renderNotificationCategory = (
                       : channel.categories[notificationCategory][category].frequency
                   }
                   preferenceOptions={
-                    channel.pathType === 'sms'
-                      ? ['immediately', 'never']
-                      : ['immediately', 'daily', 'weekly', 'never']
+                    channel.pathType === 'email'
+                      ? ['immediately', 'daily', 'weekly', 'never']
+                      : ['immediately', 'never']
                   }
                   updatePreference={frequency =>
                     updatePreferenceCallback({channel, category, frequency})
@@ -198,6 +214,30 @@ const renderNotificationCategory = (
     </Table.Body>
   </Table>
 )
+
+const renderSendScoresInEmailsToggle = (
+  sendScoresInEmails,
+  setSendScoresInEmails,
+  updatePreferenceCallback
+) => {
+  if (ENV.NOTIFICATION_PREFERENCES_OPTIONS.send_scores_in_emails_text !== null) {
+    return (
+      <View margin="x-small 0 0 small" display="block">
+        <Checkbox
+          data-testid="grading-send-score-in-email"
+          label={ENV.NOTIFICATION_PREFERENCES_OPTIONS.send_scores_in_emails_text.label}
+          size="small"
+          variant="toggle"
+          checked={sendScoresInEmails}
+          onChange={() => {
+            setSendScoresInEmails(!sendScoresInEmails)
+            updatePreferenceCallback({sendScoresInEmails: !sendScoresInEmails})
+          }}
+        />
+      </View>
+    )
+  }
+}
 
 const formatPreferencesData = preferences => {
   preferences.channels.forEach((channel, i) => {
@@ -237,6 +277,8 @@ const dropEmptyCategories = categories => {
 }
 
 const NotificationPreferencesTable = props => {
+  const [sendScoresInEmails, setSendScoresInEmails] = useState(props.preferences.sendScoresInEmails)
+
   if (props.preferences.channels?.length > 0) {
     formatPreferencesData(props.preferences)
     return (
@@ -246,12 +288,15 @@ const NotificationPreferencesTable = props => {
             props.preferences,
             notificationCategory,
             props.updatePreference,
-            i === 0
+            i === 0,
+            sendScoresInEmails,
+            setSendScoresInEmails
           )
         )}
       </>
     )
   }
+  return null
 }
 
 NotificationPreferencesTable.propTypes = {

@@ -50,6 +50,36 @@ describe Types::CourseType do
     end
   end
 
+  context "sis fields" do
+    let_once(:sis_course) { course.update!(sis_course_id: "SIScourseID"); course }
+
+    let(:admin) { account_admin_user_with_role_changes(role_changes: { read_sis: false})}
+
+    it "returns sis_id if you have read_sis permissions" do
+      expect(
+        CanvasSchema.execute(<<~GQL, context: { current_user: @teacher}).dig("data", "course", "sisId")
+          query { course(id: "#{sis_course.id}") { sisId } }
+        GQL
+      ).to eq("SIScourseID")
+    end
+
+    it "returns sis_id if you have manage_sis permissions" do
+      expect(
+        CanvasSchema.execute(<<~GQL, context: { current_user: admin}).dig("data", "course", "sisId")
+          query { course(id: "#{sis_course.id}") { sisId } }
+        GQL
+      ).to eq("SIScourseID")
+    end
+
+    it "doesn't return sis_id if you don't have read_sis or management_sis permissions" do
+      expect(
+        CanvasSchema.execute(<<~GQL, context: { current_user: @student}).dig("data", "course", "sisId")
+          query { course(id: "#{sis_course.id}") { sisId } }
+        GQL
+      ).to be_nil
+    end
+  end
+
   describe "assignmentsConnection" do
     let_once(:assignment) {
       course.assignments.create! name: "asdf", workflow_state: "unpublished"
@@ -123,6 +153,15 @@ describe Types::CourseType do
           @term1_assignment1,
         ].map { |a| a.id.to_s }
       end
+    end
+  end
+
+  describe "outcomeCalculationMethod" do
+    it 'works' do
+      outcome_calculation_method_model(course.account)
+      expect(
+        course_type.resolve('outcomeCalculationMethod { _id }', current_user: @teacher)
+      ).to eq course.account.outcome_calculation_method.id.to_s
     end
   end
 
@@ -504,34 +543,6 @@ describe Types::CourseType do
       course.image_url = "http://some.cool/gif.gif"
       course.save!
       expect(course_type.resolve("imageUrl")).to eq "http://some.cool/gif.gif"
-    end
-  end
-
-  describe 'notificationPreferences' do
-    it 'returns the students notification preferences' do
-      Notification.delete_all
-      @student.communication_channels.create!(path: 'test@test.com').confirm!
-      notification_model(:name => 'test', :category => 'Announcement')
-
-      expect(
-        course_type.resolve('notificationPreferences { channels { notificationPolicies(contextType: Course) { notification { name } } } }')[0][0]
-      ).to eq 'test'
-    end
-
-    it 'only returns active communication channels' do
-      Notification.delete_all
-      communication_channel = @student.communication_channels.create!(path: 'test@test.com')
-      communication_channel.confirm!
-      notification_model(:name => 'test', :category => 'Announcement')
-
-      expect(
-        course_type.resolve('notificationPreferences { channels { notificationPolicies(contextType: Course) { notification { name } } } }')[0][0]
-      ).to eq 'test'
-
-      communication_channel.destroy
-      expect(
-        course_type.resolve('notificationPreferences { channels { notificationPolicies(contextType: Course) { notification { name } } } }').count
-      ).to eq 0
     end
   end
 end

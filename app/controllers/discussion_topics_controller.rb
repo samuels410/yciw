@@ -562,9 +562,7 @@ class DiscussionTopicsController < ApplicationController
     if post_to_sis && @topic.new_record?
       js_hash[:POST_TO_SIS_DEFAULT] = @context.account.sis_default_grade_export[:value]
     end
-    if @context.root_account.feature_enabled?(:student_planner)
-      js_hash[:STUDENT_PLANNER_ENABLED] = @context.grants_any_right?(@current_user, session, :manage_content)
-    end
+    js_hash[:STUDENT_PLANNER_ENABLED] = @context.grants_any_right?(@current_user, session, :manage_content)
 
     if @topic.is_section_specific && @context.is_a?(Course)
       selected_section_ids = @topic.discussion_topic_section_visibilities.pluck(:course_section_id)
@@ -625,6 +623,11 @@ class DiscussionTopicsController < ApplicationController
     @context.require_assignment_group rescue nil
     add_discussion_or_announcement_crumb
     add_crumb(@topic.title, named_context_url(@context, :context_discussion_topic_url, @topic.id))
+    
+    js_env({
+      DISABLE_KEYBOARD_SHORTCUTS: @current_user.prefers_no_keyboard_shortcuts?,
+    })
+
     if @topic.deleted?
       flash[:notice] = t :deleted_topic_notice, "That topic has been deleted"
       redirect_to named_context_url(@context, :context_discussion_topics_url)
@@ -1203,7 +1206,7 @@ class DiscussionTopicsController < ApplicationController
 
     process_group_parameters(discussion_topic_hash)
     process_pin_parameters(discussion_topic_hash)
-    process_todo_parameters(discussion_topic_hash)
+    process_todo_parameters()
 
     if @errors.present?
       render :json => {errors: @errors}, :status => :bad_request
@@ -1268,11 +1271,7 @@ class DiscussionTopicsController < ApplicationController
     end
   end
 
-  def process_todo_parameters(discussion_topic_hash)
-    unless @topic.context.root_account.feature_enabled?(:student_planner)
-      discussion_topic_hash.delete(:todo_date)
-      return
-    end
+  def process_todo_parameters
     remove_assign = ['false', false, '0'].include?(params.dig(:assignment, :set_assignment))
     if params[:assignment] && !remove_assign && !params[:todo_date]
       @topic.todo_date = nil

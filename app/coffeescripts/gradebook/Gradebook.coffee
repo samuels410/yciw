@@ -2740,7 +2740,7 @@ export default do ->
       @sections_enabled = sections.length > 1
 
     setStudentGroups: (groupCategories) =>
-      @studentGroupCategories = _.indexBy(groupCategories.map(htmlEscape), 'id')
+      @studentGroupCategories = _.indexBy(groupCategories, 'id')
 
       studentGroupList = _.flatten(_.pluck(groupCategories, 'groups')).map(htmlEscape)
       @studentGroups = _.indexBy(studentGroupList, 'id')
@@ -2836,7 +2836,8 @@ export default do ->
       assignment = @getAssignment(assignmentId)
       manager = new ReuploadSubmissionsDialogManager(
         assignment,
-        @options.re_upload_submissions_url
+        @options.re_upload_submissions_url,
+        @options.user_asset_string
       )
 
       {

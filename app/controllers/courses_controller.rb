@@ -504,7 +504,8 @@ class CoursesController < ApplicationController
     all_enrollments.group_by {|e| [e.course_id, e.type]}.values.each do |enrollments|
       e = enrollments.sort_by {|e| e.state_with_date_sortable}.first
       if enrollments.count > 1
-        e.course_section = nil
+        # pick the last one so if all sections have "ended" it still shows up in past enrollments because dates are still terrible
+        e.course_section = enrollments.map(&:course_section).sort_by{|cs| cs.end_at || CanvasSort::Last}.last
         e.readonly!
       end
 
@@ -2000,8 +2001,6 @@ class CoursesController < ApplicationController
         @course_home_view ||= default_view
 
         js_env({
-                 # don't check for student enrollments because we want to show course items on the teacher's  syllabus
-                 STUDENT_PLANNER_ENABLED: @domain_root_account&.feature_enabled?(:student_planner),
                  COURSE: {
                    id: @context.id.to_s,
                    pages_url: polymorphic_url([@context, :wiki_pages]),
@@ -2130,10 +2129,12 @@ class CoursesController < ApplicationController
   def render_course_notification_settings
     add_crumb(t("Course Notification Settings"))
     js_env(
+      course_name: @context.name,
       NOTIFICATION_PREFERENCES_OPTIONS: {
-        granular_course_preferences_enabled: @domain_root_account&.feature_enabled?(:notification_granular_course_preferences),
+        granular_course_preferences_enabled: Account.site_admin.feature_enabled?(:notification_granular_course_preferences),
         deprecate_sms_enabled: !@domain_root_account.settings[:sms_allowed] && Account.site_admin.feature_enabled?(:deprecate_sms),
-        allowed_sms_categories: Notification.categories_to_send_in_sms(@domain_root_account)
+        allowed_sms_categories: Notification.categories_to_send_in_sms(@domain_root_account),
+        send_scores_in_emails_text: Notification.where(category: 'Grading').first&.related_user_setting(@current_user, @domain_root_account)
       }
     )
     js_bundle :course_notification_settings_show
@@ -2215,7 +2216,7 @@ class CoursesController < ApplicationController
     params[:enrollment_type] ||= 'StudentEnrollment'
 
     custom_role = nil
-    if params[:role_id].present? || !Role.get_built_in_role(params[:enrollment_type])
+    if params[:role_id].present? || !Role.get_built_in_role(params[:enrollment_type], root_account_id: @context.root_account_id)
       custom_role = @context.account.get_role_by_id(params[:role_id]) if params[:role_id].present?
       custom_role ||= @context.account.get_role_by_name(params[:enrollment_type]) # backwards compatibility
       if custom_role && custom_role.course_role?

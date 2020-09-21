@@ -59,6 +59,9 @@
     <% if can_do(@context, @current_user, :manage_account_settings) %>
     <li><a href="#tab-settings" id="tab-settings-link"><%= t(:tab_settings, "Settings") %></a></li>
     <% end %>
+    <% if can_do(@account, @current_user, :manage_privacy_settings) %>
+    <li><a href="#tab-privacy" id="tab-privacy-link"><%= t(:tab_privacy, "Privacy") %></a></li>
+    <% end %>
     <% if can_do(@context, @current_user, :manage_storage_quotas) %>
     <li><a href="#tab-quotas" id="tab-quotas-link"><%= t(:tab_quotas, "Quotas") %></a></li>
     <% end %>
@@ -311,6 +314,58 @@
                   <% end %>
                 <% end %>
 
+                <% if @account.feature_allowed?(:rce_enhancements) %>
+                  <%= settings.fields_for :disable_rce_media_uploads do |r| %>
+                    <% hash = @account.disable_rce_media_uploads %>
+                    <% disabled = hash[:locked] && hash[:inherited] %>
+                    <tr>
+                      <td colspan="2">
+                        <%= r.check_box :value, checked: hash[:value], disabled: disabled %>
+                        <%= r.label :value, t("Disable uploads to Canvas Media from the enhanced rich content editor") %>
+                      </td>
+                    </tr>
+                  <% end %>
+                <% end %>
+
+                <% if @account.root_account.feature_enabled?(:account_level_mastery_scales) %>
+                  <%= settings.fields_for :lock_outcome_proficiency do |r| %>
+                    <% hash = @account.lock_outcome_proficiency %>
+                    <% disabled = hash[:locked] && hash[:inherited] %>
+                    <tr>
+                      <td colspan="2">
+                        <%= r.check_box :value, checked: hash[:value], disabled: disabled %>
+                        <%= r.label :value, t("Restrict instructors from changing mastery scales") %>
+                      </td>
+                    </tr>
+                    <% unless disabled %>
+                      <tr>
+                        <td colspan="2" class="sub_checkbox">
+                          <%= r.check_box :locked, :checked => hash[:locked] %>
+                          <%= r.label :locked, :en => "Lock this setting for sub-accounts and courses" %>
+                        </td>
+                      </tr>
+                    <% end %>
+                  <% end %>
+
+                  <%= settings.fields_for :lock_proficiency_calculation do |r| %>
+                    <% hash = @account.lock_proficiency_calculation %>
+                    <% disabled = hash[:locked] && hash[:inherited] %>
+                    <tr>
+                      <td colspan="2">
+                        <%= r.check_box :value, checked: hash[:value], disabled: disabled %>
+                        <%= r.label :value, t("Restrict instructors from changing proficiency calculation method") %>
+                      </td>
+                    </tr>
+                    <% unless disabled %>
+                      <tr>
+                        <td colspan="2" class="sub_checkbox">
+                          <%= r.check_box :locked, :checked => hash[:locked] %>
+                          <%= r.label :locked, :en => "Lock this setting for sub-accounts and courses" %>
+                        </td>
+                      </tr>
+                    <% end %>
+                  <% end %>
+                <% end %>
               <% end %>
             <% end %>
           </table>
@@ -339,24 +394,8 @@
               <%= settings.check_box :can_add_pronouns, :checked => @account.settings[:can_add_pronouns], class: "element_toggler", "aria-controls": "personal_pronouns_options" %>
               <%= settings.label :can_add_pronouns, en: "Enable Personal Pronouns" %>
               <div id="personal_pronouns_options" <%= hidden(true) unless @account.settings[:can_add_pronouns] %>>
-                <table class="formtable">
-                  <tbody>
-                    <% ((@account.pronouns.presence || Pronouns.default_pronouns) + [nil]).each do |pronouns| %>
-                      <tr class="pronouns_row <%= raw ' blank" style="display: none;' if pronouns.nil? %>">
-                        <td> <input type="text" name="account[pronouns][]" value="<%= pronouns %>"/></td>
-                        <td> <a href="#" title="<%= t("Remove Pronouns %{pronoun}", :pronoun => pronouns) %>" role="button" class="close" data-remove=".pronouns_row"><i class="icon-end standalone-icon"></i></a> </td>
-                      </tr>
-                    <% end %>
-                  </tbody>
-                </table>
-                <button
-                  type="button"
-                  class="Button"
-                  onclick="$('.pronouns_row.blank').clone().removeClass('blank').show().insertBefore('.pronouns_row.blank').find('input').focus()"
-                >
-                  <i class='icon-add'></i>
-                  <%= t("Add pronouns option") %>
-                </button>
+                <% js_env(PRONOUNS_LIST: ((@account.pronouns.presence || Pronouns.default_pronouns)))
+                js_bundle :available_pronouns_list %>
               </div>
             <% end %>
           </fieldset>
@@ -424,16 +463,26 @@
                     <td> <label> <%= t("Name:") %></label> <input aria-label="<%= t("Name") %>" type="text" class="name" value="<%= name %>"/></td>
                     <td>
                       <label> <%= t("Filter:") %></label> <input aria-label="<%= t("Filter") %>" type="text" class="value" value="<%= filter %>" maxlength="255"/>
-                      <a href="#" title="<%= t(:quiz_ip_filters_delete, "Remove Filter") %>" class="delete_filter_link"><i class="icon-end standalone-icon"></i></a>
+                      <button
+                        type="button"
+                        class="Button Button--icon-action delete_filter_link"
+                        title="<%= t(:quiz_ip_filters_delete, "Remove Quiz IP Filter") %>"
+                      >
+                        <i class="icon-end standalone-icon"></i>
+                      </button>
                     </td>
                   </tr>
                 <% end %>
               </tbody>
             </table>
-            <a href="#" class="icon-add add_ip_filter_link">
+            <button
+              type="button"
+              class="Button add_ip_filter_link"
+              title="<%= t("Add Quiz IP Filter") %>"
+            >
+              <i class='icon-add'></i>
               <span aria-hidden="true"><%= t(:add_ip_filter_link, "Filter") %></span>
-              <span class="screenreader-only"><%= t("Add Quiz IP Filter") %></span>
-            </a>
+            </button>
           </fieldset>
         <% end %>
 
@@ -500,7 +549,7 @@
                     </p>
                     <p>
                       <%= t do %>
-                      Before implementing custom CSS or Javascript, please refer to <a href="https://community.canvaslms.com/docs/DOC-3010" target="_blank"> our documentation</a>.
+                      Before implementing custom CSS or Javascript, please refer to <a href="https://community.canvaslms.com/t5/Admin-Guide/How-do-I-upload-custom-JavaScript-and-CSS-files-to-an-account/ta-p/253" target="_blank"> our documentation</a>.
                       <% end %>
                     </p>
                   </div>
@@ -751,24 +800,27 @@ acknowledge that you have read and agreed to the
 
         <%= render partial: 'external_integration_keys', locals: { f: f } %>
 
-        <% if @account.root_account? && @account.root_account.feature_enabled?(:smart_alerts) %>
+        <% if @account.root_account &&
+              @account.root_account.feature_enabled?(:smart_alerts) &&
+              can_do(@account, @current_user, :manage_alerts)
+        %>
           <fieldset>
-            <h2 class="screenreader-only"><%= t('Smart Alerts') %></h2>
-            <legend><%= t('Smart Alerts') %></legend>
+            <h2 class="screenreader-only"><%= t('Smart Assignment Alerts') %></h2>
+            <legend><%= t('Smart Assignment Alerts') %></legend>
             <%= f.fields_for :settings do |settings| %>
               <table class="formtable narrow">
                 <tr>
                   <td>
                     <label for="smart_alerts_threshold">
-                      <%= I18n.t('Threshold (in hours) to notify students within') %>
+                      <%= I18n.t('Hours (from due date) before students are alerted') %>
                     </label>
                   </td>
                   <td>
-                    <% # TODO: read from account in KNO-443 %>
                     <%= settings.select :smart_alerts_threshold,
                       options_for_select(
-                        smart_alerts_threshold_options,
-                        '36h'
+                        # ref: KNO-231
+                        %w[ 12 24 36 48 ].map { |x| [ x, x ] },
+                        @account.settings.fetch(:smart_alerts_threshold, '36')
                       )
                     %>
                   </td>
@@ -780,6 +832,35 @@ acknowledge that you have read and agreed to the
 
         <div class="button-container">
           <button type="submit" class="Button Button--primary"><%= t(:update_settings_button, "Update Settings") %></button>
+        </div>
+      <% end %>
+    </div>
+  <% end %>
+
+  <% if can_do(@account, @current_user, :manage_privacy_settings) %>
+    <div id="tab-privacy">
+      <h2 class="screenreader-only"><%= t('headings.privacy', "Privacy") %></h2>
+      <%= form_for(:account, url: account_url(@account), html: {
+            method: :put,
+            id: "account_privacy_settings"
+          }) do |f|
+      %>
+        <%= f.fields_for :settings do |settings| %>
+          <div>
+            <%= settings.check_box :enable_google_analytics, checked: @account.settings.fetch(:enable_google_analytics, true) %>
+            <%= settings.label :enable_google_analytics, en: "Allow tracking with Google Analytics" %>
+          </div>
+
+          <div>
+            <%= settings.check_box :enable_fullstory, checked: @account.settings.fetch(:enable_fullstory, true) %>
+            <%= settings.label :enable_fullstory, en: "Allow tracking with FullStory" %>
+          </div>
+        <% end %>
+
+        <div class="button-container">
+          <button type="submit" class="Button Button--primary">
+            <%= t(:update_settings_button, "Update Settings") %>
+          </button>
         </div>
       <% end %>
     </div>
@@ -954,9 +1035,9 @@ acknowledge that you have read and agreed to the
             <div class="notification_account_content">
               <div class="ic-notification__content">
                 <div class="ic-notification__message">
-                  <h4 class="ic-notification__title notification_subject">
+                  <h2 class="ic-notification__title notification_subject">
                     <%= announcement.subject %>
-                  </h4>
+                  </h2>
                   <span class="notification_message">
                     <%= user_content(announcement.message) %>
                   </span>
@@ -1197,7 +1278,7 @@ acknowledge that you have read and agreed to the
 
         </div>
 
-        <% if !@account.site_admin? && @account.root_account.feature_enabled?(:notification_for_global_announcement) %>
+        <% if !@account.site_admin? %>
           <div class="ic-Form-control ic-Form-control--checkbox">
             <%= f.check_box :send_message %>
             <%= f.label :send_message, t("Send notification directly to users when announcement starts"), :class => "ic-Label" %>

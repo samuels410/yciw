@@ -47,7 +47,7 @@ class ContextModulesController < ApplicationController
           collection_cache_key(@modules), Time.zone, Digest::MD5.hexdigest([visible_assignments, @section_visibility].join("/"))]
         cache_key = cache_key_items.join('/')
         cache_key = add_menu_tools_to_cache_key(cache_key)
-        cache_key = add_mastery_paths_to_cache_key(cache_key, @context, @modules, @current_user)
+        cache_key = add_mastery_paths_to_cache_key(cache_key, @context, @current_user)
       end
     end
 
@@ -139,7 +139,7 @@ class ContextModulesController < ApplicationController
       item = @context.context_module_tags.not_deleted.find(params[:id])
 
       if item.present? && item.published? && item.context_module.published?
-        rules = ConditionalRelease::Service.rules_for(@context, @current_user, item, session)
+        rules = ConditionalRelease::Service.rules_for(@context, @current_user, session)
         rule = conditional_release_rule_for_module_item(item, conditional_release_rules: rules)
 
         # locked assignments always have 0 sets, so this check makes it not return 404 if locked
@@ -151,7 +151,7 @@ class ContextModulesController < ApplicationController
                 setId: set[:id]
               }
 
-              option[:assignments] = set[:assignments].map { |a|
+              option[:assignments] = (set[:assignments] || set[:assignment_set_associations]).map { |a|
                 assg = assignment_json(a[:model], @current_user, session)
                 assg[:assignmentId] = a[:assignment_id]
                 assg
@@ -352,6 +352,10 @@ class ContextModulesController < ApplicationController
           {:points_possible => nil, :due_date => nil}
         end
         info[tag.id][:todo_date] = tag.content && tag.content[:todo_date]
+
+        if tag.try(:assignment).try(:external_tool_tag).try(:external_data).try(:[], 'key') == 'https://canvas.instructure.com/lti/mastery_connect_assessment'
+          info[tag.id][:mc_objectives] = tag.assignment.external_tool_tag.external_data['objectives']
+        end
       end
       render :json => info
     end
@@ -458,22 +462,36 @@ class ContextModulesController < ApplicationController
     render :json => res
   end
 
+  def collapse(mod, should_collapse)
+    progression = mod.evaluate_for(@current_user)
+    progression ||= ContextModuleProgression.new
+    if value_to_boolean(should_collapse)
+      progression.collapsed = true
+    else
+      progression.uncollapse!
+    end
+    progression.save unless progression.new_record?
+    progression
+  end
+
   def toggle_collapse
     if authorized_action(@context, @current_user, :read)
+      return unless params.key?(:collapse)
       @module = @context.modules_visible_to(@current_user).find(params[:context_module_id])
-      @progression = @module.evaluate_for(@current_user) #context_module_progressions.find_by_user_id(@current_user)
-      @progression ||= ContextModuleProgression.new
-      if params[:collapse] == '1'
-        @progression.collapsed = true
-      elsif params[:collapse]
-        @progression.uncollapse!
-      else
-        @progression.collapsed = !@progression.collapsed
-      end
-      @progression.save unless @progression.new_record?
+      progression = collapse(@module, params[:collapse])
       respond_to do |format|
         format.html { redirect_to named_context_url(@context, :context_context_modules_url) }
-        format.json { render :json => (@progression.collapsed ? @progression : @module.content_tags_visible_to(@current_user) )}
+        format.json { render :json => (progression.collapsed ? progression : @module.content_tags_visible_to(@current_user))}
+      end
+    end
+  end
+
+  def toggle_collapse_all
+    if authorized_action(@context, @current_user, :read)
+      return unless params.key?(:collapse)
+      @modules = @context.modules_visible_to(@current_user)
+      @modules.each do |mod|
+        collapse(mod, params[:collapse])
       end
     end
   end

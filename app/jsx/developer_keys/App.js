@@ -17,7 +17,8 @@
  */
 
 import {Button} from '@instructure/ui-buttons'
-import {Heading, Spinner} from '@instructure/ui-elements'
+import {Heading} from '@instructure/ui-elements'
+import {Spinner} from '@instructure/ui-spinner'
 import {TabList} from '@instructure/ui-tabs'
 import {View} from '@instructure/ui-layout'
 

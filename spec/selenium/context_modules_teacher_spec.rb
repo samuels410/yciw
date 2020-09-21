@@ -338,6 +338,19 @@ describe "context modules" do
       expect(tag.reload).to be_published
     end
 
+    it "publishes a newly created item using keyboard" do
+      @course.context_modules.create!(name: "Content Page")
+      get "/courses/#{@course.id}/modules"
+      add_new_module_item('#wiki_pages_select', 'Page', '[ New Page ]', 'New Page Title')
+
+      tag = ContentTag.last
+      item = f("#context_module_item_#{tag.id}")
+      item.find_element(:css, ".publish-icon[role='button']").send_keys(:return)
+      wait_for_ajax_requests
+
+      expect(tag.reload).to be_published
+    end
+
     it "should add the 'with-completion-requirements' class to rows that have requirements" do
       mod = @course.context_modules.create! name: 'TestModule'
       tag = mod.add_item({:id => @assignment.id, :type => 'assignment'})
@@ -1115,6 +1128,80 @@ describe "context modules" do
       get "/courses/#{@course.id}/modules"
       add_new_external_item('External Tool', 'www.instructure.com', 'Instructure')
       expect(fln('Instructure')).to be_displayed
+    end
+
+    it "should not render links for subheader type items", priority: "1" do
+      mod = @course.context_modules.create! name: 'Test Module'
+      tag = mod.add_item(title: 'Example text header', type: 'sub_header')
+      get "/courses/#{@course.id}/modules"
+      expect(f("#context_module_item_#{tag.id}")).not_to contain_css(".item_link")
+      expect(f("#context_module_item_#{tag.id}")).not_to contain_css("a.for-nvda")
+    end
+
+    it "should render links for wiki page type items", priority: "1" do
+      mod = @course.context_modules.create! name: 'Test Module'
+      page = @course.wiki_pages.create title: 'A Page'
+      page.workflow_state = 'unpublished'
+      page.save!
+      tag = mod.add_item({:id => page.id, :type => 'wiki_page'})
+      get "/courses/#{@course.id}/modules"
+      expect(f("#context_module_item_#{tag.id}")).to contain_css(".item_link")
+      expect(f("#context_module_item_#{tag.id}")).to contain_css("a.for-nvda")
+    end
+
+    context "expanding/collapsing modules" do
+      before :each do
+        @mod = create_modules(2, true)
+        @mod[0].add_item({id: @assignment.id, type: 'assignment'})
+        @mod[1].add_item({id: @assignment2.id, type: 'assignment'})
+        get "/courses/#{@course.id}/modules"
+      end
+
+      def assert_collapsed
+        expect(f("#context_module_#{@mod[0].id} span.expand_module_link")).to be_displayed
+        expect(f("#context_module_#{@mod[0].id} .content")).to_not be_displayed
+        expect(f("#context_module_#{@mod[1].id} span.expand_module_link")).to be_displayed
+        expect(f("#context_module_#{@mod[1].id} .content")).to_not be_displayed
+      end
+
+      def assert_expanded
+        expect(f("#context_module_#{@mod[0].id} span.collapse_module_link")).to be_displayed
+        expect(f("#context_module_#{@mod[0].id} .content")).to be_displayed
+        expect(f("#context_module_#{@mod[1].id} span.collapse_module_link")).to be_displayed
+        expect(f("#context_module_#{@mod[1].id} .content")).to be_displayed
+      end
+
+      it "should display collapse all button at top of page" do
+        button = f("button#expand_collapse_all")
+        expect(button).to be_displayed
+        expect(button.attribute("data-expand")).to eq("false")
+      end
+
+      it "should collapse and expand all modules when clicked and persist after refresh" do
+        button = f("button#expand_collapse_all")
+        button.click
+        wait_for_ajaximations
+        assert_collapsed
+        expect(button.text).to eq("Expand All")
+        refresh_page
+        assert_collapsed
+        button.click
+        wait_for_ajaximations
+        assert_expanded
+        expect(button.text).to eq("Collapse All")
+        refresh_page
+        assert_expanded
+      end
+
+      it "should collapse all after collapsing individually" do
+        f("#context_module_#{@mod[0].id} span.collapse_module_link").click
+        wait_for_ajaximations
+        button = f("button#expand_collapse_all")
+        button.click
+        wait_for_ajaximations
+        assert_collapsed
+        expect(button.text).to eq("Expand All")
+      end
     end
   end
 end

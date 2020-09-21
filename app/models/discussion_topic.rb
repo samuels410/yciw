@@ -102,6 +102,7 @@ class DiscussionTopic < ActiveRecord::Base
   after_update :clear_streams_if_not_published
   after_update :clear_non_applicable_stream_items_for_sections
   after_update :clear_non_applicable_stream_items_for_delayed_posts
+  after_update :clear_non_applicable_stream_items_for_locked_modules
   after_create :create_participant
   after_create :create_materialized_view
 
@@ -524,7 +525,7 @@ class DiscussionTopic < ActiveRecord::Base
 
   def bulk_insert_new_participants(new_entry_ids, current_user, update_fields)
     records = new_entry_ids.map do |entry_id|
-      { discussion_entry_id: entry_id, user_id: current_user.id }.merge(update_fields)
+      { discussion_entry_id: entry_id, user_id: current_user.id, root_account_id: self.root_account_id}.merge(update_fields)
     end
     DiscussionEntryParticipant.bulk_insert(records)
   end
@@ -901,6 +902,10 @@ class DiscussionTopic < ActiveRecord::Base
       false
     elsif self.root_topic_id && self.has_group_category?
       false
+    elsif self.in_unpublished_module?
+      false
+    elsif self.locked_by_module?
+      false
     else
       true
     end
@@ -920,10 +925,27 @@ class DiscussionTopic < ActiveRecord::Base
     end
   end
 
+  # This is manually called for module publishing
+  def send_items_to_stream
+    if should_send_to_stream
+      queue_create_stream_items
+    end
+  end
+
   def clear_streams_if_not_published
-    if !self.published?
+    unless self.published?
       self.clear_stream_items
     end
+  end
+
+  def in_unpublished_module?
+    return true if ContentTag.where(content_type: "DiscussionTopic", content_id: self, workflow_state: "unpublished").exists?
+    ContextModule.joins(:content_tags).where(content_tags: { content_type: "DiscussionTopic", content_id: self }, workflow_state: 'unpublished').exists?
+  end
+
+  def locked_by_module?
+    return false unless self.context_module_tags.any?
+    ContentTag.where(content_type: "DiscussionTopic", content_id: self, workflow_state: "active").all? { |tag| tag.context_module.unlock_at&.future? }
   end
 
   def clear_non_applicable_stream_items_for_sections
@@ -957,6 +979,22 @@ class DiscussionTopic < ActiveRecord::Base
     stream_item&.stream_item_instances&.find_each do |item|
       user_ids.push(item.user_id)
       item.destroy
+    end
+    self.clear_stream_item_cache_for(user_ids)
+  end
+
+  def clear_non_applicable_stream_items_for_locked_modules
+    return unless self.locked_by_module?
+    send_later_if_production(:clear_stream_items_for_locked_modules)
+  end
+
+  def clear_stream_items_for_locked_modules
+    user_ids = []
+    stream_item&.stream_item_instances&.find_each do |item|
+      if self.locked_by_module_item?(item.user)
+        user_ids.push(item.user_id)
+        item.destroy
+      end
     end
     self.clear_stream_item_cache_for(user_ids)
   end
@@ -1486,8 +1524,8 @@ class DiscussionTopic < ActiveRecord::Base
       txt = (message.message || "")
       attachment_matches = txt.scan(/\/#{context.class.to_s.pluralize.underscore}\/#{context.id}\/files\/(\d+)\/download/)
       attachment_ids += (attachment_matches || []).map{|m| m[0] }
-      media_object_matches = txt.scan(/media_comment_([\w\-]+)/)
-      media_object_ids += (media_object_matches || []).map{|m| m[0] }
+      media_object_matches = txt.scan(/media_comment_([\w\-]+)/) + txt.scan(/data-media-id=\"([\w\-]+)\"/)
+      media_object_ids += (media_object_matches || []).map{|m| m[0] }.uniq
       (attachment_ids + media_object_ids).each do |id|
         messages_hash[id] ||= message
       end

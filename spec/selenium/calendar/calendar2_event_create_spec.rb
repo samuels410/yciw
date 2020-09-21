@@ -22,6 +22,10 @@ describe "calendar2" do
   include_context "in-process server selenium tests"
   include Calendar2Common
 
+  before(:once) do
+    Account.find_or_create_by!(id: 0).update_attributes(name: 'Dummy Root Account', workflow_state: 'deleted', root_account_id: nil)
+  end
+
   before(:each) do
     Account.default.tap do |a|
       a.settings[:show_scheduler]   = true
@@ -123,8 +127,6 @@ describe "calendar2" do
       end
 
       it "should create an event that is recurring", priority: "1", test_id: 223510 do
-        Account.default.enable_feature!(:recurring_calendar_events)
-
         get '/calendar2'
         expect(f('#context-list li:nth-of-type(1)').text).to include(@teacher.name)
         expect(f('#context-list li:nth-of-type(2)').text).to include(@course.name)
@@ -151,7 +153,6 @@ describe "calendar2" do
       end
 
       it "should create recurring section-specific events" do
-        Account.default.enable_feature!(:recurring_calendar_events)
         section1 = @course.course_sections.first
         section2 = @course.course_sections.create!(:name => "other section")
 
@@ -214,7 +215,6 @@ describe "calendar2" do
 
   context "to-do dates" do
     before :once do
-      Account.default.enable_feature!(:student_planner)
       @course = Course.create!(name: "Course 1")
       @course.offer!
       @student1 = User.create!(name: 'Student 1')

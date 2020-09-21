@@ -20,10 +20,9 @@ require File.expand_path(File.dirname(__FILE__) + '/../spec_helper.rb')
 
 describe ContextExternalTool do
   before(:once) do
-    course_model
-    @root_account = @course.root_account
+    @root_account = Account.default
     @account = account_model(:root_account => @root_account, :parent_account => @root_account)
-    @course.update_attribute(:account, @account)
+    course_model(:account => @account)
   end
 
   describe 'associations' do
@@ -845,6 +844,82 @@ describe ContextExternalTool do
       it 'picks up url in higher priority' do
         tool = ContextExternalTool.find_external_tool('http://www.tool.com/launch?p1=2082', Course.find(@course.id))
         expect(tool.tool_id).to eq('real')
+      end
+
+      context 'and there is a difference in LTI version' do
+        subject { ContextExternalTool.find_external_tool(requested_url, context) }
+
+        before do
+          # Creation order is important. Be default Canvas uses
+          # creation order as a tie-breaker. Creating the LTI 1.3
+          # tool first ensures we are actually exercising the preferred
+          # LTI version matching logic.
+          lti_1_1_tool
+          lti_1_3_tool
+        end
+
+        let(:context) { @course }
+        let(:domain) { 'www.test.com' }
+        let(:opts) { { url: url, domain: domain } }
+        let(:requested_url) { "" }
+        let(:url) { 'https://www.test.com/foo?bar=1' }
+        let(:lti_1_1_tool) { external_tool_model(context: context, opts: opts) }
+        let(:lti_1_3_tool) do
+          t = external_tool_model(context: context, opts: opts)
+          t.use_1_3 = true
+          t.save!
+          t
+        end
+
+        context 'with an exact URL match' do
+          let(:requested_url) { url }
+
+          it { is_expected.to eq lti_1_3_tool }
+        end
+
+        context 'with a partial URL match' do
+          let(:requested_url) { "#{url}&extra_param=1" }
+
+          it { is_expected.to eq lti_1_3_tool }
+        end
+
+        context 'whith a domain match' do
+          let(:requested_url) { "https://www.test.com/another_endpoint" }
+
+          it { is_expected.to eq lti_1_3_tool }
+        end
+      end
+    end
+
+    context('with a client id') do
+      let(:url) { 'http://test.com' }
+      let(:tool_params) do
+        {
+          name: "a",
+          url: url,
+          consumer_key: '12345',
+          shared_secret: 'secret',
+        }
+      end
+      let!(:tool1) { @course.context_external_tools.create!(tool_params) }
+      let!(:tool2) do
+        @course.context_external_tools.create!(
+          tool_params.merge(developer_key: DeveloperKey.create!)
+        )
+      end
+
+      it 'preferred_tool_id has precedence over preferred_client_id' do
+        external_tool = ContextExternalTool.find_external_tool(
+          url, @course, tool1.id, nil, tool2.developer_key.id
+        )
+        expect(external_tool).to eq tool1
+      end
+
+      it 'finds the tool based on developer key id' do
+        external_tool = ContextExternalTool.find_external_tool(
+          url, @course, nil, nil, tool2.developer_key.id
+        )
+        expect(external_tool).to eq tool2
       end
     end
   end

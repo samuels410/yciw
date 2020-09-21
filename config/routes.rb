@@ -449,6 +449,7 @@ CanvasRails::Application.routes.draw do
       end
     end
 
+    post 'collapse_all_modules' => 'context_modules#toggle_collapse_all'
     resources :content_exports, only: [:create, :index, :destroy, :show]
     get 'offline_web_exports' => 'courses#offline_web_exports'
     post 'start_offline_web_export' => 'courses#start_offline_web_export'
@@ -640,12 +641,13 @@ CanvasRails::Application.routes.draw do
     get :avatars
     get :sis_import
     resources :sis_imports, only: [:create, :show, :index], controller: :sis_imports_api
+    get 'users' => 'accounts#users', as: 'users'
     post 'users' => 'users#create', as: :add_user
     get 'users/:user_id/delete' => 'accounts#confirm_delete_user', as: :confirm_delete_user
     delete 'users/:user_id' => 'accounts#remove_user', as: :delete_user
 
     # create/delete are handled by specific routes just above
-    resources :users, only: [:index, :new, :edit, :show, :update]
+    resources :users, only: [:new, :edit, :show, :update]
     resources :account_notifications, only: [:create, :update, :destroy]
     concerns :announcements
     resources :submissions
@@ -861,6 +863,8 @@ CanvasRails::Application.routes.draw do
 
   get 'account_notifications' => 'account_notifications#render_past_global_announcements'
 
+  resource :trophy_case, controller: :user_trophies, only: [:show]
+
   scope '/profile' do
     post 'toggle_disable_inbox' => 'profile#toggle_disable_inbox'
     get 'profile_pictures' => 'profile#profile_pics', as: :profile_pics
@@ -919,6 +923,7 @@ CanvasRails::Application.routes.draw do
 
   get 'health_check' => 'info#health_check'
   get 'health_prognosis' => 'info#health_prognosis'
+  get 'web-app-manifest/manifest.json' => 'info#web_app_manifest'
 
   get 'browserconfig.xml', to: 'info#browserconfig', defaults: { format: 'xml' }
 
@@ -1970,7 +1975,7 @@ CanvasRails::Application.routes.draw do
       get 'courses/:course_id/outcome_results', action: :index, as: 'course_outcome_results'
     end
 
-    scope(controller: :outcomes_import_api) do
+    scope(controller: :outcomes_academic_benchmark_import_api) do
       # These can be uncommented when implemented
       # get  "global/outcomes_import",            action: :index
       # get  "global/outcomes_import/:id",        action: :show
@@ -2259,6 +2264,24 @@ CanvasRails::Application.routes.draw do
       put 'media_objects/:media_object_id/media_tracks', action: 'update', as: :update_media_tracks
     end
 
+    scope(controller: 'conditional_release/rules') do
+      # TODO: can rearrange so assignment is in path if desired once we're no longer maintaining backwards compat
+      get 'courses/:course_id/mastery_paths/rules', action: 'index'
+      get 'courses/:course_id/mastery_paths/rules/:id', action: 'show'
+      post 'courses/:course_id/mastery_paths/rules', action: 'create'
+      put 'courses/:course_id/mastery_paths/rules/:id', action: 'update'
+      delete 'courses/:course_id/mastery_paths/rules/:id', action: 'destroy'
+    end
+
+    scope(controller: 'conditional_release/stats') do
+      # TODO: can rearrange so assignment is in path if desired once we're no longer maintaining backwards compat
+      get 'courses/:course_id/mastery_paths/stats/students_per_range', action: 'students_per_range'
+      get 'courses/:course_id/mastery_paths/stats/student_details', action: 'student_details'
+    end
+
+    scope(controller: :history) do
+      get 'users/:user_id/history', action: 'index', as: :user_history
+    end
   end
 
     # this is not a "normal" api endpoint in the sense that it is not documented or
@@ -2285,6 +2308,7 @@ CanvasRails::Application.routes.draw do
   post 'login/oauth2/accept' => 'oauth2_provider#accept', as: :oauth2_auth_accept
   get 'login/oauth2/deny' => 'oauth2_provider#deny', as: :oauth2_auth_deny
   delete 'login/oauth2/token' => 'oauth2_provider#destroy', as: :oauth2_logout
+  get 'login/oauth2/jwks' => 'oauth2_provider#jwks', as: :oauth2_jwks
 
   ApiRouteSet.draw(self, "/api/lti/v1") do
     post "tools/:tool_id/grade_passback", controller: :lti_api, action: :grade_passback, as: "lti_grade_passback_api"

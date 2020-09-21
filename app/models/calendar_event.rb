@@ -52,6 +52,7 @@ class CalendarEvent < ActiveRecord::Base
   belongs_to :parent_event, :class_name => 'CalendarEvent', :foreign_key => :parent_calendar_event_id, :inverse_of => :child_events
   has_many :child_events, -> { where("calendar_events.workflow_state <> 'deleted'") }, class_name: 'CalendarEvent', foreign_key: :parent_calendar_event_id, inverse_of: :parent_event
   belongs_to :web_conference, autosave: true
+  belongs_to :root_account, class_name: 'Account'
 
   validates_presence_of :context, :workflow_state
   validates_associated :context, :if => lambda { |record| record.validate_context }
@@ -59,6 +60,7 @@ class CalendarEvent < ActiveRecord::Base
   validates_length_of :title, :maximum => maximum_string_length, :allow_nil => true, :allow_blank => true
   validates_length_of :comments, maximum: 255, allow_nil: true, allow_blank: true
   validate :validate_conference_visibility
+  before_create :set_root_account
   before_save :default_values
   after_save :touch_context
   after_save :replace_child_events
@@ -216,15 +218,19 @@ class CalendarEvent < ActiveRecord::Base
   end
   protected :default_values
 
-  def root_account
-    if context.respond_to?(:root_account)
-      context.root_account # course, section, group
+  def set_root_account(ctx = self.context)
+    if ctx.respond_to?(:root_account)
+      self.root_account = ctx.root_account # course, section, group
     else
-      case context
+      case ctx
       when User
-        context.account
+        if self.effective_context.is_a?(User)
+          self.root_account_id = 0
+        else
+          self.set_root_account(self.effective_context)
+        end
       when AppointmentGroup
-        context.context&.root_account
+        self.root_account = context.context&.root_account
       end
     end
   end
@@ -242,7 +248,7 @@ class CalendarEvent < ActiveRecord::Base
   def populate_appointment_group_defaults
     self.effective_context_code = context.appointment_group_contexts.map(&:context_code).join(",")
     if new_record?
-      AppointmentGroup::EVENT_ATTRIBUTES.each { |attr| send("#{attr}=", attr == :description ? context.description_html : context.send(attr)) }
+      AppointmentGroup::EVENT_ATTRIBUTES.each { |attr| send("#{attr}=", context.send(attr)) }
       if locked?
         self.start_at = start_at_was if !new_record? && start_at_changed?
         self.end_at   = end_at_was   if !new_record? && end_at_changed?

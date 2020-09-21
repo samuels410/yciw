@@ -65,9 +65,9 @@ export default class EditorConfig {
     return {
       body_class: window.ENV.FEATURES.canvas_k6_theme ? 'elementary-theme' : 'default-theme',
       font_formats:
-        "Lato=lato,Helvetica Neue,Helvetica,Arial,sans- serif; Balsamiq Sans=Balsamiq Sans,lato,Helvetica Neue,Helvetica,Arial,sans- serif; Architect's Daughter=Architects Daughter,lato,Helvetica Neue,Helvetica,Arial,sans- serif; Andale Mono=andale mono,times; Arial=arial,helvetica,sans-serif; Arial Black=arial black,avant garde; Book Antiqua=book antiqua,palatino; Comic Sans MS=comic sans ms,sans-serif; Courier New=courier new,courier; Georgia=georgia,palatino; Helvetica=helvetica; Impact=impact,chicago; Symbol=symbol; Tahoma=tahoma,arial,helvetica,sans-serif; Terminal=terminal,monaco; Times New Roman=times new roman,times; Trebuchet MS=trebuchet ms,geneva; Verdana=verdana,geneva; Webdings=webdings; Wingdings=wingdings,zapf dingbats",
+        "Lato=lato,Helvetica Neue,Helvetica,Arial,sans-serif; Balsamiq Sans=Balsamiq Sans,lato,Helvetica Neue,Helvetica,Arial,sans-serif; Architect's Daughter=Architects Daughter,lato,Helvetica Neue,Helvetica,Arial,sans-serif; Andale Mono=andale mono,times; Arial=arial,helvetica,sans-serif; Arial Black=arial black,avant garde; Book Antiqua=book antiqua,palatino; Comic Sans MS=comic sans ms,sans-serif; Courier New=courier new,courier; Georgia=georgia,palatino; Helvetica=helvetica; Impact=impact,chicago; Symbol=symbol; Tahoma=tahoma,arial,helvetica,sans-serif; Terminal=terminal,monaco; Times New Roman=times new roman,times; Trebuchet MS=trebuchet ms,geneva; Verdana=verdana,geneva; Webdings=webdings; Wingdings=wingdings,zapf dingbats",
       selector: `#${this.idAttribute}`,
-      toolbar: this.toolbar(),
+      [!window.ENV.use_rce_enhancements && 'toolbar']: this.toolbar(), // handled in RCEWrapper
       [!window.ENV.use_rce_enhancements && 'theme']: 'modern',
       [!window.ENV.use_rce_enhancements && 'skin']: false,
       directionality: getDirection(),
@@ -88,7 +88,7 @@ export default class EditorConfig {
       language_load: false,
       convert_urls: false,
       // we add the menubar for a11y purposes but then
-      // hide it with js for non screenreader users
+      // hide it with js for non screenreader users (for old rce only)
       menubar: true,
       branding: false,
       remove_script_host: true,
@@ -102,10 +102,10 @@ export default class EditorConfig {
       valid_elements:
         '@[id|class|style|title|dir<ltr?rtl|lang|xml::lang|onclick|ondblclick|' +
         'onmousedown|onmouseup|onmouseover|onmousemove|onmouseout|onkeypress|' +
-        'onkeydown|onkeyup],a[rel|rev|charset|hreflang|tabindex|accesskey|type|' +
+        'onkeydown|onkeyup|role],a[rel|rev|charset|hreflang|tabindex|accesskey|type|' +
         'name|href|target|title|class|onfocus|onblur],strong/b,em/i,strike,u,' +
         '#p,-ol[type|compact],-ul[type|compact],-li,br,img[longdesc|usemap|' +
-        'src|border|alt=|title|hspace|vspace|width|height|align],-sub,-sup,' +
+        'src|border|alt|title|hspace|vspace|width|height|align|role],-sub,-sup,' +
         '-blockquote,-table[border=0|cellspacing|cellpadding|width|frame|rules|' +
         'height|align|summary|bgcolor|background|bordercolor],-tr[rowspan|width|' +
         'height|align|valign|bgcolor|background|bordercolor],tbody,thead,tfoot,' +

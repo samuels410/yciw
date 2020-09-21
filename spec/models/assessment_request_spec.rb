@@ -42,7 +42,7 @@ describe AssessmentRequest do
 
   describe 'peer review invitations' do
     before :once do
-      @student.communication_channels.create!(:path => 'test@example.com').confirm!
+      communication_channel(@student, {username: 'test@example.com', active_cc: true})
       @notification_name = "Peer Review Invitation"
       notification = Notification.create!(:name => @notification_name, :category => 'Invitation')
       NotificationPolicy.create!(:notification => notification, :communication_channel => @student.communication_channel, :frequency => 'immediately')
@@ -80,7 +80,7 @@ describe AssessmentRequest do
     let(:notification)      { Notification.create!(:name => notification_name, :category => 'Invitation') }
 
     it "should send submission reminders" do
-      @student.communication_channels.create!(:path => 'test@example.com').confirm!
+      communication_channel(@student, {username: 'test@example.com', active_cc: true})
       NotificationPolicy.create!(:notification => notification,
         :communication_channel => @student.communication_channel, :frequency => 'immediately')
 
@@ -93,12 +93,13 @@ describe AssessmentRequest do
       @request.send_reminder!
 
       expect(@request.messages_sent.keys).to include(notification_name)
+      expect(@request.messages_sent[notification_name].count).to eq 1
       message = @request.messages_sent[notification_name].first
       expect(message.body).to include(@assignment.title)
     end
 
     it "should send to the correct url if anonymous" do
-      @student.communication_channels.create!(:path => 'test@example.com').confirm!
+      communication_channel(@student, {username: 'test@example.com', active_cc: true})
       NotificationPolicy.create!(:notification => notification,
         :communication_channel => @student.communication_channel, :frequency => 'immediately')
 

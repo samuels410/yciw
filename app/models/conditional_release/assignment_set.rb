@@ -24,6 +24,14 @@ module ConditionalRelease
     accepts_nested_attributes_for :assignment_set_associations, allow_destroy: true
     acts_as_list :scope => {:scoring_range => self, :deleted_at => nil}
     has_one :rule, through: :scoring_range
+    belongs_to :root_account, :class_name => "Account"
+
+    attr_accessor :service_id # TODO: can remove after migration is complete
+
+    before_create :set_root_account_id
+    def set_root_account_id
+      self.root_account_id ||= scoring_range.root_account_id
+    end
 
     def self.collect_associations(sets)
       sets.map(&:assignment_set_associations).flatten.sort_by(&:id).uniq(&:assignment_id)

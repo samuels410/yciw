@@ -99,7 +99,7 @@ describe GroupMembership do
 
       it "should send message if the first membership in a student organized group", priority: "1", test_id: 193157 do
         Notification.create(name: 'New Student Organized Group', category: 'TestImmediately')
-        @teacher.communication_channels.create(path: "test_channel_email_#{@teacher.id}", path_type: 'email').confirm
+        communication_channel(@teacher, {username: "test_channel_email_#{@teacher.id}@test.com", active_cc: true})
 
         group_membership = @group1.group_memberships.create(user: @student1)
         expect(group_membership.messages_sent['New Student Organized Group']).not_to be_empty
@@ -108,7 +108,7 @@ describe GroupMembership do
       it "should send message when a new student is invited to group and auto-joins", priority: "1", test_id: 193155 do
         Notification.create!(name: 'New Context Group Membership', category: 'TestImmediately')
         student2 = student_in_course(active_all: true).user
-        student2.communication_channels.create(path: "test_channel_email_#{student2.id}", path_type: 'email').confirm
+        communication_channel(student2, {username: "test_channel_email_#{student2.id}@test.com", active_cc: true})
         group_membership = @group1.group_memberships.create(user: @student1)
         @group1.add_user(student2)
         expect(group_membership.messages_sent['New Context Group Membership']).not_to be_empty
@@ -389,5 +389,48 @@ describe GroupMembership do
     expect(sub.reload).to be_deleted # no longer part of the group so the assignment no longer applies to them
     membership.update_attribute(:workflow_state, 'accepted')
     expect(sub.reload).to be_submitted # back to the way it was
+  end
+
+  describe "root_account_id" do
+    let(:category) { course.group_categories.create!(name: 'category 1') }
+    let(:course) { course_factory && @course }
+    let(:group) { category.groups.create!(context: course) }
+    let(:user) { user_model }
+
+    it 'assigns it on save if it is not set' do
+      membership = group.group_memberships.create!(user: user)
+      membership.root_account_id = nil
+
+      expect {
+        membership.save!
+      }.to change {
+        membership.root_account_id
+      }.from(nil).to(group.root_account_id)
+    end
+
+    it 'preserves it on save if it was already set' do
+      membership = group.group_memberships.create!(user: user)
+
+      expect(membership.group).not_to receive(:root_account_id)
+
+      expect {
+        membership.save!
+      }.not_to change {
+        GroupMembership.find(membership.id).root_account_id
+      }
+    end
+
+    it 'does nothing on save if it is not set and could not be resolved' do
+      membership = group.group_memberships.create!(user: user)
+      membership.update_column(:root_account_id, nil)
+
+      expect(membership.group).to receive(:root_account_id).and_return(nil)
+
+      expect {
+        membership.save!
+      }.not_to change {
+        GroupMembership.find(membership.id).root_account_id
+      }
+    end
   end
 end

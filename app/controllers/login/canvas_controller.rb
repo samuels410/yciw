@@ -31,6 +31,7 @@ class Login::CanvasController < ApplicationController
     @headers = false
     flash.now[:error] = params[:message] if params[:message]
     flash.now[:notice] = t('Your password has been changed.') if params[:password_changed] == '1'
+    @include_recaptcha = recaptcha_enabled?
 
     maybe_render_mobile_login
   end
@@ -125,13 +126,10 @@ class Login::CanvasController < ApplicationController
     else
       link_url = Setting.get('invalid_login_faq_url', nil)
       if link_url
-        unsuccessful_login ({
-          html: t(
-            "Invalid username or password. Trouble logging in? *Check out our Login FAQs*.",
-            wrapper: view_context.link_to('\1', link_url)
-          ),
-          timeout: 15000
-        })
+        unsuccessful_login t(
+          "Invalid username or password. Trouble logging in? *Check out our Login FAQs*.",
+          wrapper: view_context.link_to('\1', link_url)
+        )
       else
         unsuccessful_login t("Invalid username or password")
       end
@@ -148,7 +146,11 @@ class Login::CanvasController < ApplicationController
     if request.format.json?
       return render :json => {:errors => [message]}, :status => :bad_request
     end
-    flash[:error] = message
+    if mobile_device?
+      flash[:error] = message
+    else
+      flash[:error] = { html: message, timeout: 15000 }
+    end
     @errored = true
     @headers = false
     maybe_render_mobile_login :bad_request

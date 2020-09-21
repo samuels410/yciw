@@ -19,7 +19,8 @@
 import React from 'react'
 import axios from 'axios'
 import I18n from 'i18n!feature_flags'
-import {Text, Spinner} from '@instructure/ui-elements'
+import {Text} from '@instructure/ui-elements'
+import {Spinner} from '@instructure/ui-spinner'
 import {Button} from '@instructure/ui-buttons'
 import {View} from '@instructure/ui-layout'
 import {Tooltip} from '@instructure/ui-overlays'
@@ -44,7 +45,7 @@ export default class FeatureFlags extends React.Component {
 
   retrieveFlagsConfig() {
     this.setState({isLoading: true})
-    const url = `/api/v1/accounts/${window.ENV.ACCOUNT.id}/features`
+    const url = `/api/v1/accounts/${window.ENV.ACCOUNT.id}/features?hide_inherited_enabled=true`
     axios.get(url).then(response => this.loadData(response.data))
   }
 

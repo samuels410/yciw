@@ -80,12 +80,14 @@ class Submission < ActiveRecord::Base
   belongs_to :attachment # this refers to the screenshot of the submission if it is a url submission
   belongs_to :assignment, inverse_of: :submissions
   belongs_to :course, inverse_of: :submissions
+  has_many :observer_alerts, as: :context, inverse_of: :context, dependent: :destroy
   belongs_to :user
   alias student user
   belongs_to :grader, :class_name => 'User'
   belongs_to :grading_period
   belongs_to :group
   belongs_to :media_object
+  belongs_to :root_account, :class_name => 'Account'
 
   belongs_to :quiz_submission, :class_name => 'Quizzes::QuizSubmission'
   has_many :all_submission_comments, -> { order(:created_at) }, class_name: 'SubmissionComment', dependent: :destroy
@@ -256,7 +258,7 @@ class Submission < ActiveRecord::Base
   def self.needs_grading_conditions
     conditions = <<-SQL
       submissions.submission_type IS NOT NULL
-      AND submissions.excused IS NOT TRUE
+      AND (submissions.excused=false OR submissions.excused IS NULL)
       AND (submissions.workflow_state = 'pending_review'
         OR (submissions.workflow_state IN ('submitted', 'graded')
           AND (submissions.score IS NULL OR submissions.grade_matches_current_submission =  'f')
@@ -318,8 +320,9 @@ class Submission < ActiveRecord::Base
   before_save :update_if_pending
   before_save :validate_single_submission, :infer_values
   before_save :prep_for_submitting_to_plagiarism
-  before_save :check_url_changed
+  before_save :check_is_new_attempt
   before_save :check_reset_graded_anonymously
+  before_save :set_root_account_id
   after_save :touch_user
   after_save :clear_user_submissions_cache
   after_save :touch_graders
@@ -350,25 +353,12 @@ class Submission < ActiveRecord::Base
     !!(self.grader_id && self.grader_id < 0)
   end
 
-  def touch_assignments
-    Assignment.
-      where(id: assignment_id, context_type: 'Course').
-      where("EXISTS (?)",
-        Enrollment.where(Enrollment.active_student_conditions).
-        where(user_id: user_id).
-        where("course_id=assignments.context_id")).
-      update_all(["updated_at=?", Time.now.utc])
-    # TODO: add this to the SQL above when DA is on for everybody
-    # and remove NeedsGradingCountQuery#manual_count
-    # AND EXISTS (SELECT assignment_student_visibilities.* WHERE assignment_student_visibilities.user_id = NEW.user_id AND assignment_student_visibilities.assignment_id = NEW.assignment_id);
-  end
-
   after_create :needs_grading_count_updated, if: :needs_grading?
   after_update :needs_grading_count_updated, if: :needs_grading_changed?
   after_update :update_planner_override
   def needs_grading_count_updated
     self.class.connection.after_transaction_commit do
-      touch_assignments
+      self.assignment.clear_cache_key(:needs_grading)
     end
   end
 
@@ -1440,8 +1430,8 @@ class Submission < ActiveRecord::Base
     end
   end
 
-  def check_url_changed
-    @url_changed = self.url && self.url_changed?
+  def check_is_new_attempt
+    @attempt_changed = self.attempt_changed?
     true
   end
 
@@ -1624,7 +1614,7 @@ class Submission < ActiveRecord::Base
   private :can_grade_symbolic_status
 
   def queue_websnap
-    if !self.attachment_id && @url_changed && self.url && self.submission_type == 'online_url'
+    if !self.attachment_id && @attempt_changed && self.url && self.submission_type == 'online_url'
       self.send_later_enqueue_args(:get_web_snapshot, { :priority => Delayed::LOW_PRIORITY })
     end
   end
@@ -1887,6 +1877,24 @@ class Submission < ActiveRecord::Base
     end
     self.class.connection.after_transaction_commit do
       Auditors::GradeChange.record(skip_insert: skip_insert, submission: self)
+      queue_conditional_release_grade_change_handler if newly_graded || grade_changed
+    end
+  end
+
+  def queue_conditional_release_grade_change_handler
+    self.shard.activate do
+      return unless self.graded? && self.posted?
+      # use request caches to handle n+1's when updating a lot of submissions in the same course in one request
+      return unless RequestCache.cache('conditional_release_feature_enabled', self.course_id) do
+        self.course.feature_enabled?(:conditional_release)
+      end
+      if ConditionalRelease::Rule.is_trigger_assignment?(self.assignment)
+        ConditionalRelease::OverrideHandler.send_later_if_production_enqueue_args(
+          :handle_grade_change,
+          {:priority => Delayed::LOW_PRIORITY, :strand => "conditional_release_grade_change:#{self.global_assignment_id}"},
+          self
+        )
+      end
     end
   end
 
@@ -2500,6 +2508,13 @@ class Submission < ActiveRecord::Base
     end
   end
 
+  # You must also check the assignment.can_view_score_statistics
+  def eligible_for_showing_score_statistics?
+    # This checks whether this submission meets the requirements in order
+    # for the submitter to be able to see score statistics for the assignment
+    (score.present? && !hide_grade_from_student?)
+  end
+
   def posted?
     # NOTE: This really should be a call to assignment.course.post_policies_enabled?
     # but we're going to leave it the way it is for the next few months (until
@@ -2520,24 +2535,17 @@ class Submission < ActiveRecord::Base
   end
 
   def visible_rubric_assessments_for(viewing_user, attempt: nil)
-    return [] unless posted? || grants_right?(viewing_user, :read_grade)
-    return [] unless self.assignment.rubric_association
+    return [] if assignment.rubric_association.blank?
 
-    assessments =
-      if attempt
-        self.rubric_assessments.each_with_object([]) do |assessment, assessments_for_attempt|
-          if assessment.artifact_attempt == attempt
-            assessments_for_attempt << assessment
-          else
-            version = assessment.versions.find { |v| v.model.artifact_attempt == attempt }
-            assessments_for_attempt << version.model if version
-          end
-        end
-      else
-        self.rubric_assessments
+    unless posted? || grants_right?(viewing_user, :read_grade)
+      # If this submission is unposted and the viewer can't view the grade,
+      # show only that viewer's assessments
+      return rubric_assessments_for_attempt(attempt: attempt).filter do |assessment|
+        assessment.assessor_id == viewing_user.id
       end
+    end
 
-    filtered_assessments = assessments.select do |a|
+    filtered_assessments = rubric_assessments_for_attempt(attempt: attempt).select do |a|
       a.grants_right?(viewing_user, :read) &&
         a.rubric_association == self.assignment.rubric_association
     end
@@ -2548,6 +2556,20 @@ class Submission < ActiveRecord::Base
       ]
     end
   end
+
+  def rubric_assessments_for_attempt(attempt: nil)
+    return rubric_assessments.to_a if attempt.blank?
+
+    rubric_assessments.each_with_object([]) do |assessment, assessments_for_attempt|
+      if assessment.artifact_attempt == attempt
+        assessments_for_attempt << assessment
+      else
+        version = assessment.versions.find { |v| v.model.artifact_attempt == attempt }
+        assessments_for_attempt << version.model if version
+      end
+    end
+  end
+  private :rubric_assessments_for_attempt
 
   def self.queue_bulk_update(context, section, grader, grade_data)
     progress = Progress.create!(:context => context, :tag => "submissions_update")
@@ -2676,19 +2698,11 @@ class Submission < ActiveRecord::Base
     end
   end
 
-  def root_account_id
-    # TODO this is a substitute for the root_account_id column
-    # and the root_account attribute, which will eventually be added
-    self.assignment&.root_account_id
-  end
-
-  def root_account
-    # TODO this is a substitute for the root_account attribute,
-    # which will eventually be added
-    self.assignment&.root_account
-  end
-
   private
+
+  def set_root_account_id
+    self.root_account_id ||= assignment&.course&.root_account_id
+  end
 
   def set_anonymous_id
     self.anonymous_id = Anonymity.generate_id(existing_ids: Submission.anonymous_ids_for(assignment))

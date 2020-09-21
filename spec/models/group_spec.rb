@@ -101,6 +101,15 @@ describe Group do
     expect(@group.inactive?).to eq false
   end
 
+  it "should set the root_account_id for GroupMemberships when bulk adding users" do
+    @account = account_model
+    group_model(group_category: @communities, is_public: true, context: @account)
+    @group.bulk_add_users_to_group([@user])
+    @group.group_memberships.each do |gm|
+      expect(gm.root_account_id).not_to be nil
+    end
+  end
+
   describe '#grading_standard_or_default' do
     context 'when the Group belongs to a Course' do
       it 'returns the grading scheme being used by the course, if one exists' do
@@ -620,6 +629,31 @@ describe Group do
       user2 = section1.enroll_user(user_model, 'StudentEnrollment').user
       group = @course.groups.create
       group.add_user(user1)
+      expect(group).to have_common_section_with_user(user2)
+    end
+
+    it "should be true if one member is inactive" do
+      course_with_teacher(:active_all => true)
+      section1 = @course.course_sections.create
+      user1 = section1.enroll_user(user_model, 'StudentEnrollment').user
+      user2 = section1.enroll_user(user_model, 'StudentEnrollment').user
+      group = @course.groups.create
+      group.add_user(user1)
+      e = Enrollment.where(user_id: user1.id, course_id: @course.id)
+      e.update(workflow_state: 'inactive')
+      group.add_user(user2)
+      expect(group).to have_common_section_with_user(user2)
+    end
+
+    it "should be true if one member is completed" do
+      course_with_teacher(:active_all => true)
+      section1 = @course.course_sections.create
+      user1 = section1.enroll_user(user_model, 'StudentEnrollment').user
+      user2 = section1.enroll_user(user_model, 'StudentEnrollment').user
+      group = @course.groups.create
+      group.add_user(user1)
+      Enrollment.where(user_id: user1.id, course_id: @course.id).update(workflow_state: 'completed')
+      group.add_user(user2)
       expect(group).to have_common_section_with_user(user2)
     end
   end

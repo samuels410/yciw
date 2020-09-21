@@ -46,13 +46,13 @@ require('./bundles')
 // after-uglify size of things, but can skip making sourcemaps if you want it to
 // go faster. So this is to allow people to use either environment variable:
 // the technically more correct SKIP_SOURCEMAPS one or the historically used JS_BUILD_NO_UGLIFY one.
-const skipSourcemaps = Boolean(process.env.SKIP_SOURCEMAPS || process.env.JS_BUILD_NO_UGLIFY)
+const skipSourcemaps = Boolean(process.env.SKIP_SOURCEMAPS || process.env.JS_BUILD_NO_UGLIFY === '1')
 
 const root = path.resolve(__dirname, '..')
 
 module.exports = {
   mode: process.env.NODE_ENV,
-  performance: {
+  performance: skipSourcemaps ? false : {
     // This just reflects how big the 'main' entry is at the time of writing. Every
     // time we get it smaller we should change this to the new smaller number so it
     // only goes down over time instead of growing bigger over time
@@ -62,7 +62,8 @@ module.exports = {
     // tracking them too. Then, as we work to get all chunks smaller, we should change
     // this number to the size of our biggest known asset and hopefully someday get
     // to where they are all under the default value of 250000 and then remove this
-    maxAssetSize: 1200000,
+    // TODO: decrease back to 1200000 LS-1222
+    maxAssetSize: 1400000,
     assetFilter: assetFilename => {
       const thingsWeKnowAreWayTooBig = [
         'canvas-rce-async-chunk',

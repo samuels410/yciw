@@ -36,32 +36,46 @@ import StudentGroupFilter from '../shared/StudentGroupFilter'
 import SpeedGraderLink from '../shared/SpeedGraderLink'
 import DirectShareUserModal from 'jsx/shared/direct_share/DirectShareUserModal'
 import DirectShareCourseTray from 'jsx/shared/direct_share/DirectShareCourseTray'
+import {setupSubmitHandler} from 'jsx/shared/helpers/reuploadSubmissionsHelper'
 
 const lockManager = new LockManager()
 lockManager.init({itemType: 'assignment', page: 'show'})
 
+let studentGroupSelectionRequestTrackers = []
+
 function onStudentGroupSelected(selectedStudentGroupId) {
   if (selectedStudentGroupId !== '0') {
-    axios.put(
-      `/api/v1/courses/${ENV.COURSE_ID}/gradebook_settings`,
-      qs.stringify({
-        gradebook_settings: {
-          filter_rows_by: {
-            student_group_id: selectedStudentGroupId
-          }
-        }
-      })
-    )
+    const tracker = {selectedStudentGroupId}
+    studentGroupSelectionRequestTrackers.push(tracker)
 
     ENV.selected_student_group_id = selectedStudentGroupId
     renderStudentGroupFilter()
     renderSpeedGraderLink()
+
+    axios
+      .put(
+        `/api/v1/courses/${ENV.COURSE_ID}/gradebook_settings`,
+        qs.stringify({
+          gradebook_settings: {
+            filter_rows_by: {
+              student_group_id: selectedStudentGroupId
+            }
+          }
+        })
+      )
+      .finally(() => {
+        studentGroupSelectionRequestTrackers = studentGroupSelectionRequestTrackers.filter(
+          item => item !== tracker
+        )
+        renderSpeedGraderLink()
+      })
   }
 }
 
 function renderSpeedGraderLink() {
   const disabled =
-    ENV.SETTINGS.filter_speed_grader_by_student_group && !ENV.selected_student_group_id
+    ENV.SETTINGS.filter_speed_grader_by_student_group &&
+    (!ENV.selected_student_group_id || studentGroupSelectionRequestTrackers.length > 0)
   const $mountPoint = document.getElementById('speed_grader_link_mount_point')
 
   if ($mountPoint) {
@@ -191,19 +205,7 @@ $(() => {
     $('.upload_submissions_link').slideDown()
   })
 
-  $('#re_upload_submissions_form').submit(function(event) {
-    const data = $(this).getFormData()
-    if (!data.submissions_zip) {
-      event.preventDefault()
-      event.stopPropagation()
-    } else if (!data.submissions_zip.match(/\.zip$/)) {
-      event.preventDefault()
-      event.stopPropagation()
-      $(this).formErrors({
-        submissions_zip: I18n.t('Please upload files as a .zip')
-      })
-    }
-  })
+  setupSubmitHandler(ENV.USER_ASSET_STRING)
 
   $('#edit_assignment_form').bind('assignment_updated', (event, data) => {
     if (data.assignment && data.assignment.peer_reviews) {

@@ -49,9 +49,13 @@ module LiveEvents
         LiveEvents.clear_context!
         yield block
         run_jobs
-        puts stream_client
-        puts stream_client.data.first[:data]
-        @event_message = JSON.parse(stream_client.data.first[:data])
+
+        # Find the last message with a matching event_name
+        @event_message = stream_client.data.map do |event|
+          JSON.parse(event[:data])
+        end.reverse.find do |msg|
+          msg.dig('attributes', 'event_name') == @event_name
+        end
       end
 
       def has_kept_the_contract?
@@ -101,10 +105,11 @@ module LiveEvents
 
       def initialize(stream_name)
         @stream_name = stream_name
+        @data = []
       end
 
       def put_records(records:, stream_name:) # rubocop:disable Lint/UnusedMethodArgument
-        @data = records
+        @data += records
       end
     end
 

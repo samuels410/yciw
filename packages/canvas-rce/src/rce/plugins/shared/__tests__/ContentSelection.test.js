@@ -68,11 +68,8 @@ describe('RCE > Plugins > Shared > Content Selection', () => {
       })
 
       it('finds the selected text', () => {
-        // a bit contrived, but proves we find the selected text
-        // if there is some w/in the link
-        editor.selection.getContent = () => 'foo'
         const content = getContentFromElement($element, editor)
-        expect(content.text).toEqual('foo')
+        expect(content.text).toEqual('Syllabus.doc')
       })
 
       it('includes the url of the link', () => {
@@ -179,26 +176,18 @@ describe('RCE > Plugins > Shared > Content Selection', () => {
       })
 
       describe('.isDecorativeImage', () => {
-        describe('when "data-is-decorative" is "true" on the image element', () => {
+        describe('when "role" is "presentation" on the image element', () => {
           beforeEach(() => {
-            $element.setAttribute('data-is-decorative', true)
+            $element.setAttribute('role', 'presentation')
           })
 
           it('is true when the image has no alt text', () => {
             $element.alt = ''
             expect(getContentFromElement($element, editor).isDecorativeImage).toEqual(true)
           })
-
-          it('is false when the image still has alt text', () => {
-            expect(getContentFromElement($element, editor).isDecorativeImage).toEqual(false)
-          })
         })
 
-        describe('when "data-is-decorative" is "false" on the image element', () => {
-          beforeEach(() => {
-            $element.setAttribute('data-is-decorative', false)
-          })
-
+        describe('when "role" is not "presentation" on the image element', () => {
           it('is false when the image has no alt text', () => {
             $element.alt = ''
             expect(getContentFromElement($element, editor).isDecorativeImage).toEqual(false)

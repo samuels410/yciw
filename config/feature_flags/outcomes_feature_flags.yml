@@ -5,25 +5,9 @@ outcome_alignment_non_scoring_content:
   display_name: Outcome alignment to non-scoring content
   description: |-
     Allows aligning outcomes to non-scoring content
-rubrics_in_course_navigation:
-  state: hidden
-  applies_to: RootAccount
-  display_name: Rubrics in course navigation
-  description: |-
-    Includes rubrics in the course sidebar navigation
-  touch_context: true
-decouple_rubrics:
-  state: hidden
-  applies_to: RootAccount
-  display_name: "Modify permissions for Account Rubrics"
-  description: "Change Rubrics visibility on Accounts to depend on the Rubrics permission
-    instead of the Learning Outcomes permission"
-import_outcomes_permission_fix:
-  state: hidden
-  applies_to: RootAccount
-  display_name: "Hide the Import Learning Outcomes button based on user permissions"
-  description: "Ensures that users without the Import Outcomes permission cannot see
-    the button within the Outcomes tab"
+  environments:
+    production:
+      state: disabled
 outcome_guid_course_exports:
   state: hidden
   applies_to: RootAccount
@@ -47,3 +31,14 @@ outcome_alignments_course_migration:
   display_name: Outcomes Service Alignment Migration
   description: Includes Outcomes Service alignments when exporting and importing
     course content
+bulk_delete_pages:
+  state: hidden
+  applies_to: RootAccount
+  display_name: Page Bulk Deleting
+  description: Allow pages to be deleted in bulk
+account_level_mastery_scales:
+  state: hidden
+  applies_to: RootAccount
+  display_name: Account-level Mastery Scales
+  description: Allows Account-level mastery scales and proficiency calculations,
+    replacing per-outcome scales

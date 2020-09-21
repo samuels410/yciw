@@ -100,7 +100,7 @@ class AccountNotification < ActiveRecord::Base
         # roles. try(:id) because the AccountNotificationRole may have an
         # explicitly nil role_id to indicate the announcement's intended for
         # users not enrolled in any courses
-        role_ids = announcement.account_notification_roles.map { |anr| anr.role&.role_for_shard&.id }
+        role_ids = announcement.account_notification_roles.map { |anr| anr.role&.role_for_root_account_id(root_account.id)&.id }
 
         unless role_ids.empty? || user_role_ids.key?(announcement.account_id)
           # choose enrollments and account users to inspect
@@ -109,10 +109,15 @@ class AccountNotification < ActiveRecord::Base
             account_users = user.account_users.shard(user.in_region_associated_shards).distinct.select(:role_id).to_a
           else
             announcement.shard.activate do
-              sub_account_ids_map[announcement.account_id] ||=
-                Account.sub_account_ids_recursive(announcement.account_id) + [announcement.account_id]
-              enrollments = Enrollment.where(user_id: user).active_or_pending_by_date.joins(:course).
-                where(:courses => {:account_id => sub_account_ids_map[announcement.account_id]}).select(:role_id).to_a
+              if announcement.account.root_account?
+                enrollments = Enrollment.where(user_id: user).active_or_pending_by_date.
+                  where(root_account_id: announcement.account_id).select(:role_id).to_a
+              else
+                sub_account_ids_map[announcement.account_id] ||=
+                  Account.sub_account_ids_recursive(announcement.account_id) + [announcement.account_id]
+                enrollments = Enrollment.where(user_id: user).active_or_pending_by_date.joins(:course).
+                  where(:courses => {:account_id => sub_account_ids_map[announcement.account_id]}).select(:role_id).to_a
+              end
               account_users = announcement.account.root_account.cached_all_account_users_for(user)
             end
           end
@@ -124,9 +129,9 @@ class AccountNotification < ActiveRecord::Base
           # map to role ids. user role.id instead of role_id to trigger Role#id
           # magic for built in roles. announcements intended for users not
           # enrolled in any courses have the NilEnrollment role type
-          user_role_ids[announcement.account_id] = enrollments.map{ |e| e.role.role_for_shard.id }
+          user_role_ids[announcement.account_id] = enrollments.map{ |e| e.role.role_for_root_account_id(root_account.id).id }
           user_role_ids[announcement.account_id] = [nil] if user_role_ids[announcement.account_id].empty?
-          user_role_ids[announcement.account_id] |= account_users.map{ |au| au.role.role_for_shard.id }
+          user_role_ids[announcement.account_id] |= account_users.map{ |au| au.role.role_for_root_account_id(root_account.id).id }
         end
 
         role_ids.empty? || (role_ids & user_role_ids[announcement.account_id]).present?
@@ -282,7 +287,7 @@ class AccountNotification < ActiveRecord::Base
       user_ids = Set.new
       get_everybody = roles.empty?
 
-      course_roles = roles.select{|role| role.course_role?}.map(&:role_for_shard)
+      course_roles = roles.select{|role| role.course_role?}.map{|r| r.role_for_root_account_id(account.resolved_root_account_id)}
       if get_everybody || course_roles.any?
         Course.find_ids_in_ranges do |min_id, max_id|
           course_ids = Course.active.where(:id => min_id..max_id, :account_id => all_account_ids).pluck(:id)
@@ -295,7 +300,7 @@ class AccountNotification < ActiveRecord::Base
         end
       end
 
-      account_roles = roles.select{|role| role.account_role?}.map(&:role_for_shard)
+      account_roles = roles.select{|role| role.account_role?}.map{|r| r.role_for_root_account_id(account.resolved_root_account_id)}
       if get_everybody || account_roles.any?
         AccountUser.find_ids_in_ranges do |min_id, max_id|
           scope = AccountUser.where(:id => min_id..max_id).active.where(:account_id => all_account_ids)

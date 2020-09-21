@@ -148,6 +148,16 @@ module RSpec::Rails
       !!Nokogiri::HTML(actual).at_css(expected)
     end
   end
+
+  RSpec::Matchers.define :be_checked do
+    match do |node|
+      if node.is_a?(Nokogiri::XML::Element)
+        node.attr('checked') == 'checked'
+      elsif node.respond_to?(:checked?)
+        node.checked?
+      end
+    end
+  end
 end
 
 module RenderWithHelpers
@@ -206,17 +216,7 @@ require_relative 'rspec_mock_extensions'
 require File.expand_path(File.dirname(__FILE__) + '/ams_spec_helper')
 
 require 'i18n_tasks'
-
-legit_global_methods = Object.private_methods
-Dir[File.dirname(__FILE__) + "/factories/**/*.rb"].each {|f| require f }
-crap_factories = (Object.private_methods - legit_global_methods)
-if crap_factories.present?
-  $stderr.puts "\e[31mError: Don't create global factories/helpers"
-  $stderr.puts "Put #{crap_factories.map { |m| "`#{m}`" }.to_sentence} in the `Factories` module"
-  $stderr.puts "(or somewhere else appropriate)\e[0m"
-  $stderr.puts
-  exit! 1
-end
+require_relative 'factories'
 
 Dir[File.dirname(__FILE__) + "/shared_examples/**/*.rb"].each {|f| require f }
 
@@ -282,6 +282,8 @@ RSpec::Matchers.define :and_fragment do |expected|
   end
 end
 
+RSpec::Matchers.define_negated_matcher :not_change, :change
+
 module RSpec::Matchers::Helpers
   # allows for matchers to use symbols and literals even though URIs are always strings.
   # i.e. `and_query({assignment_id: @assignment.id})`
@@ -323,6 +325,8 @@ end
 
 RSpec::Expectations.configuration.on_potential_false_positives = :raise
 
+require 'rspec_junit_formatter'
+
 RSpec.configure do |config|
   config.example_status_persistence_file_path = Rails.root.join('tmp', 'rspec')
   config.use_transactional_fixtures = true
@@ -342,6 +346,16 @@ RSpec.configure do |config|
   config.include Onceler::BasicHelpers
   config.include PGCollkeyHelper
   config.project_source_dirs << "gems" # so that failures here are reported properly
+
+  # DOCKER_PROCESSES is only used on Jenkins and we only care to have RspecJunitFormatter on Jenkins.
+  if ENV['DOCKER_PROCESSES']
+    # if file already exists this is a rerun of a failed spec, don't generate new xml.
+    config.add_formatter "RspecJunitFormatter", "log/results.xml" unless File.file?("log/results.xml")
+  end
+
+  if ENV['RSPEC_LOG']
+    config.add_formatter "ParallelTests::RSpec::RuntimeLogger", "log/parallel_runtime_rspec_tests.log"
+  end
 
   if ENV['RAILS_LOAD_ALL_LOCALES'] && RSpec.configuration.filter.rules[:i18n]
     config.around :each do |example|
@@ -377,6 +391,7 @@ RSpec.configure do |config|
     MultiCache.reset
     Course.enroll_user_call_count = 0
     TermsOfService.skip_automatic_terms_creation = true
+    LiveEvents.clear_context!
     $spec_api_tokens = {}
   end
 
@@ -390,7 +405,6 @@ RSpec.configure do |config|
 
   config.before :all do
     raise "all specs need to use transactions" unless using_transactions_properly?
-    Role.ensure_built_in_roles!
   end
 
   Onceler.configure do |c|
@@ -507,22 +521,6 @@ RSpec.configure do |config|
 
   def default_uploaded_data
     fixture_file_upload('docs/doc.doc', 'application/msword', true)
-  end
-
-  def factory_with_protected_attributes(ar_klass, attrs, do_save = true)
-    obj = ar_klass.respond_to?(:new) ? ar_klass.new : ar_klass.build
-    attrs.each { |k, v| obj.send("#{k}=", attrs[k]) }
-    obj.save! if do_save
-    obj
-  end
-
-  def update_with_protected_attributes!(ar_instance, attrs)
-    attrs.each { |k, v| ar_instance.send("#{k}=", attrs[k]) }
-    ar_instance.save!
-  end
-
-  def update_with_protected_attributes(ar_instance, attrs)
-    update_with_protected_attributes!(ar_instance, attrs) rescue false
   end
 
   def create_temp_dir!
@@ -838,45 +836,14 @@ RSpec.configure do |config|
     Rails.application.config.consider_all_requests_local = value
   end
 
-  # a fast way to create a record, especially if you don't need the actual
-  # ruby object. since it just does a straight up insert, you need to
-  # provide any non-null attributes or things that would normally be
-  # inferred/defaulted prior to saving
-  def create_record(klass, attributes, return_type = :id)
-    create_records(klass, [attributes], return_type)[0]
-  end
-
-  # a little wrapper around bulk_insert that gives you back records or ids
-  # in order
-  # NOTE: if you decide you want to go add something like this to canvas
-  # proper, make sure you have it handle concurrent inserts (this does
-  # not, because READ COMMITTED is the default transaction isolation
-  # level)
-  def create_records(klass, records, return_type = :id)
-    return [] if records.empty?
-    klass.transaction do
-      klass.connection.bulk_insert klass.table_name, records
-      return if return_type == :nil
-      scope = klass.order("id DESC").limit(records.size)
-      if return_type == :record
-        scope.to_a.reverse
-      else
-        scope.pluck(:id).reverse
-      end
-    end
-  end
-
   def skip_if_prepended_class_method_stubs_broken
     versions = [
       '2.4.6',
       '2.4.9',
       '2.5.1',
-      '2.5.3',
-      '2.6.0',
-      '2.6.2',
-      '2.6.5'
+      '2.5.3'
     ]
-    skip("stubbing prepended class methods is broken in this version of ruby") if versions.include?(RUBY_VERSION)
+    skip("stubbing prepended class methods is broken in this version of ruby") if versions.include?(RUBY_VERSION) || RUBY_VERSION >= "2.6"
   end
 end
 

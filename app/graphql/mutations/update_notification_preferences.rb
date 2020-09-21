@@ -70,29 +70,47 @@ class Mutations::UpdateNotificationPreferences < Mutations::BaseMutation
   argument :account_id, ID, required: false, prepare: GraphQLHelpers.relay_or_legacy_id_prepare_func('Account')
   argument :course_id, ID, required: false, prepare: GraphQLHelpers.relay_or_legacy_id_prepare_func('Course')
   argument :context_type, NotificationPreferencesContextType, required: true
+
   argument :enabled, Boolean, required: false
+
+  argument :send_scores_in_emails, Boolean, required: false
+
   argument :communication_channel_id, ID, required: false, prepare: GraphQLHelpers.relay_or_legacy_id_prepare_func('CommunicationChannel')
   argument :notification_category, NotificationCategoryType, required: false
   argument :frequency, NotificationFrequencyType, required: false
+  argument :is_policy_override, Boolean, required: false
 
-  field :account, Types::AccountType, null: true
-  field :course, Types::CourseType, null: true
+  field :user, Types::UserType, null: true
   def resolve(input:)
     validate_input(input)
     context = get_context(input)
 
-    unless input[:enabled].nil?
+    if !input[:enabled].nil?
       NotificationPolicyOverride.enable_for_context(current_user, context, enable: input[:enabled])
     end
 
-    if input[:communication_channel_id] && input[:notification_category] && input[:frequency]
+    if !input[:send_scores_in_emails].nil? && context.root_account.present? && context.root_account.settings[:allow_sending_scores_in_emails] != false
+      if context.is_a?(Course)
+        current_user.set_preference(:send_scores_in_emails_override, "course_" + context.global_id.to_s, input[:send_scores_in_emails])
+      else
+        current_user.preferences[:send_scores_in_emails] = input[:send_scores_in_emails]
+        current_user.save!
+      end
+    end
+
+    # Because we validate the arguments for updating notification policies above we only need to
+    # check for the presence of one of the arguments needed to update notification policies
+    if input[:communication_channel_id]
       communication_channel = CommunicationChannel.find(input[:communication_channel_id])
-      NotificationPolicyOverride.create_or_update_for(communication_channel, input[:notification_category].gsub('_', ' '), input[:frequency], context)
+      if input[:is_policy_override]
+        NotificationPolicyOverride.create_or_update_for(communication_channel, input[:notification_category].tr('_', ' '), input[:frequency], context)
+      else
+        NotificationPolicy.find_or_update_for_category(communication_channel, input[:notification_category].tr('_', ' '), input[:frequency])
+      end
     end
 
     {
-      account: input[:context_type] == 'Account' ? context : nil,
-      course: input[:context_type] == 'Course' ? context : nil
+      user: current_user
     }
   rescue ActiveRecord::RecordNotFound
     raise GraphQL::ExecutionError, 'not found'
@@ -108,13 +126,28 @@ class Mutations::UpdateNotificationPreferences < Mutations::BaseMutation
     elsif input[:context_type] == 'Account'
       raise I18n.t('Account level notification preferences require an account_id to update') unless input[:account_id]
     end
+
+    validate_policy_update_input(input)
+  end
+
+  def validate_policy_update_input(input)
+    policy_update_input = [
+      input[:communication_channel_id],
+      input[:notification_category],
+      input[:frequency]
+    ]
+    # We require that the 4 arguments listed above be present in order
+    # to update notification policies or policy overrides
+    if !policy_update_input.all? && !policy_update_input.none?
+      raise I18n.t('Notification policies requires the communication channel id, the notification category, and the frequency to update')
+    end
   end
 
   def get_context(input)
     if input[:context_type] == 'Course'
-      Course.find(input[:course_id])
+      Course.find(input[:course_id]) if input[:course_id]
     elsif input[:context_type] == 'Account'
-      Account.find(input[:account_id])
+      Account.find(input[:account_id]) if input[:account_id]
     end
   end
 end

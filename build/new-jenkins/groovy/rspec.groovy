@@ -17,52 +17,56 @@
  */
 
 def seleniumConfig() {
-  def flags = load 'build/new-jenkins/groovy/commit-flags.groovy'
   [
-    node_total: (env.SELENIUM_CI_NODE_TOTAL ?: '25') as Integer,
-    max_fail: (env.SELENIUM_MAX_FAIL ?: "100") as Integer,
-    reruns_retry: (env.SELENIUM_RERUN_RETRY ?: "3") as Integer,
-    force_failure: flags.isForceFailureSelenium() ? "1" : ''
+    node_total: configuration.getInteger('selenium-ci-node-total'),
+    max_fail: configuration.getInteger('selenium-max-fail'),
+    reruns_retry: configuration.getInteger('selenium-rerun-retry'),
+    force_failure: configuration.isForceFailureSelenium() ? "1" : '',
+    patchsetTag: env.PATCHSET_TAG,
   ]
 }
 
 def runSeleniumSuite(total, index) {
+  def config = seleniumConfig()
   _runRspecTestSuite(
       total,
       index,
-      'docker-compose.new-jenkins.multiple-processes.yml:docker-compose.new-jenkins-selenium.yml',
+      'docker-compose.new-jenkins.yml:docker-compose.new-jenkins-selenium.yml',
       'selenium',
-      seleniumConfig().max_fail,
-      seleniumConfig().reruns_retry,
+      config.max_fail,
+      config.reruns_retry,
       '^./(spec|gems/plugins/.*/spec_canvas)/selenium',
       '.*/performance',
       '3',
-      seleniumConfig().force_failure
+      config.force_failure,
+      config.patchsetTag
   )
 }
 
 def rspecConfig() {
-  def flags = load 'build/new-jenkins/groovy/commit-flags.groovy'
   [
-    node_total: (env.RSPEC_CI_NODE_TOTAL ?: '15') as Integer,
-    max_fail: (env.RSPEC_MAX_FAIL ?: "100") as Integer,
-    reruns_retry: (env.RSPEC_RERUN_RETRY ?: "1") as Integer,
-    force_failure: flags.isForceFailureRspec() ? "1" : '',
+    node_total: configuration.getInteger('rspec-ci-node-total'),
+    max_fail: configuration.getInteger('rspec-max-fail'),
+    reruns_retry: configuration.getInteger('rspec-rerun-retry'),
+    force_failure: configuration.isForceFailureRSpec() ? "1" : '',
+    patchsetTag: env.PATCHSET_TAG,
   ]
 }
 
 def runRSpecSuite(total, index) {
+  def config = rspecConfig()
   _runRspecTestSuite(
       total,
       index,
-      'docker-compose.new-jenkins.multiple-processes.yml',
+      'docker-compose.new-jenkins.yml',
       'rspec',
-      rspecConfig().max_fail,
-      rspecConfig().reruns_retry,
+      config.max_fail,
+      config.reruns_retry,
       '^./(spec|gems/plugins/.*/spec_canvas)/',
       '.*/selenium',
       '4',
-      rspecConfig().force_failure
+      config.force_failure,
+      config.patchsetTag
   )
 }
 
@@ -76,7 +80,9 @@ def _runRspecTestSuite(
     test_file_pattern,
     exclude_regex,
     docker_processes,
-    force_failure) {
+    force_failure,
+    patchsetTag
+) {
   withEnv([
       "CI_NODE_INDEX=$index",
       "COMPOSE_FILE=$compose",
@@ -88,32 +94,42 @@ def _runRspecTestSuite(
       "DOCKER_PROCESSES=$docker_processes",
       "FORCE_FAILURE=$force_failure",
       "POSTGRES_PASSWORD=sekret",
+      "SELENIUM_VERSION=3.141.59-20200719",
+      "PATCHSET_TAG=$patchsetTag",
   ]) {
     try {
+      cleanAndSetup()
       sh 'rm -rf ./tmp'
-      sh 'build/new-jenkins/docker-cleanup.sh'
       sh 'mkdir -p tmp'
       timeout(time: 60) {
-        sh 'build/new-jenkins/print-env-excluding-secrets.sh'
         sh 'build/new-jenkins/docker-compose-pull.sh'
-        sh 'build/new-jenkins/docker-compose-pull-selenium.sh'
+
+        if(prefix == 'selenium') {
+          sh 'build/new-jenkins/docker-compose-pull-selenium.sh'
+        }
+
         sh 'build/new-jenkins/docker-compose-build-up.sh'
         sh 'build/new-jenkins/docker-compose-setup-databases.sh'
-        sh 'build/new-jenkins/rspec_parallel_dockers.sh'
+        sh 'build/new-jenkins/docker-compose-rspec-parallel.sh'
       }
     }
     finally {
       // copy spec failures to local
       sh 'build/new-jenkins/docker-copy-files.sh /usr/src/app/log/spec_failures/ tmp/spec_failures canvas_ --allow-error --clean-dir'
-
+      sh 'build/new-jenkins/docker-copy-files.sh /usr/src/app/log/results.xml tmp/rspec_results canvas_ --allow-error --clean-dir'
       def reports = load 'build/new-jenkins/groovy/reports.groovy'
       reports.stashSpecFailures(prefix, index)
+      reports.stashSpecResults(prefix, index)
       if (env.COVERAGE == '1') {
         sh 'build/new-jenkins/docker-copy-files.sh /usr/src/app/coverage/ tmp/spec_coverage canvas_ --clean-dir'
         reports.stashSpecCoverage(prefix, index)
       }
+      if (env.RSPEC_LOG == '1') {
+        sh 'build/new-jenkins/docker-copy-files.sh /usr/src/app/log/parallel_runtime_rspec_tests.log ./tmp/parallel_runtime_rspec_tests canvas_ --allow-error --clean-dir'
+        reports.stashParallelLogs(prefix, index)
+      }
       sh 'rm -rf ./tmp'
-      sh 'build/new-jenkins/docker-cleanup.sh --allow-failure'
+      execute 'bash/docker-cleanup.sh --allow-failure'
     }
   }
 }
@@ -148,6 +164,33 @@ def _uploadSpecFailures(prefix, total, test_name) {
   if (!load('build/new-jenkins/groovy/successes.groovy').hasSuccessOrBuildIsSuccessful(prefix, total)) {
     reports.appendFailMessageReport("Spec Failure For $prefix", report_url)
   }
+}
+
+def uploadSeleniumJunit() {
+  def reports = load('build/new-jenkins/groovy/reports.groovy')
+  reports.publishJunitReport('selenium', seleniumConfig().node_total)
+}
+
+def uploadRspecJunit() {
+  def reports = load('build/new-jenkins/groovy/reports.groovy')
+  reports.publishJunitReport('rspec', rspecConfig().node_total)
+}
+
+def uploadJunitReports() {
+  uploadSeleniumJunit()
+  uploadRspecJunit()
+  def preStatus = currentBuild.getResult()
+  junit "spec_results/**/*.xml"
+  // junit publishing will set build status to unstable if failed tests found, if so set it back to SUCCESS
+  if (currentBuild.getResult() == 'UNSTABLE' && preStatus != 'UNSTABLE') {
+    currentBuild.rawBuild.@result = hudson.model.Result.SUCCESS
+  }
+}
+
+def uploadParallelLog() {
+  def reports = load('build/new-jenkins/groovy/reports.groovy')
+  reports.copyParallelLogs(rspecConfig().node_total, seleniumConfig().node_total)
+  archiveArtifacts(artifacts: "parallel_logs/**")
 }
 
 return this

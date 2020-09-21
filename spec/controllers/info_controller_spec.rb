@@ -48,7 +48,7 @@ describe InfoController do
     end
   end
 
-  describe "GET health_prognosis" do
+  describe "GET 'health_prognosis'" do
     it "should work if partitions are up to date" do
       # just in case
       Quizzes::QuizSubmissionEventPartitioner.process
@@ -109,7 +109,7 @@ describe InfoController do
           :available_to => ['user', 'student', 'teacher', 'admin', 'observer', 'unenrolled'],
           :text => 'Search the Canvas Guides',
           :subtext => 'Find answers to common questions',
-          :url => 'http://community.canvaslms.com/community/answers/guides',
+          :url => 'https://community.canvaslms.com/t5/Canvas/ct-p/canvas',
           :is_default => 'true'
         },
         {
@@ -127,6 +127,20 @@ describe InfoController do
       get 'help_links'
       links = json_parse(response.body)
       expect(links.select {|link| link[:text] == 'Ask Your Instructor a Question'}.size).to eq 0
+    end
+  end
+
+  describe "GET 'web-app-manifest'" do
+    it "should work" do
+      get 'web_app_manifest'
+      expect(response).to be_successful
+    end
+
+    it "should return icon path correct" do
+      get 'web_app_manifest'
+      manifest = json_parse(response.body)
+      src = manifest["icons"].first["src"]
+      expect(src).to start_with("/dist/images/")
     end
   end
 end

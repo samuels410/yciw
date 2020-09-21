@@ -276,7 +276,7 @@ class ContextModuleItemsApiController < ApplicationController
       # Get conditionally released objects if requested
       # TODO: Document in API when out of beta
       if includes.include?("mastery_paths")
-        opts[:conditional_release_rules] = ConditionalRelease::Service.rules_for(@context, @student, items, session)
+        opts[:conditional_release_rules] = ConditionalRelease::Service.rules_for(@context, @student, session)
       end
       render :json => items.map { |item| module_item_json(item, @student || @current_user, session, mod, prog, includes, opts) }
     end
@@ -541,37 +541,25 @@ class ContextModuleItemsApiController < ApplicationController
     get_module_item
     assignment = @item.assignment
     return render json: { message: 'requested item is not an assignment' }, status: :bad_request unless assignment
+    assignment_ids = ConditionalRelease::OverrideHandler.handle_assignment_set_selection(@student, assignment, params[:assignment_set_id])
 
-    response = ConditionalRelease::Service.select_mastery_path(
-      @context,
-      @current_user,
-      @student,
-      assignment,
-      params[:assignment_set_id],
-      session)
+    # assignment occurs in delayed job, may not be fully visible to user until job completes
+    assignments = @context.assignments.published.where(id: assignment_ids).
+      preload(Api::V1::Assignment::PRELOADS)
 
-    if response[:code] != '200'
-      render json: response[:body], status: response[:code]
-    else
-      assignment_ids = response[:body]['assignments'].map {|a| a['assignment_id'].try(&:to_i) }
-      # assignment occurs in delayed job, may not be fully visible to user until job completes
-      assignments = @context.assignments.published.where(id: assignment_ids).
-        preload(Api::V1::Assignment::PRELOADS)
+    Assignment.preload_context_module_tags(assignments)
 
-      Assignment.preload_context_module_tags(assignments)
+    # match cyoe order, omit unpublished or deleted assignments
+    assignments = assignments.index_by(&:id).values_at(*assignment_ids).compact
 
-      # match cyoe order, omit unpublished or deleted assignments
-      assignments = assignments.index_by(&:id).values_at(*assignment_ids).compact
+    # grab locally relevant module items
+    items = assignments.map(&:all_context_module_tags).flatten.select{|a| a.context_module_id == @module.id}
 
-      # grab locally relevant module items
-      items = assignments.map(&:all_context_module_tags).flatten.select{|a| a.context_module_id == @module.id}
-
-      render json: {
-        meta: { primaryCollection: 'assignments' },
-        items: items.map { |item| module_item_json(item, @student || @current_user, session, @module) },
-        assignments: assignments_json(assignments, @current_user, session)
-      }
-    end
+    render json: {
+      meta: { primaryCollection: 'assignments' },
+      items: items.map { |item| module_item_json(item, @student || @current_user, session, @module) },
+      assignments: assignments_json(assignments, @current_user, session)
+    }
   end
 
   # @API Delete module item

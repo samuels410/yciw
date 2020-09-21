@@ -113,12 +113,9 @@ class OutcomeProficiencyApiController < ApplicationController
   #
   def create
     if authorized_action(@context, @current_user, :manage_outcomes)
-      if @account.outcome_proficiency
-        update_ratings(@account.outcome_proficiency)
-      else
-        update_ratings(OutcomeProficiency.new, @account)
-      end
-      render json: outcome_proficiency_json(@account.outcome_proficiency, @current_user, session)
+      proficiency = @account.outcome_proficiency.presence || OutcomeProficiency.new
+      proficiency = update_ratings(proficiency, @account)
+      render json: outcome_proficiency_json(proficiency, @current_user, session)
     end
   end
 
@@ -134,6 +131,7 @@ class OutcomeProficiencyApiController < ApplicationController
   #
   # @returns Proficiency
   def show
+    return unless authorized_action(@context, @current_user, :read)
     proficiency = @account.resolved_outcome_proficiency or raise ActiveRecord::RecordNotFound
     render json: outcome_proficiency_json(proficiency, @current_user, session)
   rescue ActiveRecord::RecordNotFound => e
@@ -142,18 +140,10 @@ class OutcomeProficiencyApiController < ApplicationController
 
   private
 
-  def update_ratings(proficiency, account = nil)
-    # update existing ratings & create any new ratings
-    proficiency_params['ratings'].each_with_index do |val, idx|
-      if idx <= proficiency.outcome_proficiency_ratings.count - 1
-        proficiency.outcome_proficiency_ratings[idx].assign_attributes(val.to_hash.symbolize_keys)
-      else
-        proficiency.outcome_proficiency_ratings.build(val)
-      end
-    end
-    # delete unused ratings
-    proficiency.outcome_proficiency_ratings[proficiency_params['ratings'].length..-1].each(&:mark_for_destruction)
-    proficiency.account = account if account
+  def update_ratings(proficiency, context = nil)
+    proficiency.replace_ratings(proficiency_params['ratings'])
+    proficiency.context = context if context
+    proficiency.workflow_state = 'active'
     proficiency.save!
     proficiency
   end
