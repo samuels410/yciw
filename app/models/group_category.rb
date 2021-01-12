@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 #
 # Copyright (C) 2011 - present Instructure, Inc.
 #
@@ -26,10 +28,11 @@ class GroupCategory < ActiveRecord::Base
   belongs_to :root_account, class_name: 'Account', inverse_of: :all_group_categories
   has_many :groups, :dependent => :destroy
   has_many :progresses, :as => 'context', :dependent => :destroy
+  has_many :group_and_membership_importers, dependent: :destroy, inverse_of: :group_category
   has_one :current_progress, -> { where(workflow_state: ['queued', 'running']).order(:created_at) }, as: :context, inverse_of: :context, class_name: 'Progress'
 
   before_validation :set_root_account_id
-  validates_uniqueness_of :sis_source_id, scope: [:root_account_id], conditions: -> { where.not(sis_source_id: nil) }
+  validates :sis_source_id, uniqueness: {scope: :root_account}, allow_nil: true
 
   after_save :auto_create_groups
   after_update :update_groups_max_membership
@@ -146,7 +149,7 @@ class GroupCategory < ActiveRecord::Base
                  context.group_categories.build(name: name_for_role(role),
                                                 role: role,
                                                 root_account: context.root_account)
-      category.save({:validate => false}) if category.new_record?
+      category.save(validate: false) if category.new_record?
       category
     end
   end
@@ -222,6 +225,12 @@ class GroupCategory < ActiveRecord::Base
     groups.destroy_all
     self.deleted_at = Time.now.utc
     self.save
+  end
+
+  def restore
+    self.groups.where(deleted_at: [self.deleted_at - 10.minutes..self.deleted_at]).update_all(workflow_state: 'available', deleted_at: nil)
+    self.deleted_at = nil
+    self.save!
   end
 
   # We can't reassign existing group members, groups can have different maximum limits, and we want
@@ -374,7 +383,7 @@ class GroupCategory < ActiveRecord::Base
     Group.where(id: groups).touch_all
     if context_type == 'Course'
       opts = { assignments: Assignment.where(context_type: context_type, context_id: context_id, group_category_id: self).pluck(:id) }
-      DueDateCacher.recompute_course(context_id, opts)
+      DueDateCacher.recompute_course(context_id, **opts)
     end
   end
 
@@ -424,8 +433,10 @@ class GroupCategory < ActiveRecord::Base
       'by_group_count'
     end
 
-    InstStatsd::Statsd.increment('groups.auto_create',
-     tags: {split_type: split_type, root_account_id: self.root_account_id})
+    if split_type
+      InstStatsd::Statsd.increment('groups.auto_create',
+       tags: {split_type: split_type, root_account_id: self.root_account&.global_id, root_account_name: self.root_account&.name})
+    end
 
     calculate_group_count_by_membership if @create_group_member_count
     create_groups(@create_group_count) if @create_group_count
@@ -481,7 +492,7 @@ class GroupCategory < ActiveRecord::Base
 
   def assign_unassigned_members_in_background(by_section=false, updating_user: nil)
     start_progress
-    send_later_enqueue_args(:assign_unassigned_members, {:priority => Delayed::LOW_PRIORITY}, by_section, updating_user: updating_user)
+    delay(priority: Delayed::LOW_PRIORITY).assign_unassigned_members(by_section, updating_user: updating_user)
   end
 
   def clone_groups_and_memberships(new_group_category)

@@ -17,13 +17,7 @@
  */
 
 import classnames from 'classnames'
-import {
-  renderImage,
-  renderLinkedImage,
-  renderVideo,
-  renderAudio,
-  mediaIframeSrcFromFile
-} from './contentRendering'
+import {renderImage, renderLinkedImage, renderVideo, renderAudio} from './contentRendering'
 import scroll from '../common/scroll'
 import {
   cleanUrl,
@@ -31,6 +25,7 @@ import {
   isOnlyTextSelected,
   isImageFigure
 } from './contentInsertionUtils'
+import {mediaPlayerURLFromFile} from './plugins/shared/fileTypeUtils'
 
 /** * generic content insertion ** */
 
@@ -65,7 +60,11 @@ export function insertContent(editor, content) {
     // created nodes if there were multiple, unfortunately), because the cursor
     // itself stays just before the new content.
     scroll.scrollIntoViewWDelay(editor.iframeElement, {})
-    editor.insertContent(content)
+    // there's a bug in tinymce where insertContent calls execCommand('mceInsertContent'),
+    // but doesn't correctly forward the second "args" argument. Let's go right for
+    // execCommand
+    // editor.insertContent(content, {skip_focus: true})
+    editor.execCommand('mceInsertContent', false, content + ' ', {skip_focus: true})
     return editor.selection.getEnd()
   }
 }
@@ -193,8 +192,7 @@ function insertUndecoratedLink(editor, linkProps) {
     linkAttrs.rel = 'noopener noreferrer'
   }
 
-  editor.focus()
-  if (anchorElm) {
+  if (anchorElm && !editor.selection.isCollapsed()) {
     updateLink(editor, anchorElm, linkText, linkAttrs)
   } else if (selectedContent) {
     if (linkProps.userText && selectedPlainText !== linkText) {
@@ -226,7 +224,7 @@ function createLink(editor, selectedElm, text, linkAttrs) {
     linkImageFigure(editor, selectedElm, linkAttrs)
   } else if (text) {
     // create the whole wazoo
-    editor.insertContent(editor.dom.createHTML('a', linkAttrs, editor.dom.encode(text)))
+    insertContent(editor, editor.dom.createHTML('a', linkAttrs, editor.dom.encode(text)))
   } else {
     // create a link on the selected content
     editor.execCommand('mceInsertLink', false, linkAttrs)
@@ -252,21 +250,37 @@ export function insertVideo(editor, video) {
     // video iframe. Look for the iframe with the right
     // src attribute. (Aside: tinymce strips the id or data-*
     // attributes from the iframe, that's why we can't look for those)
-    const src = mediaIframeSrcFromFile(video)
+    const src = mediaPlayerURLFromFile(video)
     result = result.querySelector(`iframe[src="${src}"]`)
+
+    // When the iframe is inserted, it doesn't allow the video to play
+    // because the wrapping span captures the click events. Setting
+    // contentEditable to false disables this behavior.
+    if (result?.parentElement) {
+      editor.dom.setAttrib(result.parentElement, 'contenteditable', false)
+    }
+
     return result
   } else {
-    return insertLink(editor, {...video, href: mediaIframeSrcFromFile(video)})
+    return insertLink(editor, {...video, href: mediaPlayerURLFromFile(video)})
   }
 }
 
 export function insertAudio(editor, audio) {
   if (editor.selection.isCollapsed()) {
     let result = insertContent(editor, renderAudio(audio))
-    const src = mediaIframeSrcFromFile(audio)
+    const src = mediaPlayerURLFromFile(audio)
     result = result.querySelector(`iframe[src="${src}"]`)
+
+    // When the iframe is inserted, it doesn't allow the audio to play
+    // because the wrapping span captures the click events. Setting
+    // contentEditable to false disables this behavior.
+    if (result?.parentElement) {
+      editor.dom.setAttrib(result.parentElement, 'contenteditable', false)
+    }
+
     return result
   } else {
-    return insertLink(editor, {...audio, href: mediaIframeSrcFromFile(audio)})
+    return insertLink(editor, {...audio, href: mediaPlayerURLFromFile(audio)})
   }
 }

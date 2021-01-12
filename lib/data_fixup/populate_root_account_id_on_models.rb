@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 #
 # Copyright (C) 2020 - present Instructure, Inc.
 #
@@ -115,6 +117,7 @@ module DataFixup::PopulateRootAccountIdOnModels
       Quizzes::QuizGroup => :quiz,
       Quizzes::QuizQuestion => :quiz,
       Quizzes::QuizSubmission => :quiz,
+      Quizzes::QuizSubmissionEvent => :quiz_submission,
       Role => :account,
       RoleOverride => :account,
       Rubric => :context,
@@ -181,7 +184,6 @@ module DataFixup::PopulateRootAccountIdOnModels
     # Arguments to where()
     @unfillable_criteria ||= {
       DeveloperKey => 'account_id IS NULL',
-      LearningOutcomeGroup => 'context_id IS NULL',
     }.transform_values{ |criteria| [criteria].flatten(1) }.freeze
   end
 
@@ -194,7 +196,9 @@ module DataFixup::PopulateRootAccountIdOnModels
   def self.fill_with_zeros_criteria
     # Arguments to where()
     @fill_with_zeros_criteria ||= {
-      CalendarEvent => {context_type: 'User', effective_context_code: nil}
+      CalendarEvent => {context_type: 'User', effective_context_code: nil},
+      LearningOutcomeGroup => 'context_id IS NULL',
+      ContentMigration => {context_type: 'User'},
     }.transform_values{ |criteria| [criteria].flatten(1) }.freeze
   end
 
@@ -219,12 +223,8 @@ module DataFixup::PopulateRootAccountIdOnModels
   DONE_TABLES = [Account, Assignment, Course, CourseSection, Enrollment, EnrollmentDatesOverride, EnrollmentTerm, Group].freeze
 
   def self.send_later_backfill_strand(job, *args)
-    self.send_later_if_production_enqueue_args(job,
-    {
-      priority: Delayed::MAX_PRIORITY,
-      n_strand: ["root_account_id_backfill", Shard.current.database_server.id]
-    },
-    *args)
+    delay_if_production(priority: Delayed::MAX_PRIORITY,
+      n_strand: ["root_account_id_backfill", Shard.current.database_server.id]).__send__(job, *args)
   end
 
   def self.run
@@ -292,6 +292,10 @@ module DataFixup::PopulateRootAccountIdOnModels
           true
         elsif incomplete_tables.include?(class_name) || tables_in_progress.include?(class_name)
           false
+        elsif table == CommunicationChannel
+          # For single-sharded (OSS) Canvas, if any users have been filled in
+          # and User jobs are complete, we are good to fill in comm channels
+          User.where.not(root_account_ids: nil).any?
         else
           check_if_association_has_root_account(table, assoc_reflection) ? complete_tables << table && true : incomplete_tables << table && false
         end
@@ -303,8 +307,8 @@ module DataFixup::PopulateRootAccountIdOnModels
   def self.in_progress_tables
     Delayed::Job.where(strand: "root_account_id_backfill/#{Shard.current.database_server.id}",
       shard_id: Shard.current).map do |job|
-        job.payload_object.try(:args)&.first
-    end.uniq.compact
+        job.payload_object&.args&.first
+      end.uniq.compact
   end
 
   def self.hash_association(association)
@@ -578,10 +582,8 @@ module DataFixup::PopulateRootAccountIdOnModels
     # when the current table has been fully backfilled, restart the backfill job
     # so it can check to see if any new tables can begin working based off of this table
     if empty_root_account_column_scope(table).none?
-      self.send_later_if_production_enqueue_args(:run, {
-        priority: Delayed::LOWER_PRIORITY,
-        singleton: "root_account_id_backfill_strand_#{Shard.current.id}"
-      })
+      delay_if_production(priority: Delayed::LOWER_PRIORITY,
+        singleton: "root_account_id_backfill_strand_#{Shard.current.id}").run
     end
   end
 end

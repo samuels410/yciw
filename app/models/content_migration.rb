@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 #
 # Copyright (C) 2011 - present Instructure, Inc.
 #
@@ -169,7 +171,7 @@ class ContentMigration < ActiveRecord::Base
   end
 
   def question_bank_name=(name)
-    if name && name.strip! != ''
+    if (name = name&.strip) != ''
       migration_settings[:question_bank_name] = name
     end
   end
@@ -203,6 +205,7 @@ class ContentMigration < ActiveRecord::Base
   end
 
   def root_account
+    return super if root_account_id
     self.context.root_account rescue nil
   end
 
@@ -233,12 +236,19 @@ class ContentMigration < ActiveRecord::Base
   # error_report_id - the id to an error report
   # fix_issue_html_url - the url to send the user to to fix problem
   #
+  ISSUE_TYPE_TO_ERROR_LEVEL_MAP = {
+    todo: :info,
+    warning: :warn,
+    error: :error
+  }.freeze
+
   def add_issue(user_message, type, opts={})
     mi = self.migration_issues.build(:issue_type => type.to_s, :description => user_message)
     if opts[:error_report_id]
       mi.error_report_id = opts[:error_report_id]
     elsif opts[:exception]
-      er = Canvas::Errors.capture_exception(:content_migration, opts[:exception])[:error_report]
+      level = ISSUE_TYPE_TO_ERROR_LEVEL_MAP[type]
+      er = Canvas::Errors.capture_exception(:content_migration, opts[:exception], level)[:error_report]
       mi.error_report_id = er
     end
     mi.error_message = opts[:error_message]
@@ -260,7 +270,8 @@ class ContentMigration < ActiveRecord::Base
   end
 
   def add_error(user_message, opts={})
-    add_issue(user_message, :error, opts)
+    level = opts.fetch(:issue_level, :error)
+    add_issue(user_message, level, opts)
   end
 
   def add_warning(user_message, opts={})
@@ -289,14 +300,15 @@ class ContentMigration < ActiveRecord::Base
     add_warning(t('errors.import_error', "Import Error:") + " #{item_type} - \"#{item_name}\"", warning)
   end
 
-  def fail_with_error!(exception_or_info)
-    opts={}
+  def fail_with_error!(exception_or_info, error_message: nil, issue_level: :error)
+    opts={ issue_level: issue_level }
     if exception_or_info.is_a?(Exception)
       opts[:exception] = exception_or_info
     else
       opts[:error_message] = exception_or_info
     end
-    add_error(t(:unexpected_error, "There was an unexpected error, please contact support."), opts)
+    message = error_message || t(:unexpected_error, "There was an unexpected error, please contact support.")
+    add_error(message, opts)
     self.workflow_state = :failed
     job_progress.fail if job_progress && !skip_job_progress
     save
@@ -368,7 +380,7 @@ class ContentMigration < ActiveRecord::Base
         # it's ready to be imported
         self.workflow_state = :importing
         self.save
-        self.send_later_enqueue_args(:import_content, queue_opts.merge(:on_permanent_failure => :fail_with_error!))
+        delay(**queue_opts.merge(on_permanent_failure: :fail_with_error!)).import_content
       else
         # find worker and queue for conversion
         begin
@@ -414,7 +426,7 @@ class ContentMigration < ActiveRecord::Base
         run_at = Setting.get('content_migration_requeue_delay_minutes', '60').to_i.minutes.from_now
         # if everything goes right, we'll queue it right away after the currently running one finishes
         # but if something goes catastropically wrong, then make sure we recheck it eventually
-        job = self.send_later_enqueue_args(:queue_migration, {:no_delay => true, :run_at => run_at},
+        job = delay(ignore_transaction: true, run_at: run_at).queue_migration(
           plugin, retry_count: retry_count + 1, expires_at: expires_at)
 
         if self.job_progress
@@ -937,6 +949,22 @@ class ContentMigration < ActiveRecord::Base
     imported_migration_items_hash(klass).values
   end
 
+  def imported_migration_items_for_insert_type
+    import_type = migration_settings[:insert_into_module_type]
+    imported_items = if import_type.present?
+      class_name = self.class.import_class_name(import_type)
+      imported_migration_items_hash[class_name] ||= {}
+      imported_migration_items_hash[class_name].values
+    else
+      imported_migration_items
+    end
+  end
+
+  def self.import_class_name(import_type)
+    prefix = asset_string_prefix(collection_name(import_type.pluralize))
+    ActiveRecord::Base.convert_class_name(prefix)
+  end
+
   def find_imported_migration_item(klass, migration_id)
     imported_migration_items_hash(klass)[migration_id]
   end
@@ -984,14 +1012,15 @@ class ContentMigration < ActiveRecord::Base
   end
 
   def set_root_account_id
-    case self.context
-    when Course, Group
-      self.root_account_id ||= self.context.root_account_id
-    when Account
-      self.root_account_id ||= self.context.resolved_root_account_id
-    when User
-      self.root_account_id ||= 0
-    end
+    self.root_account_id ||=
+      case self.context
+      when Course, Group
+        self.context.root_account_id
+      when Account
+        self.context.resolved_root_account_id
+      when User
+        0 # root account id unknown, use dummy root account id
+      end
     Account.ensure_dummy_root_account if root_account_id == 0
   end
 

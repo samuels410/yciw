@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 #
 # Copyright (C) 2015 - present Instructure, Inc.
 #
@@ -872,6 +874,14 @@ module Lti
           expect(exp_hash[:test]).to eq '123'
         end
 
+        it 'has substitution for $Context.id.history' do
+          allow(Lti::SubstitutionsHelper).to receive(:new).and_return(substitution_helper)
+          allow(substitution_helper).to receive(:recursively_fetch_previous_lti_context_ids).and_return('xyz,abc')
+          exp_hash = {test: '$Context.id.history'}
+          variable_expander.expand_variables!(exp_hash)
+          expect(exp_hash[:test]).to eq 'xyz,abc'
+        end
+
         it 'has substitution for $vnd.instructure.Course.uuid' do
           allow(course).to receive(:uuid).and_return('Ioe3sJPt0KZp9Pw6xAvcHuLCl0z4TvPKP0iIOLbo')
           exp_hash = {test: '$vnd.instructure.Course.uuid'}
@@ -1107,6 +1117,60 @@ module Lti
 
           context 'when the current user is not observing users in the context' do
             it { is_expected.to eq "" }
+          end
+        end
+      end
+
+      describe '$com.instructure.Observee.sisIds' do
+        subject do
+          exp_hash = { observee_sis_ids: '$com.instructure.Observee.sisIds' }
+          variable_expander.expand_variables!(exp_hash)
+          exp_hash[:observee_sis_ids]
+        end
+
+        let(:student_a) { user_factory }
+        let(:student_b) { user_factory }
+        let(:student_c) { user_factory }
+        let(:observer) { user_factory }
+        let(:variable_expander) { VariableExpander.new(root_account, course, controller, current_user: observer, tool: tool) }
+        let(:context) do
+          c = variable_expander.context
+          c.save!
+          c
+        end
+
+        before do
+          managed_pseudonym(student_a, account: root_account, sis_user_id: 'SIS_A')
+          managed_pseudonym(student_b, account: root_account, sis_user_id: 'SIS_B')
+
+          context.enroll_student(student_a)
+          context.enroll_student(student_b)
+          context.enroll_student(student_c)
+
+          variable_expander.current_user = observer
+        end
+
+        context 'when the current user is observing students in the course context' do
+          before do
+            student_a_enrollment = context.enroll_user(observer, 'ObserverEnrollment')
+            student_a_enrollment.update!(associated_user_id: student_a.id)
+
+            student_b_enrollment = context.enroll_user(observer, 'ObserverEnrollment')
+            student_b_enrollment.update!(associated_user_id: student_b.id)
+
+            student_c_enrollment = context.enroll_user(observer, 'ObserverEnrollment')
+            student_c_enrollment.update!(associated_user_id: student_c.id)
+          end
+
+          it 'return an array of all student that has a SIS IDs' do
+            id_set = subject.split(",").to_set
+            expect(Set['SIS_A', 'SIS_B']).to eq(id_set)
+          end
+        end
+
+        context 'when the current user is not observing students in the course context' do
+          it 'return a empty array of student SIS IDs' do
+            expect(subject).to be_empty
           end
         end
       end

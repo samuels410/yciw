@@ -30,21 +30,6 @@ hide_course_sections_from_students:
     Allows teachers to hide course sections from students on the People page when there is more than one section in the course.
   applies_to: RootAccount
 
-mute_notifications_by_course:
-  state: hidden
-  display_name: Mute notifications by course
-  description: |-
-    Allows users to mute notifications on a course level granularity.
-  applies_to: RootAccount
-
-notification_granular_course_preferences:
-  state: hidden
-  display_name: Course level overrides for notification preferences
-  description: |-
-    Allows users to override specific notification preferences on a
-    course by course basis.
-  applies_to: SiteAdmin
-
 notification_update_account_ui:
   state: hidden
   display_name: Account level notification preferences UI update
@@ -60,6 +45,28 @@ past_announcements:
     Show past account level announcements to users. Allows
     a user to view announcemnts that have ended or been dismissed.
   applies_to: RootAccount
+
+react_announcement_discussion_edit:
+  state: hidden
+  display_name: Update announcement/discussion edit page to use react/instui
+  description: |-
+    This refactor will make this page more maintainable and easily
+    allow us to make the page more accessible
+  applies_to: RootAccount
+
+react_inbox:
+  state: hidden
+  display_name: Update Inbox page to use react/instui
+  description: |-
+    This refactor will make this page more maintainable
+  applies_to: RootAccount
+
+reduce_push_notifications:
+  state: hidden
+  display_name: Restrict Push Notifications to Select Types
+  description: |-
+    Disables Push notifications for certain types.
+  applies_to: SiteAdmin
 
 smart_alerts:
   state: hidden

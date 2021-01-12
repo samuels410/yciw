@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 #
 # Copyright (C) 2011 - present Instructure, Inc.
 #
@@ -149,7 +151,9 @@ module Api
           :scope => 'root_account_id' }.freeze,
   }.freeze
 
-  MAX_ID_LENGTH = (2**63 - 1).to_s.length
+  MAX_ID = (2**63 - 1)
+  MAX_ID_LENGTH = MAX_ID.to_s.length
+  MAX_ID_RANGE = (-MAX_ID...MAX_ID)
   ID_REGEX = %r{\A\d{1,#{MAX_ID_LENGTH}}\z}
   USER_UUID_REGEX = %r{\Auuid:(\w{40,})\z}
 
@@ -573,11 +577,11 @@ module Api
   end
 
   def self.invalid_time_stamp_error(attribute, message)
-    Canvas::Errors.capture(
-      'invalid_date_time',
+    data = {
       message: "invalid #{attribute}",
       exception_message: message
-    )
+    }
+    Canvas::Errors.capture('invalid_date_time', data, :info)
   end
 
   # regex for valid iso8601 dates

@@ -481,10 +481,14 @@ class ExternalToolsController < ApplicationController
       else
         basic_lti_launch_request(tool, selection_type, opts)
     end
-  rescue Lti::Errors::UnauthorizedError
+  rescue Lti::Errors::UnauthorizedError => e
+    Canvas::Errors.capture_exception(:lti_launch, e, :info)
     render_unauthorized_action
     nil
-  rescue Lti::Errors::UnsupportedExportTypeError, Lti::Errors::InvalidMediaTypeError
+  rescue Lti::Errors::UnsupportedExportTypeError,
+         Lti::Errors::InvalidMediaTypeError,
+         Lti::Errors::UnsupportedPlacement => e
+    Canvas::Errors.capture_exception(:lti_launch, e, :info)
     respond_to do |format|
       err = t('There was an error generating the tool launch')
       format.html do
@@ -678,6 +682,8 @@ class ExternalToolsController < ApplicationController
   #   multiple times
   #
   # @argument is_rce_favorite [Boolean]
+  #   (Deprecated in favor of {api:ExternalToolsController#add_rce_favorite Add tool to RCE Favorites} and
+  #   {api:ExternalToolsController#remove_rce_favorite Remove tool from RCE Favorites})
   #   Whether this tool should appear in a preferred location in the RCE.
   #   This only applies to tools in root account contexts that have an editor
   #   button placement.
@@ -919,6 +925,7 @@ class ExternalToolsController < ApplicationController
     end
     @tool.check_for_duplication(params.dig(:external_tool, :verify_uniqueness).present?)
     if @tool.errors.blank? && @tool.save
+      @tool.prepare_for_ags_if_needed!
       invalidate_nav_tabs_cache(@tool)
       if api_request?
         render :json => external_tool_json(@tool, @context, @current_user, session)
@@ -1038,6 +1045,59 @@ class ExternalToolsController < ApplicationController
     render json: {jwt_token: Canvas::Security.create_jwt(params, nil, tool.shared_secret)}
   end
 
+  # @API Add tool to RCE Favorites
+  # Add the specified editor_button external tool to a preferred location in the RCE
+  # for courses in the given account and its subaccounts (if the subaccounts
+  # haven't set their own RCE Favorites). Cannot set more than 2 RCE Favorites.
+  #
+  # @example_request
+  #
+  #   curl -X POST 'https://<canvas>/api/v1/accounts/<account_id>/external_tools/rce_favorites/<id>' \
+  #        -H "Authorization: Bearer <token>"
+  def add_rce_favorite
+    if authorized_action(@context, @current_user, :lti_add_edit)
+      @tool = ContextExternalTool.find_external_tool_by_id(params[:id], @context)
+      raise ActiveRecord::RecordNotFound unless @tool
+      unless @tool.can_be_rce_favorite?
+        return render json: {message: "Tool does not have an editor_button placement"}, status: :bad_request
+      end
+
+      favorite_ids = @context.get_rce_favorite_tool_ids
+      favorite_ids << @tool.global_id
+      favorite_ids.uniq!
+      if favorite_ids.length > 2
+        valid_ids = ContextExternalTool.all_tools_for(@context, placements: [:editor_button]).pluck(:id).map{|id| Shard.global_id_for(id)}
+        favorite_ids = favorite_ids & valid_ids # try to clear out any possibly deleted tool references first before causing a fuss
+      end
+      if favorite_ids.length > 2
+        render json: {message: "Cannot have more than 2 favorited tools"}, status: :bad_request
+      else
+        @context.settings[:rce_favorite_tool_ids] = {:value => favorite_ids}
+        @context.save!
+        render json: {rce_favorite_tool_ids: favorite_ids.map{|id| Shard.relative_id_for(id, Shard.current, Shard.current)}}
+      end
+    end
+  end
+
+  # @API Remove tool from RCE Favorites
+  # Remove the specified external tool from a preferred location in the RCE
+  # for the given account
+  #
+  # @example_request
+  #
+  #   curl -X DELETE 'https://<canvas>/api/v1/accounts/<account_id>/external_tools/rce_favorites/<id>' \
+  #        -H "Authorization: Bearer <token>"
+  def remove_rce_favorite
+    if authorized_action(@context, @current_user, :lti_add_edit)
+      favorite_ids = @context.get_rce_favorite_tool_ids
+      if favorite_ids.delete(Shard.global_id_for(params[:id]))
+        @context.settings[:rce_favorite_tool_ids] = {:value => favorite_ids}
+        @context.save!
+      end
+      render json: {rce_favorite_tool_ids: favorite_ids.map{|id| Shard.relative_id_for(id, Shard.current, Shard.current)}}
+    end
+  end
+
   private
 
   def generate_module_item_sessionless_launch
@@ -1116,6 +1176,11 @@ class ExternalToolsController < ApplicationController
         format.json { render json: {errors: {external_tool: "Unable to find a matching external tool"}} and return }
       end
     end
+
+    # In the case of cross-shard launches, direct the request to the
+    # tool's shard.
+    tool_account_res = direct_to_tool_account(@tool, @context) if @tool.shard != Shard.current
+    return render json: tool_account_res.body, status: tool_account_res.code if tool_account_res&.success?
 
     if @tool.use_1_3?
       # Create a launch URL that uses a session token to

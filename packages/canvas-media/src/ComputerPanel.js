@@ -18,12 +18,13 @@
 
 import React, {Suspense, useCallback, useEffect, useRef, useState} from 'react'
 import {arrayOf, bool, func, instanceOf, number, oneOfType, shape, string} from 'prop-types'
+import formatMessage from 'format-message'
 
 import {Billboard} from '@instructure/ui-billboard'
 import {Button} from '@instructure/ui-buttons'
 import {Checkbox, FileDrop} from '@instructure/ui-forms'
 import {Flex, View} from '@instructure/ui-layout'
-import {IconTrashLine} from '@instructure/ui-icons'
+import {IconTrashLine, IconVideoLine} from '@instructure/ui-icons'
 import {PresentationContent, ScreenReaderContent} from '@instructure/ui-a11y'
 import {Text} from '@instructure/ui-elements'
 import {px} from '@instructure/ui-utils'
@@ -33,7 +34,7 @@ import LoadingIndicator from './shared/LoadingIndicator'
 import RocketSVG from './RocketSVG'
 import translationShape from './translationShape'
 import useComputerPanelFocus from './useComputerPanelFocus'
-import {isAudio, isVideo, sizeMediaPlayer} from './shared/utils'
+import {isAudio, isVideo, isPreviewable, sizeMediaPlayer} from './shared/utils'
 
 const ClosedCaptionPanel = React.lazy(() => import('./ClosedCaptionCreator'))
 
@@ -56,6 +57,7 @@ export default function ComputerPanel({
   } = uploadMediaTranslations.UploadMediaStrings
   const [messages, setMessages] = useState([])
   const [mediaTracksCheckbox, setMediaTracksCheckbox] = useState(false)
+  const [previewURL, setPreviewURL] = useState(null)
   const height = 0.8 * (bounds?.height - 38 - px('1.5rem')) // the trashcan is 38px tall and the 1.5rem margin-bottom
   const width = 0.8 * bounds?.width
 
@@ -63,6 +65,10 @@ export default function ComputerPanel({
   const clearButtonRef = useRef(null)
   const panelRef = useRef(null)
   useComputerPanelFocus(theFile, panelRef, clearButtonRef)
+
+  useEffect(() => {
+    return () => URL?.revokeObjectURL?.(previewURL)
+  }, [previewURL])
 
   useEffect(() => {
     if (previewPanelRef.current && mediaTracksCheckbox) {
@@ -80,12 +86,7 @@ export default function ComputerPanel({
           height: window.innerHeight
         }
       }
-      const sz = sizeMediaPlayer(
-        player,
-        theFile.type,
-        boundingBox,
-        !!(document.fullscreenElement || document.webkitFullscreenElement)
-      )
+      const sz = sizeMediaPlayer(player, theFile.type, boundingBox)
       player.style.width = sz.width
       player.style.height = sz.height
       player.style.margin = '0 auto'
@@ -103,22 +104,6 @@ export default function ComputerPanel({
     [handlePlayerSize]
   )
 
-  // // when we go to ui-media-player v7, <MediaPlayer> can listen for onLoadedMetedata
-  // // but for now, it doesn't.
-  // useEffect(() => {
-  //   const player = previewPanelRef?.current?.querySelector('video')
-  //   if (player) {
-  //     if (player.loadedmetadata || player.readyState >= 1) {
-  //       handlePlayerSize()
-  //     } else {
-  //       player.addEventListener('loadedmetadata', handleLoadedMetadata)
-  //       return () => {
-  //         player.removeEventListener('loadedmetadata', handleLoadedMetadata)
-  //       }
-  //     }
-  //   }
-  // }, [handlePlayerSize, handleLoadedMetadata, hasUploadedFile])
-
   useEffect(() => {
     window.addEventListener('resize', handlePlayerSize)
     return () => {
@@ -127,7 +112,6 @@ export default function ComputerPanel({
   }, [handlePlayerSize])
 
   if (hasUploadedFile) {
-    const src = URL.createObjectURL(theFile)
     return (
       <div style={{position: 'relative'}} ref={previewPanelRef}>
         <Flex direction="row-reverse" margin="none none medium">
@@ -139,6 +123,7 @@ export default function ComputerPanel({
               onClick={() => {
                 setFile(null)
                 setHasUploadedFile(false)
+                setPreviewURL(null)
               }}
               icon={IconTrashLine}
             >
@@ -154,11 +139,21 @@ export default function ComputerPanel({
           </Flex.Item>
         </Flex>
         <View as="div" textAlign="center" margin="0 auto">
-          <MediaPlayer
-            sources={[{label: theFile.name, src}]}
-            hideFullScreen={!(document.fullscreenEnabled || document.webkitFullscreenEnabled)}
-            onLoadedMetadata={handleLoadedMetadata}
-          />
+          {/* avi, wma, and wmv files won't load from a blob URL */}
+          {!isPreviewable(theFile.type) ? (
+            <>
+              <IconVideoLine size="medium" data-testid="preview-video-icon" />
+              <Text as="p" weight="normal">
+                {formatMessage('No preview is available for this file.')}
+              </Text>
+            </>
+          ) : (
+            <MediaPlayer
+              sources={[{label: theFile.name, src: previewURL, type: theFile.type}]}
+              hideFullScreen={!(document.fullscreenEnabled || document.webkitFullscreenEnabled)}
+              onLoadedMetadata={handleLoadedMetadata}
+            />
+          )}
         </View>
         {isVideo(theFile.type) && (
           <>
@@ -196,6 +191,7 @@ export default function ComputerPanel({
           }
           setFile(file)
           setHasUploadedFile(true)
+          setPreviewURL(URL.createObjectURL(file))
         }}
         onDropRejected={() => {
           setMessages(msgs =>

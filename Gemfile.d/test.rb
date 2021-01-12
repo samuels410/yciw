@@ -17,20 +17,21 @@
 
 group :test do
   gem 'rails-dom-testing', '2.0.3'
-  gem 'rails-controller-testing', '1.0.4'
+  gem 'rails-controller-testing', '1.0.5'
 
-  gem 'gergich', '1.2.0', require: false
+  gem 'gergich', '1.2.1', require: false
   gem 'dotenv', '2.7.5', require: false
   gem 'testingbot', require: false
   gem 'brakeman', require: false
   gem 'simplecov', '0.15.1', require: false
     gem 'docile', '1.1.5', require: false
   gem 'simplecov-rcov', '0.2.3', require: false
-  gem 'puma', '4.3.3', require: false
+  gem 'puma', '5.0.0', require: false
 
+  gem 'db-query-matchers', '0.10.0'
   gem 'rspec', '3.9.0'
   gem 'rspec_around_all', '0.2.0'
-  gem 'rspec-rails', '3.9.0'
+  gem 'rspec-rails', '4.0.1'
   gem 'rspec-collection_matchers', '1.2.0'
   gem 'rspec-support', '3.9.2'
   gem 'rspec-expectations', '3.9.0'
@@ -38,9 +39,10 @@ group :test do
   gem 'shoulda-matchers', '4.3.0'
 
   gem 'rubocop-canvas', require: false, path: 'gems/rubocop-canvas'
-    gem 'rubocop', '0.52.1', require: false
+    gem 'rubocop', '0.68.0', require: false
       gem 'rainbow', '3.0.0', require: false
-  gem 'rubocop-rspec', '1.22.2', require: false
+  gem 'rubocop-rspec', '1.33.0', require: false
+  gem 'rubocop-performance', '1.3.0', require: false
 
   gem 'once-ler', '0.1.4'
   gem 'sauce_whisk', '0.2.2'
@@ -60,12 +62,13 @@ group :test do
   gem 'luminosity_contrast', '0.2.1'
   gem 'pact', '1.49.0', require: false
     gem 'pact-mock_service', '3.5.0', require: false
+    gem 'pact-support', '1.15.1', require: false # pinned until https://github.com/pact-foundation/pact-support/issues/81 fixed
   gem 'pact-messages', '0.2.0'
   gem 'pact_broker-client', '1.25.0'
   gem 'database_cleaner', '~> 1.5', '>= 1.5.3'
 
   gem 'parallel_tests'
   gem 'flakey_spec_catcher', require: false
-  gem 'factory_bot', '5.2.0', require: false
+  gem 'factory_bot', '6.1.0', require: false
   gem 'rspec_junit_formatter', require: false
 end

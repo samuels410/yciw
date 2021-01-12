@@ -38,6 +38,11 @@
 #           "example": "icon-assignment",
 #           "type": "string"
 #         },
+#         "asset_readable_category": {
+#           "description": "The associated category describing the asset_icon",
+#           "example": "Assignment",
+#           "type": "string"
+#         },
 #         "context_type": {
 #           "description": "The type of context of the item visited. One of 'Course', 'Group', 'User', or 'Account'",
 #           "type": "string",
@@ -98,11 +103,28 @@ class HistoryController < ApplicationController
                               api_v1_user_history_url(user_id: @user.id),
                               per_page: 100,
                               total_entries: nil)
-    page_views = page_views.to_a.select { |pv| pv.asset_user_access_id.present? && pv.real_user_id == @real_current_user&.id }
+    page_views = page_views.to_a.select { |pv| include_page_view?(pv) }
 
     auas = AssetUserAccess.where(id: page_views.map(&:asset_user_access_id)).preload(:context).to_a.index_by(&:id)
 
-    render json: page_views.map { |pv| history_entry_json(pv, auas[pv.asset_user_access_id], @current_user, session) }
+    render json: page_views.
+      select { |pv| auas.key?(pv.asset_user_access_id) }.
+      map { |pv| history_entry_json(pv, auas[pv.asset_user_access_id], @current_user, session) }
+  end
+
+  def include_page_view?(pv)
+    return false unless pv.asset_user_access_id.present?
+
+    # activity done while masquerading is invisible
+    return false unless pv.real_user_id.nil?
+
+    url = URI.parse(pv.url)
+    return false if url.path =~ %r{^/api/v1/} # exclude API calls
+    return false if url.path =~ %r{/files/\d+/download} # exclude file downloads (not previews though)
+
+    true
+  rescue URI::InvalidURIError
+    false
   end
 end
 

@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 #
 # Copyright (C) 2014 - present Instructure, Inc.
 #
@@ -22,6 +24,9 @@ class GradingPeriod < ActiveRecord::Base
   belongs_to :grading_period_group, inverse_of: :grading_periods
   has_many :scores, -> { active }
   has_many :submissions, -> { active }
+  has_many :auditor_grade_change_records,
+    class_name: "Auditors::ActiveRecord::GradeChangeRecord",
+    inverse_of: :grading_period
 
   validates :title, :start_date, :end_date, :close_date, :grading_period_group_id, presence: true
   validates :weight, numericality: true, allow_nil: true
@@ -98,19 +103,22 @@ class GradingPeriod < ActiveRecord::Base
     grading_period_group.course_id.present?
   end
 
-  def assignments_for_student(assignments, student)
-    Assignment::FilterWithOverridesByDueAtForStudent.new(
-      assignments: assignments,
-      grading_period: self,
-      student: student
-    ).filter_assignments
+  def assignments_for_student(course, assignments, student)
+    assignment_ids = GradebookGradingPeriodAssignments.new(course, student: student).to_h.fetch(id, [])
+    if assignment_ids.empty?
+      []
+    else
+      assignments.select { |assignment| assignment_ids.include?(assignment.id.to_s) }
+    end
   end
 
-  def assignments(assignments)
-    Assignment::FilterWithOverridesByDueAtForClass.new(
-      assignments: assignments,
-      grading_period: self
-    ).filter_assignments
+  def assignments(course, assignments)
+    assignment_ids = GradebookGradingPeriodAssignments.new(course).to_h.fetch(id, [])
+    if assignment_ids.empty?
+      []
+    else
+      assignments.select { |assignment| assignment_ids.include?(assignment.id.to_s) }
+    end
   end
 
   def current?

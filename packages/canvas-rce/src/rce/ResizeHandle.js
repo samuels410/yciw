@@ -20,7 +20,7 @@ import React, {useState} from 'react'
 import {func, string} from 'prop-types'
 import {DraggableCore} from 'react-draggable'
 import keycode from 'keycode'
-import {View} from '@instructure/ui-layout'
+import {View} from '@instructure/ui-view'
 import {IconDragHandleLine} from '@instructure/ui-icons'
 import DraggingBlocker from './DraggingBlocker'
 import formatMessage from '../format-message'
@@ -48,6 +48,14 @@ export default function ResizeHandle(props) {
     setIsFocused(false)
   }
 
+  function handleDragStart(e) {
+    setDragging(true)
+  }
+
+  function handleDragStop(e) {
+    setDragging(false)
+  }
+
   const [dragging, setDragging] = useState(false)
   // tracking isFocused rather than leveraging instui Focusable
   // because Focusable doesn't detect whan ResizeHandle gets focus
@@ -71,8 +79,8 @@ export default function ResizeHandle(props) {
       <DraggableCore
         offsetParent={document.body}
         onDrag={props.onDrag}
-        onStart={() => setDragging(true)}
-        onStop={() => setDragging(false)}
+        onStart={handleDragStart}
+        onStop={handleDragStop}
       >
         <View cursor="ns-resize">
           <IconDragHandleLine />

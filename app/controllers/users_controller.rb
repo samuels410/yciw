@@ -311,12 +311,14 @@ class UsersController < ApplicationController
 
         flash[:notice] = t('google_drive_added', "Google Drive account successfully added!")
         return redirect_to(json['return_to_url'])
+      rescue Signet::AuthorizationError => e
+        Canvas::Errors.capture_exception(:oauth, e, :info)
+        flash[:error] = t('google_drive_authorization_failure', "Google Drive failed authorization for current user!")
       rescue Google::APIClient::ClientError => e
-        Canvas::Errors.capture_exception(:oauth, e)
-
+        Canvas::Errors.capture_exception(:oauth, e, :warn)
         flash[:error] = e.to_s
       end
-      return redirect_to(user_profile_url(@current_user))
+      return redirect_to (@current_user ? user_profile_url(@current_user) : root_url)
     end
 
     if !oauth_request || (request.host_with_port == oauth_request.original_host_with_port && oauth_request.user != @current_user)
@@ -404,7 +406,7 @@ class UsersController < ApplicationController
 
     includes = (params[:include] || []) & %w{avatar_url email last_login time_zone uuid}
     includes << 'last_login' if params[:sort] == 'last_login' && !includes.include?('last_login')
-    Shackles.activate(:slave) do
+    GuardRail.activate(:secondary) do
       users = Api.paginate(users, self, api_v1_account_users_url, page_opts)
       user_json_preloads(users, includes.include?('email'))
       User.preload_last_login(users, @context.resolved_root_account_id) if includes.include?('last_login') && !(params[:sort] == 'last_login')
@@ -560,7 +562,7 @@ class UsersController < ApplicationController
   end
 
   def dashboard_sidebar
-    Shackles.activate(:slave) do
+    GuardRail.activate(:secondary) do
       unless @current_user&.has_student_enrollment? && !@current_user.non_student_enrollment?
         # it's not even using any of this for students - it's just using planner now
         prepare_current_user_dashboard_items
@@ -571,7 +573,11 @@ class UsersController < ApplicationController
       end
     end
 
-    render :formats => 'html', :layout => false
+    if CANVAS_RAILS5_2
+      render :formats => 'html', :layout => false
+    else
+      render format: 'html', layout: false
+    end
   end
 
   def toggle_hide_dashcard_color_overlays
@@ -828,7 +834,7 @@ class UsersController < ApplicationController
   #     },
   #   ]
   def todo_items
-    Shackles.activate(:slave) do
+    GuardRail.activate(:secondary) do
       return render_unauthorized_action unless @current_user
       bookmark = Plannable::Bookmarker.new(Assignment, false, [:due_at, :created_at], :id)
       grading_scope = @current_user.assignments_needing_grading(scope_only: true).
@@ -894,7 +900,7 @@ class UsersController < ApplicationController
   #     assignments_needing_submitting: 10
   #   }
   def todo_item_count
-    Shackles.activate(:slave) do
+    GuardRail.activate(:secondary) do
       return render_unauthorized_action unless @current_user
       grading = @current_user.submissions_needing_grading_count
       submitting = @current_user.assignments_needing_submitting(include_ungraded: true, scope_only: true, limit: nil).size
@@ -974,7 +980,7 @@ class UsersController < ApplicationController
   def upcoming_events
     return render_unauthorized_action unless @current_user
 
-    Shackles.activate(:slave) do
+    GuardRail.activate(:secondary) do
       prepare_current_user_dashboard_items
 
       events = @upcoming_events.map do |e|
@@ -1002,7 +1008,7 @@ class UsersController < ApplicationController
   #
   # @returns [Assignment]
   def missing_submissions
-    Shackles.activate(:slave) do
+    GuardRail.activate(:secondary) do
       user = api_find(User, params[:user_id])
       return render_unauthorized_action unless @current_user && user.grants_right?(@current_user, :read)
 
@@ -1167,7 +1173,7 @@ class UsersController < ApplicationController
   end
 
   def show
-    Shackles.activate(:slave) do
+    GuardRail.activate(:secondary) do
       get_context
       @context_account = @context.is_a?(Account) ? @context : @domain_root_account
       @user = params[:id] && params[:id] != 'self' ? User.find(params[:id]) : @current_user
@@ -1197,6 +1203,7 @@ class UsersController < ApplicationController
         respond_to do |format|
           format.html do
             @google_analytics_page_title = "User"
+            @body_classes << 'full-width'
             js_env(CONTEXT_USER_DISPLAY_NAME: @user.short_name,
                    USER_ID: @user.id)
           end
@@ -1690,7 +1697,6 @@ class UsersController < ApplicationController
   end
 
   # @API Get dashboard positions
-  # @beta
   #
   # Returns all dashboard positions that have been saved for a user.
   #
@@ -1715,7 +1721,6 @@ class UsersController < ApplicationController
   end
 
   # @API Update dashboard positions
-  # @beta
   #
   # Updates the dashboard positions for a user for a given context.  This allows
   # positions for the dashboard cards and elsewhere to be customized on a per
@@ -1773,6 +1778,8 @@ class UsersController < ApplicationController
     end
   end
 
+  include Pronouns
+
   # @API Edit a user
   # Modify an existing user. To modify a user's login, see the documentation for logins.
   #
@@ -1819,6 +1826,12 @@ class UsersController < ApplicationController
   #   Sets a bio on the user profile. (See {api:ProfileController#settings Get user profile}.)
   #   Profiles must be enabled on the root account.
   #
+  # @argument user[pronouns] [String]
+  #   Sets pronouns on the user profile.
+  #   Passing an empty string will empty the user's pronouns
+  #   Only Available Pronouns set on the root account are allowed
+  #   Adding and changing pronouns must be enabled on the root account.
+  #
   # @example_request
   #
   #   curl 'https://<canvas>/api/v1/users/133.json' \
@@ -1851,6 +1864,10 @@ class UsersController < ApplicationController
       managed_attributes << :title if @user.grants_right?(@current_user, :rename)
     end
 
+    if @domain_root_account.can_change_pronouns? && @user.grants_right?(@current_user, :manage_user_details)
+      managed_attributes << :pronouns
+    end
+
     if @user.grants_right?(@current_user, :manage_user_details)
       managed_attributes.concat([:time_zone, :locale])
     end
@@ -1873,59 +1890,67 @@ class UsersController < ApplicationController
       end
     end
 
-    if managed_attributes.any? && user_params.except(*managed_attributes).empty?
-      managed_attributes << {:avatar_image => strong_anything} if managed_attributes.delete(:avatar_image)
-      user_params = user_params.permit(*managed_attributes)
-      new_email = user_params.delete(:email)
-      # admins can update avatar images even if they are locked
-      admin_avatar_update = user_params[:avatar_image] &&
-        @user.grants_right?(@current_user, :update_avatar) &&
-        @user.grants_right?(@current_user, :manage_user_details)
+    if managed_attributes.empty? || !user_params.except(*managed_attributes).empty?
+      return render_unauthorized_action
+    end
 
-      includes = %w{locale avatar_url email time_zone}
-      if title = user_params.delete(:title)
-        @user.profile.title = title
-        includes << "title"
+    managed_attributes << { :avatar_image => strong_anything } if managed_attributes.delete(:avatar_image)
+    user_params = user_params.permit(*managed_attributes)
+    new_email = user_params.delete(:email)
+    # admins can update avatar images even if they are locked
+    admin_avatar_update = user_params[:avatar_image] &&
+      @user.grants_right?(@current_user, :update_avatar) &&
+      @user.grants_right?(@current_user, :manage_user_details)
+
+    includes = %w{locale avatar_url email time_zone}
+    if title = user_params.delete(:title)
+      @user.profile.title = title
+      includes << "title"
+    end
+    if bio = user_params.delete(:bio)
+      @user.profile.bio = bio
+      includes << "bio"
+    end
+
+    if (pronouns = user_params.delete(:pronouns))
+      updated_pronoun = match_pronoun(pronouns, @domain_root_account.pronouns)
+      if updated_pronoun || pronouns&.empty?
+        @user.pronouns = updated_pronoun
       end
-      if bio = user_params.delete(:bio)
-        @user.profile.bio = bio
-        includes << "bio"
-      end
+      includes << "pronouns"
+    end
 
-      if admin_avatar_update
-        old_avatar_state = @user.avatar_state
-        @user.avatar_state = 'submitted'
-      end
+    if admin_avatar_update
+      old_avatar_state = @user.avatar_state
+      @user.avatar_state = 'submitted'
+    end
 
-      if session[:require_terms]
-        @user.require_acceptance_of_terms = true
-      end
+    if session[:require_terms]
+      @user.require_acceptance_of_terms = true
+    end
 
-      @user.sortable_name_explicitly_set = user_params[:sortable_name].present?
+    @user.sortable_name_explicitly_set = user_params[:sortable_name].present?
 
-      respond_to do |format|
-        if @user.update(user_params)
-          @user.avatar_state = (old_avatar_state == :locked ? old_avatar_state : 'approved') if admin_avatar_update
-          @user.profile.save if @user.profile.changed?
-          @user.save if admin_avatar_update || update_email
-          # User.email= causes a reload to the user object. The saves need to
-          # happen before the reload happens or we lose all the hard work from
-          # above.
-          @user.email = new_email if update_email
-          session.delete(:require_terms)
-          flash[:notice] = t('user_updated', 'User was successfully updated.')
-          unless params[:redirect_to_previous].blank?
-            return redirect_back fallback_location: user_url(@user)
-          end
-          format.html { redirect_to user_url(@user) }
-          format.json { render :json => user_json(@user, @current_user, session, includes, @domain_root_account) }
-        else
-          format.html { render :edit }
-          format.json { render :json => @user.errors, :status => :bad_request }
+    respond_to do |format|
+      if @user.update(user_params)
+        @user.avatar_state = (old_avatar_state == :locked ? old_avatar_state : 'approved') if admin_avatar_update
+        @user.profile.save if @user.profile.changed?
+        @user.save if admin_avatar_update || update_email
+        # User.email= causes a reload to the user object. The saves need to
+        # happen before the reload happens or we lose all the hard work from
+        # above.
+        @user.email = new_email if update_email
+        session.delete(:require_terms)
+        flash[:notice] = t('user_updated', 'User was successfully updated.')
+        unless params[:redirect_to_previous].blank?
+          return redirect_back fallback_location: user_url(@user)
         end
+        format.html { redirect_to user_url(@user) }
+        format.json { render :json => user_json(@user, @current_user, session, includes, @domain_root_account) }
+      else
+        format.html { render :edit }
+        format.json { render :json => @user.errors, :status => :bad_request }
       end
-    else
-      render_unauthorized_action
     end
   end
 
@@ -2002,6 +2027,16 @@ class UsersController < ApplicationController
 
       render :admin_merge
     end
+  end
+
+  def admin_split
+    @user = User.find(params[:user_id])
+    return unless authorized_action(@user, @current_user, :merge)
+
+    merge_data = UserMergeData.active.splitable.where(user_id: @user).shard(@user).preload(:from_user).to_a
+    js_env ADMIN_SPLIT_USER: user_display_json(@user),
+           ADMIN_SPLIT_URL: api_v1_split_url(@user),
+           ADMIN_SPLIT_USERS: merge_data.map { |md| user_display_json(md.from_user) }
   end
 
   def mark_avatar_image
@@ -2310,7 +2345,7 @@ class UsersController < ApplicationController
 
     if authorized_action(user, @current_user, :merge)
       users = SplitUsers.split_db_users(user)
-      render :json => users.map { |u| user_json(u, @current_user, session) }
+      render :json => users.sort_by(&:short_name).map { |u| user_json(u, @current_user, session) }
     end
   end
 
@@ -2484,8 +2519,7 @@ class UsersController < ApplicationController
   def clear_cache
     user = api_find(User, params[:id])
     if user && authorized_action(@domain_root_account, @current_user, :manage_site_settings)
-      user.clear_cache_key(*Canvas::CacheRegister::ALLOWED_TYPES['User'])
-      user.touch
+      user.clear_caches
       render json: { status: "ok" }
     end
   end
@@ -2729,6 +2763,9 @@ class UsersController < ApplicationController
         includes << 'confirmation_url' if value_to_boolean(cc_params[:confirmation_url])
       end
 
+      if CommunicationChannel.trusted_confirmation_redirect?(@domain_root_account, cc_params[:confirmation_redirect])
+        cc_confirmation_redirect = cc_params[:confirmation_redirect]
+      end
     else
       cc_type = CommunicationChannel::TYPE_EMAIL
       cc_addr = params[:pseudonym].delete(:path) || params[:pseudonym][:unique_id]
@@ -2779,6 +2816,9 @@ class UsersController < ApplicationController
       @pairing_code = find_observer_pairing_code(params[:pairing_code][:code])
       if !@pairing_code.nil?
         @observee = @pairing_code.user
+        # If the user is using a valid pairing code, we don't need recaptcha
+        # Just clear out any errors it may have generated
+        @recaptcha_errors = nil
       else
         @invalid_observee_code = ObserverPairingCode.new
         @invalid_observee_code.errors.add('code', 'invalid')
@@ -2822,6 +2862,7 @@ class UsersController < ApplicationController
             @user.communication_channels.build(:path_type => cc_type, :path => cc_addr)
       @cc.user = @user
       @cc.workflow_state = skip_confirmation ? 'active' : 'unconfirmed' unless @cc.workflow_state == 'confirmed'
+      @cc.confirmation_redirect = cc_confirmation_redirect
     end
 
     if @recaptcha_errors.nil? && @user.valid? && @pseudonym.valid? && @invalid_observee_creds.nil? & @invalid_observee_code.nil?

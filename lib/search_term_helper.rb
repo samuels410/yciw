@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 #
 # Copyright (C) 2013 - present Instructure, Inc.
 #
@@ -37,9 +39,6 @@ module SearchTermHelper
   end
 
   class SearchTermTooShortError < ArgumentError
-    def skip_error_report?
-      true
-    end
 
     def response_status
       :bad_request

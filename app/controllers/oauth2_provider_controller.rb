@@ -19,9 +19,9 @@
 class Oauth2ProviderController < ApplicationController
 
   rescue_from Canvas::Oauth::RequestError, with: :oauth_error
-  protect_from_forgery :except => [:token, :destroy], with: :exception
-  before_action :run_login_hooks, :only => [:token]
-  skip_before_action :require_reacceptance_of_terms
+  protect_from_forgery except: %i[token destroy], with: :exception
+  before_action :run_login_hooks, only: %i[token]
+  skip_before_action :require_reacceptance_of_terms, only: %i[token destroy]
 
   def auth
     if params[:code] || params[:error]
@@ -86,6 +86,7 @@ class Oauth2ProviderController < ApplicationController
   end
 
   def accept
+    return render plain: t("Invalid or missing session for oauth"), status: 400 unless session[:oauth2]
     redirect_params = Canvas::Oauth::Provider.final_redirect_params(session[:oauth2], @current_user, logged_in_user, remember_access: params[:remember_access])
     redirect_to Canvas::Oauth::Provider.final_redirect(self, redirect_params)
   end

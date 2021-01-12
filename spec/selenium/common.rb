@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 #
 # Copyright (C) 2011 - present Instructure, Inc.
 #
@@ -203,6 +205,14 @@ shared_context "in-process server selenium tests" do
     # if a previous step fails
     begin
       clear_local_storage
+    rescue Selenium::WebDriver::Error::WebDriverError
+      # we want to ignore selenium errors when attempting to wait here
+    end
+
+    # we don't want to combine this into the above block to avoid x-test pollution
+    # if a previous step fails
+    begin
+      driver.session_storage.clear
     rescue Selenium::WebDriver::Error::WebDriverError
       # we want to ignore selenium errors when attempting to wait here
     end

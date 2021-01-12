@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 #
 # Copyright (C) 2020 - present Instructure, Inc.
 #
@@ -37,7 +39,6 @@ describe Mutations::CreateOutcomeProficiency do
             _id
             contextId
             contextType
-            locked
             proficiencyRatingsConnection(first: 10) {
               nodes {
                 _id
@@ -83,7 +84,6 @@ describe Mutations::CreateOutcomeProficiency do
     expect(record.context).to eq @account
     expect(result.dig('contextType')).to eq 'Account'
     expect(result.dig('contextId')).to eq @account.id
-    expect(result.dig('locked')).to eq false
     ratings = result.dig('proficiencyRatingsConnection', 'nodes')
     expect(ratings.length).to eq 1
     expect(ratings[0]['color']).to eq 'FFFFFF'
@@ -108,7 +108,7 @@ describe Mutations::CreateOutcomeProficiency do
       expect(errors[0]['message']).to match(/#{message}/)
     end
 
-    it "requires manage_outcomes permission" do
+    it "requires manage_proficiency_scales permission" do
       result = execute_with_input(good_query, user_executing: @teacher)
       expect_error(result, 'insufficient permission')
     end

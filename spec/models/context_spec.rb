@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 #
 # Copyright (C) 2011 - present Instructure, Inc.
 #
@@ -44,7 +46,7 @@ describe Context do
     end
 
     it "should not find an invalid account" do
-      expect(Context.find_by_asset_string("account_0")).to be nil
+      expect(Context.find_by_asset_string("account_#{Account.last.id + 9999}")).to be nil
     end
 
     it "should find a valid user" do

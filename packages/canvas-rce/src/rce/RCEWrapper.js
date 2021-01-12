@@ -23,7 +23,7 @@ import uniqBy from 'lodash/uniqBy'
 
 import themeable from '@instructure/ui-themeable'
 import {IconKeyboardShortcutsLine} from '@instructure/ui-icons'
-import {ScreenReaderContent} from '@instructure/ui-a11y'
+import {ScreenReaderContent} from '@instructure/ui-a11y-content'
 import {Alert} from '@instructure/ui-alerts'
 import {Spinner} from '@instructure/ui-spinner'
 
@@ -213,7 +213,6 @@ class RCEWrapper extends React.Component {
       wordCount: 0,
       isHtmlView: false,
       KBShortcutModalOpen: false,
-      focused: false,
       messages: [],
       announcement: null,
       confirmAutoSave: false,
@@ -248,6 +247,15 @@ class RCEWrapper extends React.Component {
 
   setCode(newContent) {
     this.mceInstance().setContent(newContent)
+  }
+
+  // This function is called imperatively by the page that renders the RCE.
+  // It should be called when the RCE content is done being edited.
+  RCEClosed() {
+    // We want to clear the autosaved content, since the page was legitimately closed.
+    if (this.storage) {
+      this.storage.removeItem(this.autoSaveKey)
+    }
   }
 
   indicateEditor(element) {
@@ -375,7 +383,8 @@ class RCEWrapper extends React.Component {
 
   insertImagePlaceholder(fileMetaProps) {
     let width, height
-    if (isImage(fileMetaProps.contentType)) {
+    let align = 'middle'
+    if (isImage(fileMetaProps.contentType) && fileMetaProps.displayAs !== 'link') {
       const image = new Image()
       image.src = fileMetaProps.domObject.preview
       width = image.width
@@ -391,22 +400,37 @@ class RCEWrapper extends React.Component {
     } else if (isVideo(fileMetaProps.contentType || fileMetaProps.type)) {
       width = VIDEO_SIZE_DEFAULT.width
       height = VIDEO_SIZE_DEFAULT.height
+      align = 'bottom'
     } else if (isAudio(fileMetaProps.contentType || fileMetaProps.type)) {
       width = AUDIO_PLAYER_SIZE.width
       height = AUDIO_PLAYER_SIZE.height
+      align = 'bottom'
     } else {
       width = `${fileMetaProps.name.length}rem`
       height = '1rem'
     }
+    // if you're wondering, the &nbsp; scatter about in the svg
+    // is because tinymce will strip empty elements
     const markup = `
-    <img
-      alt="${formatMessage('Loading...')}"
-      src="data:image/gif;base64,R0lGODlhAQABAIAAAMLCwgAAACH5BAAAAAAALAAAAAABAAEAAAICRAEAOw=="
+    <span
+      aria-label="${formatMessage('Loading')}"
       data-placeholder-for="${encodeURIComponent(fileMetaProps.name)}"
-      style="width: ${width}; height: ${height}; border: solid 1px #8B969E;"
-    />`
+      style="width: ${width}; height: ${height}; vertical-align: ${align};"
+    >
+      <svg xmlns="http://www.w3.org/2000/svg" version="1.1" x="0px" y="0px" viewBox="0 0 100 100" height="100px" width="100px">
+        <g style="stroke-width:.5rem;fill:none;stroke-linecap:round;">&nbsp;
+          <circle class="c1" cx="50%" cy="50%" r="28px">&nbsp;</circle>
+          <circle class="c2" cx="50%" cy="50%" r="28px">&nbsp;</circle>
+          &nbsp;
+        </g>
+        &nbsp;
+      </svg>
+    </span>`
 
-    this.insertCode(markup)
+    const editor = this.mceInstance()
+    editor.undoManager.ignore(() => {
+      editor.execCommand('mceInsertContent', false, markup)
+    })
   }
 
   insertVideo(video) {
@@ -426,7 +450,10 @@ class RCEWrapper extends React.Component {
       `[data-placeholder-for="${encodeURIComponent(name)}"]`
     )
     if (placeholder) {
-      placeholder.remove()
+      const editor = this.mceInstance()
+      editor.undoManager.ignore(() => {
+        editor.dom.remove(placeholder)
+      })
     }
   }
 
@@ -488,7 +515,7 @@ class RCEWrapper extends React.Component {
     return this.state.id
   }
 
-  toggle = () => {
+  toggleView = () => {
     if (this.isHidden()) {
       this.setState({isHtmlView: false})
     } else {
@@ -526,14 +553,12 @@ class RCEWrapper extends React.Component {
   // these focus and blur event handlers work together so that RCEWrapper
   // can report focus and blur events from the RCE at-large
   get focused() {
-    return this.state.focused
+    return this === bridge.getEditor()
   }
 
   handleFocus(_event) {
-    if (!this.state.focused) {
-      this.setState({focused: true})
+    if (!this.focused) {
       bridge.focusEditor(this)
-      this._forceCloseFloatingToolbar()
       this.props.onFocus && this.props.onFocus(this)
     }
   }
@@ -549,7 +574,7 @@ class RCEWrapper extends React.Component {
   handleBlur(event) {
     if (this.blurTimer) return
 
-    if (this.state.focused) {
+    if (this.focused) {
       // because the old active element fires blur before the next element gets focus
       // we often need a moment to see if focus comes back
       event && event.persist && event.persist()
@@ -567,11 +592,10 @@ class RCEWrapper extends React.Component {
         }
 
         const activeClass = document.activeElement && document.activeElement.getAttribute('class')
-        if (activeClass && activeClass.includes('tox-')) {
+        if (event.target.id === event.focusedEditor?.id && activeClass?.includes('tox-')) {
           // if a toolbar button has focus, then the user clicks on the "more" button
           // focus jumps to the body, then eventually to the popped up toolbar. This
-          // catches that case, but could also fail to blur an rce if the user clicked from
-          // one rce on the page to another.  I think this is the lesser of the 2 evils
+          // catches that case.
           return
         }
 
@@ -585,16 +609,15 @@ class RCEWrapper extends React.Component {
           // one of our popups has focus
           return
         }
-        this.setState({focused: false})
+
+        bridge.blurEditor(this)
         this.props.onBlur && this.props.onBlur(event)
       }, ASYNC_FOCUS_TIMEOUT)
     }
   }
 
   handleFocusRCE = event => {
-    if (this._elementRef && !this._elementRef.contains(event.relatedTarget)) {
-      this.handleFocus(event)
-    }
+    this.handleFocus(event)
   }
 
   handleBlurRCE = event => {
@@ -615,6 +638,7 @@ class RCEWrapper extends React.Component {
     const ifr = this.iframe
     ifr && ifr.parentElement.classList.add('active')
 
+    this._forceCloseFloatingToolbar()
     this.handleFocus(event)
   }
 
@@ -649,31 +673,72 @@ class RCEWrapper extends React.Component {
     } else if (event.code === 'Escape') {
       // ESC
       this._forceCloseFloatingToolbar()
+      if (this._fullscreenState.isFullscreen) {
+        this.mceInstance().execCommand('mceFullScreen') // turn it off
+      } else {
+        bridge.hideTrays()
+      }
     }
+  }
+
+  handleClickFullscreen = () => {
+    if (!this.state.isHtmlView) {
+      this.mceInstance().execCommand('mceFullScreen')
+    }
+  }
+
+  handleExternalClick = () => {
+    this._forceCloseFloatingToolbar()
   }
 
   onInit = (_event, editor) => {
     editor.rceWrapper = this
     this.editor = editor
 
+    // Capture click events outside the iframe
+    document.addEventListener('click', this.handleExternalClick)
+
     if (document.body.classList.contains('Underline-All-Links__enabled')) {
       this.iframe.contentDocument.body.classList.add('Underline-All-Links__enabled')
     }
     editor.on('wordCountUpdate', this.onWordCountUpdate)
-    // and an aria-label to the application div that wraps RCE
+    // add an aria-label to the application div that wraps RCE
+    // and change role from "application" to "document" to ensure
+    // the editor gets properly picked up by screen readers
     const tinyapp = document.querySelector('.tox-tinymce[role="application"]')
     if (tinyapp) {
       tinyapp.setAttribute('aria-label', formatMessage('Rich Content Editor'))
+      tinyapp.setAttribute('role', 'document')
     }
     // Probably should do this in tinymce.scss, but we only want it in new rce
     this.getTextarea().style.resize = 'none'
     editor.on('ExecCommand', this._forceCloseFloatingToolbar)
     editor.on('keydown', this.handleKey)
+    editor.on('FullscreenStateChanged', this._toggleFullscreen)
 
     this.announceContextToolbars(editor)
 
     if (this.isAutoSaving) {
       this.initAutoSave(editor)
+    }
+  }
+
+  _fullscreenState = {
+    headerDisp: 'static',
+    isFullscreen: false
+  }
+
+  _toggleFullscreen = event => {
+    const header = document.getElementById('header')
+    if (header) {
+      if (event.state) {
+        this._fullscreenState.headerDisp = header.style.display
+        this._fullscreenState.isFullscreen = true
+        header.style.display = 'none'
+      } else {
+        header.style.display = this._fullscreenState.headerDisp
+        this._fullscreenState.isFullscreen = false
+      }
     }
   }
 
@@ -744,12 +809,19 @@ class RCEWrapper extends React.Component {
       try {
         const autosaved = this.getAutoSaved(this.autoSaveKey)
         if (autosaved && autosaved.content) {
-          const editorContent = editor.getContent({no_events: true})
-          const autosavedContent = this.patchAutosavedContent(autosaved.content)
-          if (autosaved.content !== editorContent) {
+          // We'll compare just the text of the autosave content, since
+          // Canvas is prone to swizzling images and iframes which will
+          // make the editor content and autosave content never match up
+          const editorContent = this.patchAutosavedContent(
+            editor.getContent({no_events: true}),
+            true
+          )
+          const autosavedContent = this.patchAutosavedContent(autosaved.content, true)
+
+          if (autosavedContent !== editorContent) {
             this.setState({
               confirmAutoSave: true,
-              autoSavedContent: autosavedContent
+              autoSavedContent: this.patchAutosavedContent(autosaved.content)
             })
           } else {
             this.storage.removeItem(this.autoSaveKey)
@@ -797,12 +869,13 @@ class RCEWrapper extends React.Component {
   // because the data url gets converted to a blob, which is not valid when restored.
   // besides, the placeholder is intended to be temporary while the file
   // is being uploaded
-  patchAutosavedContent(content) {
+  patchAutosavedContent(content, asText) {
     const temp = document.createElement('div')
     temp.innerHTML = content
-    temp.querySelectorAll('img[data-placeholder-for]').forEach(placeholder => {
+    temp.querySelectorAll('[data-placeholder-for]').forEach(placeholder => {
       placeholder.parentElement.removeChild(placeholder)
     })
+    if (asText) return temp.textContent
     return temp.innerHTML
   }
 
@@ -938,6 +1011,7 @@ class RCEWrapper extends React.Component {
       this.destroy()
     }
     this._elementRef.removeEventListener('keydown', this.handleKey, true)
+    this.observer.disconnect()
   }
 
   // Get top 2 favorited LTI Tools
@@ -1019,12 +1093,12 @@ class RCEWrapper extends React.Component {
         },
         {
           name: formatMessage('Miscellaneous'),
-          items: ['removeformat', 'table', 'instructure_equation']
+          items: ['removeformat', 'table', 'instructure_equation', 'instructure_media_embed']
         }
       ],
       contextmenu: '', // show the browser's native context menu
 
-      toolbar_drawer: 'floating',
+      toolbar_mode: 'floating',
       toolbar_sticky: true,
 
       // tiny's external link create/edit dialog config
@@ -1077,6 +1151,25 @@ class RCEWrapper extends React.Component {
     // This helps with loading the favorited external tools
     if (this.ltiToolFavorites.length > 0) {
       import('./plugins/instructure_external_tools/components/LtiToolsModal')
+    }
+
+    // .tox-tinymce-aux is where tinymce puts the floating toolbar when
+    // the user clicks the More... button
+    // Tinymce doesn't fire onFocus when the user clicks More... from somewhere
+    // outside, so we'll handle that here by watching for the floating toolbar
+    // to come and go.
+    const portals = document.querySelectorAll('.tox-tinymce-aux')
+    // my portal will be the last one in the doc because tinyumce appends them
+    const tinymce_floating_toolbar_portal = portals[portals.length - 1]
+    if (tinymce_floating_toolbar_portal) {
+      this.observer = new MutationObserver((mutationList, _observer) => {
+        mutationList.forEach(mutation => {
+          if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
+            this.handleFocusEditor(new FocusEvent('focus', {target: mutation.target}))
+          }
+        })
+      })
+      this.observer.observe(tinymce_floating_toolbar_portal, {childList: true})
     }
   }
 
@@ -1171,13 +1264,14 @@ class RCEWrapper extends React.Component {
           onNodeChange={this.onNodeChange}
         />
         <StatusBar
-          onToggleHtml={this.toggle}
+          onToggleHtml={this.toggleView}
           path={this.state.path}
           wordCount={this.state.wordCount}
           isHtmlView={this.state.isHtmlView}
           onResize={this.onResize}
           onKBShortcutModalOpen={this.openKBShortcutModal}
           onA11yChecker={this.onA11yChecker}
+          onFullscreen={this.handleClickFullscreen}
         />
         <CanvasContentTray
           key={this.id}

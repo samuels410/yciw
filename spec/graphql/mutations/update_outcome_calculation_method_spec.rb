@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 #
 # Copyright (C) 2020 - present Instructure, Inc.
 #
@@ -23,13 +25,13 @@ describe Mutations::UpdateOutcomeCalculationMethod do
   before :once do
     @account = Account.default
     @course = @account.courses.create!
+    @admin = account_admin_user(account: @account)
     @teacher = @course.enroll_teacher(User.create!, enrollment_state: 'active').user
-    @student = @course.enroll_student(User.create!, enrollment_state: 'active').user
   end
 
   let!(:original_record) { outcome_calculation_method_model(@course) }
 
-  def execute_with_input(update_input, user_executing: @teacher)
+  def execute_with_input(update_input, user_executing: @admin)
     mutation_command = <<~GQL
       mutation {
         updateOutcomeCalculationMethod(input: {
@@ -41,7 +43,6 @@ describe Mutations::UpdateOutcomeCalculationMethod do
             contextId
             calculationMethod
             contextType
-            locked
           }
           errors {
             attribute
@@ -69,7 +70,6 @@ describe Mutations::UpdateOutcomeCalculationMethod do
     expect(result.dig('contextId')).to eq @course.id
     expect(result.dig('calculationMethod')).to eq 'highest'
     expect(result.dig('calculationInt')).to be_nil
-    expect(result.dig('locked')).to be false
     expect(record.calculation_method).to eq 'highest'
     expect(record.calculation_int).to be_nil
     expect(record.context).to eq @course
@@ -97,12 +97,12 @@ describe Mutations::UpdateOutcomeCalculationMethod do
       expect(errors[0]['message']).to match(/#{message}/)
     end
 
-    it "requires manage_outcomes permission" do
+    it "requires manage_proficiency_calculations permission" do
       query = <<~QUERY
         id: #{original_record.id}
         calculationMethod: "highest"
       QUERY
-      result = execute_with_input(query, user_executing: @student)
+      result = execute_with_input(query, user_executing: @teacher)
       expect_error(result, 'insufficient permission')
     end
 

@@ -32,6 +32,9 @@
     "align_right_9bad3ac1": {
         "message": "Выровнять по правому краю"
     },
+    "alignment_and_lists_5cebcb69": {
+        "message": "Согласование и списки"
+    },
     "all_4321c3a1": {
         "message": "Все"
     },
@@ -113,6 +116,9 @@
     "assignmenttype_title_reminder_datetime_33fa66d5": {
         "message": "{ assignmentType } { title }, напоминание { datetime }."
     },
+    "attributes_963ba262": {
+        "message": "Атрибуты"
+    },
     "audio_and_video_recording_is_not_available_c7173efc": {
         "message": "Запись аудио и видео недоступна."
     },
@@ -131,6 +137,9 @@
     "beginning_of_your_to_do_history_61ef2dce": {
         "message": "Начало вашей истории задач"
     },
+    "c_2001_acme_inc_283f7f80": {
+        "message": "(c) 2001 г. Acme Inc."
+    },
     "calendar_a8563bb2": {
         "message": "Календарь:"
     },
@@ -146,8 +155,14 @@
     "choose_caption_file_9c45bc4e": {
         "message": "Выберите файл подписи к изображению"
     },
+    "choose_usage_rights_33683854": {
+        "message": "Выбрать права на использование..."
+    },
     "circle_unordered_list_9e3a0763": {
         "message": "заключить неупорядоченный список в круг"
+    },
+    "clear_2084585f": {
+        "message": "Очистить"
     },
     "clear_selected_file_82388e50": {
         "message": "Очистить выбранный файл"
@@ -176,6 +191,9 @@
     "close_opportunity_center_popup_9907d981": {
         "message": "Закройте всплывающее окно Центр возможностей"
     },
+    "closed_captions_subtitles_e6aaa016": {
+        "message": "Закрытые надписи/субтитры"
+    },
     "collaborations_5c56c15f": {
         "message": "Совместная работа"
     },
@@ -185,6 +203,9 @@
     "computer_1d7dfa6f": {
         "message": "Компьютер"
     },
+    "content_1440204b": {
+        "message": "Содержимое"
+    },
     "content_is_still_being_uploaded_if_you_continue_it_8f06d0cb": {
         "message": "Выгрузка контента еще не завершена, в случае продолжения вами данного действия он не будет внедрен правильно."
     },
@@ -193,6 +214,9 @@
     },
     "content_type_2cf90d95": {
         "message": "Тип содержимого"
+    },
+    "copyright_holder_66ee111": {
+        "message": "Правообладатель:"
     },
     "count_plural_0_0_words_one_1_word_other_words_acf32eca": {
         "message": "{ count, plural,\n     =0 {0 слов}\n    one {1 слово}\n  other {# слов(-а)}\n}"
@@ -232,6 +256,9 @@
     },
     "course_to_do_bcbbab54": {
         "message": "{ course } ЗАДАЧИ"
+    },
+    "creative_commons_license_725584ae": {
+        "message": "Лицензионное соглашение Creative Commons:"
     },
     "current_volume_level_c55ab825": {
         "message": "Уровень текущего объема"
@@ -341,9 +368,6 @@
     "drag_handle_use_up_and_down_arrows_to_resize_e29eae5c": {
         "message": "Перетаскивание. Используйте стрелки вверх и вниз для изменения размера"
     },
-    "drop_and_drop_or_click_to_browse_your_computer_1acfa42d": {
-        "message": "Перетащите или щелкните, чтобы просмотреть свой компьютер"
-    },
     "due_5d7267be": {
         "message": "Срок:"
     },
@@ -358,6 +382,9 @@
     },
     "edit_c5fbea07": {
         "message": "Редактировать"
+    },
+    "edit_equation_f5279959": {
+        "message": "Редактировать уравнение"
     },
     "edit_link_7f53bebb": {
         "message": "Редактировать ссылку"
@@ -386,11 +413,11 @@
     "embed_video_a97a64af": {
         "message": "Вставить видео"
     },
-    "embed_video_code_703e10f2": {
-        "message": "Вставить код видео"
-    },
     "embedded_content_aaeb4d3d": {
         "message": "интегрированный контент"
+    },
+    "enter_at_least_3_characters_to_search_4f037ee0": {
+        "message": "Введите не менее 3 знаков для поиска"
     },
     "equation_1c5ac93c": {
         "message": "Формула"
@@ -415,6 +442,9 @@
     },
     "external_links_3d9f074e": {
         "message": "Внешние ссылки"
+    },
+    "external_tools_6e77821": {
+        "message": "Внешние инструменты"
     },
     "extra_large_b6cdf1ff": {
         "message": "Очень крупный"
@@ -482,6 +512,9 @@
     "found_count_plural_0_results_one_result_other_resu_46aeaa01": {
         "message": "Найдено { count, plural,\n     =0 {# результата(-ов)}\n    one {# результат}\n  other {# результата(-ов)}\n}"
     },
+    "fullscreen_873bf53f": {
+        "message": "На весь экран"
+    },
     "generating_preview_45b53be0": {
         "message": "Создание предварительного просмотра"
     },
@@ -506,11 +539,23 @@
     "grades_loaded_5056277c": {
         "message": "Оценки загружены"
     },
+    "group_documents_8bfd6ae6": {
+        "message": "Документы группы"
+    },
     "group_files_4324f3df": {
         "message": "Файлы группы"
     },
     "group_files_82e5dcdb": {
         "message": "Файлы группы"
+    },
+    "group_images_98e0ac17": {
+        "message": "Изображения группы"
+    },
+    "group_links_9493129e": {
+        "message": "Групповые ссылки"
+    },
+    "group_media_2f3d128a": {
+        "message": "Медиа группы"
     },
     "group_navigation_99f191a": {
         "message": "Навигация группы"
@@ -526,6 +571,15 @@
     },
     "height_69b03e15": {
         "message": "Высота"
+    },
+    "i_have_obtained_permission_to_use_this_file_6386f087": {
+        "message": "Разрешение на использование данного файла получено."
+    },
+    "i_hold_the_copyright_71ee91b1": {
+        "message": "Я являюсь правообладателем"
+    },
+    "if_you_do_not_select_usage_rights_now_this_file_wi_14e07ab5": {
+        "message": "Если вы не выберете права пользования сейчас, этот файл не будет опубликован после отправки."
     },
     "image_8ad06": {
         "message": "Изображение"
@@ -559,6 +613,9 @@
     },
     "invalid_file_type_881cc9b2": {
         "message": "Неверный тип файла"
+    },
+    "invalid_url_cbde79f": {
+        "message": "Неверный URL"
     },
     "items_completed_items_plural_1_item_other_items_717d579f": {
         "message": "{ items } завершенный(-е) { items, plural,\n     =1 {элемент}\n  other {элементы}\n}"
@@ -638,6 +695,9 @@
     "loading_planner_items_947a813d": {
         "message": "Загрузка событий планировщика"
     },
+    "loading_please_wait_d276220a": {
+        "message": "Выполняется загрузка, подождите..."
+    },
     "location_3b6ff307": {
         "message": "Местоположение:"
     },
@@ -656,6 +716,9 @@
     "mic_a7f3d311": {
         "message": "Микрофон"
     },
+    "miscellaneous_e9818229": {
+        "message": "Разное"
+    },
     "missing_1a256b3b": {
         "message": "Отсутствует"
     },
@@ -673,9 +736,6 @@
     },
     "my_grades_98834476": {
         "message": "Мои оценки"
-    },
-    "my_media_82bade11": {
-        "message": "Мое мультимедиа"
     },
     "navigate_through_the_menu_or_toolbar_415a4e50": {
         "message": "Навигация в меню или панели инструментов"
@@ -770,6 +830,9 @@
     "other_editor_shortcuts_may_be_found_at_404aba4a": {
         "message": "Другие ярлыки редактора можно найти на"
     },
+    "p_is_not_a_valid_protocol_which_must_be_ftp_http_h_adf13fc2": {
+        "message": "{ p } — недействительный протокол. Это должен быть ftp, http, https, mailto, skype, tel или может не указываться"
+    },
     "page_50c4823d": {
         "message": "Страница"
     },
@@ -821,6 +884,9 @@
     "previous_page_928fc112": {
         "message": "Предыдущая страница"
     },
+    "protocol_must_be_ftp_http_https_mailto_skype_tel_o_73beb4f8": {
+        "message": "Протокол должен быть ftp, http, https, mailto, skype, tel или может не указываться"
+    },
     "pts_699bd9aa": {
         "message": "баллы"
     },
@@ -835,6 +901,9 @@
     },
     "quizzes_7e598f57": {
         "message": "Тесты"
+    },
+    "raw_html_editor_e3993e41": {
+        "message": "Редактор Raw HTML"
     },
     "reading_a_media_track_file_failed_aborting_be051b20": {
         "message": "Сбой чтения файла мультимедийного трека. Прерывание."
@@ -1007,6 +1076,15 @@
     "the_date_and_time_this_to_do_is_due_74c823d4": {
         "message": "Дата и время выполнения этого установлены на"
     },
+    "the_material_is_in_the_public_domain_279c39a3": {
+        "message": "Материал находится в общедоступном домене"
+    },
+    "the_material_is_licensed_under_creative_commons_3242cb5e": {
+        "message": "Материал распространяется по лицензии Creative Commons"
+    },
+    "the_material_is_subject_to_an_exception_e_g_fair_u_a39c8ca2": {
+        "message": "Материал подпадает под действие правовой оговорки - например, касательно добросовестного использования, права цитирования или иной правовой оговорки согласно действующему законодательству об авторских правах"
+    },
     "there_are_no_points_associated_with_this_item_449c712a": {
         "message": "Нет пунктов, связанных с этим элементом"
     },
@@ -1048,6 +1126,9 @@
     },
     "tomorrow_at_date_b53f2cf1": {
         "message": "Завтра в { date }"
+    },
+    "tools_2fcf772e": {
+        "message": "Инструменты"
     },
     "totalresults_results_found_numdisplayed_results_cu_a0a44975": {
         "message": "{ totalResults } результатов найдено, { numDisplayed } результатов отображается в данный момент"
@@ -1100,6 +1181,12 @@
     "url_22a5f3b8": {
         "message": "URL"
     },
+    "usage_right_ff96f3e2": {
+        "message": "Право на использование:"
+    },
+    "usage_rights_required_5fe4dd68": {
+        "message": "Права на использование (обязательно)"
+    },
     "use_arrow_keys_to_navigate_options_2021cc50": {
         "message": "Используйте клавиши со стрелками для навигации по параметрам."
     },
@@ -1138,6 +1225,9 @@
     },
     "video_player_for_title_ffd9fbc4": {
         "message": "Видеоплеер для { title }"
+    },
+    "view_ba339f93": {
+        "message": "Просмотр"
     },
     "view_keyboard_shortcuts_34d1be0b": {
         "message": "Показать клавиши быстрого доступа"

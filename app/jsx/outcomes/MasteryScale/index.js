@@ -18,35 +18,38 @@
 
 import React, {useCallback, useState} from 'react'
 import I18n from 'i18n!MasteryScale'
-import {Heading} from '@instructure/ui-heading'
 import {Spinner} from '@instructure/ui-spinner'
 import {Text} from '@instructure/ui-text'
 import ProficiencyTable from './ProficiencyTable'
-import {saveProficiency, OUTCOME_PROFICIENCY_QUERY} from './api'
+import RoleList from '../RoleList'
+import {
+  saveProficiency,
+  ACCOUNT_OUTCOME_PROFICIENCY_QUERY,
+  COURSE_OUTCOME_PROFICIENCY_QUERY
+} from './api'
 import {useQuery} from 'react-apollo'
 
-const MasteryScale = ({contextType, contextId}) => {
-  const {loading, error, data} = useQuery(OUTCOME_PROFICIENCY_QUERY, {
-    variables: {contextId}
+const MasteryScale = ({contextType, contextId, onNotifyPendingChanges}) => {
+  const query =
+    contextType === 'Course' ? COURSE_OUTCOME_PROFICIENCY_QUERY : ACCOUNT_OUTCOME_PROFICIENCY_QUERY
+
+  const {loading, error, data} = useQuery(query, {
+    variables: {contextId},
+    fetchPolicy: process.env.NODE_ENV === 'test' ? undefined : 'no-cache'
   })
 
-  // const [updateProficiencyRatingsQuery, {error: updateProficiencyRatingsError}] = useMutation(
-  //   SET_OUTCOME_PROFICIENCY_RATINGS
-  // )
   const [updateProficiencyRatingsError, setUpdateProficiencyRatingsError] = useState(null)
   const updateProficiencyRatings = useCallback(
     async config => {
       try {
         const response = await saveProficiency(contextType, contextId, config)
         if (response.status !== 200) {
-          setUpdateProficiencyRatingsError(
-            I18n.t('An error occurred updating the proficiency ratings')
-          )
+          setUpdateProficiencyRatingsError(I18n.t('An error occurred updating the mastery scale'))
           throw new Error(I18n.t('HTTP Response: %{code}', {code: response.status}))
         }
       } catch (e) {
         setUpdateProficiencyRatingsError(
-          I18n.t('An error occurred updating the proficiency ratings: %{message}', {
+          I18n.t('An error occurred updating the mastery scale: %{message}', {
             message: e.message
           })
         )
@@ -66,21 +69,53 @@ const MasteryScale = ({contextType, contextId}) => {
   if (error) {
     return (
       <Text color="danger">
-        {I18n.t('An error occurred while loading the proficiency ratings: %{error}', {error})}
+        {I18n.t('An error occurred while loading the mastery scale: %{error}', {error})}
       </Text>
     )
   }
-  const {outcomeProficiency} = data.account
+  const {outcomeProficiency} = data.context
+
+  const roles = ENV.PROFICIENCY_SCALES_ENABLED_ROLES || []
+  const accountRoles = roles.filter(role => role.is_account_role)
+  const canManage = ENV.PERMISSIONS.manage_proficiency_scales
+
   return (
-    <div>
-      <Heading level="h5" margin="medium 0">
-        {I18n.t('Set the mastery scale to be used for all courses within this account.')}
-      </Heading>
+    <div data-testid="masteryScales">
+      {canManage && contextType === 'Account' && (
+        <p>
+          <Text>
+            {I18n.t(
+              'This mastery scale will be used as the default for all courses within your account.'
+            )}
+          </Text>
+        </p>
+      )}
+
       <ProficiencyTable
-        proficiency={outcomeProficiency}
+        contextType={contextType}
+        proficiency={outcomeProficiency || undefined} // send undefined when value is null
         update={updateProficiencyRatings}
         updateError={updateProficiencyRatingsError}
+        onNotifyPendingChanges={onNotifyPendingChanges}
       />
+
+      {accountRoles.length > 0 && (
+        <RoleList
+          description={I18n.t(
+            'Permission to change this mastery scale at the account level is enabled for:'
+          )}
+          roles={accountRoles}
+        />
+      )}
+
+      {roles.length > 0 && (
+        <RoleList
+          description={I18n.t(
+            'Permission to change this mastery scale at the course level is enabled for:'
+          )}
+          roles={roles}
+        />
+      )}
     </div>
   )
 }

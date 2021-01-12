@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 #
 # Copyright (C) 2011 - present Instructure, Inc.
 #
@@ -106,8 +108,8 @@ class User < ActiveRecord::Base
   has_many :associated_root_accounts, -> { order("user_account_associations.depth").
     where(accounts: { parent_account_id: nil }) }, source: :account, through: :user_account_associations
   has_many :developer_keys
-  has_many :access_tokens, -> { where(:workflow_state => "active").preload(:developer_key) }, inverse_of: :user, multishard: true
-  has_many :masquerade_tokens, -> { where(:workflow_state => "active").preload(:developer_key) }, class_name: 'AccessToken', inverse_of: :real_user
+  has_many :access_tokens, -> { where(:workflow_state => "active") }, inverse_of: :user, multishard: true
+  has_many :masquerade_tokens, -> { where(:workflow_state => "active") }, class_name: 'AccessToken', inverse_of: :real_user
   has_many :notification_endpoints, :through => :access_tokens, multishard: true
   has_many :context_external_tools, -> { order(:name) }, as: :context, inverse_of: :context, dependent: :destroy
   has_many :lti_results, inverse_of: :user, class_name: 'Lti::Result', dependent: :destroy
@@ -301,11 +303,15 @@ class User < ActiveRecord::Base
 
   def assignment_and_quiz_visibilities(context)
     RequestCache.cache("assignment_and_quiz_visibilities", self, context) do
-      Shackles.activate(:slave) do
+      GuardRail.activate(:secondary) do
         {assignment_ids: DifferentiableAssignment.scope_filter(context.assignments, self, context).pluck(:id),
           quiz_ids: DifferentiableAssignment.scope_filter(context.quizzes, self, context).pluck(:id)}
       end
     end
+  end
+
+  def self.public_lti_id
+    [Canvas::Security.config['lti_iss'], 'public_user'].join('/')
   end
 
   def self.order_by_sortable_name(options = {})
@@ -358,7 +364,7 @@ class User < ActiveRecord::Base
     select_clause = "users.*, #{select_clause}" if select_values.blank?
     scope = select(select_clause).
       # left outer join ensures we get the user even if they don't have a pseudonym
-      joins(sanitize_sql([<<-SQL, root_account_id])).where(:enrollments => { :course_id => course })
+      joins(sanitize_sql([<<~SQL, root_account_id])).where(:enrollments => { :course_id => course })
         LEFT OUTER JOIN #{Pseudonym.quoted_table_name} ON pseudonyms.user_id = users.id AND pseudonyms.account_id = ?
         INNER JOIN #{Enrollment.quoted_table_name} ON enrollments.user_id = users.id
       SQL
@@ -430,59 +436,41 @@ class User < ActiveRecord::Base
   ensure
     @skip_updating_account_associations = false
   end
+
   def self.skip_updating_account_associations?
     !!@skip_updating_account_associations
   end
 
   # Update the root_account_ids column on the user
-  # and all associated CommunicationChannels
+  # and all the users CommunicationChannels
   def update_root_account_ids
     # See User#associated_shards in MRA for an explanation of
     # shard association levels
     shards = associated_shards(:strong) + associated_shards(:weak)
 
     refreshed_root_account_ids = Set.new
-    communication_channels_to_update = Set.new
 
     Shard.with_each_shard(shards) do
-      UserAccountAssociation.joins(:account).
-        where(user: self, accounts: { parent_account_id: nil }).
-        preload(:account).
-        find_each do |association|
-          refreshed_root_account_ids << association.global_account_id
-        end
-
-      # Users can potentially have communication_channels on
-      # any of their associated shards. Collect those communication
-      # channels here for later root_account_ids updating.
-      communication_channels_to_update.merge(
-        CommunicationChannel.where(user: self)
-      )
+      UserAccountAssociation.for_root_accounts.for_user_id(self.id).each do |uaa|
+        refreshed_root_account_ids << Shard.relative_id_for(uaa.account_id, Shard.current, self.shard)
+      end
     end
 
     # Update the user
-    relative_ids = refreshed_root_account_ids.map do |id|
-      Shard.relative_id_for(id, self.shard, self.shard)
-    end
-    self.update!(root_account_ids: relative_ids)
-
-    # Update each communication channel associated with the user
-    communication_channels_to_update.each do |c|
-      c.set_root_account_ids(persist_changes: true)
+    self.root_account_ids = refreshed_root_account_ids.to_a.sort
+    if root_account_ids_changed?
+      save!
+      # Update each communication channel associated with the user
+      self.communication_channels.update_all(root_account_ids: self.root_account_ids)
     end
   end
 
   def update_root_account_ids_later
-    send_later_enqueue_args(
-      :update_root_account_ids,
-      {
-        max_attempts: MAX_ROOT_ACCOUNT_ID_SYNC_ATTEMPTS
-      }
-    )
+    delay(max_attempts: MAX_ROOT_ACCOUNT_ID_SYNC_ATTEMPTS).update_root_account_ids
   end
 
   def update_account_associations_later
-    self.send_later_if_production(:update_account_associations) unless self.class.skip_updating_account_associations?
+    delay_if_production.update_account_associations unless self.class.skip_updating_account_associations?
   end
 
   def update_account_associations_if_necessary
@@ -976,6 +964,8 @@ class User < ActiveRecord::Base
     else
       cc = self.communication_channels.email.by_path(e).first ||
            self.communication_channels.email.create!(path: e)
+      # If the email already exists but with different casing this allows us to change it
+      cc.path = e
       cc.user = self
     end
     cc.move_to_top
@@ -1022,6 +1012,11 @@ class User < ActiveRecord::Base
 
   def unavailable?
     deleted?
+  end
+
+  def clear_caches
+    self.clear_cache_key(*Canvas::CacheRegister::ALLOWED_TYPES['User'])
+    self.touch
   end
 
   alias_method :destroy_permanently!, :destroy
@@ -1210,6 +1205,11 @@ class User < ActiveRecord::Base
 
     given { |user| self.check_courses_right?(user, :manage_user_notes) }
     can :create_user_notes and can :read_user_notes
+
+    [:read_email_addresses, :read_sis, :manage_sis].each do |permission|
+      given {|user| self.check_courses_right?(user, permission) }
+      can permission
+    end
 
     given { |user| self.check_courses_right?(user, :generate_observer_pairing_code, enrollments.not_deleted) }
     can :generate_observer_pairing_code
@@ -1747,7 +1747,7 @@ class User < ActiveRecord::Base
   # made a tree, it would be the chain between the root and the first branching
   # point.
   def common_account_chain(in_root_account)
-    Shackles.activate(:slave) do
+    GuardRail.activate(:secondary) do
       rid = in_root_account.id
       accts = self.associated_accounts.where("accounts.id = ? OR accounts.root_account_id = ?", rid, rid)
       return [] if accts.blank?
@@ -1808,7 +1808,7 @@ class User < ActiveRecord::Base
               where("enrollment_states.state IN ('active', 'invited', 'pending_invited', 'pending_active')")
           end
 
-          Shackles.activate(:slave) do
+          GuardRail.activate(:secondary) do
             scope.select("courses.*, enrollments.id AS primary_enrollment_id, enrollments.type AS primary_enrollment_type, enrollments.role_id AS primary_enrollment_role_id, #{Enrollment.type_rank_sql} AS primary_enrollment_rank, enrollments.workflow_state AS primary_enrollment_state, enrollments.created_at AS primary_enrollment_date").
                 order(Arel.sql("courses.id, #{Enrollment.type_rank_sql}, #{Enrollment.state_rank_sql}")).
                 distinct_on(:id).shard(shards).to_a
@@ -2039,7 +2039,7 @@ class User < ActiveRecord::Base
       Rails.cache.fetch_with_batched_keys(['submissions_for_course_ids', ids_hash, start_at, limit].cache_key, expires_in: 1.day, batch_object: self, batched_keys: :submissions) do
         start_at ||= 4.weeks.ago
 
-        Shackles.activate(:slave) do
+        GuardRail.activate(:secondary) do
           submissions = []
           submissions += self.submissions.posted.where("GREATEST(submissions.submitted_at, submissions.created_at) > ?", start_at).
             where(:course_id => course_ids).eager_load(:assignment).
@@ -2128,7 +2128,7 @@ class User < ActiveRecord::Base
   # NOTE: excludes submission stream items
   def recent_stream_items(opts={})
     self.shard.activate do
-      Shackles.activate(:slave) do
+      GuardRail.activate(:secondary) do
         visible_instances = visible_stream_item_instances(opts).
           preload(stream_item: :context).
           limit(Setting.get('recent_stream_item_limit', 100))
@@ -2194,13 +2194,24 @@ class User < ActiveRecord::Base
       events += select_available_assignments(
         select_upcoming_assignments(assignments.map {|a| a.overridden_for(self)}, opts.merge(:time => now))
       )
-
     end
-    events.sort_by{|e| [e.start_at ? 0: 1,e.start_at || 0, Canvas::ICU.collation_key(e.title)] }.uniq.first(opts[:limit])
+
+    sorted_events = events.sort_by do |e|
+      due_date = e.start_at
+      if e.respond_to? :dates_hash_visible_to
+        e.dates_hash_visible_to(self).any? do |due_hash|
+          due_date = due_hash[:due_at] if due_hash[:due_at]
+        end
+      end
+      [due_date ? 0 : 1, due_date || 0, Canvas::ICU.collation_key(e.title)]
+    end
+
+    sorted_events.uniq.first(opts[:limit])
   end
 
   def select_available_assignments(assignments, include_concluded: false)
     return [] if assignments.empty?
+
     available_course_ids = if include_concluded
                             all_course_ids
                           else
@@ -2620,7 +2631,7 @@ class User < ActiveRecord::Base
   def user_can_edit_name?
     accounts = pseudonyms.shard(self).active.map(&:account)
     return true if accounts.empty?
-    accounts.any? { |a| a.settings[:users_can_edit_name] != false }
+    accounts.any? { |a| a.users_can_edit_name? }
   end
 
   def limit_parent_app_web_access?
@@ -3011,14 +3022,14 @@ class User < ActiveRecord::Base
 
   def user_roles(root_account, exclude_deleted_accounts = nil)
     roles = ['user']
-    enrollment_types = Shackles.activate(:slave) do
+    enrollment_types = GuardRail.activate(:secondary) do
       root_account.all_enrollments.where(user_id: self, workflow_state: 'active').distinct.pluck(:type)
     end
     roles << 'student' unless (enrollment_types & %w[StudentEnrollment StudentViewEnrollment]).empty?
     roles << 'fake_student' if fake_student?
     roles << 'teacher' unless (enrollment_types & %w[TeacherEnrollment TaEnrollment DesignerEnrollment]).empty?
     roles << 'observer' unless (enrollment_types & %w[ObserverEnrollment]).empty?
-    account_users = Shackles.activate(:slave) do
+    account_users = GuardRail.activate(:secondary) do
       root_account.cached_all_account_users_for(self)
     end
 

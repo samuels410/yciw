@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 #
 # Copyright (C) 2014 - present Instructure, Inc.
 #
@@ -145,7 +147,12 @@ module Canvadocs
       response = @http.request(request)
 
       unless response.code =~ /\A20./
-        raise Canvadocs::Error, "HTTP Error #{response.code}: #{response.body}"
+        err_message = "HTTP Error #{response.code}: #{response.body}"
+        klass = Canvadocs::HttpError
+        klass = Canvadocs::ServerError if response.code.to_s == "500"
+        klass = Canvadocs::BadGateway if response.code.to_s == "502"
+        klass = Canvadocs::BadRequest if response.code.to_s == "400"
+        raise klass, err_message
       end
       response.body
     end
@@ -192,6 +199,10 @@ module Canvadocs
   end
 
   class Error < StandardError; end
+  class HttpError < Error; end
+  class ServerError < HttpError; end
+  class BadGateway < HttpError; end
+  class BadRequest < HttpError; end
 
   def self.config
     PluginSetting.settings_for_plugin(:canvadocs)
@@ -291,7 +302,7 @@ module Canvadocs
     end
 
     def moderated_grading_user_filter(submission, current_user, enrollments)
-      submission.moderation_whitelist_for_user(current_user).map do |user|
+      submission.moderation_allow_list_for_user(current_user).map do |user|
         user_filter_entry(
           user,
           submission,

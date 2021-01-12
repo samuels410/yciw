@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 # Copyright (C) 2017 - present Instructure, Inc.
 #
 # This file is part of Canvas.
@@ -25,7 +27,7 @@ module Canvas
       let(:proxy) { PrefixProxy.new('foo/bar', service: nil, tree: nil, default_ttl: 3.minutes, kv_client: client) }
 
       after(:each) do
-        LocalCache.clear
+        LocalCache.clear(force: true)
       end
 
       describe '.fetch(key, ttl: @default_ttl)' do
@@ -60,6 +62,7 @@ module Canvas
 
         it 'must fetch the value from consul using the prefix and supplied key' do
           expect(client).to receive(:get).with('', :recurse, :stale).ordered.and_return(double(status: 200, values: {}))
+          expect(client).to receive(:get).with('foo/bar/baz', :stale).ordered.and_return(double(status: 200, values: nil))
           expect(client).to receive(:get).with('global/foo/bar/baz', :stale).ordered.and_return(double(status: 200, values: nil))
           proxy.fetch('baz')
         end
@@ -89,7 +92,7 @@ module Canvas
         it 'must use the dynamic settings cache for previously fetched values' do
           expect(LocalCache).to receive(:fetch).with(DynamicSettings::CACHE_KEY_PREFIX + 'foo/bar/baz').ordered
           expect(LocalCache).to receive(:fetch).with(DynamicSettings::CACHE_KEY_PREFIX + '/', expires_in: 3.minutes).ordered
-          expect(LocalCache).to receive(:fetch).with(DynamicSettings::CACHE_KEY_PREFIX + 'foo/bar/baz').ordered
+          expect(LocalCache).to receive(:fetch).with(DynamicSettings::CACHE_KEY_PREFIX + 'foo/bar/baz', expires_in: 6.minutes).ordered
           expect(LocalCache).to receive(:fetch).with(DynamicSettings::CACHE_KEY_PREFIX + 'global/foo/bar/baz', expires_in: 3.minutes).ordered
           proxy.fetch('baz')
         end
@@ -104,7 +107,7 @@ module Canvas
         it "must log the connection failure when consul can't be contacted" do
           LocalCache.write(DynamicSettings::CACHE_KEY_PREFIX + 'foo/bar/baz', 'qux', expires_in: -3.minutes)
           expect(Canvas::Errors).to receive(:capture_exception).
-            with(:consul, an_instance_of(Imperium::TimeoutError))
+            with(:consul, an_instance_of(Imperium::TimeoutError), :warn)
           allow(client).to receive(:get).and_raise(Imperium::TimeoutError)
           proxy.fetch('baz')
         end
@@ -116,10 +119,75 @@ module Canvas
 
         it "falls back to global settings" do
           empty_mock = double(status: 404, values: nil)
-          expect(client).to receive(:get).with('', :recurse, :stale).and_return(empty_mock).ordered
           mock = double(status: 200, values: 42)
+          expect(client).to receive(:get).with('', :recurse, :stale).and_return(empty_mock).ordered
+          expect(client).to receive(:get).with('foo/bar/baz', :stale).and_return(empty_mock).ordered
           expect(client).to receive(:get).with('global/foo/bar/baz', :stale).and_return(mock).ordered
           expect(proxy.fetch('baz')).to eq 42
+        end
+      end
+
+      describe 'with redis local cache' do
+        let(:redis_conf_hash) do
+          rc = Canvas.redis_config
+          {
+            store: "redis",
+            redis_url: rc.fetch("servers", ["redis://redis"]).first,
+            redis_db: rc.fetch("database", 1)
+          }
+        end
+
+        before(:each) do
+          skip("Must have a local redis available to run this spec") unless Canvas.redis_enabled?
+          allow(ConfigFile).to receive(:load).with("local_cache").and_return(redis_conf_hash)
+          # will get cleared by top-level "after" block
+          LocalCache.reset
+        end
+
+        let(:proxy) { PrefixProxy.new('test/prefix', service: 'test_svc', tree: 'test_tree', environment: 'test_env', default_ttl: 3.minutes, kv_client: client) }
+
+        it "caches tree values from client" do
+          mock = double(status: 200, values: {
+            'test' => {
+              'prefix' => {
+                'svc_config' => {
+                  'app-host' => 'http://test-host',
+                  'app-secret' => 'sekret'
+                }
+              }
+            }
+          })
+          expect(client).to receive(:get).with('test_tree/test_svc/test_env', :recurse, :stale).and_return(mock).ordered
+          # shouldn't need to get a specific key because it's already populated in the cache
+          expect(client).to_not receive(:get).with('test_tree/test_svc/test_env/test/prefix/svc_config/app-host', :stale)
+          expect(client).to_not receive(:get).with('test_tree/test_svc/test_env/test/prefix/svc_config/app-secret', :stale)
+          output = proxy['svc_config/app-host']
+          expect(output).to eq('http://test-host')
+          expect(proxy['svc_config/app-secret']).to eq('sekret')
+        end
+
+        it "can handle a cache clear" do
+          skip ('FOO-1030 10/5/2020')
+          mock = double(status: 200, values: {
+            'test' => {
+              'prefix' => {
+                'svc_config' => {
+                  'app-host' => 'http://test-host',
+                  'app-secret' => 'sekret'
+                }
+              }
+            }
+          })
+          sub_mock = double(status: 200, values: 'sekret')
+          expect(client).to receive(:get).with('test_tree/test_svc/test_env', :recurse, :stale).and_return(mock).ordered
+          expect(client).to_not receive(:get).with('test_tree/test_svc/test_env/test/prefix/svc_config/app-host', :stale)
+          expect(client).to receive(:get).with('test_tree/test_svc/test_env/test/prefix/svc_config/app-secret', :stale).and_return(sub_mock).ordered
+          output = proxy['svc_config/app-host']
+          expect(output).to eq('http://test-host')
+          # CACHE CLEAR, but force race condition
+          LocalCache.clear
+          LocalCache.write("dynamic_settings/test_tree/test_svc/test_env/", true)
+          expect(proxy['svc_config/app-secret']).to eq('sekret')
         end
       end
 

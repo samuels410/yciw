@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 #
 # Copyright (C) 2011 - present Instructure, Inc.
 #
@@ -19,6 +21,12 @@
 require 'aws-sdk-sns'
 
 class DeveloperKey < ActiveRecord::Base
+  class CacheOnAssociation < ActiveRecord::Associations::BelongsToAssociation
+    def find_target
+      DeveloperKey.find_cached(owner._read_attribute(reflection.foreign_key))
+    end  
+  end
+
   include CustomValidations
   include Workflow
 
@@ -70,7 +78,7 @@ class DeveloperKey < ActiveRecord::Base
       lti_key_ids = Lti::ToolConfiguration.joins(:developer_key).
         where(developer_keys: { id: site_admin_key_ids }).
         pluck(:developer_key_id)
-      DeveloperKey.where(id: lti_key_ids)
+      self.where(id: lti_key_ids)
     end
   end
 
@@ -193,10 +201,10 @@ class DeveloperKey < ActiveRecord::Base
     def find_cached(id)
       global_id = Shard.global_id_for(id)
       MultiCache.fetch("developer_key/#{global_id}") do
-        Shackles.activate(:slave) do
-          DeveloperKey.find(global_id)
+        GuardRail.activate(:secondary) do
+          DeveloperKey.find_by(id: global_id)
         end
-      end
+      end or raise ActiveRecord::RecordNotFound
     end
 
     def by_cached_vendor_code(vendor_code)
@@ -212,7 +220,12 @@ class DeveloperKey < ActiveRecord::Base
   end
 
   def set_root_account
+    # If the key belongs to a non-site admin account, resolve
+    # the root account through that account. Otherwise use the
+    # site admin account ID if the current shard is the site admin
+    # shard
     self.root_account_id ||= account&.resolved_root_account_id
+    self.root_account_id ||= Account.site_admin.id if Shard.current == Shard.default
   end
 
   def authorized_for_account?(target_account)
@@ -339,29 +352,16 @@ class DeveloperKey < ActiveRecord::Base
 
     if affected_account.blank? || affected_account.site_admin?
       # Cleanup tools across all shards
-      send_later_enqueue_args(
-        :manage_external_tools_multi_shard,
-        enqueue_args,
-        enqueue_args,
-        method,
-        affected_account
-      )
+      delay(**enqueue_args).
+        manage_external_tools_multi_shard(enqueue_args, method, affected_account)
     else
-      send_later_enqueue_args(
-        method,
-        enqueue_args,
-        affected_account
-      )
+      delay(**enqueue_args).__send__(method, affected_account)
     end
   end
 
   def manage_external_tools_multi_shard(enqueue_args, method, affected_account)
     Shard.with_each_shard do
-      send_later_enqueue_args(
-        method,
-        enqueue_args,
-        affected_account
-      )
+      delay(**enqueue_args).__send__(method, affected_account)
     end
   end
 
@@ -472,7 +472,7 @@ class DeveloperKey < ActiveRecord::Base
   def invalidate_access_tokens_if_scopes_removed!
     return unless saved_change_to_scopes?
     return if (scopes_before_last_save - scopes).blank?
-    send_later_if_production(:invalidate_access_tokens!)
+    delay_if_production.invalidate_access_tokens!
   end
 
   def invalidate_access_tokens!

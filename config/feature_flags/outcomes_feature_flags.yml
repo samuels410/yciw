@@ -38,7 +38,20 @@ bulk_delete_pages:
   description: Allow pages to be deleted in bulk
 account_level_mastery_scales:
   state: hidden
+  display_name: Account and Course Level Outcome Mastery Scales
+  description: Allows setting Account & Course Level mastery scales and calculation methods,
+    replacing per-outcome criterion ratings & calculation methods
+  after_state_change_proc: mastery_scales_after_change_hook
   applies_to: RootAccount
-  display_name: Account-level Mastery Scales
-  description: Allows Account-level mastery scales and proficiency calculations,
-    replacing per-outcome scales
+usage_rights_discussion_topics:
+  state: hidden
+  applies_to: RootAccount
+  display_name: Usage Rights on Discussion Topics
+  description: On courses with usage rights enabled, enforces usage rights
+    selection on discussion topic file attachments
+improved_outcomes_management:
+  state: hidden
+  applies_to: RootAccount
+  display_name: Improved Outcomes Management
+  description: Helps administrators and teachers make more meaningful decisions as they import,
+    organize, and edit outcomes in their account and courses.

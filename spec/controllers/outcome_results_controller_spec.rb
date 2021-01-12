@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 #
 # Copyright (C) 2015 - present Instructure, Inc.
 #
@@ -67,7 +69,7 @@ describe OutcomeResultsController do
     find_outcome_criterion
   end
 
-  def create_result(user_id, outcome, assignment, score)
+  def create_result(user_id, outcome, assignment, score, opts = {})
     rubric_association = outcome_rubric.associate_with(outcome_assignment, outcome_course, purpose: 'grading')
 
     LearningOutcomeResult.new(
@@ -79,7 +81,8 @@ describe OutcomeResultsController do
         learning_outcome: outcome,
         content_type: 'Assignment',
         content_id: assignment.id
-      })
+      }),
+      **opts
     ).tap do |lor|
       lor.association_object = rubric_association
       lor.context = outcome_course
@@ -178,7 +181,7 @@ describe OutcomeResultsController do
                       aggregate: 'course',
                       aggregate_stat: 'powerlaw'},
                       format: "json"
-      expect(response).not_to be_success
+      expect(response).not_to be_successful
     end
 
     context 'with muted assignment' do
@@ -263,26 +266,71 @@ describe OutcomeResultsController do
       expect(json['linked']['outcomes'][0]['ratings'].map { |r| r['percent'] }).to eq [50, 50]
     end
 
+    context 'with the account_mastery_scales FF' do
+      context 'enabled' do
+        before do
+          @course.account.enable_feature!(:account_level_mastery_scales)
+        end
+
+        it 'uses the default outcome proficiency for points scaling if no outcome proficiency exists' do
+          create_result(@student.id, @outcome, outcome_assignment, 2, {:possible => 5})
+          json = parse_response(get_rollups(sort_by: 'student', sort_order: 'desc', per_page: 1, page: 1))
+          points_possible = OutcomeProficiency.find_or_create_default!(@course.account).points_possible
+          score = (2.to_f / 5.to_f) * points_possible
+          expect(json['rollups'][0]['scores'][0]['score']).to eq score
+        end
+
+        it 'uses resolved_outcome_proficiency for points scaling if one exists' do
+          proficiency = outcome_proficiency_model(@course)
+          create_result(@student.id, @outcome, outcome_assignment, 2, {:possible => 5})
+          json = parse_response(get_rollups(sort_by: 'student', sort_order: 'desc', per_page: 1, page: 1))
+          score = (2.to_f / 5.to_f) * proficiency.points_possible
+          expect(json['rollups'][0]['scores'][0]['score']).to eq score
+        end
+
+        it 'returns outcomes with outcome_proficiency.ratings and their percents' do
+          outcome_proficiency_model(@course)
+          json = parse_response(get_rollups(rating_percents: true, include: ['outcomes']))
+          ratings = json['linked']['outcomes'][0]['ratings']
+          expect(ratings.map { |r| r['percent'] }).to eq [50, 50]
+          expect(ratings.map { |r| r['points'] }).to eq [10, 0]
+        end
+      end
+
+      context 'disabled' do
+        before do
+          @course.account.disable_feature!(:account_level_mastery_scales)
+        end
+
+        it 'ignores the outcome proficiency for points scaling' do
+          proficiency = outcome_proficiency_model(@course)
+          res = create_result(@student.id, @outcome, outcome_assignment, 2, {:possible => 5})
+          json = parse_response(get_rollups(sort_by: 'student', sort_order: 'desc', per_page: 1, page: 1))
+          expect(json['rollups'][0]['scores'][0]['score']).to eq 1.2 # ( score of 2 / possible 5) * outcome.points_possible
+        end
+      end
+    end
+
     context 'sorting' do
       it 'should validate sort_by parameter' do
         get_rollups(sort_by: 'garbage')
-        expect(response).not_to be_success
+        expect(response).not_to be_successful
       end
 
       it 'should validate sort_order parameter' do
         get_rollups(sort_by: 'student', sort_order: 'random')
-        expect(response).not_to be_success
+        expect(response).not_to be_successful
       end
 
       context 'by outcome' do
         it 'should validate a missing sort_outcome_id parameter' do
           get_rollups(sort_by: 'outcome')
-          expect(response).not_to be_success
+          expect(response).not_to be_successful
         end
 
         it 'should validate an invalid sort_outcome_id parameter' do
           get_rollups(sort_by: 'outcome', sort_outcome_id: 'NaN')
-          expect(response).not_to be_success
+          expect(response).not_to be_successful
         end
       end
 
@@ -302,14 +350,14 @@ describe OutcomeResultsController do
       context 'by student' do
         it 'should sort rollups by ascending student name' do
           get_rollups(sort_by: 'student')
-          expect(response).to be_success
+          expect(response).to be_successful
           json = parse_response(response)
           expect_user_order(json['rollups'], [@student1, @student2, @student3])
         end
 
         it 'should sort rollups by descending student name' do
           get_rollups(sort_by: 'student', sort_order: 'desc')
-          expect(response).to be_success
+          expect(response).to be_successful
           json = parse_response(response)
           expect_user_order(json['rollups'], [@student3, @student2, @student1])
         end
@@ -354,7 +402,7 @@ describe OutcomeResultsController do
 
           def expect_students_in_pagination(page, students, sort_order = 'asc', include: nil)
             get_rollups(sort_by: 'student', sort_order: sort_order, per_page: 1, page: page, include: include)
-            expect(response).to be_success
+            expect(response).to be_successful
             expect_user_order(json['rollups'], students)
           end
 
@@ -431,7 +479,7 @@ describe OutcomeResultsController do
       context 'by outcome' do
         it 'should sort rollups by ascending rollup score' do
           get_rollups(sort_by: 'outcome', sort_outcome_id: @outcome.id)
-          expect(response).to be_success
+          expect(response).to be_successful
           json = parse_response(response)
           expect_user_order(json['rollups'], [@student2, @student1, @student3])
           expect_score_order(json['rollups'], [1, 3, nil])
@@ -439,7 +487,7 @@ describe OutcomeResultsController do
 
         it 'should sort rollups by descending rollup score' do
           get_rollups(sort_by: 'outcome', sort_outcome_id: @outcome.id, sort_order: 'desc')
-          expect(response).to be_success
+          expect(response).to be_successful
           json = parse_response(response)
           expect_user_order(json['rollups'], [@student1, @student2, @student3])
           expect_score_order(json['rollups'], [3, 1, nil])
@@ -448,7 +496,7 @@ describe OutcomeResultsController do
         context 'with pagination' do
           def expect_students_in_pagination(page, students, scores, sort_order = 'asc')
             get_rollups(sort_by: 'outcome', sort_outcome_id: @outcome.id, sort_order: sort_order, per_page: 1, page: page)
-            expect(response).to be_success
+            expect(response).to be_successful
             json = parse_response(response)
             expect_user_order(json['rollups'], students)
             expect_score_order(json['rollups'], scores)

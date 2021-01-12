@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 #
 # Copyright (C) 2012 - present Instructure, Inc.
 #
@@ -22,7 +24,7 @@ module AttachmentHelper
     url_opts = {
       anonymous_instructor_annotations: attrs.delete(:anonymous_instructor_annotations),
       enable_annotations: attrs.delete(:enable_annotations),
-      moderated_grading_whitelist: attrs[:moderated_grading_whitelist],
+      moderated_grading_allow_list: attrs[:moderated_grading_allow_list],
       submission_id: attrs.delete(:submission_id)
     }
     url_opts[:enrollment_type] = attrs.delete(:enrollment_type) if url_opts[:enable_annotations]
@@ -41,7 +43,7 @@ module AttachmentHelper
     context_name = url_helper_context_from_object(attachment.context)
     url_helper = "#{context_name}_file_inline_view_url"
     if self.respond_to?(url_helper)
-      attrs[:attachment_view_inline_ping_url] = self.send(url_helper, attachment.context, attachment.id)
+      attrs[:attachment_view_inline_ping_url] = self.send(url_helper, attachment.context, attachment.id, {:verifier => params[:verifier]})
     end
     if attachment.pending_upload? || attachment.processing?
       attrs[:attachment_preview_processing] = true
@@ -55,7 +57,7 @@ module AttachmentHelper
     attrs[:type] = attachment.content_type.match(/video/) ? 'video' : 'audio'
     attrs[:download_url] = context_url(attachment.context, :context_file_download_url, attachment.id)
     attrs[:media_entry_id] = attachment.media_entry_id if attachment.media_entry_id
-    attrs.inject("") { |s,(attr,val)| s << "data-#{attr}=#{val} " }
+    attrs.inject(+"") { |s,(attr,val)| s << "data-#{attr}=#{val} " }
   end
 
   def doc_preview_json(attachment, user)

@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 #
 # Copyright (C) 2017 - present Instructure, Inc.
 #
@@ -19,7 +21,7 @@ require_relative '../helpers/wiki_and_tiny_common'
 require_relative '../test_setup/common_helper_methods/custom_selenium_actions'
 require_relative 'pages/rce_next_page'
 
-describe 'RCE Next autosave feature' do
+describe 'RCE Next autosave feature', ignore_js_errors: true do
   include_context 'in-process server selenium tests'
   include CustomSeleniumActions
   include RCENextPage
@@ -41,7 +43,7 @@ describe 'RCE Next autosave feature' do
       "{\"autosaveTimestamp\": \"#{time}\", \"content\": \"#{content}\"}"
     end
 
-    def autosave_key(url = driver.current_url, textarea_id = 'discussion-topic-message8')
+    def autosave_key(url = driver.current_url, textarea_id = 'discussion-topic-message10')
       "rceautosave:#{url}:#{textarea_id}"
     end
 
@@ -68,10 +70,11 @@ describe 'RCE Next autosave feature' do
     end
 
     it 'should autosave htmlview entered content' do
+      skip 'LS-1700 12/14/2020'
       create_and_edit_announcement
 
       switch_to_html_view
-      f('textarea#discussion-topic-message8').send_keys('html text')
+      f('textarea#discussion-topic-message10').send_keys('html text')
       driver.navigate.refresh
       accept_alert
       wait_for_rce
@@ -81,7 +84,7 @@ describe 'RCE Next autosave feature' do
       driver.local_storage.clear
     end
 
-    it 'should prompt to restore autosaved conent' do
+    it 'should prompt to restore autosaved content' do
       create_and_edit_announcement
       saved_content = driver.local_storage[autosave_key]
       assert(saved_content)
@@ -163,8 +166,8 @@ describe 'RCE Next autosave feature' do
 
       # simulate a placeholder image
       switch_to_html_view
-      f('textarea#discussion-topic-message8').send_keys(
-        "<img data-placeholder-for='someimage.jpg' style='width: 200px; height: 50px; border: solid 1px #8B969E;'/>"
+      f('textarea#discussion-topic-message10').send_keys(
+        "<div data-placeholder-for='someimage.jpg' style='width: 200px; height: 50px;'>svg spinner here</div>"
       )
       switch_to_editor_view
 
@@ -208,7 +211,7 @@ describe 'RCE Next autosave feature' do
       insert_tiny_text text
     end
 
-    def autosave_key(url = driver.current_url, textarea_id = 'discussion-topic-message8')
+    def autosave_key(url = driver.current_url, textarea_id = 'discussion-topic-message10')
       "rceautosave:#{url}:#{textarea_id}"
     end
     it 'should not prompt to restore autosaved content if the RCE is hidden',

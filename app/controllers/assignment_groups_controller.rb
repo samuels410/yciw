@@ -108,6 +108,9 @@ class AssignmentGroupsController < ApplicationController
   #  The "assignment_visibility" option additionally requires that the Differentiated Assignments course feature be turned on.
   #  If "observed_users" is passed along with "assignments" and "submission", submissions for observed users will also be included as an array.
   #
+  # @argument assignment_ids[] [String]
+  #  If "assignments" are included, optionally return only assignments having their ID in this array.
+  #
   # @argument exclude_assignment_submission_types[] [String, "online_quiz"|"discussion_topic"|"wiki_page"|"external_tool"]
   #  If "assignments" are included, those with the specified submission types
   #  will be excluded from the assignment groups.
@@ -128,7 +131,7 @@ class AssignmentGroupsController < ApplicationController
   #
   # @returns [AssignmentGroup]
   def index
-    Shackles.activate(:slave) do
+    GuardRail.activate(:secondary) do
       if authorized_action(@context.assignment_groups.temp_record, @current_user, :read)
         groups = Api.paginate(@context.assignment_groups.active, self, api_v1_course_assignment_groups_url(@context))
 
@@ -174,7 +177,7 @@ class AssignmentGroupsController < ApplicationController
       if assignment_ids_to_update.any?
         assignments.where(:id => assignment_ids_to_update).update_all(assignment_group_id: @group.id, updated_at: Time.now.utc)
         tags_to_update += MasterCourses::ChildContentTag.where(:content_type => "Assignment", :content_id => assignment_ids_to_update).to_a
-        Canvas::LiveEvents.send_later_if_production(:assignments_bulk_updated, assignment_ids_to_update)
+        Canvas::LiveEvents.delay_if_production.assignments_bulk_updated(assignment_ids_to_update)
       end
       quizzes = @context.active_quizzes.where(assignment_id: order)
       quiz_ids_to_update = quizzes.where.not(:assignment_group_id => @group.id).pluck(:id)
@@ -330,8 +333,7 @@ class AssignmentGroupsController < ApplicationController
   def include_overrides?
     override_dates? ||
       include_params.include?('all_dates') ||
-      include_params.include?('overrides') ||
-      filter_by_grading_period?
+      include_params.include?('overrides')
   end
 
   def assignment_visibilities(course, assignments)
@@ -398,12 +400,13 @@ class AssignmentGroupsController < ApplicationController
 
   def visible_assignments(context, current_user, groups)
     return Assignment.none unless include_params.include?('assignments')
-    # TODO: possible keyword arguments refactor
+
     assignments = AssignmentGroup.visible_assignments(
       current_user,
       context,
       groups,
-      assignment_includes
+      includes: assignment_includes,
+      assignment_ids: params[:assignment_ids]
     )
 
     if params[:exclude_assignment_submission_types].present?
@@ -445,9 +448,9 @@ class AssignmentGroupsController < ApplicationController
 
     if params[:scope_assignments_to_student] &&
       course.user_is_student?(@current_user, include_future: true, include_fake_student: true)
-      grading_period.assignments_for_student(assignments, @current_user)
+      grading_period.assignments_for_student(course, assignments, @current_user)
     else
-      grading_period.assignments(assignments)
+      grading_period.assignments(course, assignments)
     end
   end
 

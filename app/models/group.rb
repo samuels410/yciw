@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 #
 # Copyright (C) 2011 - present Instructure, Inc.
 #
@@ -77,6 +79,7 @@ class Group < ActiveRecord::Base
   after_update :clear_cached_short_name, :if => :saved_change_to_name?
 
   delegate :time_zone, :to => :context
+  delegate :usage_rights_required?, to: :context
 
   include StickySisFields
   are_sis_sticky :name
@@ -261,7 +264,7 @@ class Group < ActiveRecord::Base
 
   def self.not_in_group_sql_fragment(groups)
     return nil if groups.empty?
-    sanitize_sql([<<-SQL, groups])
+    sanitize_sql([<<~SQL, groups])
       NOT EXISTS (SELECT * FROM #{GroupMembership.quoted_table_name} gm
       WHERE gm.user_id = users.id AND
       gm.workflow_state != 'deleted' AND
@@ -283,6 +286,12 @@ class Group < ActiveRecord::Base
     self.workflow_state = 'deleted'
     self.deleted_at = Time.now.utc
     self.save
+  end
+
+  def restore
+    self.workflow_state = 'available'
+    self.deleted_at = nil
+    self.save!
   end
 
   Bookmarker = BookmarkedCollection::SimpleBookmarker.new(Group, :name, :id)
@@ -379,13 +388,13 @@ class Group < ActiveRecord::Base
       notification = BroadcastPolicy.notification_finder.by_name(notification_name)
 
       users.each_with_index do |user, index|
-        BroadcastPolicy.notifier.send_later_enqueue_args(:send_notification,
-                                                         { :priority => Delayed::LOW_PRIORITY },
-                                                         new_group_memberships[index],
-                                                         notification_name.parameterize.underscore.to_sym,
-                                                         notification,
-                                                         [user],
-                                                         broadcast_data)
+        BroadcastPolicy.notifier.delay(priority: Delayed::LOW_PRIORITY).
+          send_notification(
+            new_group_memberships[index],
+            notification_name.parameterize.underscore.to_sym,
+            notification,
+            [user],
+            broadcast_data)
       end
     end
     new_group_memberships
@@ -494,7 +503,6 @@ class Group < ActiveRecord::Base
     can :manage_calendar and
     can :manage_content and
     can :manage_files and
-    can :manage_wiki and
     can :manage_wiki_create and
     can :manage_wiki_delete and
     can :manage_wiki_update and
@@ -529,6 +537,7 @@ class Group < ActiveRecord::Base
       can :delete and
       can :manage and
       can :manage_admin_users and
+      can :allow_course_admin_actions and
       can :manage_students and
       can :moderate_forum and
       can :update
@@ -551,11 +560,11 @@ class Group < ActiveRecord::Base
       can :delete and
       can :manage and
       can :manage_admin_users and
+      can :allow_course_admin_actions and
       can :manage_calendar and
       can :manage_content and
       can :manage_files and
       can :manage_students and
-      can :manage_wiki and
       can :manage_wiki_create and
       can :manage_wiki_delete and
       can :manage_wiki_update and

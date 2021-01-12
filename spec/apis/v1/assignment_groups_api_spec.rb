@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 #
 # Copyright (C) 2011-2016 Instructure, Inc.
 #
@@ -348,6 +350,7 @@ describe AssignmentGroupsController, type: :request do
   context "grading periods" do
     before :once do
       setup_grading_periods
+      @course.enroll_student(User.create!)
     end
 
     describe "#index" do
@@ -550,6 +553,7 @@ describe AssignmentGroupsController, type: :request do
              format: 'json',
              course_id: @course.id.to_s,
              include: ['assignments'])
+    assert_status(200)
   end
 
   it "should not return unpublished assignments to students" do
@@ -675,6 +679,7 @@ describe AssignmentGroupsApiController, type: :request do
     end
 
     it 'should only return assignments in the given grading period with MGP on' do
+      @course.enroll_student(User.create!)
       setup_grading_periods
 
       json = api_call(:get, "/api/v1/courses/#{@course.id}/assignment_groups/#{@group1.id}?include[]=assignments&grading_period_id=#{@gp_future.id}",

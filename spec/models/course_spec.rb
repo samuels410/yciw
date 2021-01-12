@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 #
 # Copyright (C) 2011 - present Instructure, Inc.
 #
@@ -27,12 +29,12 @@ describe Course do
 
   describe 'relationships' do
     it { is_expected.to have_one(:late_policy).dependent(:destroy).inverse_of(:course) }
+    it { is_expected.to have_one(:default_post_policy).inverse_of(:course) }
 
     it { is_expected.to have_many(:post_policies).dependent(:destroy).inverse_of(:course) }
-    it { is_expected.to have_one(:default_post_policy).inverse_of(:course) }
     it { is_expected.to have_many(:assignment_post_policies).inverse_of(:course) }
-
     it { is_expected.to have_many(:feature_flags) }
+    it { is_expected.to have_many(:lti_resource_links).class_name('Lti::ResourceLink') }
   end
 
   describe 'lti2 proxies' do
@@ -155,6 +157,17 @@ describe Course do
       expect(@course.moderated_grading_max_grader_count).to eq 1
     end
   end
+
+  describe '#membership_for_user' do
+    it 'should return active enrollments' do
+      course = Course.create!(name: 'the best')
+      user = User.create!(name: 'the best')
+      course.enroll_teacher(user, enrollment_state: :completed)
+      course.enroll_student(user, enrollment_state: :active)
+      expect(course.membership_for_user(user).active?).to eq true
+    end
+  end
+
 
   describe '#moderators' do
     before(:once) do
@@ -363,15 +376,14 @@ describe Course do
     end
 
     it "triggers a delayed job by default" do
-      expect(@course).to receive(:send_later_if_production_enqueue_args).
-        with(:recompute_student_scores_without_send_later, any_args)
+      expect(@course).to receive(:delay_if_production).and_return(@course)
+      expect(@course).to receive(:recompute_student_scores_without_send_later)
 
       @course.recompute_student_scores
     end
 
     it "does not trigger a delayed job when passed run_immediately: true" do
-      expect(@course).not_to receive(:send_later_if_production_enqueue_args).
-        with(:recompute_student_scores_without_send_later, any_args)
+      expect(@course).not_to receive(:delay)
 
       @course.recompute_student_scores(nil, run_immediately: true)
     end
@@ -752,6 +764,13 @@ describe Course do
     @course.course_code = nil
     @course.save
     expect(code).to_not eql(@course.course_code)
+  end
+
+  it "should remove carriage returns from the name" do
+    @course = Course.create_unique
+    @course.name = "Hello\r\nWorld"
+    @course.save
+    expect(@course.name).to eql("Hello\nWorld")
   end
 
   it "should throw error for long sis id" do
@@ -1451,14 +1470,6 @@ describe Course do
       expect(course.reload.default_post_policy).to be_post_manually
     end
   end
-
-  describe "#post_policies_enabled?" do
-    let_once(:course) { Course.create! }
-
-    it "returns true" do
-      expect(course).to be_post_policies_enabled
-    end
-  end
 end
 
 describe Course do
@@ -1585,6 +1596,54 @@ describe Course do
       method = outcome_proficiency_model(@course.root_account)
       expect(@course.resolved_outcome_proficiency).to eq method
     end
+
+    it "can retrieve own proficiency" do
+      root_account = Account.create!
+      outcome_proficiency_model(root_account)
+      course = course_model(account: root_account)
+      course_method = outcome_proficiency_model(course)
+      expect(course.outcome_proficiency).to eq course_method
+      expect(course.resolved_outcome_proficiency).to eq course_method
+    end
+
+    it "can retrieve ancestor account's proficiency" do
+      root_account = Account.create!
+      root_method = outcome_proficiency_model(root_account)
+      subaccount = root_account.sub_accounts.create!
+      course = course_model(account: subaccount)
+      expect(course.outcome_proficiency).to eq nil
+      expect(course.resolved_outcome_proficiency).to eq root_method
+    end
+
+    it "ignores soft deleted proficiencies" do
+      root_account = Account.create!
+      account_method = outcome_proficiency_model(root_account)
+      course = course_model(account: root_account)
+      course_method = outcome_proficiency_model(course)
+      course_method.destroy
+      expect(course.outcome_proficiency).to eq course_method
+      expect(course.resolved_outcome_proficiency).to eq account_method
+    end
+
+    context "with the account_level_mastery_scales FF enabled" do
+      it "returns the account default if no record exists" do
+        root_account = Account.create!
+        root_account.enable_feature!(:account_level_mastery_scales)
+        course = course_model(account: root_account)
+        expect(course.outcome_proficiency).to eq nil
+        expect(course.resolved_outcome_proficiency).to eq OutcomeProficiency.find_or_create_default!(root_account)
+      end
+    end
+
+    context "with the account_level_mastery_scales FF disabled" do
+      it "returns nil if no record exists" do
+        root_account = Account.create!
+        root_account.disable_feature!(:account_level_mastery_scales)
+        course = course_model(account: root_account)
+        expect(course.outcome_proficiency).to eq nil
+        expect(course.resolved_outcome_proficiency).to eq nil
+      end
+    end
   end
 
   context 'resolved_outcome_calculation_method' do
@@ -1614,13 +1673,6 @@ describe Course do
       expect(course.resolved_outcome_calculation_method).to eq course_method
     end
 
-    it "can be nil" do
-      root_account = Account.create!
-      course = course_model(account: root_account)
-      expect(course.outcome_calculation_method).to eq nil
-      expect(course.resolved_outcome_calculation_method).to eq nil
-    end
-
     it "ignores soft deleted calculation methods" do
       root_account = Account.create!
       account_method = OutcomeCalculationMethod.create! context: root_account, calculation_method: :highest
@@ -1628,6 +1680,26 @@ describe Course do
       course_method = OutcomeCalculationMethod.create! context: course, calculation_method: :latest, workflow_state: :deleted
       expect(course.outcome_calculation_method).to eq course_method
       expect(course.resolved_outcome_calculation_method).to eq account_method
+    end
+
+    context "with the account_level_mastery_scales FF enabled" do
+      it "returns the account default if no record exists" do
+        root_account = Account.create!
+        root_account.enable_feature!(:account_level_mastery_scales)
+        course = course_model(account: root_account)
+        expect(course.outcome_calculation_method).to eq nil
+        expect(course.resolved_outcome_calculation_method).to eq OutcomeCalculationMethod.find_or_create_default!(root_account)
+      end
+    end
+
+    context "with the account_level_mastery_scales FF disabled" do
+      it "returns nil if no record exists" do
+        root_account = Account.create!
+        root_account.disable_feature!(:account_level_mastery_scales)
+        course = course_model(account: root_account)
+        expect(course.outcome_calculation_method).to eq nil
+        expect(course.resolved_outcome_calculation_method).to eq nil
+      end
     end
   end
 end
@@ -1780,7 +1852,11 @@ describe Course, "enroll" do
     @course.enroll_student(@user)
     scope = account.associated_courses.active.select([:id, :name]).eager_load(:teachers).joins(:teachers).where(:enrollments => { :workflow_state => 'active' })
     sql = scope.to_sql
-    expect(sql).to match(/"enrollments"\."type" IN \('TeacherEnrollment'\)/)
+    if CANVAS_RAILS5_2
+      expect(sql).to match(/"enrollments"\."type" IN \('TeacherEnrollment'\)/)
+    else
+      expect(sql).to match(/"enrollments"\."type" = 'TeacherEnrollment'/)
+    end
   end
 end
 
@@ -1982,17 +2058,7 @@ describe Course, "gradebook_to_csv" do
       test_student_enrollment.save!
     end
 
-    it "should alphabetize by sortable name with the test student at the end" do
-      csv = GradebookExporter.new(@course, @teacher).to_csv
-      rows = CSV.parse(csv)
-      expect([rows[2][0],
-       rows[3][0],
-       rows[4][0],
-       rows[5][0]]).to eq ["Zed Zed", "Aardvark Aardvark", "Ned Ned", "Test Student"]
-    end
-
-    it "can show students by sortable name" do
-      @course.enable_feature! :gradebook_list_students_by_sortable_name
+    it "alphabetizes by sortable name with the test student at the end" do
       csv = GradebookExporter.new(@course, @teacher).to_csv
       rows = CSV.parse(csv)
       expect([rows[2][0],
@@ -2994,7 +3060,8 @@ describe Course, 'grade_publishing' do
       end
 
       it 'should kick off the actual grade send' do
-        expect(@course).to receive(:send_later_if_production_enqueue_args).with(:send_final_grades_to_endpoint, anything, @user, nil).and_return(nil)
+        expect(@course).to receive(:delay).and_return(@course)
+        expect(@course).to receive(:send_final_grades_to_endpoint).with(@user, nil)
         allow(@plugin).to receive(:enabled?).and_return(true)
         @plugin_settings[:publish_endpoint] = "http://localhost/endpoint"
         @course.publish_final_grades(@user)
@@ -3002,7 +3069,8 @@ describe Course, 'grade_publishing' do
 
       it 'should kick off the actual grade send for a specific user' do
         make_student_enrollments
-        expect(@course).to receive(:send_later_if_production_enqueue_args).with(:send_final_grades_to_endpoint, anything, @user, @student_enrollments.first.user_id).and_return(nil)
+        expect(@course).to receive(:delay).and_return(@course)
+        expect(@course).to receive(:send_final_grades_to_endpoint).with(@user, @student_enrollments.first.user_id)
         allow(@plugin).to receive(:enabled?).and_return(true)
         @plugin_settings[:publish_endpoint] = "http://localhost/endpoint"
         @course.publish_final_grades(@user, @student_enrollments.first.user_id)
@@ -3010,11 +3078,13 @@ describe Course, 'grade_publishing' do
       end
 
       it 'should kick off the timeout when a success timeout is defined and waiting is configured' do
-        expect(@course).to receive(:send_later_if_production_enqueue_args).with(:send_final_grades_to_endpoint, anything, @user, nil).and_return(nil)
+        expect(@course).to receive(:delay).and_return(@course)
+        expect(@course).to receive(:send_final_grades_to_endpoint).with(@user, nil)
         current_time = Time.now.utc
         allow(Time).to receive(:now).and_return(current_time)
         allow(current_time).to receive(:utc).and_return(current_time)
-        expect(@course).to receive(:send_at).with(current_time + 1.seconds, :expire_pending_grade_publishing_statuses, current_time).and_return(nil)
+        expect(@course).to receive(:delay).with(run_at: current_time + 1.seconds).and_return(@course)
+        expect(@course).to receive(:expire_pending_grade_publishing_statuses).with(current_time).and_return(nil)
         allow(@plugin).to receive(:enabled?).and_return(true)
         @plugin_settings.merge!({
             :publish_endpoint => "http://localhost/endpoint",
@@ -3025,11 +3095,12 @@ describe Course, 'grade_publishing' do
       end
 
       it 'should not kick off the timeout when a success timeout is defined and waiting is not configured' do
-        expect(@course).to receive(:send_later_if_production_enqueue_args).with(:send_final_grades_to_endpoint, anything, @user, nil).and_return(nil)
+        expect(@course).to receive(:delay).and_return(@course)
+        expect(@course).to receive(:send_final_grades_to_endpoint).with(@user, nil)
         current_time = Time.now.utc
         allow(Time).to receive(:now).and_return(current_time)
         allow(current_time).to receive(:utc).and_return(current_time)
-        expect(@course).to receive(:send_at).never
+        expect(@course).to receive(:delay).never
         allow(@plugin).to receive(:enabled?).and_return(true)
         @plugin_settings.merge!({
             :publish_endpoint => "http://localhost/endpoint",
@@ -3040,11 +3111,12 @@ describe Course, 'grade_publishing' do
       end
 
       it 'should not kick off the timeout when a success timeout is not defined and waiting is not configured' do
-        expect(@course).to receive(:send_later_if_production_enqueue_args).with(:send_final_grades_to_endpoint, anything, @user, nil).and_return(nil)
+        expect(@course).to receive(:delay_if_production).and_return(@course)
+        expect(@course).to receive(:send_final_grades_to_endpoint).with(@user, nil)
         current_time = Time.now.utc
         allow(Time).to receive(:now).and_return(current_time)
         allow(current_time).to receive(:utc).and_return(current_time)
-        expect(@course).to receive(:send_at).never
+        expect(@course).to receive(:delay).never
         allow(@plugin).to receive(:enabled?).and_return(true)
         @plugin_settings.merge!({
             :publish_endpoint => "http://localhost/endpoint",
@@ -3055,11 +3127,12 @@ describe Course, 'grade_publishing' do
       end
 
       it 'should not kick off the timeout when a success timeout is not defined and waiting is configured' do
-        expect(@course).to receive(:send_later_if_production_enqueue_args).with(:send_final_grades_to_endpoint, anything, @user, nil).and_return(nil)
+        expect(@course).to receive(:delay_if_production).and_return(@course)
+        expect(@course).to receive(:send_final_grades_to_endpoint).with(@user, nil)
         current_time = Time.now.utc
         allow(Time).to receive(:now).and_return(current_time)
         allow(current_time).to receive(:utc).and_return(current_time)
-        expect(@course).to receive(:send_at).never
+        expect(@course).to receive(:delay).never
         allow(@plugin).to receive(:enabled?).and_return(true)
         @plugin_settings.merge!({
             :publish_endpoint => "http://localhost/endpoint",
@@ -4504,6 +4577,11 @@ describe Course, "section_visibility" do
       @admin = account_admin_user
       visible_enrollments = @course.apply_enrollment_visibility(@course.student_enrollments, @admin)
       expect(visible_enrollments.map(&:user)).to be_include(@course.student_view_student)
+    end
+
+    it "is safely empty for a nil user" do
+      visible_enrollments = @course.apply_enrollment_visibility(@course.student_enrollments, nil)
+      expect(visible_enrollments.count).to eq(0)
     end
 
     it "should return student view students to account admins who are also observers for some reason" do
@@ -5951,5 +6029,25 @@ describe Course, "#show_total_grade_as_points?" do
       sub_account2.update_attribute(:parent_account, sub_account1)
       expect(cached_account_users).to eq [au]
     end
+  end
+end
+
+describe Course, "#has_modules?" do
+  before(:once) do
+    @course = Course.create!
+  end
+
+  it "returns false when the course has no modules" do
+    expect(@course).not_to be_has_modules
+  end
+
+  it "returns false when all modules are soft-deleted" do
+    @course.context_modules.create!(workflow_state: "deleted")
+    expect(@course).not_to be_has_modules
+  end
+
+  it "returns true when at least one not-deleted module exists" do
+    @course.context_modules.create!
+    expect(@course).to be_has_modules
   end
 end

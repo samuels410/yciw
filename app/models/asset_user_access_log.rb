@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 #
 # Copyright (C) 2020 - present Instructure, Inc.
 #
@@ -72,7 +74,8 @@ class AssetUserAccessLog
 
   MODEL_BY_DAY_OF_WEEK_INDEX = [
     AuaLog0, AuaLog1, AuaLog2, AuaLog3, AuaLog4, AuaLog5, AuaLog6
-  ]
+  ].freeze
+  METADATUM_KEY = "aua_logs_compaction_state".freeze
 
   def self.put_view(asset_user_access, timestamp: nil)
     # the "timestamp:" argument is useful for testing or backfill/replay
@@ -105,6 +108,14 @@ class AssetUserAccessLog
     PluginSetting.find_by_name(:asset_user_access_logs)
   end
 
+  def self.metadatum_payload
+    CanvasMetadatum.get(METADATUM_KEY, {max_log_ids: [0,0,0,0,0,0,0]})
+  end
+
+  def self.update_metadatum(compaction_state)
+    CanvasMetadatum.set(METADATUM_KEY, compaction_state)
+  end
+
   # This is the job component, taking the inserts that have
   # accumulated and writing them to the AUA records they actually
   # belong to with as few updates as possible.  This should help control
@@ -116,8 +127,8 @@ class AssetUserAccessLog
   # fewer writes at peak and use spare I/O capacity later in the day if necessary to catch up.
   def self.compact
     ps = plugin_setting
-    if ps.nil?
-      return Rails.logger.warn("[AUA_LOG_COMPACTION:#{Shard.current.id}] - PluginSetting nil, aborting")
+    if ps.nil? || ps.settings[:write_path] != "log"
+      return Rails.logger.warn("[AUA_LOG_COMPACTION:#{Shard.current.id}] - PluginSetting configured OFF, aborting")
     end
     ts = Time.now.utc
     yesterday_ts = ts - 1.day
@@ -125,7 +136,9 @@ class AssetUserAccessLog
     if yesterday_model.take(1).size > 0
       yesterday_completed = compact_partition(yesterday_ts)
       ps.reload
-      if yesterday_completed && ps.settings[:max_log_ids][yesterday_ts.wday] >= yesterday_model.maximum(:id)
+      compaction_state = self.metadatum_payload
+      max_yesterday_id = compaction_state[:max_log_ids][yesterday_ts.wday]
+      if yesterday_completed && max_yesterday_id >= yesterday_model.maximum(:id)
         # we have now compacted all the writes from the previous day.
         # since the timestamp (now) is into the NEXT utc day, no further
         # writes can happen to yesterdays partition, and we can truncate it,
@@ -134,13 +147,13 @@ class AssetUserAccessLog
         # "reset" by looking for the max id value in a table and making it bigger than that.
         #  Tracking iterator state indefinitely could result in missing writes if a truncated
         # table gets it's iterator reset).
-        if truncation_enabled?
-          Shackles.activate(:deploy) do
-            yesterday_model.connection.truncate(yesterday_model.table_name)
-          end
-          PluginSetting.suspend_callbacks(:clear_cache) do
-            ps.settings[:max_log_ids][yesterday_ts.wday] = 0
-            ps.save
+        yesterday_model.transaction do
+          if truncation_enabled?
+            GuardRail.activate(:deploy) do
+              yesterday_model.connection.truncate(yesterday_model.table_name)
+            end
+            compaction_state[:max_log_ids][yesterday_ts.wday] = 0
+            self.update_metadatum(compaction_state)
           end
         end
       end
@@ -159,12 +172,8 @@ class AssetUserAccessLog
     Setting.get('aua_log_truncation_enabled', 'false') == 'true'
   end
 
-  def self.sequence_jumps_allowed?
-    Setting.get('aua_log_seq_jumps_allowed', 'false') == 'true'
-  end
-
   def self.reschedule!
-    AssetUserAccessLog.send_later_enqueue_args(:compact, { strand: strand_name })
+    AssetUserAccessLog.delay(strand: strand_name).compact
   end
 
   def self.strand_name
@@ -176,7 +185,7 @@ class AssetUserAccessLog
     log_batch_size = Setting.get("aua_log_batch_size", "10000").to_i
     max_compaction_time = Setting.get("aua_compaction_time_limit_in_minutes", "5").to_i
     compaction_start = Time.now.utc
-    Shackles.activate(:slave) do
+    GuardRail.activate(:secondary) do
       # select the boundaries of the log segment we're going to iterate.
       # we may still _process_ records bigger than this as part of a single write,
       # but will stop loading new batches to pluck AUA ids from when we hit the maximum.
@@ -184,16 +193,21 @@ class AssetUserAccessLog
       # "just a few more"
       partition_upper_bound = partition_model.maximum(:id)
       partition_lower_bound = partition_model.minimum(:id)
-      # fetch from the plugin setting the last compacted log id.  This lets us
+      if partition_lower_bound.nil? || partition_upper_bound.nil?
+        # no data means there's nothing in this partition to compact.
+        return true
+      end
+
+      # fetch from the canvas metadatum compaction state the last compacted log id.  This lets us
       # resume log compaction past the records we've already processed, but without
       # having to delete records as we go (which would churn write IO), leaving the log cleanup
       # to the truncation operation that occurs after finally processing "yesterdays" partition.
       # We'd expect them to usually be 0 because we reset the value after truncating the partition
       # (defends against sequences being reset to the "highest" record in a table and then
       # deciding we already chomped these logs).
-      ps = plugin_setting
-      max_log_ids = ps.reload.settings.fetch(:max_log_ids, [0,0,0,0,0,0,0])
-      log_id_bookmark = [(partition_lower_bound-1), (max_log_ids[ts.wday] || 0)].max
+      compaction_state = self.metadatum_payload
+      state_max_log_ids = compaction_state.fetch(:max_log_ids, [0,0,0,0,0,0,0])
+      log_id_bookmark = [(partition_lower_bound-1), state_max_log_ids[ts.wday]].max
       while log_id_bookmark < partition_upper_bound
         Rails.logger.info("[AUA_LOG_COMPACTION:#{Shard.current.id}] - processing #{log_id_bookmark} from #{partition_upper_bound}")
         # maybe we won't need this, but if we need to slow down throughput and don't want to hold
@@ -212,44 +226,22 @@ class AssetUserAccessLog
           # taking the full set of logs in that range)
           update_query = compaction_sql(log_segment_aggregation)
           new_iterator_pos = log_segment_aggregation.map{|r| r["max_id"]}.max
-          Shackles.activate(:master) do
+          GuardRail.activate(:primary) do
             partition_model.transaction do
               Rails.logger.info("[AUA_LOG_COMPACTION:#{Shard.current.id}] - batch updating (sometimes these queries don't get logged)...")
               partition_model.connection.execute(update_query)
               Rails.logger.info("[AUA_LOG_COMPACTION:#{Shard.current.id}] - ...batch update complete")
-              # Here we want to write the iteration state onto the plugin setting
+              # Here we want to write the iteration state into the database
               # so that we don't double count rows later.  The next time the job
               # runs it can pick up at this point and only count rows that haven't yet been counted.
-              ps.reload
-              # also, no need to clear the cache, these are LOCAL
-              # plugin settings, so let's not beat up consul
-              PluginSetting.suspend_callbacks(:clear_cache) do
-                ps.settings[:max_log_ids] ||= [0,0,0,0,0,0,0] # (just in case...)
-                ps.settings[:max_log_ids][ts.wday] = new_iterator_pos
-                ps.save
-              end
+              compaction_state[:max_log_ids][ts.wday] = new_iterator_pos
+              self.update_metadatum(compaction_state)
             end
           end
           log_id_bookmark = new_iterator_pos
           sleep(intra_batch_pause) if intra_batch_pause > 0.0
         else
-          # no records found in this range, we must be paging through an open segment
-          unless sequence_jumps_allowed?
-            # we found no records in this range, and we're nervous about writing
-            # bugs that miss records right now.  The sequence might be compromised
-            # in some way, or the batch code could be buggy.  Warn and reschedule.
-            # TODO: yank this whole block and setting when we're comfortable with this pattern?
-            Rails.logger.warn("[AUA_LOG_COMPACTION:#{Shard.current.id}] - Found no results in-range, pausing compaction for now")
-            Shackles.activate(:master) do
-              Canvas::Errors.capture("AUA Compaction Missing Segment", {
-                shard_id: Shard.current.id,
-                partition_model: partition_model.to_s,
-                range_start: log_id_bookmark,
-                range_stop: batch_upper_boundary
-              })
-            end
-            return false
-          end
+          # no records found in this range, we must be paging through an open segment.
           # If we actually have a jump in sequences, there will
           # be more records greater than the batch, so we will choose
           # the minimum ID greater than the current bookmark, because it's safe
@@ -259,11 +251,9 @@ class AssetUserAccessLog
           # make sure we actually process the next record by offsetting
           # to just under it's ID
           new_bookmark_id = next_id - 1
-          Shackles.activate(:master) do
-            PluginSetting.suspend_callbacks(:clear_cache) do
-              ps.reload.settings[:max_log_ids][ts.wday] = new_bookmark_id
-              ps.save
-            end
+          GuardRail.activate(:primary) do
+            compaction_state[:max_log_ids][ts.wday] = new_bookmark_id
+            self.update_metadatum(compaction_state)
           end
           log_id_bookmark = new_bookmark_id
         end
@@ -304,7 +294,12 @@ class AssetUserAccessLog
   # of the max timestamp from a log segment and the timestamp currently on the
   # AUA record
   def self.compaction_sql(aggregation_results)
-    values_list = aggregation_results.map{|row| "(#{row["aua_id"]}, #{row["view_count"]}, '#{row["max_updated_at"]}')" }.join(", ")
+    values_list = aggregation_results.map do |row|
+      max_updated_at = row['max_updated_at']
+      max_updated_at = max_updated_at.to_s(:db) unless CANVAS_RAILS5_2
+      "(#{row["aua_id"]}, #{row["view_count"]}, '#{max_updated_at}')"
+    end.join(", ")
+
     update_query = <<~SQL
       UPDATE #{AssetUserAccess.quoted_table_name} AS aua
       SET view_score = COALESCE(aua.view_score, 0) + log_segment.view_count,

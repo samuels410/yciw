@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 #
 # Copyright (C) 2020 - present Instructure, Inc.
 #
@@ -55,7 +57,7 @@ module Lti
         Format: format,
         TransportType: transport_type,
         TransportMetadata: transport_metadata,
-        AssociatedIntegrationId: "#{product_family.vendor_code}-#{product_family.product_code}"
+        AssociatedIntegrationId: tool_proxy.guid
       }.with_indifferent_access
       sub[:SystemEventTypes] = EVENT_TYPES if enabled
       sub[:UserEventTypes] = EVENT_TYPES if enabled

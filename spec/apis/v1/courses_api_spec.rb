@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 #
 # Copyright (C) 2011 - 2014 Instructure, Inc.
 #
@@ -3581,8 +3583,9 @@ describe CoursesController, type: :request do
       end
 
       it "should 404 for bad account id" do
-        json = api_call(:get, "/api/v1/accounts/0/courses/#{@course.id}.json",
-                          {:controller => 'courses', :action => 'show', :id => @course.id.to_param, :format => 'json', :account_id => '0'},
+        bad_account_id = Account.last.id + 9999
+        json = api_call(:get, "/api/v1/accounts/#{bad_account_id}/courses/#{@course.id}.json",
+                          {:controller => 'courses', :action => 'show', :id => @course.id.to_param, :format => 'json', :account_id => bad_account_id.to_s},
                           {}, {}, :expected_status => 404)
       end
 

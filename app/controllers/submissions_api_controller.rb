@@ -429,9 +429,9 @@ class SubmissionsApiController < ApplicationController
       assignment_scope = assignment_scope.where(:id => requested_assignment_ids)
     end
 
-    assignments = Shackles.activate(:slave) do
+    assignments = GuardRail.activate(:secondary) do
       if params[:grading_period_id].present?
-        GradingPeriod.active.find(params[:grading_period_id]).assignments(assignment_scope)
+        GradingPeriod.active.find(params[:grading_period_id]).assignments(@context, assignment_scope)
       else
         assignment_scope.to_a
       end
@@ -470,9 +470,7 @@ class SubmissionsApiController < ApplicationController
     end
 
     if params[:grouped].present?
-      if @context.root_account.feature_enabled?(:allow_postable_submission_comments) && @context.post_policies_enabled?
-        includes << "has_postable_comments"
-      end
+      includes << "has_postable_comments"
 
       # student_ids is either a subscope returning students in context visible to the caller,
       # or an array whose contents have been verified to be a subset of these
@@ -493,7 +491,7 @@ class SubmissionsApiController < ApplicationController
       ActiveRecord::Associations::Preloader.new.preload(
         submissions,
         :submission_comments,
-        {select: [:hidden, :submission_id]}
+        SubmissionComment.select(:hidden, :submission_id)
       )
 
       bulk_load_attachments_and_previews(submissions)

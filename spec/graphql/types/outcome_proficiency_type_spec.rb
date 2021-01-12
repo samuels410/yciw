@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 #
 # Copyright (C) 2019 - present Instructure, Inc.
 #
@@ -39,18 +41,6 @@ describe Types::OutcomeProficiencyType do
       expect(
         account_type.resolve('outcomeProficiency { proficiencyRatingsConnection { nodes { _id } } }').sort
       ).to eq @outcome_proficiency.outcome_proficiency_ratings.map(&:id).map(&:to_s)
-    end
-
-    context 'locked' do
-      it 'when unlocked' do
-        expect(account_type.resolve('outcomeProficiency { locked }')).to eq false
-      end
-
-      it 'when locked' do
-        account.settings[:lock_outcome_proficiency] = {value: true, locked: true}
-        account.save!
-        expect(account_type.resolve('outcomeProficiency { locked }')).to eq true
-      end
     end
   end
 end

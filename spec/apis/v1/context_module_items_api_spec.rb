@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 #
 # Copyright (C) 2013 Instructure, Inc.
 #
@@ -293,10 +295,12 @@ describe "Module Items API", type: :request do
       end
 
       it "should find module items" do
-        api_call(:get, "/api/v1/courses/#{@course.id}/modules/#{@module1.id}/items/#{@assignment_tag.id}",
+        json = api_call(:get, "/api/v1/courses/#{@course.id}/modules/#{@module1.id}/items/#{@assignment_tag.id}",
           :controller => "context_module_items_api", :action => "show", :format => "json",
           :course_id => "#{@course.id}", :module_id => "#{@module1.id}",
           :id => "#{@assignment_tag.id}")
+        expect(json['id']).to eq(@assignment_tag.id)
+        expect(json['title']).to eq(@assignment_tag.title)
       end
 
       it "should not find module items when hidden" do
@@ -498,32 +502,49 @@ describe "Module Items API", type: :request do
         expect(tags.map(&:position)).to eq [1, 4, 5, 6]
       end
 
-      it "should set completion requirement" do
-        assignment = @course.assignments.create!(:name => "pls submit", :submission_types => ["online_text_entry"])
-        json = api_call(:post, "/api/v1/courses/#{@course.id}/modules/#{@module1.id}/items",
-                        {:controller => "context_module_items_api", :action => "create", :format => "json",
-                         :course_id => "#{@course.id}", :module_id => "#{@module1.id}"},
-                        {:module_item => {:title => 'title', :type => 'Assignment', :content_id => assignment.id,
-                         :completion_requirement => {:type => 'min_score', :min_score => 2}}})
+      context "set_completion_requirement" do
+        it "should set completion requirement on assignment to min_score" do
+          assignment = @course.assignments.create!(:name => "pls submit", :submission_types => ["online_text_entry"])
+          json = api_call(:post, "/api/v1/courses/#{@course.id}/modules/#{@module1.id}/items",
+                          {:controller => "context_module_items_api", :action => "create", :format => "json",
+                           :course_id => "#{@course.id}", :module_id => "#{@module1.id}"},
+                          {:module_item => {:title => 'title', :type => 'Assignment', :content_id => assignment.id,
+                                            :completion_requirement => {:type => 'min_score', :min_score => 2}}})
 
-        expect(json['completion_requirement']).to eq({"type" => "min_score", "min_score" => 2})
+          expect(json['completion_requirement']).to eq({"type" => "min_score", "min_score" => 2})
 
-        @module1.reload
-        req = @module1.completion_requirements.find{|h| h[:id] == json['id'].to_i}
-        expect(req[:type]).to eq 'min_score'
-        expect(req[:min_score]).to eq 2
-      end
+          @module1.reload
+          req = @module1.completion_requirements.find{|h| h[:id] == json['id'].to_i}
+          expect(req[:type]).to eq 'min_score'
+          expect(req[:min_score]).to eq 2
+        end
 
-      it "should require valid completion requirement type" do
-        assignment = @course.assignments.create!(:name => "pls submit", :submission_types => ["online_text_entry"])
-        json = api_call(:post, "/api/v1/courses/#{@course.id}/modules/#{@module1.id}/items",
-                        {:controller => "context_module_items_api", :action => "create", :format => "json",
-                         :course_id => "#{@course.id}", :module_id => "#{@module1.id}"},
-                        {:module_item => {:title => 'title', :type => 'Assignment', :content_id => assignment.id,
-                         :completion_requirement => {:type => 'not a valid type'}}},
-                         {}, {:expected_status => 400})
+        it "should set completion requirement on wiki page to must_mark_done" do
+          page = @course.wiki_pages.create(:title => 'New Page')
+          json = api_call(:post, "/api/v1/courses/#{@course.id}/modules/#{@module1.id}/items",
+                          {:controller => "context_module_items_api", :action => "create", :format => "json",
+                           :course_id => "#{@course.id}", :module_id => "#{@module1.id}"},
+                          {:module_item => {:title => 'title', :type => 'wiki_page', :content_id => page.id,
+                                            :completion_requirement => {:type => 'must_mark_done'}}})
 
-        expect(json["errors"]["completion_requirement"].count).to eq 1
+          expect(json['completion_requirement']).to eq({"type" => "must_mark_done"})
+
+          @module1.reload
+          req = @module1.completion_requirements.find{|h| h[:id] == json['id'].to_i}
+          expect(req[:type]).to eq 'must_mark_done'
+        end
+
+        it "should require valid completion requirement type" do
+          assignment = @course.assignments.create!(:name => "pls submit", :submission_types => ["online_text_entry"])
+          json = api_call(:post, "/api/v1/courses/#{@course.id}/modules/#{@module1.id}/items",
+                          {:controller => "context_module_items_api", :action => "create", :format => "json",
+                           :course_id => "#{@course.id}", :module_id => "#{@module1.id}"},
+                          {:module_item => {:title => 'title', :type => 'Assignment', :content_id => assignment.id,
+                                            :completion_requirement => {:type => 'not a valid type'}}},
+                          {}, {:expected_status => 400})
+
+          expect(json["errors"]["completion_requirement"].count).to eq 1
+        end
       end
     end
 
@@ -617,35 +638,51 @@ describe "Module Items API", type: :request do
         expect(tags.map(&:position)).to eq [4, 1, 2, 3, 5]
       end
 
-      it "should set completion requirement" do
-        json = api_call(:put, "/api/v1/courses/#{@course.id}/modules/#{@module1.id}/items/#{@assignment_tag.id}",
-                        {:controller => "context_module_items_api", :action => "update", :format => "json",
-                         :course_id => "#{@course.id}", :module_id => "#{@module1.id}", :id => "#{@assignment_tag.id}"},
-                        {:module_item => {:title => 'title',
-                                          :completion_requirement => {:type => 'min_score', :min_score => 3}}})
+      context "set_completion_requirement" do
+        it "should update completion requirement to min_score" do
+          json = api_call(:put, "/api/v1/courses/#{@course.id}/modules/#{@module1.id}/items/#{@assignment_tag.id}",
+                          {:controller => "context_module_items_api", :action => "update", :format => "json",
+                           :course_id => "#{@course.id}", :module_id => "#{@module1.id}", :id => "#{@assignment_tag.id}"},
+                          {:module_item => {:title => 'title',
+                                            :completion_requirement => {:type => 'min_score', :min_score => 3}}})
 
-        expect(json['completion_requirement']).to eq({"type" => "min_score", "min_score" => 3})
+          expect(json['completion_requirement']).to eq({"type" => "min_score", "min_score" => 3})
 
-        @module1.reload
-        req = @module1.completion_requirements.find{|h| h[:id] == json['id'].to_i}
-        expect(req[:type]).to eq 'min_score'
-        expect(req[:min_score]).to eq 3
-      end
+          @module1.reload
+          req = @module1.completion_requirements.find{|h| h[:id] == json['id'].to_i}
+          expect(req[:type]).to eq 'min_score'
+          expect(req[:min_score]).to eq 3
+        end
 
-      it "should remove completion requirement" do
-        req = @module1.completion_requirements.find{|h| h[:id] == @assignment_tag.id}
-        expect(req).not_to be_nil
+        it "should update completion requirement to must_mark_done" do
+          json = api_call(:put, "/api/v1/courses/#{@course.id}/modules/#{@module1.id}/items/#{@assignment_tag.id}",
+                          {:controller => "context_module_items_api", :action => "update", :format => "json",
+                           :course_id => "#{@course.id}", :module_id => "#{@module1.id}", :id => "#{@assignment_tag.id}"},
+                          {:module_item => {:title => 'title',
+                                            :completion_requirement => {:type => 'must_mark_done'}}})
 
-        json = api_call(:put, "/api/v1/courses/#{@course.id}/modules/#{@module1.id}/items/#{@assignment_tag.id}",
-                        {:controller => "context_module_items_api", :action => "update", :format => "json",
-                         :course_id => "#{@course.id}", :module_id => "#{@module1.id}", :id => "#{@assignment_tag.id}"},
-                        {:module_item => {:title => 'title', :completion_requirement => ''}})
+          expect(json['completion_requirement']).to eq({"type" => "must_mark_done"})
 
-        expect(json['completion_requirement']).to be_nil
+          @module1.reload
+          req = @module1.completion_requirements.find{|h| h[:id] == json['id'].to_i}
+          expect(req[:type]).to eq 'must_mark_done'
+        end
 
-        @module1.reload
-        req = @module1.completion_requirements.find{|h| h[:id] == json['id'].to_i}
-        expect(req).to be_nil
+        it "should remove completion requirement" do
+          req = @module1.completion_requirements.find{|h| h[:id] == @assignment_tag.id}
+          expect(req).not_to be_nil
+
+          json = api_call(:put, "/api/v1/courses/#{@course.id}/modules/#{@module1.id}/items/#{@assignment_tag.id}",
+                          {:controller => "context_module_items_api", :action => "update", :format => "json",
+                           :course_id => "#{@course.id}", :module_id => "#{@module1.id}", :id => "#{@assignment_tag.id}"},
+                          {:module_item => {:title => 'title', :completion_requirement => ''}})
+
+          expect(json['completion_requirement']).to be_nil
+
+          @module1.reload
+          req = @module1.completion_requirements.find{|h| h[:id] == json['id'].to_i}
+          expect(req).to be_nil
+        end
       end
 
       it "should publish module items" do
@@ -1527,6 +1564,7 @@ describe "Module Items API", type: :request do
 
         it "should work even when there is none must-mark-done requirement to delete" do
           mark_not_done_api_call
+          assert_status(200)
         end
       end
     end

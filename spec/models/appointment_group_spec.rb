@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 #
 # Copyright (C) 2012 - present Instructure, Inc.
 #
@@ -72,6 +74,46 @@ describe AppointmentGroup do
       )
       expect(group).to be_valid
       expect(group.sub_context_codes.include?(invalid_context)).to be_falsey
+    end
+  end
+
+  context 'broadcast_data' do
+    it 'should include course_id if the context is a course' do
+      course_with_student(:active_all => true)
+      group = AppointmentGroup.new(:title => "test")
+      group.contexts = [@course]
+      group.save!
+
+      expect(group.broadcast_data).to eql({root_account_id: @course.root_account_id, course_ids: [@course.id]})
+    end
+
+    it 'should include all course_ids' do
+      course_with_student(:active_all => true)
+      course2 = @course.root_account.courses.create!(name: 'course2', workflow_state: 'available')
+      group = AppointmentGroup.new(:title => "test")
+      group.contexts = [@course, course2]
+      group.save!
+
+      expect(group.broadcast_data).to eql({root_account_id: @course.root_account_id, course_ids: [@course.id, course2.id]})
+    end
+
+    it 'should include course_id if the context is a section' do
+      course_with_student(:active_all => true)
+      group = AppointmentGroup.new(:title => "test")
+      group.contexts = [@course.default_section]
+      group.save!
+
+      expect(group.broadcast_data).to eql({root_account_id: @course.root_account_id, course_ids: [@course.id]})
+    end
+
+    it 'should include mixed contexts course_ids' do
+      course_with_student(:active_all => true)
+      course2 = @course.root_account.courses.create!(name: 'course2', workflow_state: 'available')
+      group = AppointmentGroup.new(:title => "test")
+      group.contexts = [@course.default_section, course2]
+      group.save!
+
+      expect(group.broadcast_data).to eql({root_account_id: @course.root_account_id, course_ids: [@course.id, course2.id]})
     end
   end
 

@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 #
 # Copyright (C) 2017 - present Instructure, Inc.
 #
@@ -31,6 +33,10 @@ describe Types::CourseType do
   it "works" do
     expect(course_type.resolve("_id")).to eq course.id.to_s
     expect(course_type.resolve("name")).to eq course.name
+  end
+
+  it 'works for root_outcome_group' do
+    expect(course_type.resolve('rootOutcomeGroup { _id }')).to eq course.root_outcome_group.id.to_s
   end
 
   context "top-level permissions" do
@@ -156,8 +162,17 @@ describe Types::CourseType do
     end
   end
 
+  describe "outcomeProficiency" do
+    it 'resolves to the account proficiency' do
+      outcome_proficiency_model(course.account)
+      expect(
+        course_type.resolve('outcomeProficiency { _id }', current_user: @teacher)
+      ).to eq course.account.outcome_proficiency.id.to_s
+    end
+  end
+
   describe "outcomeCalculationMethod" do
-    it 'works' do
+    it 'resolves to the account calculation method' do
       outcome_calculation_method_model(course.account)
       expect(
         course_type.resolve('outcomeCalculationMethod { _id }', current_user: @teacher)

@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 #
 # Copyright (C) 2014 - present Instructure, Inc.
 #
@@ -132,7 +134,7 @@ module Assignments
     end
 
     def all_submissions
-      string = <<-SQL
+      string = <<~SQL
         submissions.assignment_id = ?
           AND e.course_id = ?
           AND e.type IN ('StudentEnrollment', 'StudentViewEnrollment')

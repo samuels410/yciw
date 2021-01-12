@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 #
 # Copyright (C) 2011 - present Instructure, Inc.
 #
@@ -406,7 +408,7 @@ describe "security" do
 
     user_session(@student)
     post "/courses/#{@course.id}/user_lists.json", params: {:user_list => "A1234567, A345678"}
-    expect(response).not_to be_success
+    expect(response).not_to be_successful
 
     user_session(@teacher)
     post "/courses/#{@course.id}/user_lists.json", params: {:user_list => "A1234567, A345678"}
@@ -1038,7 +1040,29 @@ describe "security" do
 
       it 'manage_sections' do
         course_with_teacher_logged_in(:active_all => 1)
+        # granular permissions disabled by default
+        @course.root_account.disable_feature!(:granular_permissions_course_sections)
         remove_permission(:manage_sections, teacher_role)
+
+        get "/courses/#{@course.id}/settings"
+        expect(response).to be_successful
+        expect(response.body).not_to match 'Add Section'
+
+        post "/courses/#{@course.id}/sections"
+        assert_status(401)
+
+        get "/courses/#{@course.id}/sections/#{@course.default_section.id}"
+        expect(response).to be_successful
+
+        put "/courses/#{@course.id}/sections/#{@course.default_section.id}"
+        assert_status(401)
+      end
+
+      it 'manage_sections with granular permissions enabled' do
+        course_with_teacher_logged_in(:active_all => 1)
+        @course.root_account.enable_feature!(:granular_permissions_course_sections)
+        remove_permission(:manage_sections_add, teacher_role)
+        remove_permission(:manage_sections_edit, teacher_role)
 
         get "/courses/#{@course.id}/settings"
         expect(response).to be_successful

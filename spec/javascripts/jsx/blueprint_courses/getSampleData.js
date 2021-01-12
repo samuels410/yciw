@@ -73,6 +73,9 @@ export default function getSampleData() {
         id: '2',
         workflow_state: 'completed',
         created_at: '2013-08-28T23:59:00-06:00',
+        user: {
+          display_name: 'Bob Jones'
+        },
         changes: [
           {
             asset_id: '2',

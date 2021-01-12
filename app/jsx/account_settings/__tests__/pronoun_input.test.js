@@ -25,6 +25,17 @@ describe('render available pronouns input', () => {
     ENV.PRONOUNS_LIST = ['She/Her', 'He/Him', 'They/Them']
   })
 
+  it('renders tooltip when focused', () => {
+    const {getAllByText, getByTestId} = render(<PronounInput />)
+    const icon = getByTestId('pronoun_info')
+    fireEvent.focus(icon)
+    expect(
+      getAllByText(
+        'These pronouns will be available to Canvas users in your account to choose from.'
+      )[0]
+    ).toBeVisible()
+  })
+
   it('with defaults in view', () => {
     const {getByText} = render(<PronounInput />)
     expect(getByText('She/Her')).toBeVisible()
@@ -39,10 +50,10 @@ describe('render available pronouns input', () => {
     expect(await queryByText('They/Them')).toEqual(null)
   })
 
-  it('adds pronoun "It/That"', async () => {
+  it('trims pronouns before adding them', async () => {
     const {findByText, getByTestId} = render(<PronounInput />)
     const input = getByTestId('test_pronoun_input')
-    fireEvent.change(input, {target: {value: 'It/That'}})
+    fireEvent.change(input, {target: {value: ' It/That '}})
     fireEvent.keyDown(input, {key: 'Enter', code: 13, charCode: 13})
     expect(await findByText('It/That')).toBeVisible()
   })

@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 # Copyright (C) 2019 - present Instructure, Inc.
 #
 # This file is part of Canvas.
@@ -69,9 +71,7 @@ describe 'course wiki pages' do
     end
 
     context 'With granular permission on' do
-      it_behaves_like "course_pages_granular_permissions" do
-        let(:set_granular_permission) { @course.root_account.enable_feature!(:granular_permissions_wiki_pages) }
-      end
+      it_behaves_like "course_pages_granular_permissions"
     end
   end
 end

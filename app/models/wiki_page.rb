@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 #
 # Copyright (C) 2011 - present Instructure, Inc.
 #
@@ -86,6 +88,8 @@ class WikiPage < ActiveRecord::Base
 
   TITLE_LENGTH = 255
   SIMPLY_VERSIONED_EXCLUDE_FIELDS = [:workflow_state, :editing_roles, :notify_of_update].freeze
+
+  self.ignored_columns = %i[view_count]
 
   def ensure_wiki_and_context
     self.wiki_id ||= (self.context.wiki_id || self.context.wiki.id)
@@ -404,6 +408,35 @@ class WikiPage < ActiveRecord::Base
     wiki_pages.each{|wp| wp.can_unpublish = !(wp.url == front_page_url)}
   end
 
+  def self.reinterpret_version_yaml(yaml_string)
+    # TODO: This should be temporary.  For a long time
+    # course exports/imports would corrupt the yaml in the first version
+    # of an imported wiki page by trying to replace placeholders right
+    # in the yaml.  This doctors the yaml back, and can be removed
+    # when the "content_imports" exception type for psych syntax errors
+    # isn't happening anymore.
+    pattern_1 = /(\<a[^<>]*?id=.*?"media_comment.*?\/\>)/im
+    pattern_2 = /(\<a[^<>]*?id=.*?"media_comment.*?\<\/a\>)/
+    replacements = []
+    [pattern_1, pattern_2].each do |regex_pattern|
+      yaml_string.scan(regex_pattern).each do |matched_groups|
+        matched_groups.each do |group|
+          # this should be an UNESCAPED version of a media comment.
+          # let's try to escape it.
+          replacements << [group, group.inspect[1..-2]]
+        end
+      end
+    end
+    new_string = yaml_string.dup
+    replacements.each do |operation|
+      new_string = new_string.sub(operation[0], operation[1])
+    end
+    # if this works without throwing another error, we've
+    # cleaned up the yaml successfully
+    YAML::load( new_string )
+    new_string
+  end
+
   # opts contains a set of related entities that should be duplicated.
   # By default, all associated entities are duplicated.
   def duplicate(opts = {})
@@ -425,7 +458,6 @@ class WikiPage < ActiveRecord::Base
       :user_id => self.user_id,
       :protected_editing => self.protected_editing,
       :editing_roles => self.editing_roles,
-      :view_count => 0,
       :todo_date => self.todo_date
     })
     if self.assignment && opts_with_default[:duplicate_assignment]

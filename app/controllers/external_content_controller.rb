@@ -27,8 +27,8 @@ class ExternalContentController < ApplicationController
   before_action :require_user, only: :oembed_retrieve, if: -> { require_oembed_token? }
   before_action :validate_oembed_token!, only: :oembed_retrieve, if: -> { require_oembed_token? }
 
-  rescue_from Lti::Concerns::Oembed::OembedAuthorizationError do
-    head :unauthorized
+  rescue_from Lti::Concerns::Oembed::OembedAuthorizationError do |error|
+    render json: { message: error.message }, status: :unauthorized
   end
 
   rescue_from JSON::JWT::InvalidFormat do
@@ -80,10 +80,10 @@ class ExternalContentController < ApplicationController
       lti_response_messages: lti_response_messages,
       service: params[:service],
       service_id: params[:id],
-      message: params[:lti_msg],
-      log: params[:lti_log],
-      error_message: params[:lti_errormsg],
-      error_log: params[:lti_errorlog]
+      message: param_if_set(:lti_msg),
+      log: param_if_set(:lti_log),
+      error_message: param_if_set(:lti_errormsg),
+      error_log: param_if_set(:lti_errorlog)
     })
   end
 
@@ -173,6 +173,7 @@ class ExternalContentController < ApplicationController
 
   def param_if_set(param_key)
     param_value = params[param_key] && !params[param_key].empty? && params[param_key]
+    param_value = param_value.to_s if param_value
     if param_value && block_given?
       yield param_value
     end

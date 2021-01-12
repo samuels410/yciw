@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 #
 # Copyright (C) 2011 - present Instructure, Inc.
 #
@@ -412,19 +414,6 @@ describe GroupMembership do
       membership = group.group_memberships.create!(user: user)
 
       expect(membership.group).not_to receive(:root_account_id)
-
-      expect {
-        membership.save!
-      }.not_to change {
-        GroupMembership.find(membership.id).root_account_id
-      }
-    end
-
-    it 'does nothing on save if it is not set and could not be resolved' do
-      membership = group.group_memberships.create!(user: user)
-      membership.update_column(:root_account_id, nil)
-
-      expect(membership.group).to receive(:root_account_id).and_return(nil)
 
       expect {
         membership.save!

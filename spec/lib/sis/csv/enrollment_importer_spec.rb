@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 #
 # Copyright (C) 2011 - present Instructure, Inc.
 #
@@ -619,6 +621,16 @@ describe SIS::CSV::EnrollmentImporter do
       'C002,U001,student,active',
       'C002,U002,student,active'
     )
+  end
+
+  describe "#persist_errors" do
+    it "gracefully handles string errors" do
+      batch = Account.default.sis_batches.create!
+      csv = double(root_account: Account.default, batch: batch, :[] => nil)
+      importer = SIS::CSV::EnrollmentImporter.new(csv)
+      importer.persist_errors(csv, ['a string error message'], batch)
+      expect(batch.sis_batch_errors.count).to eq(1)
+    end
   end
 
   it 'should only queue up one recache_grade_distribution job per course' do

@@ -32,6 +32,9 @@ import {View} from '@instructure/ui-view'
 
 const NotificationPreferences = props => {
   const [enabled, setEnabled] = useState(props.enabled)
+  const [sendObservedNamesEnabled, setSendObservedNames] = useState(
+    props.notificationPreferences?.sendObservedNamesInNotifications
+  )
 
   const renderMuteToggle = () => {
     if (props.contextType === 'course') {
@@ -68,36 +71,14 @@ const NotificationPreferences = props => {
     }
   }
 
-  const renderNotificationPreferences = () => {
-    if (
-      props.contextType === 'account' ||
-      ENV.NOTIFICATION_PREFERENCES_OPTIONS?.granular_course_preferences_enabled
-    ) {
-      return (
-        <Flex.Item>
-          <NotificationPreferencesTable
-            preferences={props.notificationPreferences}
-            updatePreference={props.updatePreference}
-          />
-        </Flex.Item>
-      )
-    } else {
-      return (
-        <Flex.Item>
-          <View as="div" margin="large 0 medium 0" textAlign="center">
-            <Text size="large">
-              {I18n.t(
-                'Granular course notification settings will be configurable here in the future.'
-              )}
-            </Text>
-          </View>
-          <div style={{textAlign: 'center'}}>
-            <img alt="" src={PleaseWaitWristWatch} style={{width: '200px'}} />
-          </div>
-        </Flex.Item>
-      )
-    }
-  }
+  const renderNotificationPreferences = () => (
+    <Flex.Item>
+      <NotificationPreferencesTable
+        preferences={props.notificationPreferences}
+        updatePreference={props.updatePreference}
+      />
+    </Flex.Item>
+  )
 
   const renderNotificationInfoAlert = () => (
     <Flex.Item>
@@ -113,6 +94,29 @@ const NotificationPreferences = props => {
     </Flex.Item>
   )
 
+  const renderSendObservedNamesInNotificationsToggle = () => {
+    if (
+      props.contextType === 'account' &&
+      props.notificationPreferences.sendObservedNamesInNotifications !== null
+    ) {
+      return (
+        <Flex.Item margin="small 0 small 0" padding="xx-small">
+          <Checkbox
+            data-testid="send-observed-names-toggle"
+            label={I18n.t('Show name of observed students in notifications')}
+            size="small"
+            variant="toggle"
+            checked={sendObservedNamesEnabled}
+            onChange={() => {
+              setSendObservedNames(!sendObservedNamesEnabled)
+              props.updatePreference({sendObservedNamesInNotifications: !sendObservedNamesEnabled})
+            }}
+          />
+        </Flex.Item>
+      )
+    }
+  }
+
   return (
     <Flex direction="column">
       <Flex.Item overflowY="visible" margin="0 0 small 0">
@@ -124,6 +128,7 @@ const NotificationPreferences = props => {
       </Flex.Item>
       {renderNotificationInfoAlert()}
       {renderMuteToggle()}
+      {renderSendObservedNamesInNotificationsToggle()}
       {renderNotificationPreferences()}
     </Flex>
   )

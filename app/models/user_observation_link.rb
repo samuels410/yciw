@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 #
 # Copyright (C) 2011 - present Instructure, Inc.
 #
@@ -81,7 +83,7 @@ class UserObservationLink < ActiveRecord::Base
   alias_method :destroy_permanently!, :destroy
   def destroy
     if !self.skip_destroy_other_record && (other = other_record)
-      other.skip_destroy_other_record = false
+      other.skip_destroy_other_record = true
       other.destroy
     end
     self.workflow_state = 'deleted'

@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 #
 # Copyright (C) 2011 - present Instructure, Inc.
 #
@@ -342,8 +344,8 @@ describe ActiveRecord::Base do
       arr1 = ['1, 2', 3, 'string with "quotes"', "another 'string'", "a fancy strîng"]
       arr2 = ['4', '5;', nil, "string with \t tab and \n newline and slash \\"]
       DeveloperKey.bulk_insert [
-        {name: "bulk_insert_1", workflow_state: "registered", redirect_uris: arr1},
-        {name: "bulk_insert_2", workflow_state: "registered", redirect_uris: arr2}
+        {name: "bulk_insert_1", workflow_state: "registered", redirect_uris: arr1, root_account_id: Account.default.id},
+        {name: "bulk_insert_2", workflow_state: "registered", redirect_uris: arr2, root_account_id: Account.default.id}
       ]
       names = DeveloperKey.order(:name).pluck(:redirect_uris)
       expect(names).to be_include(arr1.map(&:to_s))

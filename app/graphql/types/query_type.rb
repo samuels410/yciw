@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 #
 # Copyright (C) 2018 - present Instructure, Inc.
 #
@@ -137,6 +139,15 @@ module Types
     end
     def outcome_proficiency(id:)
       GraphQLNodeLoader.load("OutcomeProficiency", id, context)
+    end
+
+    field :learning_outcome_group, Types::LearningOutcomeGroupType, null: true do
+      description "LearningOutcomeGroup"
+      argument :id, ID, "a graphql or legacy id", required: true,
+        prepare: GraphQLHelpers.relay_or_legacy_id_prepare_func("LearningOutcomeGroup")
+    end
+    def learning_outcome_group(id:)
+      GraphQLNodeLoader.load("LearningOutcomeGroup", id, context)
     end
   end
 end

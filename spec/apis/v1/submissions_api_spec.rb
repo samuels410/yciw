@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 #
 # Copyright (C) 2011 - present Instructure, Inc.
 #
@@ -1787,7 +1789,6 @@ describe 'Submissions API', type: :request do
       let(:student1_sub) { assignment.submissions.find_by(user: @student1) }
 
       before(:each) do
-        @course.root_account.enable_feature!(:allow_postable_submission_comments)
         assignment.ensure_post_policy(post_manually: true)
       end
 
@@ -1803,11 +1804,6 @@ describe 'Submissions API', type: :request do
           },
           params
         ).first
-      end
-
-      it "is not included when allow_postable_submission_comments feature is not enabled" do
-        @course.root_account.disable_feature!(:allow_postable_submission_comments)
-        expect(student_json.fetch("submissions").first).not_to have_key "has_postable_comments"
       end
 
       it "is not included when params[:grouped] is not present" do
@@ -4572,7 +4568,7 @@ describe 'Submissions API', type: :request do
     expect(json[0]["attachments"][0]["canvadoc_document_id"]).to eq canvadoc_document_id
   end
 
-  it "includes crocodoc whitelist ids in the preview url for attachments" do
+  it "includes crocodoc allowed ids in the preview url for attachments" do
     allow(Canvas::Crocodoc).to receive(:config).and_return({a: 1})
 
     course_with_teacher_logged_in active_all: true
@@ -4607,8 +4603,8 @@ describe 'Submissions API', type: :request do
     parsed_blob = JSON.parse parsed_params["blob"].first
     expect(parsed.path).to eq "/api/v1/crocodoc_session"
 
-    expect(parsed_blob["moderated_grading_whitelist"]).to include(@student.moderated_grading_ids.as_json)
-    expect(parsed_blob["moderated_grading_whitelist"]).to include(@teacher.moderated_grading_ids.as_json)
+    expect(parsed_blob["moderated_grading_allow_list"]).to include(@student.moderated_grading_ids.as_json)
+    expect(parsed_blob["moderated_grading_allow_list"]).to include(@teacher.moderated_grading_ids.as_json)
   end
 
 

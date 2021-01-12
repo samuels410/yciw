@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 #
 # Copyright (C) 2020 - present Instructure, Inc.
 #
@@ -84,7 +86,7 @@ describe ContentMigration do
 
     it "should handle an export from the old service format into a natively enabled course" do
       old_account = Account.create!
-      @copy_from.update_attributes(:account => old_account, :root_account => old_account)
+      @copy_from.update(:account => old_account, :root_account => old_account)
 
       allow(ConditionalRelease::Service).to receive(:service_configured?).and_return(true)
       allow(ConditionalRelease::MigrationService).to receive(:begin_export).and_return({:mock_data => true})

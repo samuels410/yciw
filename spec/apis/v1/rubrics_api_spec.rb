@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 #
 # Copyright (C) 2016 Instructure, Inc.
 #
@@ -277,7 +279,7 @@ describe "Rubrics API", type: :request do
         it "returns an error if passed an invalid argument" do
           raw_rubric_call(@course, {include: "cheez"})
 
-          expect(response).not_to be_success
+          expect(response).not_to be_successful
           json = JSON.parse response.body
           expect(json["errors"]["include"].first["message"]).to start_with "invalid include value requested. Must be one of the following:"
         end
@@ -285,13 +287,13 @@ describe "Rubrics API", type: :request do
         it "returns an error if passed mutually-exclusive include options" do
           raw_rubric_call(@course, {include: ["assessments", "peer_assessments"]})
 
-          expect(response).not_to be_success
+          expect(response).not_to be_successful
           json = JSON.parse response.body
           expect(json["errors"]["include"].first["message"]).to start_with "cannot list multiple assessment includes."
 
           raw_rubric_call(@course, {include: ["associations", "assignment_associations"]})
 
-          expect(response).not_to be_success
+          expect(response).not_to be_successful
           json = JSON.parse response.body
           expect(json["errors"]["include"].first["message"]).to start_with "cannot list multiple association includes."
         end
@@ -310,7 +312,7 @@ describe "Rubrics API", type: :request do
           it "returns an error if passed an invalid argument" do
             raw_rubric_call(@course, {include: "assessments", style: "BigMcLargeHuge"})
 
-            expect(response).not_to be_success
+            expect(response).not_to be_successful
             json = JSON.parse response.body
             expect(json["errors"]["style"].first["message"]).to eq "invalid style requested. Must be one of the following: full, comments_only"
           end
@@ -318,7 +320,7 @@ describe "Rubrics API", type: :request do
           it "returns an error if passed a style parameter without assessments" do
             raw_rubric_call(@course, {style: "full"})
 
-            expect(response).not_to be_success
+            expect(response).not_to be_successful
             json = JSON.parse response.body
             expect(json["errors"]["style"].first["message"]).to eq "invalid parameters. Style parameter passed without requesting assessments"
           end
@@ -524,7 +526,7 @@ describe "Rubrics API", type: :request do
         it "returns an error if passed an invalid argument" do
           raw_rubric_call(@account, {include: "cheez"}, 'account')
 
-          expect(response).not_to be_success
+          expect(response).not_to be_successful
           json = JSON.parse response.body
           expect(json["errors"]["include"].first["message"]).to start_with "invalid include value requested. Must be one of the following:"
         end
@@ -532,13 +534,13 @@ describe "Rubrics API", type: :request do
         it "returns an error if passed mutually-exclusive include options" do
           raw_rubric_call(@account, {include: ["assessments", "peer_assessments"]}, 'account')
 
-          expect(response).not_to be_success
+          expect(response).not_to be_successful
           json = JSON.parse response.body
           expect(json["errors"]["include"].first["message"]).to start_with "cannot list multiple assessment includes."
 
           raw_rubric_call(@account, {include: ["associations", "assignment_associations"]}, 'account')
 
-          expect(response).not_to be_success
+          expect(response).not_to be_successful
           json = JSON.parse response.body
           expect(json["errors"]["include"].first["message"]).to start_with "cannot list multiple association includes."
         end
@@ -561,7 +563,7 @@ describe "Rubrics API", type: :request do
           it "returns an error if passed an invalid argument" do
             raw_rubric_call(@account, {include: "assessments", style: "BigMcLargeHuge"}, 'account')
 
-            expect(response).not_to be_success
+            expect(response).not_to be_successful
             json = JSON.parse response.body
             expect(json["errors"]["style"].first["message"]).to eq "invalid style requested. Must be one of the following: full, comments_only"
           end
@@ -569,7 +571,7 @@ describe "Rubrics API", type: :request do
           it "returns an error if passed a style parameter without assessments" do
             raw_rubric_call(@account, {style: "full"}, 'account')
 
-            expect(response).not_to be_success
+            expect(response).not_to be_successful
             json = JSON.parse response.body
             expect(json["errors"]["style"].first["message"]).to eq "invalid parameters. Style parameter passed without requesting assessments"
           end

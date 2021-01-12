@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 #
 # Copyright (C) 2011 - present Instructure, Inc.
 #
@@ -347,6 +349,42 @@ describe Message do
         message_model(:dispatch_at => Time.now, :workflow_state => 'staged', :to => 'somebody', :updated_at => Time.now.utc - 11.minutes, :path_type => 'push', :user => @user)
         @message.deliver
       end
+
+      context 'with the reduce_push_notifications feature enabled' do
+        before :each do
+          Account.site_admin.enable_feature!(:reduce_push_notifications)
+        end
+
+        after :each do
+          Account.site_admin.disable_feature!(:reduce_push_notifications)
+        end
+
+        it "allows whitelisted notification types" do
+          message_model(
+            dispatch_at: Time.now,
+            workflow_state: 'staged',
+            updated_at: Time.now.utc - 11.minutes,
+            path_type: 'push',
+            notification_name: 'Assignment Created',
+            user: @user
+          )
+          expect(@message).to receive(:deliver_via_push)
+          @message.deliver
+        end
+
+        it "does not deliver notification types not on the whitelist" do
+          message_model(
+            dispatch_at: Time.now,
+            workflow_state: 'staged',
+            updated_at: Time.now.utc - 11.minutes,
+            path_type: 'push',
+            notification_name: 'New Wiki Page',
+            user: @user
+          )
+          expect(@message).to receive(:deliver_via_push).never
+          @message.deliver
+        end
+      end
     end
 
     context 'SMS' do
@@ -634,6 +672,26 @@ describe Message do
         expect(message).to eq "value hi"
       end
     end
+
+    describe "cross-shard urls" do
+      specs_require_sharding
+
+      it 'should use relative ids in links of message body' do
+        @shard2.activate do
+          @c = Course.create!(account: Account.create!)
+          @a = @c.assignments.create!
+          @announcement = @c.announcements.create!(message: "<p>added assignment</p>\r\n<p><a title=\"assa\" href=\"/courses/#{@c.id}/assignments/#{@a.id}\"title</a></p>", title: 'title')
+        end
+        @shard1.activate do
+          @shard1_account = Account.create!(name: 'new acct')
+          expect_any_instance_of(Message).to receive(:link_root_account).at_least(:once).and_return(@shard1_account)
+          message = generate_message('New Announcement', 'email', @announcement)
+          parts = message.body.split("/courses/").second.split("/assignments/")
+          expect(parts.first.split('~')).to eq [@shard2.id.to_s, @c.local_id.to_s]
+          expect(parts.last.split(')').first.split('~')).to eq [@shard2.id.to_s, @a.local_id.to_s]
+        end
+      end
+    end
   end
 
   describe "author interface" do
@@ -769,6 +827,18 @@ describe Message do
 
     it 'has no side-effects on other scopes' do
       expect(Message.in_partition(partition).unscoped.to_sql).to match(/^SELECT "messages"\.\* FROM .*"messages"$/)
+    end
+  end
+
+  describe "for_queue" do
+    it "has a clear error path for messages that are missing" do
+      queued = Message.new(id: -1, created_at: Time.zone.now).for_queue
+      begin
+        queued.deliver
+        raise RuntimeError, "#deliver should have failed because this message does not exist"
+      rescue Delayed::RetriableError => e
+        expect(e.cause.is_a?(::Message::QueuedNotFound)).to be_truthy
+      end
     end
   end
 end

@@ -30,12 +30,13 @@ jest.mock('../../../../canvasFileBrowser/FileBrowser', () => {
 describe('RCE Plugins > CanvasContentTray', () => {
   let component
   let props
+  const editor = {id: 'editor_id'}
 
   function getProps(override = {}) {
     props = {
       bridge: new Bridge(),
-      editor: {id: 'editor_id'},
-      containingContext: {type: 'course', contextId: '1201', userId: '17'},
+      editor,
+      containingContext: {contextType: 'course', contextId: '1201', userId: '17'},
       contextId: '1201',
       contextType: 'course',
       source: fakeSource,
@@ -46,7 +47,9 @@ describe('RCE Plugins > CanvasContentTray', () => {
   }
 
   function renderComponent(trayprops) {
-    component = render(<CanvasContentTray {...getProps(trayprops)} />)
+    getProps(trayprops)
+    props.bridge.focusEditor(editor)
+    component = render(<CanvasContentTray {...props} />)
   }
 
   function getTray() {
@@ -120,6 +123,21 @@ describe('RCE Plugins > CanvasContentTray', () => {
       await showTrayForPlugin('links')
       expect(getTrayLabel()).toEqual('Group Links')
     })
+
+    it('is labeled with "Group Images" when using the "images" content type', async () => {
+      await showTrayForPlugin('group_images')
+      expect(getTrayLabel()).toEqual('Group Images')
+    })
+
+    it('is labeled with "Group Media" when using the "media" content type', async () => {
+      await showTrayForPlugin('group_media')
+      expect(getTrayLabel()).toEqual('Group Media')
+    })
+
+    it('is labeled with "Group Documents" when using the "group_documents" content type', async () => {
+      await showTrayForPlugin('group_documents')
+      expect(getTrayLabel()).toEqual('Group Documents')
+    })
   })
 
   describe('content panel', () => {
@@ -128,27 +146,37 @@ describe('RCE Plugins > CanvasContentTray', () => {
     })
     it('is the links panel for links content types', async () => {
       await showTrayForPlugin('links')
-      expect(component.getByTestId('instructure_links-LinksPanel')).toBeInTheDocument()
+      await waitFor(() =>
+        expect(component.getByTestId('instructure_links-LinksPanel')).toBeInTheDocument()
+      )
     })
 
     it('is the documents panel for document content types', async () => {
       await showTrayForPlugin('course_documents')
-      expect(component.getByTestId('instructure_links-DocumentsPanel')).toBeInTheDocument()
+      await waitFor(() =>
+        expect(component.getByTestId('instructure_links-DocumentsPanel')).toBeInTheDocument()
+      )
     })
 
     it('is the images panel for image content types', async () => {
       await showTrayForPlugin('course_images')
-      expect(component.getByTestId('instructure_links-ImagesPanel')).toBeInTheDocument()
+      await waitFor(() =>
+        expect(component.getByTestId('instructure_links-ImagesPanel')).toBeInTheDocument()
+      )
     })
 
     it('is the media panel for media content types', async () => {
       await showTrayForPlugin('course_media')
-      expect(component.getByTestId('instructure_links-MediaPanel')).toBeInTheDocument()
+      await waitFor(() =>
+        expect(component.getByTestId('instructure_links-MediaPanel')).toBeInTheDocument()
+      )
     })
 
     it('is the file browser for the all content type', async () => {
       await showTrayForPlugin('all')
-      expect(component.getByTestId('instructure_links-FilesPanel')).toBeInTheDocument()
+      await waitFor(() =>
+        expect(component.getByTestId('instructure_links-FilesPanel')).toBeInTheDocument()
+      )
     })
   })
 
@@ -162,7 +190,9 @@ describe('RCE Plugins > CanvasContentTray', () => {
       props.bridge.focusActiveEditor = mockFocus
 
       await showTrayForPlugin('links')
-      expect(component.getByTestId('CanvasContentTray')).toBeInTheDocument()
+      await waitFor(() =>
+        expect(component.getByTestId('instructure_links-LinksPanel')).toBeInTheDocument()
+      )
 
       const closeBtn = component.getByText('Close')
       closeBtn.click()

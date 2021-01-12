@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 #
 # Copyright (C) 2011 - present Instructure, Inc.
 #
@@ -118,6 +120,12 @@ describe AssetUserAccess do
         asset.save!
 
         expect(asset.icon).to eq 'icon-quiz'
+      end
+
+      it "falls back with an unexpected asset_category" do
+        asset = AssetUserAccess.create asset_category: 'blah'
+        expect(asset.icon).to eq 'icon-question'
+        expect(asset.readable_category).to eq ''
       end
     end
   end

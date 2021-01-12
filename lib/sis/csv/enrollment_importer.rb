@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 #
 # Copyright (C) 2011 - present Instructure, Inc.
 #
@@ -42,8 +44,15 @@ module SIS
             end
           end
         end
-        SisBatch.bulk_insert_sis_errors(messages)
+        persist_errors(csv, messages, @batch)
         count
+      end
+
+      def persist_errors(csv, messages, batch)
+        errors = messages.map do |message|
+          (message.is_a? SisBatchError) ? message : SisBatch.build_error(csv, message, sis_batch: @batch)
+        end
+        SisBatch.bulk_insert_sis_errors(errors)
       end
 
       private

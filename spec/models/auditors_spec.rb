@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 #
 # Copyright (C) 2020 - present Instructure, Inc.
 #
@@ -70,7 +72,7 @@ describe Auditors do
 
     it "defaults to cassandra read/write" do
       expect(Auditors.write_to_cassandra?).to eq(true)
-      expect(Auditors.write_to_postgres?).to eq(false)
+      expect(Auditors.write_to_postgres?).to eq(true)
       expect(Auditors.read_from_cassandra?).to eq(true)
       expect(Auditors.read_from_postgres?).to eq(false)
     end

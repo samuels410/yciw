@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 #
 # Copyright (C) 2019 - present Instructure, Inc.
 #
@@ -25,6 +27,7 @@ module Api::V1::HistoryEntry
     entry['visited_url'] = page_view.url
     entry['interaction_seconds'] = page_view.interaction_seconds
     entry['asset_icon'] = asset_user_access.icon
+    entry['asset_readable_category'] = asset_user_access.readable_category
     entry['asset_name'] = asset_user_access.readable_name(include_group_name: false)
     entry['context_name'] = asset_user_access.context.nickname_for(user)
     entry

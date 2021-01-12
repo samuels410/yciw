@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 #
 # Copyright (C) 2011 - present Instructure, Inc.
 #
@@ -36,7 +38,7 @@ describe "Common Cartridge exporting" do
     content_export.save!
 
     expect {
-      content_export.export_without_send_later
+      content_export.export(synchronous: true)
     }.to change(ErrorReport, :count).by 1
 
     expect(content_export.error_messages.length).to eq 1
@@ -63,7 +65,7 @@ describe "Common Cartridge exporting" do
     end
 
     def run_export(opts = {})
-      @ce.export_without_send_later(opts)
+      @ce.export(opts, synchronous: true)
       expect(@ce.error_messages).to eq []
       @file_handle = @ce.attachment.open :need_local_file => true
       @zip_file = Zip::File.open(@file_handle.path)
@@ -204,7 +206,7 @@ describe "Common Cartridge exporting" do
       allow(InstFS).to receive(:enabled?).and_return(true)
       uuid = "1234-abcd"
       allow(InstFS).to receive(:direct_upload).and_return(uuid)
-      @ce.export_without_send_later
+      @ce.export(synchronous: true)
       expect(@ce.attachments.first.instfs_uuid).to eq(uuid)
     end
 
@@ -326,6 +328,8 @@ describe "Common Cartridge exporting" do
     end
 
     it "should include media objects" do
+      skip 'PHO-360 (9/17/2020)'
+
       @q1 = @course.quizzes.create(:title => 'quiz1')
       @media_object = @course.media_objects.create!(
         :media_id => "some-kaltura-id",
@@ -621,8 +625,6 @@ describe "Common Cartridge exporting" do
       include_context "lti2_course_spec_helper"
 
       before(:each) do
-        allow_any_instance_of(Lti::AssignmentSubscriptionsHelper).to receive(:create_subscription) { SecureRandom.uuid }
-        allow_any_instance_of(Lti::AssignmentSubscriptionsHelper).to receive(:destroy_subscription) { SecureRandom.uuid }
         allow(Lti::ToolProxy).to receive(:find_all_proxies_for_context) { Lti::ToolProxy.where(id: tool_proxy.id) }
         tool_proxy.context = @course
         tool_proxy.save!
@@ -687,8 +689,6 @@ describe "Common Cartridge exporting" do
       end
 
       before(:each) do
-        allow_any_instance_of(Lti::AssignmentSubscriptionsHelper).to receive(:create_subscription) { SecureRandom.uuid }
-        allow_any_instance_of(Lti::AssignmentSubscriptionsHelper).to receive(:destroy_subscription) { SecureRandom.uuid }
         allow(Lti::ToolProxy).to receive(:find_all_proxies_for_context) { Lti::ToolProxy.where(id: tool_proxy.id) }
 
         assignment = @course.assignments.create! name: 'test assignment', submission_types: 'online_upload'

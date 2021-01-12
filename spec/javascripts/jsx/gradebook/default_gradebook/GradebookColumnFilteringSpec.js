@@ -515,6 +515,7 @@ QUnit.module('Gradebook Grid Column Filtering', suiteHooks => {
 
     test('optionally shows only assignment columns for the selected grading period at initial render', () => {
       gradebook.setFilterColumnsBySetting('gradingPeriodId', '1401')
+      gradebook.setCurrentGradingPeriod()
       addDataAndInitialize()
       const expectedColumns = [
         'assignment_2301',

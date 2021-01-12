@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 #
 # Copyright (C) 2011 - present Instructure, Inc.
 #
@@ -50,6 +52,53 @@ class Notification < ActiveRecord::Base
     'New Announcement',
     'Submission Grade Changed',
     'Submission Graded'
+  ].freeze
+
+  ALLOWED_PUSH_NOTIFICATION_CATEGORIES = [
+    "all_submissions",
+    "announcement_created_by_you",
+    "calendar",
+    "due_date",
+    "course_content",
+    "appointment_cancelations",
+    "student_appointment_signups",
+    "appointment_availability",
+    "conversation_message",
+    "submission_comment",
+    "grading",
+    "announcement",
+    "invitation"
+  ].freeze
+
+  ALLOWED_PUSH_NOTIFICATION_TYPES = [
+    "New Announcement",
+    "Assignment Created",
+    "New Event Created",
+    "Submission Graded",
+    "Assignment Due Date Changed",
+    "Conversation Message",
+    "Web Conference Invitation",
+    "Event Date Changed",
+    "Submission Comment",
+    "Appointment Group Published",
+    "Submission Needs Grading",
+    "Submission Comment For Teacher",
+    "Submission Grade Changed",
+    "Assignment Changed",
+    "Appointment Group Updated",
+    "Annotation Notification",
+    "Appointment Group Deleted",
+    "Assignment Due Date Override Changed",
+    "Peer Review Invitation",
+    "Announcement Reply",
+    "Rubric Assessment Submission Reminder",
+    "Collaboration Invitation",
+    "Appointment Canceled By User",
+    "Upcoming Assignment Alert",
+    "Annotation Teacher Notification",
+    "Assignment Unmuted",
+    "Quiz Regrade Finished",
+    "Appointment Deleted For User",
   ].freeze
 
   COURSE_TYPES = [
@@ -202,6 +251,14 @@ class Notification < ActiveRecord::Base
     root_account.settings[:allowed_sms_notification_types] || Setting.get('allowed_sms_notification_types', ALLOWED_SMS_NOTIFICATION_TYPES.join(',')).split(',')
   end
 
+  def self.categories_to_send_in_push
+    Setting.get('allowed_push_notification_categories', ALLOWED_PUSH_NOTIFICATION_CATEGORIES.join(',')).split(',')
+  end
+
+  def self.types_to_send_in_push
+    Setting.get('allowed_sms_notification_types', ALLOWED_PUSH_NOTIFICATION_TYPES.join(',')).split(',')
+  end
+
   def show_in_feed?
     self.category == "TestImmediately" || Notification.types_to_show_in_feed.include?(self.name)
   end
@@ -246,7 +303,7 @@ class Notification < ActiveRecord::Base
 
   # Return a hash with information for a related user option if one exists.
   def related_user_setting(user, root_account)
-    if self.category == 'Grading' && root_account.settings[:allow_sending_scores_in_emails] != false
+    if user.present? && self.category == 'Grading' && root_account.settings[:allow_sending_scores_in_emails] != false
       {
         name: :send_scores_in_emails,
         value: user.preferences[:send_scores_in_emails],

@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 #
 # Copyright (C) 2012 - 2013 Instructure, Inc.
 #
@@ -230,6 +232,7 @@ describe MasterCourses::MasterTemplatesController, type: :request do
         json = api_call(:get, "/api/v1/courses/#{@course.id}/blueprint_templates/default/migrations/#{@migration.id}",
           @base_params.merge(:action => 'migrations_show', :id => @migration.to_param))
         expect(json['workflow_state']).to eq 'queued'
+        expect(json['user']['display_name']).to eq @user.short_name
         expect(json['comment']).to eq 'Hark!'
       end
 
@@ -239,6 +242,7 @@ describe MasterCourses::MasterTemplatesController, type: :request do
         migration2 = MasterCourses::MasterMigration.start_new_migration!(@template, @user)
 
         json = api_call(:get, "/api/v1/courses/#{@course.id}/blueprint_templates/default/migrations", @base_params.merge(:action => 'migrations_index'))
+        expect(json[0]['user']['display_name']).to eq @user.short_name
         pairs = json.map{|hash| [hash['id'], hash['workflow_state']]}
         expect(pairs).to eq [[migration2.id, 'queued'], [@migration.id, 'completed']]
       end
@@ -263,6 +267,7 @@ describe MasterCourses::MasterTemplatesController, type: :request do
                                 @base_params.merge(:subscription_id => @sub.to_param, :course_id => @child_course.to_param, :action => 'imports_show', :id => @minion_migration.to_param))
         expect(json['workflow_state']).to eq 'completed'
         expect(json['subscription_id']).to eq @sub.id
+        expect(json['user']['display_name']).to eq @user.short_name
         expect(json['comment']).to eq 'Hark!'
       end
 
@@ -272,6 +277,7 @@ describe MasterCourses::MasterTemplatesController, type: :request do
         expect(json.size).to eq 1
         expect(json[0]['id']).to eq @minion_migration.id
         expect(json[0]['subscription_id']).to eq @sub.id
+        expect(json[0]['user']['display_name']).to eq @user.short_name
       end
 
       it "filters by subscription and enumerates old subscriptions" do

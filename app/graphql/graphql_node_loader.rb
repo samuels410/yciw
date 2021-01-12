@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 #
 # Copyright (C) 2018 - present Instructure, Inc.
 #
@@ -171,6 +173,35 @@ module GraphQLNodeLoader
     when "OutcomeProficiency"
       Loaders::IDLoader.for(OutcomeProficiency).load(id).then do |record|
         next if !record || record.deleted? || !record.context.grants_right?(ctx[:current_user], :read)
+
+        record
+      end
+    when "LearningOutcomeGroup"
+      Loaders::IDLoader.for(LearningOutcomeGroup).load(id).then do |record|
+        if record.context
+          next unless record.context.grants_right?(ctx[:current_user], :read_outcomes)
+        else
+          next unless Account.site_admin.grants_right?(ctx[:current_user], :read_global_outcomes)
+        end
+
+        record
+      end
+    when "Conversation"
+      Loaders::IDLoader.for(Conversation).load(id).then do |conversation|
+        Loaders::AssociationLoader.for(User, :all_conversations).load(ctx[:current_user]).then do |all_conversations|
+          next nil unless all_conversations.where(conversation_id: conversation.id).first
+
+          conversation
+        end
+      end
+    when "LearningOutcome"
+      Loaders::IDLoader.for(LearningOutcome).load(id).then do |record|
+        if record.context
+          next unless record.context.grants_right?(ctx[:current_user], :read_outcomes)
+        else
+          next unless Account.site_admin.grants_right?(ctx[:current_user], :read_global_outcomes)
+        end
+
         record
       end
     else

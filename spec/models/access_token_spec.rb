@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 #
 # Copyright (C) 2012 - present Instructure, Inc.
 #
@@ -154,9 +156,7 @@ describe AccessToken do
       @at.developer_key = dk
       @at.save
 
-      # Need to have the `cached_developer_key` instance variable cleared
-      at = AccessToken.find(@at.id)
-      expect(at.usable?).to eq false
+      expect(@at.reload.usable?).to eq false
     end
 
     it "Shouldn't be usable if dev key isn't active, even if we request with a refresh token" do
@@ -166,9 +166,7 @@ describe AccessToken do
       @at.developer_key = dk
       @at.save
 
-      # Need to have the `cached_developer_key` instance variable cleared
-      at = AccessToken.find(@at.id)
-      expect(at.usable?(:crypted_refresh_token)).to eq false
+      expect(@at.reload.usable?(:crypted_refresh_token)).to eq false
     end
   end
 
@@ -537,7 +535,7 @@ describe AccessToken do
 
     it "inherits root_account value from siteadmin context" do
       at = AccessToken.create!(user: user_model, developer_key: site_admin_key)
-      expect(at.root_account_id).to be_nil
+      expect(at.root_account_id).to eq Account.site_admin.id
     end
 
     it "keeps set value if it already exists" do

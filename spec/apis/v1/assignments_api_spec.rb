@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 #
 # Copyright (C) 2011 - 2016 Instructure, Inc.
 #
@@ -581,7 +583,7 @@ describe AssignmentsApiController, type: :request do
           }
         )
 
-        expect(response).not_to be_success
+        expect(response).not_to be_successful
         json = JSON.parse response.body
         expect(json["errors"]["bucket"].first["message"]).to eq "bucket name must be one of the following: past, overdue, undated, ungraded, unsubmitted, upcoming, future"
       end
@@ -2677,7 +2679,7 @@ describe AssignmentsApiController, type: :request do
           }
         })
 
-      expect(response).not_to be_success
+      expect(response).not_to be_successful
       json = JSON.parse response.body
       expect(json['errors']['assignment[assignment_group_id]'].first['message']).
         to eq "must be a positive number"
@@ -3031,7 +3033,7 @@ describe AssignmentsApiController, type: :request do
         },
         { :assignment => { :published => false } }
       )
-      expect(response).not_to be_success
+      expect(response).not_to be_successful
       json = JSON.parse response.body
       expect(json['errors']['published'].first['message']).
         to eq "Can't unpublish if there are student submissions"
@@ -3068,7 +3070,7 @@ describe AssignmentsApiController, type: :request do
       @assignment.save!
       raw_api_update_assignment(@course, @assignment,
                                 {'peer_reviews_assign_at' => '1/1/2013' })
-      expect(response).not_to be_success
+      expect(response).not_to be_successful
       expect(response.code).to eql '400'
       json = JSON.parse response.body
       expect(json['errors']['assignment[peer_reviews_assign_at]'].first['message']).
@@ -4864,7 +4866,8 @@ describe AssignmentsApiController, type: :request do
             'url' => 'http://www.example.com',
             'new_tab' => false,
             'resource_link_id' => ContextExternalTool.opaque_identifier_for(@tool_tag, @tool_tag.context.shard),
-            'external_data' => nil
+            'external_data' => nil,
+            'custom' => nil
           })
         end
 
@@ -5089,6 +5092,111 @@ describe AssignmentsApiController, type: :request do
       @assignment.anonymous_grading = false
       expect(result['anonymize_students']).to be false
     end
+
+    context 'can_submit value' do
+      before :each do
+        course_with_student_logged_in(:course_name => "Course 1", :active_all => 1)
+        @course.start_at = 14.days.ago
+        @course.save!
+        @assignment = @course.assignments.create!(:title => "Assignment 1",
+                                                  :points_possible => 10,
+                                                  :submission_types => "online_text_entry")
+      end
+
+      def get_assignment
+        api_call(:get,
+                 "/api/v1/courses/#{@course.id}/assignments/#{@assignment.id}?include[]=can_submit",
+                 {:controller => "assignments_api",
+                  :action => "show",
+                  :format => "json",
+                  :course_id => @course.id.to_s,
+                  :id => @assignment.id,
+                  :include => ["can_submit"]})
+      end
+
+      it 'is true for assignment' do
+        @course.conclude_at = 7.days.from_now
+        @course.save!
+        json = get_assignment
+        expect(json.key?('can_submit')).to be_present
+        expect(json['can_submit']).to be_truthy
+      end
+
+      it 'is true for assignment in course that is soft-concluded but not restricted' do
+        @course.conclude_at = 3.days.ago
+        @course.restrict_enrollments_to_course_dates = false
+        @course.save!
+        json = get_assignment
+        expect(json.key?('can_submit')).to be_present
+        expect(json['can_submit']).to be_truthy
+      end
+
+      it 'is false for assignment in course that is soft-concluded and restricted' do
+        @course.conclude_at = 3.days.ago
+        @course.restrict_enrollments_to_course_dates = true
+        @course.save!
+        json = get_assignment
+        expect(json.key?('can_submit')).to be_present
+        expect(json['can_submit']).to be_falsey
+      end
+
+      it 'is false if the assignment has no submission types' do
+        @assignment.submission_types = "none"
+        @assignment.save!
+        json = get_assignment
+        expect(json.key?('can_submit')).to be_present
+        expect(json['can_submit']).to be_falsey
+      end
+
+      it 'is false if the assignment is submitted on paper' do
+        @assignment.submission_types = "on_paper"
+        @assignment.save!
+        json = get_assignment
+        expect(json.key?('can_submit')).to be_present
+        expect(json['can_submit']).to be_falsey
+      end
+
+      it 'is false if the assignment is locked' do
+        @assignment.unlock_at = 2.days.from_now
+        @assignment.save!
+        json = get_assignment
+        expect(json.key?('can_submit')).to be_present
+        expect(json['can_submit']).to be_falsey
+      end
+
+      it 'is false if the allowed_attempts are used' do
+        @assignment.allowed_attempts = 1
+        @assignment.submit_homework(@student, submission_type: "online_text_entry", body: "Assignment submitted")
+        @assignment.save!
+        json = get_assignment
+        expect(json.key?('can_submit')).to be_present
+        expect(json['can_submit']).to be_falsey
+      end
+
+      it 'does not show when getting all assignments' do
+        json = api_call(:get,
+                 "/api/v1/courses/#{@course.id}/assignments/?include[]=can_submit",
+                 {:controller => "assignments_api",
+                  :action => "index",
+                  :format => "json",
+                  :course_id => @course.id.to_s,
+                  :include => ["can_submit"]})
+        expect(json.first.key?('description')).to be_present
+        expect(json.first.key?('can_submit')).not_to be_present
+      end
+
+      it 'does not show when can_submit param is not included' do
+        json = api_call(:get,
+                        "/api/v1/courses/#{@course.id}/assignments/#{@assignment.id}",
+                        {:controller => "assignments_api",
+                         :action => "show",
+                         :format => "json",
+                         :course_id => @course.id.to_s,
+                         :id => @assignment.id})
+        expect(json.key?('description')).to be_present
+        expect(json.key?('can_submit')).not_to be_present
+      end
+    end
   end
 
   context "update_from_params" do
@@ -5300,6 +5408,16 @@ describe AssignmentsApiController, type: :request do
         let(:duplicated_successfully) { false }
 
         it { is_expected.to have_received(:fail_to_duplicate) }
+      end
+
+      context "when duplicated_successfully is true after timeout" do
+        before do
+          @assignment.update(workflow_state: 'failed_to_duplicate')
+        end
+
+        let(:duplicated_successfully) { true }
+
+        it { is_expected.to have_received(:finish_duplicating) }
       end
     end
 

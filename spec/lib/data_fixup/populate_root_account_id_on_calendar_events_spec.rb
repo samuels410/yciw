@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 #
 # Copyright (C) 2020 - present Instructure, Inc.
 #
@@ -19,7 +21,7 @@ require 'spec_helper'
 
 describe DataFixup::PopulateRootAccountIdOnCalendarEvents do
   before(:once) do
-    Account.find_or_create_by!(id: 0).update_attributes(name: 'Dummy Root Account', workflow_state: 'deleted', root_account_id: nil)
+    Account.find_or_create_by!(id: 0).update(name: 'Dummy Root Account', workflow_state: 'deleted', root_account_id: nil)
   end
 
   it 'ignores CalendarEvents with Course context' do

@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 #
 # Copyright (C) 2011 - present Instructure, Inc.
 #
@@ -121,10 +123,7 @@ class Role < ActiveRecord::Base
     RequestCache.cache('built_in_roles', root_account_id) do
       local_id, shard = Shard.local_id_for(root_account_id)
       (shard || Shard.current).activate do
-        roles = Role.where(:workflow_state => 'built_in', :root_account_id => local_id).order(:id).to_a
-        # if these haven't been made yet, fall back to old built-in roles
-        roles = Role.where(:workflow_state => 'built_in', :root_account_id => nil).order(:id).to_a if roles.empty? # TODO can remove after datafixup
-        roles
+        Role.where(:workflow_state => 'built_in', :root_account_id => local_id).order(:id).to_a
       end
     end
   end

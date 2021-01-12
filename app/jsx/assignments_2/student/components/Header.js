@@ -18,14 +18,15 @@
 
 import AssignmentGroupModuleNav from './AssignmentGroupModuleNav'
 import {Assignment} from '../graphqlData/Assignment'
-import Attempt from './Attempt'
-import DateTitle from './DateTitle'
+import AttemptSelect from './AttemptSelect'
+import AssignmentDetails from './AssignmentDetails'
+import {Button} from '@instructure/ui-buttons'
 import {Flex} from '@instructure/ui-layout'
 import GradeDisplay from './GradeDisplay'
 import {Heading} from '@instructure/ui-heading'
 import I18n from 'i18n!assignments_2_student_header'
 import LatePolicyStatusDisplay from './LatePolicyStatusDisplay'
-import {number} from 'prop-types'
+import {number, arrayOf, func} from 'prop-types'
 import React from 'react'
 import {ScreenReaderContent} from '@instructure/ui-a11y'
 import StepContainer from './StepContainer'
@@ -35,7 +36,9 @@ import SubmissionStatusPill from '../../shared/SubmissionStatusPill'
 
 class Header extends React.Component {
   static propTypes = {
+    allSubmissions: arrayOf(Submission.shape),
     assignment: Assignment.shape,
+    onChangeSubmission: func.isRequired,
     scrollThreshold: number.isRequired,
     submission: Submission.shape
   }
@@ -104,6 +107,36 @@ class Header extends React.Component {
     </StudentViewContext.Consumer>
   )
 
+  shouldRenderNewAttempt(context) {
+    const {assignment, submission} = this.props
+    return (
+      !assignment.lockInfo.isLocked &&
+      (submission.state === 'graded' || submission.state === 'submitted') &&
+      context.isLatestAttempt &&
+      (assignment.allowedAttempts === null || submission.attempt < assignment.allowedAttempts)
+    )
+  }
+
+  renderNewAttemptButton = () => (
+    <StudentViewContext.Consumer>
+      {context => {
+        if (this.shouldRenderNewAttempt(context)) {
+          return (
+            <Button
+              data-testid="new-attempt-button"
+              color="primary"
+              margin="small xxx-small"
+              onClick={context.startNewAttemptAction}
+            >
+              {I18n.t('New Attempt')}
+            </Button>
+          )
+        }
+        return null
+      }}
+    </StudentViewContext.Consumer>
+  )
+
   render() {
     return (
       <>
@@ -130,7 +163,10 @@ class Header extends React.Component {
           {!this.state.isSticky && <AssignmentGroupModuleNav assignment={this.props.assignment} />}
           <Flex margin={this.state.isSticky ? '0' : '0 0 medium 0'} wrap="wrap" wrapItems>
             <Flex.Item shrink>
-              <DateTitle isSticky={this.state.isSticky} assignment={this.props.assignment} />
+              <AssignmentDetails
+                isSticky={this.state.isSticky}
+                assignment={this.props.assignment}
+              />
             </Flex.Item>
             <Flex.Item grow align="start">
               {this.renderLatestGrade()}
@@ -155,13 +191,20 @@ class Header extends React.Component {
                         submissionStatus={this.props.submission.submissionStatus}
                       />
                     </Flex.Item>
+                    <Flex.Item grow>
+                      {!this.state.isSticky && this.renderNewAttemptButton()}
+                    </Flex.Item>
                   </Flex>
                 </Flex.Item>
               )}
             </Flex.Item>
           </Flex>
           {!this.state.isSticky && (
-            <Attempt assignment={this.props.assignment} submission={this.props.submission} />
+            <AttemptSelect
+              allSubmissions={this.props.allSubmissions}
+              onChangeSubmission={this.props.onChangeSubmission}
+              submission={this.props.submission}
+            />
           )}
           <div className="assignment-pizza-header-outer">
             <div

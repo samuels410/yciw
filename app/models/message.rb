@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 #
 # Copyright (C) 2011 - present Instructure, Inc.
 #
@@ -36,6 +38,8 @@ class Message < ActiveRecord::Base
 
   MAX_TWITTER_MESSAGE_LENGTH = 140
 
+  class QueuedNotFound < StandardError; end
+
   class Queued
     # use this to queue messages for delivery so we find them using the created_at in the scope
     # instead of using id alone when reconstituting the AR object
@@ -44,9 +48,19 @@ class Message < ActiveRecord::Base
       @id, @created_at = id, created_at
     end
 
-    delegate :deliver, :dispatch_at, :to => :message
+    delegate :dispatch_at, :to => :message
+
+    def deliver
+      message.deliver
+    rescue QueuedNotFound => e
+      raise Delayed::RetriableError, "Message does not (yet?) exist"
+    end
+
     def message
-      @message ||= Message.in_partition('id' => id, 'created_at' => @created_at).where(:id => @id, :created_at => @created_at).first || Message.where(:id => @id).first
+      return @message if @message.present?
+      @message = Message.in_partition('id' => id, 'created_at' => @created_at).where(:id => @id, :created_at => @created_at).first || Message.where(:id => @id).first
+      raise QueuedNotFound if @message.nil?
+      @message
     end
   end
 
@@ -323,6 +337,28 @@ class Message < ActiveRecord::Base
     end
   end
 
+  # overwrite existing html_to_text so that messages with links can have the ids
+  # translated to be shard aware while preserving the link_root_account for the
+  # host.
+  def html_to_text(html, *opts)
+    super(transpose_url_ids(html), *opts)
+  end
+
+  # overwrite existing html_to_simple_html so that messages with links can have
+  # the ids translated to be shard aware while preserving the link_root_account
+  # for the host.
+  def html_to_simple_html(html, *opts)
+    super(transpose_url_ids(html), *opts)
+  end
+
+  def transpose_url_ids(html)
+    url_helper = Api::Html::UrlProxy.new(self, self.context,
+                                         HostUrl.context_host(self.link_root_account),
+                                         HostUrl.protocol,
+                                         target_shard: self.link_root_account.shard)
+    Api::Html::Content.rewrite_outgoing(html, self.link_root_account, url_helper)
+  end
+
   # infer a root account associated with the context that the user can log in to
   def link_root_account
     @root_account ||= begin
@@ -534,7 +570,10 @@ class Message < ActiveRecord::Base
       footer_path = Canvas::MessageHelper.find_message_path('_email_footer.email.erb')
       raw_footer_message = File.read(footer_path)
       footer_message = eval(Erubi::Engine.new(raw_footer_message, :bufvar => "@output_buffer").src, nil, footer_path)
-      if footer_message.present?
+      # currently, _email_footer.email.erb only contains a way for users to change notification prefs
+      # they can only change it if they are registered in the first place
+      # do not show this for emails telling users to register
+      if footer_message.present? && !self.notification&.registration?
         self.body = <<-END.strip_heredoc
           #{self.body}
 
@@ -627,6 +666,16 @@ class Message < ActiveRecord::Base
     check_acct = root_account || user&.account || Account.site_admin
     if path_type == 'sms' && !check_acct.settings[:sms_allowed] && Account.site_admin.feature_enabled?(:deprecate_sms)
       if Notification.types_to_send_in_sms(check_acct).exclude?(notification_name)
+        InstStatsd::Statsd.increment("message.skip.#{path_type}.#{notification_name}",
+                                     short_stat: 'message.skip',
+                                     tags: {path_type: path_type, notification_name: notification_name})
+        self.destroy
+        return nil
+      end
+    end
+
+    if path_type == 'push' && Account.site_admin.feature_enabled?(:reduce_push_notifications)
+      if Notification.types_to_send_in_push.exclude?(notification_name)
         InstStatsd::Statsd.increment("message.skip.#{path_type}.#{notification_name}",
                                      short_stat: 'message.skip',
                                      tags: {path_type: path_type, notification_name: notification_name})

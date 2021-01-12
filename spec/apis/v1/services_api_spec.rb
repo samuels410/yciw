@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 #
 # Copyright (C) 2011 Instructure, Inc.
 #
@@ -32,12 +34,18 @@ describe "Services API", type: :request do
       'partner_id' => '420',
     })
   end
-  
+
   it "should check for auth" do
     get("/api/v1/services/kaltura")
     assert_status(401)
   end
-  
+
+  it "checks for auth on session" do
+    post("/api/v1/services/kaltura_session")
+    assert_status(401)
+    expect(response.body).to include("must be logged in to use Kaltura")
+  end
+
   it "should return the config information for kaltura" do
     json = api_call(:get, "/api/v1/services/kaltura",
               :controller => "services_api", :action => "show_kaltura_config", :format => "json")
@@ -49,7 +57,7 @@ describe "Services API", type: :request do
       'partner_id' => '420',
     })
   end
-  
+
   it "should degrade gracefully if kaltura is disabled or not configured" do
     allow(CanvasKaltura::ClientV3).to receive(:config).and_return(nil)
     json = api_call(:get, "/api/v1/services/kaltura",

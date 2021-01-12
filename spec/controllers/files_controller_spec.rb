@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 #
 # Copyright (C) 2011 - present Instructure, Inc.
 #
@@ -164,6 +166,13 @@ describe FilesController do
       group_with_user_logged_in(:group_context => Account.default)
       get 'index', params: {:group_id => @group.id}
       expect(response).to be_successful
+    end
+
+    it "refuses for a non-html format" do
+      group_with_user_logged_in(:group_context => Account.default)
+      get 'index', params: {:group_id => @group.id}, format: :js
+      expect(response.body).to include("endpoint does not support js")
+      expect(response.code.to_i).to eq(400)
     end
 
     it "should not show external tools in a group context" do
@@ -624,7 +633,7 @@ describe FilesController do
         get "show_relative", params: {file_id: @file.id, course_id: @course.id, file_path: @file.full_display_path, inline: 1, download: 1}
         expect(response).to be_successful
         expect(response.body).to eq 'hello'
-        expect(response.content_type).to eq 'text/html'
+        expect(response.media_type).to eq 'text/html'
       end
 
       it "redirects for large html files" do
@@ -1116,24 +1125,24 @@ describe FilesController do
     end
 
     before :each do
-      @content = Rack::Test::UploadedFile.new(File.join(ActionController::TestCase.fixture_path, 'courses.yml'), '')
+      @content = Rack::Test::UploadedFile.new(File.join(RSpec.configuration.fixture_path, 'courses.yml'), '')
       request.env['CONTENT_TYPE'] = 'multipart/form-data'
       enable_forgery_protection
     end
 
     it "should accept the upload data if the policy and attachment are acceptable" do
       local_storage!
-      params = @attachment.ajax_upload_params(@teacher.pseudonym, "", "")
+      params = @attachment.ajax_upload_params("", "")
       post "api_create", params: params[:upload_params].merge(:file => @content)
       expect(response).to be_redirect
       @attachment.reload
       # the file is not available until the third api call is completed
       expect(@attachment.file_state).to eq 'deleted'
-      expect(@attachment.open.read).to eq File.read(File.join(ActionController::TestCase.fixture_path, 'courses.yml'))
+      expect(@attachment.open.read).to eq File.read(File.join(RSpec.configuration.fixture_path, 'courses.yml'))
     end
 
     it "opens up cors headers" do
-      params = @attachment.ajax_upload_params(@teacher.pseudonym, "", "")
+      params = @attachment.ajax_upload_params("", "")
       post "api_create", params: params[:upload_params].merge(:file => @content)
       expect(response.header["Access-Control-Allow-Origin"]).to eq "*"
     end
@@ -1149,20 +1158,20 @@ describe FilesController do
     end
 
     it "should reject an expired policy" do
-      params = @attachment.ajax_upload_params(@teacher.pseudonym, "", "", :expiration => -60.seconds)
+      params = @attachment.ajax_upload_params("", "", :expiration => -60.seconds)
       post "api_create", params: params[:upload_params].merge({ :file => @content })
       assert_status(400)
     end
 
     it "should reject a modified policy" do
-      params = @attachment.ajax_upload_params(@teacher.pseudonym, "", "")
+      params = @attachment.ajax_upload_params("", "")
       params[:upload_params]['Policy'] << 'a'
       post "api_create", params: params[:upload_params].merge({ :file => @content })
       assert_status(400)
     end
 
     it "should reject a good policy if the attachment data is already uploaded" do
-      params = @attachment.ajax_upload_params(@teacher.pseudonym, "", "")
+      params = @attachment.ajax_upload_params("", "")
       @attachment.uploaded_data = @content
       @attachment.save!
       post "api_create", params: params[:upload_params].merge(:file => @content)
@@ -1171,7 +1180,7 @@ describe FilesController do
 
     it "should forward params[:success_include] to the api_create_success redirect as params[:include] if present" do
       local_storage!
-      params = @attachment.ajax_upload_params(@teacher.pseudonym, "", "")
+      params = @attachment.ajax_upload_params("", "")
       post "api_create", params: params[:upload_params].merge(:file => @content, :success_include => 'foo')
       expect(response).to be_redirect
       expect(response.location).to include('include%5B%5D=foo') # include[]=foo, url encoded
@@ -1190,7 +1199,7 @@ describe FilesController do
       )
 
       local_storage!
-      params = profile_pic.ajax_upload_params(@teacher.pseudonym, "", "")
+      params = profile_pic.ajax_upload_params("", "")
       post "api_create", params: params[:upload_params].merge(:file => @content)
       expect(response).to be_redirect
       expect(response.location).to include('include%5B%5D=avatar') # include[]=avatar, url encoded
@@ -1505,10 +1514,33 @@ describe FilesController do
   end
 
   describe "GET 'image_thumbnail'" do
+    let(:image) {factory_with_protected_attributes(@teacher.attachments, uploaded_data: stub_png_data, instfs_uuid: "1234")}
+
     it "should return default 'no_pic' thumbnail if attachment not found" do
       user_session @teacher
       get "image_thumbnail", params: { uuid: "bad uuid", id: "bad id" }
       expect(response).to be_redirect
     end
+
+    it "returns the same jwt if requested twice" do
+      enable_cache do
+        user_session @teacher
+        locations = 2.times.map {
+          get("image_thumbnail", params: {uuid: image.uuid, id: image.id}).location
+        }
+        expect(locations[0]).to eq(locations[1])
+      end
+    end
+
+    it "returns the different jwts if no_cache is passed" do
+      enable_cache do
+        user_session @teacher
+        locations = 2.times.map {
+          get("image_thumbnail", params: {uuid: image.uuid, id: image.id, no_cache: true}).location
+        }
+        expect(locations[0]).not_to eq(locations[1])
+      end
+    end
+
   end
 end

@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 #
 # Copyright (C) 2011 - present Instructure, Inc.
 #
@@ -193,12 +195,6 @@ describe GradebooksController do
       get :grade_summary, params: { course_id: @course.id, id: @student.id }
       order = assigns[:js_env][:current_assignment_sort_order]
       expect(order).to eq :due_at
-    end
-
-    it "includes the post_policies_enabled in the ENV" do
-      user_session(@teacher)
-      get :grade_summary, params: { course_id: @course.id, id: @student.id }
-      expect(assigns[:js_env][:post_policies_enabled]).to be true
     end
 
     it "includes the current grading period id in the ENV" do
@@ -723,17 +719,6 @@ describe GradebooksController do
         expect(scripts).to include a_string_matching(/\bprefetched_xhrs\b.*\buser_ids\b/)
       end
 
-      it "prefetches user ids when only 'prefetch_gradebook_user_ids' is enabled" do
-        # TODO: remove this with TALLY-831
-        Account.site_admin.enable_feature!(:prefetch_gradebook_user_ids)
-        allow(Account.site_admin).to receive(:feature_enabled?).and_call_original
-        allow(Account.site_admin).to receive(:feature_enabled?).with(:gradebook_dataloader_improvements).and_return(false)
-        get :show, params: { course_id: @course.id }
-
-        scripts = Nokogiri::HTML(response.body).css('script').map(&:text)
-        expect(scripts).to include a_string_matching(/\bprefetched_xhrs\b.*\buser_ids\b/)
-      end
-
       it "prefetches grading period assignments when the course uses grading periods" do
         group_helper = Factories::GradingPeriodGroupHelper.new
         period_helper = Factories::GradingPeriodHelper.new
@@ -843,6 +828,36 @@ describe GradebooksController do
         end
       end
 
+      describe "view ungraded as zero" do
+        context "when individual gradebook is enabled" do
+          before(:each) { @teacher.preferences[:gradebook_version] = "srgb" }
+
+          it "save_view_ungraded_as_zero_to_server is true when the feature is enabled" do
+            Account.site_admin.enable_feature!(:view_ungraded_as_zero)
+            get :show, params: { course_id: @course.id }
+            expect(gradebook_options[:save_view_ungraded_as_zero_to_server]).to be true
+          end
+
+          it "save_view_ungraded_as_zero_to_server is false when the feature is not enabled" do
+            get :show, params: { course_id: @course.id }
+            expect(gradebook_options[:save_view_ungraded_as_zero_to_server]).to be false
+          end
+        end
+
+        context "when default gradebook is enabled" do
+          it "sets allow_view_ungraded_as_zero in the ENV to true if the feature is enabled" do
+            Account.site_admin.enable_feature!(:view_ungraded_as_zero)
+            get :show, params: { course_id: @course.id }
+            expect(gradebook_options.fetch(:allow_view_ungraded_as_zero)).to be true
+          end
+
+          it "sets allow_view_ungraded_as_zero in the ENV to false if the feature is not enabled" do
+            get :show, params: { course_id: @course.id }
+            expect(gradebook_options.fetch(:allow_view_ungraded_as_zero)).to be false
+          end
+        end
+      end
+
       describe "dataloader_improvements" do
         # TODO: remove this entire block with TALLY-831
 
@@ -891,11 +906,6 @@ describe GradebooksController do
       it "includes grading_schemes" do
         get :show, params: { course_id: @course.id }
         expect(gradebook_options).to have_key :grading_schemes
-      end
-
-      it "sets post_policies_enabled to true" do
-        get :show, params: { course_id: @course.id }
-        expect(gradebook_options[:post_policies_enabled]).to be(true)
       end
 
       it "sets show_similarity_score to true when the New Gradebook Plagiarism Indicator feature flag is enabled" do
@@ -1014,19 +1024,6 @@ describe GradebooksController do
         it "defaults submissions_per_page to the api_max_per_page setting" do
           get :show, params: {course_id: @course.id}
           expect(performance_controls[:submissions_per_page]).to eq(100)
-        end
-      end
-
-      describe "new_post_policy_icons_enabled" do
-        it "is set to true when the New Post Policy Icons root account feature flag enabled" do
-          @course.root_account.enable_feature!(:new_post_policy_icons)
-          get :show, params: {course_id: @course.id}
-          expect(gradebook_options[:new_post_policy_icons_enabled]).to be true
-        end
-
-        it "is set to false when the New Post Policy Icons root account feature flag is not enabled" do
-          get :show, params: {course_id: @course.id}
-          expect(gradebook_options[:new_post_policy_icons_enabled]).to be false
         end
       end
 
@@ -1162,19 +1159,6 @@ describe GradebooksController do
         it "only includes course sections visible to the user" do
           get :show, params: {course_id: @course.id}
           expect(returned_section_ids).to contain_exactly(@course.default_section.id)
-        end
-      end
-
-      describe "include_speed_grader_in_assignment_header_menu" do
-        it "is set to true when the feature flag of the same name is true" do
-          Account.site_admin.enable_feature!(:include_speed_grader_in_assignment_header_menu)
-          get :show, params: {course_id: @course.id}
-          expect(gradebook_options.fetch(:include_speed_grader_in_assignment_header_menu)).to be true
-        end
-
-        it "is set to false when the feature flag of the same name is false" do
-          get :show, params: {course_id: @course.id}
-          expect(gradebook_options.fetch(:include_speed_grader_in_assignment_header_menu)).to be false
         end
       end
     end
@@ -1507,9 +1491,26 @@ describe GradebooksController do
             @gradebook_env = assigns[:js_env][:GRADEBOOK_OPTIONS]
           end
 
-          it "is set to the outcome proficiency on the course" do
+          it "is set to the outcome proficiency on the account" do
             expect(@gradebook_env[:outcome_proficiency]).to eq(@proficiency.as_json)
           end
+
+          # rubocop:disable RSpec/NestedGroups
+          describe "with account_level_mastery_scales enabled" do
+            before do
+              @course_proficiency = outcome_proficiency_model(@course)
+              @course.root_account.enable_feature! :account_level_mastery_scales
+
+              get 'show', params: {course_id: @course.id}
+
+              @gradebook_env = assigns[:js_env][:GRADEBOOK_OPTIONS]
+            end
+
+            it "is set to the resolved_outcome_proficiency on the course" do
+              expect(@gradebook_env[:outcome_proficiency]).to eq(@course_proficiency.as_json)
+            end
+          end
+          # rubocop:enable RSpec/NestedGroups
         end
 
         describe ".sections" do
@@ -1630,6 +1631,7 @@ describe GradebooksController do
       @period1, @period2 = Factories::GradingPeriodHelper.new.create_presets_for_group(@group, :past, :current)
       @assignment1_in_gp1 = @course.assignments.create!(due_at: 3.months.ago)
       @assignment2_in_gp2 = @course.assignments.create!(due_at: 1.day.from_now)
+      @assignment_not_in_gp = @course.assignments.create!(due_at: 9.months.from_now)
     end
 
     it "returns unauthorized if there is no current user" do
@@ -1662,7 +1664,8 @@ describe GradebooksController do
       json = json_parse(response.body)["grading_period_assignments"]
       expect(json).to eq({
         @period1.id.to_s => [@assignment1_in_gp1.id.to_s],
-        @period2.id.to_s => [@assignment2_in_gp2.id.to_s]
+        @period2.id.to_s => [@assignment2_in_gp2.id.to_s],
+        "none" => [@assignment_not_in_gp.id.to_s]
       })
     end
   end
@@ -1701,6 +1704,47 @@ describe GradebooksController do
 
       get 'history', params: { course_id: @course.id }
       assert_unauthorized
+    end
+
+    describe "js_env" do
+      describe "OVERRIDE_GRADES_ENABLED" do
+        before(:each) { user_session(@teacher) }
+
+        let(:override_grades_enabled) { assigns[:js_env][:OVERRIDE_GRADES_ENABLED] }
+
+        context "when the final_grade_override_in_gradebook_history feature is enabled" do
+          before(:each) { Account.site_admin.enable_feature!(:final_grade_override_in_gradebook_history) }
+
+          it "is set to true if the final_grade_override flag is enabled and the course setting is on" do
+            @course.enable_feature!(:final_grades_override)
+            @course.allow_final_grade_override = true
+            @course.save!
+
+            get 'history', params: { course_id: @course.id }
+            expect(override_grades_enabled).to be true
+          end
+
+          it "is set to false if the final_grade_override flag is disabled" do
+            @course.allow_final_grade_override = true
+            @course.save!
+
+            get 'history', params: { course_id: @course.id }
+            expect(override_grades_enabled).to be false
+          end
+
+          it "is set to false if the course setting is off" do
+            @course.enable_feature!(:final_grades_override)
+
+            get 'history', params: { course_id: @course.id }
+            expect(override_grades_enabled).to be false
+          end
+        end
+
+        it "is set to false if the final_grade_override_in_gradebook_history feature is not enabled" do
+          get 'history', params: { course_id: @course.id }
+          expect(override_grades_enabled).to be false
+        end
+      end
     end
   end
 
@@ -2432,6 +2476,11 @@ describe GradebooksController do
         expect(js_env).to have_key :outcome_extra_credit_enabled
       end
 
+      it 'sets media_comment_asset_string' do
+        get :speed_grader, params: { course_id: @course, assignment_id: @assignment }
+        expect(js_env.fetch(:media_comment_asset_string)).to eq @teacher.asset_string
+      end
+
       describe "student group filtering" do
         before(:each) do
           @course.root_account.enable_feature!(:filter_speed_grader_by_student_group)
@@ -2851,6 +2900,103 @@ describe GradebooksController do
         get "grading_rubrics", params: {course_id: @course}
 
         expect(response).to redirect_to(login_url)
+      end
+    end
+  end
+
+  describe "PUT 'update_final_grade_overrides'" do
+    let(:override_score_updates) do
+      [
+        {student_id: @student.id, override_score: 10.0}
+      ]
+    end
+
+    let(:update_params) { {course_id: @course.id, override_scores: override_score_updates} }
+
+    before(:each) do
+      user_session(@teacher)
+
+      Account.site_admin.enable_feature!(:import_override_scores_in_gradebook)
+      @course.enable_feature!(:final_grades_override)
+      @course.allow_final_grade_override = true
+      @course.save!
+    end
+
+    it "returns unauthorized when there is no current user" do
+      remove_user_session
+      put :update_final_grade_overrides, params: update_params, format: :json
+      assert_unauthorized
+    end
+
+    it "returns unauthorized when the user is not authorized to manage grades" do
+      user_session(@student)
+      put :update_final_grade_overrides, params: update_params, format: :json
+      assert_unauthorized
+    end
+
+    it "returns unauthorized when the course does not allow final grade override" do
+      @course.allow_final_grade_override = false
+      @course.save!
+
+      put :update_final_grade_overrides, params: update_params, format: :json
+      assert_unauthorized
+    end
+
+    it "returns unauthorized when the importing override scores is not enabled" do
+      Account.site_admin.disable_feature!(:import_override_scores_in_gradebook)
+      put :update_final_grade_overrides, params: update_params, format: :json
+      assert_unauthorized
+    end
+
+    it "grants authorization to teachers in active courses" do
+      put :update_final_grade_overrides, params: update_params, format: :json
+      expect(response).to be_ok
+    end
+
+    it "returns unauthorized when the course is concluded" do
+      @course.complete!
+      put :update_final_grade_overrides, params: update_params, format: :json
+      assert_unauthorized
+    end
+
+    it "returns an error when the override_scores param is not supplied" do
+      put :update_final_grade_overrides, params: update_params.slice(:course_id), format: :json
+      assert_status(400)
+    end
+
+    describe "grading periods" do
+      let(:group_helper)  { Factories::GradingPeriodGroupHelper.new }
+      let(:period_helper) { Factories::GradingPeriodHelper.new }
+
+      it "accepts grading periods that are used by the course" do
+        grading_period = period_helper.create_with_group_for_account(@course.account)
+        @course.enrollment_term.update!(grading_period_group: grading_period.grading_period_group)
+
+        put :update_final_grade_overrides, params: update_params.merge({grading_period_id: grading_period.id})
+        expect(response).to be_ok
+      end
+
+      it "returns a 400 for grading periods that are not used by the course" do
+        other_period = period_helper.create_with_group_for_account(@course.account)
+
+        put :update_final_grade_overrides, params: update_params.merge({grading_period_id: other_period.id})
+
+        aggregate_failures do
+          assert_status(400)
+          expect(json_parse["error"]).to eq "invalid_grading_period"
+        end
+      end
+    end
+
+    it "returns a progress object" do
+      put :update_final_grade_overrides, params: update_params, format: :json
+
+      returned_id = json_parse["id"]
+      progress = Progress.find(returned_id)
+
+      aggregate_failures do
+        expect(progress).not_to be nil
+        expect(progress.tag).to eq "override_grade_update"
       end
     end
   end

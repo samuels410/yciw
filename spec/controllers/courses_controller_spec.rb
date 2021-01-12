@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 #
 # Copyright (C) 2011 - present Instructure, Inc.
 #
@@ -640,8 +642,7 @@ describe CoursesController do
         @teacher = course_with_user("TeacherEnrollment", course: @course, active_all: true).user
       end
 
-      it 'shows the course notification settings page if enabled' do
-        Account.default.enable_feature!(:mute_notifications_by_course)
+      it 'shows the course notification settings page' do
         user_session(@teacher)
         get 'show', params: {id: @course.id, view: 'notifications'}
         expect(response).to be_successful
@@ -651,18 +652,6 @@ describe CoursesController do
           contains_js_bundle = js_bundle.include? :course_notification_settings_show if js_bundle.include? :course_notification_settings_show
         end
         expect(contains_js_bundle).to be true
-      end
-
-      it 'does not show the course notification settings page if disabled' do
-        user_session(@teacher)
-        get 'show', params: {id: @course.id, view: 'notifications'}
-        expect(response).to be_successful
-
-        contains_js_bundle = false
-        assigns['js_bundles'].each do |js_bundle|
-          contains_js_bundle = js_bundle.include? :course_notification_settings_show if js_bundle.include? :course_notification_settings_show
-        end
-        expect(contains_js_bundle).to be false
       end
     end
   end
@@ -2233,6 +2222,17 @@ describe CoursesController do
         expect(response.body).to include 'Invalid restrictions'
       end
     end
+
+    it "should update pages' permissions even if course default is nil" do
+      user_session(@teacher)
+      wiki_page = @course.wiki_pages.create! :title => 'Wiki page 1', :editing_roles=> 'teachers'
+      new_permissions = 'teachers,students'
+      put 'update', params: {:id => @course.id, :update_default_pages => true, :course => {:default_wiki_editing_roles => new_permissions}}
+      @course.reload
+      wiki_page.reload
+      expect(@course.default_wiki_editing_roles).to eq new_permissions
+      expect(wiki_page.editing_roles).to eq new_permissions
+    end
   end
 
   describe "POST 'unconclude'" do
@@ -2763,7 +2763,7 @@ describe CoursesController do
     end
 
     it "removes submissions created by the test student" do
-      allow(Auditors).to receive(:config).and_return({'write_paths' => ['cassandra', 'active_record'], 'read_path' => 'cassandra'})
+      allow(Auditors).to receive(:config).and_return({'write_paths' => ['active_record'], 'read_path' => 'active_record'})
       user_session(@teacher)
       post 'student_view', params: {course_id: @course.id}
       test_student = @course.student_view_student
@@ -2813,6 +2813,24 @@ describe CoursesController do
       assignment.reload
 
       expect(assignment.needs_grading_count).to eq original_needs_grading_count - 1
+    end
+
+    it 'removes outcome results for the test student' do
+      user_session(@teacher)
+      outcome_with_rubric(course: @course)
+      rubric_association_model(rubric: @rubric)
+
+      test_student = @course.student_view_student
+      session[:become_user_id] = test_student.id
+      rubric_assessment_model(rubric_association: @rubric_association, user: test_student)
+      expect(test_student.learning_outcome_results.size).not_to be_zero
+      expect(@outcome.assessed?).to be_truthy
+
+      delete 'reset_test_student', params: {course_id: @course.id}
+
+      test_student.reload
+      expect(test_student.learning_outcome_results.size).to be_zero
+      expect(@outcome.assessed?).to be_falsey
     end
   end
 
@@ -2913,7 +2931,7 @@ describe CoursesController do
 
   describe '#content_share_users' do
     before :once do
-      course_with_teacher(name: 'search teacher')
+      course_with_teacher(name: 'search teacher', :active_all => true)
       @course.root_account.enable_feature!(:direct_share)
     end
 
@@ -2928,7 +2946,7 @@ describe CoursesController do
       get 'content_share_users', params: {course_id: @course.id, search_term: 'teacher'}
       expect(response).to be_unauthorized
 
-      course_with_designer(name: 'course designer', course: @course)
+      course_with_designer(name: 'course designer', course: @course, :active_all => true)
       user_session(@designer)
       get 'content_share_users', params: {course_id: @course.id, search_term: 'teacher'}
       json = json_parse(response.body)
@@ -3027,13 +3045,13 @@ describe CoursesController do
       expect(json.map{|user| user['name']}).not_to include('account admin', 'sub-account admin')
     end
 
-    it 'should not return the searching user' do
+    it 'should return the searching user' do
       user_session(@teacher)
       @search_context = @course
       course_with_teacher(name: 'course teacher')
       get 'content_share_users', params: {course_id: @search_context.id, search_term: 'teacher'}
       json = json_parse(response.body)
-      expect(json.map{|user| user['name']}).to match_array(['course teacher'])
+      expect(json.map{|user| user['name']}).to match_array(['course teacher', 'search teacher'])
     end
 
     it 'should not return admin roles that do not have the "manage_content" permission' do
@@ -3064,6 +3082,17 @@ describe CoursesController do
       get 'content_share_users', params: {course_id: a1_course.id, search_term: 'account 2'}
       json = json_parse(response.body)
       expect(json.map{|user| user['name']}).not_to include('account 2 admin', 'account 2 teacher')
+    end
+
+    it 'should still work for teachers whose course is concluded by term' do
+      term = Account.default.enrollment_terms.create!(:name => "long over")
+      term.set_overrides(Account.default, 'TeacherEnrollment' => { start_at: '2014-12-01', end_at: '2014-12-31' })
+      course_with_teacher_logged_in(active_all: true)
+      @course.update(:enrollment_term => term)
+
+      get 'content_share_users', params: {course_id: @course.id, search_term: 'teacher'}
+      json = json_parse(response.body)
+      expect(json[0]).to include({'name' => 'search teacher'})
     end
 
     context "sharding" do

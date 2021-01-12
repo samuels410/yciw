@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 #
 # Copyright (C) 2018 - present Instructure, Inc.
 #
@@ -70,10 +72,6 @@ module Lti::Messages
         raise launch_error.new(nil, api_message: 'Assignment not configured for launches with specified tool')
       end
       resource_link = line_item_for_assignment&.resource_link
-      unless resource_link&.current_external_tool(@context) == @tool
-        raise launch_error.new(nil, api_message: 'Mismatched assignment vs resource link tool configurations')
-      end
-      resource_link
     end
 
     def assignment_line_item_url

@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 #
 # Copyright (C) 2011 - present Instructure, Inc.
 #
@@ -17,20 +19,6 @@
 #
 
 module AuthenticationMethods
-  def load_pseudonym_from_policy
-    if (policy_encoded = params['Policy']) &&
-        (signature = params['Signature']) &&
-        signature == Base64.encode64(OpenSSL::HMAC.digest(OpenSSL::Digest.new('sha1'), Attachment.shared_secret, policy_encoded)).gsub(/\n/, '') &&
-        (policy = JSON.parse(Base64.decode64(policy_encoded)) rescue nil) &&
-        policy['conditions'] &&
-        (credential = policy['conditions'].detect{ |cond| cond.is_a?(Hash) && cond.has_key?("pseudonym_id") })
-      @policy_pseudonym_id = credential['pseudonym_id']
-      # so that we don't have to explicitly skip verify_authenticity_token
-      params[self.class.request_forgery_protection_token] ||= form_authenticity_token
-    end
-    yield if block_given?
-  end
-
   class AccessTokenError < Exception
   end
 
@@ -70,17 +58,18 @@ module AuthenticationMethods
         logger.warn "#{@real_current_user.name}(#{@real_current_user.id}) impersonating #{@current_user.name} on page #{request.url}"
       end
       @authenticated_with_jwt = true
-    rescue JSON::JWT::InvalidFormat,             # definitely not a JWT
-           Canvas::Security::TokenExpired,       # it could be a JWT, but it's expired if so
-           Canvas::Security::InvalidToken       # Looks like garbage
+    rescue JSON::JWT::InvalidFormat,       # definitely not a JWT
+           Canvas::Security::TokenExpired, # it could be a JWT, but it's expired if so
+           Canvas::Security::InvalidToken  # not formatted like a JWT
       # these will happen for some configurations (no consul)
       # and for some normal use cases (old token, access token),
       # so we can return and move on
       return
-    rescue Imperium::TimeoutError => exception # Something went wrong in the Network
-      # these are indications of infrastructure of data problems
+    rescue Imperium::TimeoutError => exception
+      # Something went wrong in the Network
+      # these are indications of infrastructure or data problems
       # so we should log them for resolution, but recover gracefully
-      Canvas::Errors.capture_exception(:jwt_check, exception)
+      Canvas::Errors.capture_exception(:jwt_check, exception, :warn)
     end
   end
 
@@ -275,7 +264,16 @@ module AuthenticationMethods
         user = api_find(User, as_user_id)
       rescue ActiveRecord::RecordNotFound
       end
-      if user && user.can_masquerade?(@current_user, @domain_root_account)
+      if user && @real_current_user
+        if @current_user != user
+          # if we're already masquerading from an access token, and now try to
+          # masquerade as someone else
+          render :json => {:errors => "Cannot change masquerade"}, :status => :unauthorized
+          return false
+        # else: they do match, everything is already set
+        end
+        logger.warn "[AUTH] #{@real_current_user.name}(#{@real_current_user.id}) impersonating #{@current_user.name} on page #{request.url} via masquerade token"
+      elsif user && user.can_masquerade?(@current_user, @domain_root_account)
         @real_current_user = @current_user
         @current_user = user
         @real_current_pseudonym = @current_pseudonym
@@ -329,8 +327,7 @@ module AuthenticationMethods
   protected :store_location
 
   def redirect_back_or_default(default)
-    redirect_to(session[:return_to] || default)
-    session.delete(:return_to)
+    session.delete(:return_to) || default
   end
   protected :redirect_back_or_default
 

@@ -17,33 +17,92 @@
  */
 
 export default class AssignmentGroupsLoader {
-  constructor({dispatch, gradebook, performanceControls}) {
+  constructor({dispatch, gradebook, performanceControls, loadAssignmentsByGradingPeriod}) {
     this._dispatch = dispatch
     this._gradebook = gradebook
     this._performanceControls = performanceControls
+    this.loadAssignmentsByGradingPeriod = loadAssignmentsByGradingPeriod
   }
 
   loadAssignmentGroups() {
-    const courseId = this._gradebook.course.id
-    const url = `/api/v1/courses/${courseId}/assignment_groups`
+    const includes = [
+      'assignment_group_id',
+      'assignment_visibility',
+      'assignments',
+      'grades_published',
+      'post_manually'
+    ]
 
+    if (this._gradebook.options.has_modules) {
+      includes.push('module_ids')
+    }
+
+    // Careful when adding new params here. If the param content is too long,
+    // you can end up triggering a '414 Request URI Too Long' from Apache.
     const params = {
       exclude_assignment_submission_types: ['wiki_page'],
-      exclude_response_fields: ['description', 'in_closed_grading_period', 'needs_grading_count'],
-      include: [
-        'assignment_group_id',
-        'assignment_visibility',
-        'assignments',
-        'grades_published',
-        'module_ids',
-        'post_manually'
+      exclude_response_fields: [
+        'description',
+        'in_closed_grading_period',
+        'needs_grading_count',
+        'rubric'
       ],
+      include: includes,
       override_assignment_dates: false,
       per_page: this._performanceControls.assignmentGroupsPerPage
     }
 
+    const periodId = this._gradingPeriodId()
+    if (periodId && this.loadAssignmentsByGradingPeriod) {
+      return this._loadAssignmentGroupsForGradingPeriods(params, periodId)
+    }
+
+    return this._getAssignmentGroups(params)
+  }
+
+  // If we're filtering by grading period in Gradebook, send two requests for assignments:
+  // one for assignments in the selected grading period, and one for the rest.
+  _loadAssignmentGroupsForGradingPeriods(params, periodId) {
+    const assignmentIdsByGradingPeriod = this._gradingPeriodAssignmentIds(periodId)
+    const gotGroups = this._getAssignmentGroups(
+      {...params, assignment_ids: assignmentIdsByGradingPeriod.selected},
+      [periodId]
+    )
+
+    this._getAssignmentGroups(
+      {...params, assignment_ids: assignmentIdsByGradingPeriod.rest.ids},
+      assignmentIdsByGradingPeriod.rest.gradingPeriodIds
+    )
+
+    return gotGroups
+  }
+
+  _getAssignmentGroups(params, gradingPeriodIds) {
+    const url = `/api/v1/courses/${this._gradebook.course.id}/assignment_groups`
+
     return this._dispatch.getDepaginated(url, params).then(assignmentGroups => {
-      this._gradebook.updateAssignmentGroups(assignmentGroups)
+      this._gradebook.updateAssignmentGroups(assignmentGroups, gradingPeriodIds)
     })
+  }
+
+  _gradingPeriodAssignmentIds(selectedPeriodId) {
+    const gpAssignments = this._gradebook.courseContent.gradingPeriodAssignments
+    const selectedIds = this._gradebook.getGradingPeriodAssignments(selectedPeriodId)
+    const restIds = Object.values(gpAssignments)
+      .flat()
+      .filter(id => !selectedIds.includes(id))
+
+    return {
+      selected: selectedIds,
+      rest: {
+        ids: [...new Set(restIds)],
+        gradingPeriodIds: Object.keys(gpAssignments).filter(gpId => gpId !== selectedPeriodId)
+      }
+    }
+  }
+
+  _gradingPeriodId() {
+    const periodId = this._gradebook.gradingPeriodId
+    return periodId === '0' ? null : periodId
   }
 }

@@ -18,14 +18,18 @@
 
 import React from 'react'
 import PropTypes from 'prop-types'
-import {Button} from '@instructure/ui-buttons'
+import {Button, IconButton} from '@instructure/ui-buttons'
 import I18n from 'i18n!ProficiencyRating'
 import {IconTrashLine} from '@instructure/ui-icons'
 import {Popover} from '@instructure/ui-overlays'
 import {RadioInput} from '@instructure/ui-forms'
 import {TextInput} from '@instructure/ui-text-input'
-import {ScreenReaderContent} from '@instructure/ui-a11y'
+import {ScreenReaderContent, PresentationContent} from '@instructure/ui-a11y'
+import {Text} from '@instructure/ui-text'
+import {View} from '@instructure/ui-layout'
+import {Flex} from '@instructure/ui-flex'
 import ColorPicker, {PREDEFINED_COLORS} from '../../shared/ColorPicker'
+import ConfirmMasteryModal from '../ConfirmMasteryModal'
 
 function formatColor(color) {
   if (color[0] !== '#') {
@@ -34,7 +38,7 @@ function formatColor(color) {
   return color
 }
 
-export default class ProficiencyRating extends React.Component {
+class ProficiencyRating extends React.Component {
   static propTypes = {
     color: PropTypes.string.isRequired,
     description: PropTypes.string.isRequired,
@@ -48,40 +52,44 @@ export default class ProficiencyRating extends React.Component {
     onMasteryChange: PropTypes.func.isRequired,
     onPointsChange: PropTypes.func.isRequired,
     points: PropTypes.string.isRequired,
-    pointsError: PropTypes.string
+    pointsError: PropTypes.string,
+    isMobileView: PropTypes.bool,
+    position: PropTypes.number.isRequired,
+    canManage: PropTypes.bool
   }
 
   static defaultProps = {
     descriptionError: null,
     focusField: null,
-    pointsError: null
+    pointsError: null,
+    canManage: window.ENV?.PERMISSIONS ? ENV.PERMISSIONS.manage_proficiency_scales : true,
+    isMobileView: false
   }
 
   constructor(props) {
     super(props)
-    this.state = {showColorPopover: false}
+    this.state = {
+      showColorPopover: false,
+      showDeleteModal: false
+    }
     this.descriptionInput = null
     this.pointsInput = null
     this.trashButton = null
     this.colorButton = null
   }
 
-  componentDidMount() {
-    if (this.props.focusField === 'mastery') {
-      this.radioInput.focus()
-    }
-  }
-
   componentDidUpdate() {
-    if (this.props.focusField === 'trash') {
-      setTimeout(
-        () => (this.props.disableDelete ? this.colorButton.focus() : this.trashButton.focus()),
-        700
-      )
-    } else if (this.props.focusField === 'description') {
-      this.descriptionInput.focus()
-    } else if (this.props.focusField === 'points') {
-      this.pointsInput.focus()
+    if (this.props.canManage) {
+      if (this.props.focusField === 'trash') {
+        setTimeout(
+          () => (this.props.disableDelete ? this.colorButton.focus() : this.trashButton.focus()),
+          700
+        )
+      } else if (this.props.focusField === 'description') {
+        this.descriptionInput.focus()
+      } else if (this.props.focusField === 'points') {
+        this.pointsInput.focus()
+      }
     }
   }
 
@@ -128,70 +136,162 @@ export default class ProficiencyRating extends React.Component {
   }
 
   handleDelete = () => {
+    this.setState({showDeleteModal: true})
+  }
+
+  handleCloseDeleteModal = () => {
+    this.setState({showDeleteModal: false})
+  }
+
+  handleRealDelete = () => {
+    this.handleCloseDeleteModal()
     this.props.onDelete()
   }
 
-  errorMessage = error => (error ? [{text: error, type: 'error'}] : null)
-
-  render() {
-    const {
-      color,
-      description,
-      descriptionError,
-      disableDelete,
-      mastery,
-      points,
-      pointsError
-    } = this.props
+  renderDescription = () => {
+    const {description, descriptionError, position, canManage} = this.props
     return (
-      <tr>
-        <td style={{textAlign: 'center', verticalAlign: 'top', padding: '1.1rem 0 0 0'}}>
-          <div style={{display: 'inline-block'}}>
-            <RadioInput
-              ref={input => {
-                this.radioInput = input
-              }}
-              label={<ScreenReaderContent>{I18n.t('Change mastery')}</ScreenReaderContent>}
-              checked={mastery}
-              onChange={this.handleMasteryChange}
-            />
-          </div>
-        </td>
-        <td className="description" style={{verticalAlign: 'top'}}>
+      <div className="description">
+        {canManage ? (
           <TextInput
-            ref={this.setDescriptionRef}
-            renderLabel={<ScreenReaderContent>{I18n.t('Change description')}</ScreenReaderContent>}
+            width="100%"
             messages={this.errorMessage(descriptionError)}
+            renderLabel={
+              <ScreenReaderContent>
+                {I18n.t(`Change description for mastery level %{position}`, {position})}
+              </ScreenReaderContent>
+            }
             onChange={this.handleDescriptionChange}
+            inputRef={element => this.setDescriptionRef(element)}
             defaultValue={description}
           />
-        </td>
-        <td className="points" style={{verticalAlign: 'top'}}>
-          <TextInput
-            ref={this.setPointsRef}
-            renderLabel={<ScreenReaderContent>{I18n.t('Change points')}</ScreenReaderContent>}
-            messages={this.errorMessage(pointsError)}
-            onChange={this.handlePointChange}
-            defaultValue={I18n.n(points)}
-            width="4rem"
+        ) : (
+          <Text>
+            <ScreenReaderContent>
+              {I18n.t(`Description for mastery level %{position}: %{description}`, {
+                position,
+                description
+              })}
+            </ScreenReaderContent>
+
+            <PresentationContent>{description}</PresentationContent>
+          </Text>
+        )}
+      </div>
+    )
+  }
+
+  renderMastery = () => {
+    const {mastery, position, canManage} = this.props
+    return (
+      <div className={`mastery ${canManage ? null : 'view-only'}`}>
+        {(mastery || canManage) && (
+          <RadioInput
+            label={
+              <ScreenReaderContent>
+                {I18n.t(`Mastery %{mastery} for mastery level %{position}`, {
+                  position,
+                  mastery
+                })}
+              </ScreenReaderContent>
+            }
+            ref={input => (this.radioInput = input)}
+            checked={mastery}
+            readOnly={!canManage}
+            onChange={this.handleMasteryChange}
           />
-        </td>
-        <td className="color" style={{verticalAlign: 'top'}}>
-          <Popover on="click" show={this.state.showColorPopover} onToggle={this.handleMenuToggle}>
+        )}
+      </div>
+    )
+  }
+
+  renderPointsInput = () => {
+    const {points, pointsError, position, isMobileView, canManage} = this.props
+    return (
+      <div className="points">
+        {canManage ? (
+          <>
+            <TextInput
+              type="text"
+              inputRef={this.setPointsRef}
+              messages={this.errorMessage(pointsError)}
+              renderLabel={
+                <ScreenReaderContent>
+                  {I18n.t(`Change points for mastery level %{position}`, {position})}
+                </ScreenReaderContent>
+              }
+              onChange={this.handlePointChange}
+              defaultValue={I18n.n(points)}
+              width={isMobileView ? '7rem' : '4rem'}
+            />
+
+            <div className="pointsDescription" aria-hidden="true">
+              {I18n.t('points')}
+            </div>
+          </>
+        ) : (
+          <View margin={`0 0 0 ${isMobileView ? '0' : 'small'}`}>
+            <ScreenReaderContent>
+              {I18n.t(`Points for mastery level %{position}: %{points}`, {
+                position,
+                points
+              })}
+            </ScreenReaderContent>
+
+            <PresentationContent>
+              {I18n.n(points)}
+
+              <div className="pointsDescription view-only">{I18n.t('points')}</div>
+            </PresentationContent>
+          </View>
+        )}
+      </div>
+    )
+  }
+
+  focusColorPicker = () => {
+    this.colorPickerRef.setFocus()
+  }
+
+  setColorPickerRef = element => {
+    this.colorPickerRef = element
+  }
+
+  renderColorPicker = () => {
+    const {color, position, canManage, isMobileView} = this.props
+    return (
+      <div className="color">
+        {canManage ? (
+          <Popover
+            on="click"
+            show={this.state.showColorPopover}
+            onToggle={this.handleMenuToggle}
+            onShow={this.focusColorPicker}
+            shouldContainFocus
+            // Note: without this prop, there's a focus issue where the window will scroll up
+            // on Chrome which seems to be caused by an issue within Popover (possibly INSTUI-1799)
+            // Including this prop no longer focuses on the ColorPicker
+            // when it mounts (and resolves the scroll behavior), so we manually focus on
+            // mount with focusColorPicker
+            shouldFocusContentOnTriggerBlur
+          >
             <Popover.Trigger>
               <Button ref={this.setColorRef} variant="link">
                 <div>
                   <span className="colorPickerIcon" style={{background: formatColor(color)}} />
-                  {I18n.t('Change')}
+                  <ScreenReaderContent>
+                    {I18n.t(`Change color for mastery level %{position}`, {position})}
+                  </ScreenReaderContent>
+                  <span aria-hidden="true">{I18n.t('Change')}</span>
                 </div>
               </Button>
             </Popover.Trigger>
             <Popover.Content>
               <ColorPicker
+                ref={this.setColorPickerRef}
                 parentComponent="ProficiencyRating"
                 colors={PREDEFINED_COLORS}
                 currentColor={formatColor(color)}
-                isOpen
                 hidePrompt
                 nonModal
                 hideOnScroll={false}
@@ -205,19 +305,97 @@ export default class ProficiencyRating extends React.Component {
               />
             </Popover.Content>
           </Popover>
-          <div className="delete">
-            <Button
-              disabled={disableDelete}
-              buttonRef={this.setTrashRef}
-              onClick={this.handleDelete}
-              variant="icon"
-              icon={<IconTrashLine />}
+        ) : (
+          <>
+            <span
+              className="colorPickerIcon"
+              style={{
+                background: formatColor(color),
+                marginLeft: isMobileView ? 0 : '2rem'
+              }}
             >
-              <ScreenReaderContent>{I18n.t('Delete proficiency rating')}</ScreenReaderContent>
-            </Button>
-          </div>
-        </td>
-      </tr>
+              <ScreenReaderContent>
+                {I18n.t(`Color %{color} for mastery level %{position}`, {
+                  color: ColorPicker.getColorName(color) || formatColor(color),
+                  position
+                })}
+              </ScreenReaderContent>
+            </span>
+          </>
+        )}
+      </div>
+    )
+  }
+
+  renderDeleteButton = () => {
+    const {disableDelete, position} = this.props
+    const {showDeleteModal} = this.state
+
+    return (
+      <div className="deleteButton">
+        <IconButton
+          withBackground={false}
+          withBorder={false}
+          disabled={disableDelete}
+          elementRef={this.setTrashRef}
+          onClick={this.handleDelete}
+          renderIcon={<IconTrashLine />}
+          screenReaderLabel={I18n.t(`Delete mastery level %{position}`, {position})}
+        />
+
+        <ConfirmMasteryModal
+          onConfirm={this.handleRealDelete}
+          modalText={I18n.t('This will remove the mastery level from your mastery scale.')}
+          isOpen={showDeleteModal}
+          onClose={this.handleCloseDeleteModal}
+          title={I18n.t('Remove Mastery Level')}
+          confirmButtonText={I18n.t('Confirm')}
+        />
+      </div>
+    )
+  }
+
+  errorMessage = error => (error ? [{text: error, type: 'error'}] : null)
+
+  render() {
+    const {isMobileView, canManage} = this.props
+    return (
+      <Flex
+        padding={`${isMobileView ? '0 0 small 0' : '0 small small small'}`}
+        width="100%"
+        alignItems={isMobileView ? 'center' : 'start'}
+      >
+        <Flex.Item textAlign="center" padding="0 medium 0 0" size={isMobileView ? '25%' : '15%'}>
+          {this.renderMastery()}
+        </Flex.Item>
+        <Flex.Item padding="0 small 0 0" size={isMobileView ? '75%' : '40%'} align="start">
+          {this.renderDescription()}
+          {isMobileView && (
+            <>
+              {this.renderPointsInput()}
+              <div className={`mobileRow ${canManage ? null : 'view-only'}`}>
+                {this.renderColorPicker()}
+                {canManage && this.renderDeleteButton()}
+              </div>
+            </>
+          )}
+        </Flex.Item>
+        {!isMobileView && (
+          <>
+            <Flex.Item size="15%" padding="0 small 0 0" align="start">
+              {this.renderPointsInput()}
+            </Flex.Item>
+            <Flex.Item>{this.renderColorPicker()}</Flex.Item>
+            {canManage && (
+              <Flex.Item size="10%" padding="0 small 0 small">
+                {this.renderDeleteButton()}
+              </Flex.Item>
+            )}
+          </>
+        )}
+      </Flex>
     )
   }
 }
+
+export default ProficiencyRating

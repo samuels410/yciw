@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 #
 # Copyright (C) 2014 - present Instructure, Inc.
 #
@@ -145,6 +147,16 @@ describe ContentMigration do
       att2 = @copy_to.attachments.where(filename: 'first.png').first
       page2 = @copy_to.wiki_pages.where(migration_id: mig_id(page)).first
       expect(page2.body).to include("<a href=\"/courses/#{@copy_to.id}/files/#{att2.id}/download?wrap=1\">link</a>")
+    end
+
+    it "should preserve new-RCE mediahref iframes" do
+      att = @copy_from.attachments.create!(:filename => 'videro.mov', :uploaded_data => StringIO.new('...'), :folder => Folder.root_folders(@copy_from).first)
+      page = @copy_from.wiki_pages.create!(:title => "watch this y'all", :body =>
+        %Q{<iframe data-media-type="video" src="/media_objects_iframe?mediahref=/courses/#{@copy_from.id}/files/#{att.id}/download" data-media-id="#{att.id}"/>})
+      run_course_copy
+      att_to = @copy_to.attachments.where(migration_id: mig_id(att)).take
+      page_to = @copy_to.wiki_pages.where(migration_id: mig_id(page)).take
+      expect(page_to.body).to include %Q{src="/media_objects_iframe?mediahref=/courses/#{@copy_to.id}/files/#{att_to.id}/download"}
     end
 
     it "should reference existing usage rights on course copy" do

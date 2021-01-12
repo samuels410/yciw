@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 #
 # Copyright (C) 2011 Instructure, Inc.
 #
@@ -151,13 +153,15 @@ describe "Folders API", type: :request do
     end
 
     it "should 404 for no folder found" do
-      raw_api_call(:get, @folders_path + "/0", @folders_path_options.merge(:action => "show", :id => "0"), {}, {}, :expected_status => 404)
+      raw_api_call(:get, @folders_path + "/0", @folders_path_options.merge(:action => "show", :id => "0"))
+      assert_status(404)
     end
 
     it "should 404 for deleted folder" do
       f1 = @root.sub_folders.create!(:name => "folder1", :context => @course)
       f1.destroy
-      raw_api_call(:get, @folders_path + "/#{f1.id}", @folders_path_options.merge(:action => "show", :id => f1.id.to_param), {}, {}, :expected_status => 404)
+      raw_api_call(:get, @folders_path + "/#{f1.id}", @folders_path_options.merge(:action => "show", :id => f1.id.to_param))
+      assert_status(404)
     end
 
     it "should return correct locked values" do
@@ -228,6 +232,7 @@ describe "Folders API", type: :request do
       folder = @course.folders.where(:name => "Uploaded Media").first
       expect(folder.unique_type).to eq Folder::MEDIA_TYPE
       expect(json['id']).to eq folder.id
+      expect(json['hidden']).to be_truthy
 
       # get the same one twice
       json2 = api_call(:get, "/api/v1/courses/#{@course.id}/folders/media", @folders_path_options.

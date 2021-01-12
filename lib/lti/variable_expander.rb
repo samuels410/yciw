@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 #
 # Copyright (C) 2015 - present Instructure, Inc.
 #
@@ -178,6 +180,20 @@ module Lti
                        ENROLLMENT_GUARD,
                        default_name: 'com_instructure_user_section_names'
 
+    # returns all observee ids linked to this observer as an String separated by `,`
+    # @launch_parameter com_instructure_observee_ids
+    # @example
+    #   ```
+    #   "A123,B456,..."
+    #   ```
+    register_expansion 'com.instructure.Observee.sisIds', [],
+                        -> do
+                          observed_users = ObserverEnrollment.observed_students(@context, @current_user).keys
+                          observed_users&.collect { |user| find_sis_user_id_for(user) }&.compact&.join(',')
+                        end,
+                        COURSE_GUARD,
+                        default_name: 'com_instructure_observee_sis_ids'
+
     # The title of the context
     # @launch_parameter context_title
     # @example
@@ -309,6 +325,16 @@ module Lti
     #   ```
     register_expansion 'Context.sourcedId', [],
                        -> { @context.sis_source_id }
+
+    # return a string with a comma-separeted list of the context ids of the
+    # courses in reverse chronological order from which content has been copied
+    # @example
+    #   ```
+    #   "789,456,123"
+    #   ```
+    register_expansion 'Context.id.history', [],
+                       -> { lti_helper.recursively_fetch_previous_lti_context_ids },
+                       COURSE_GUARD
 
     # communicates the kind of browser window/frame where the Canvas has launched a tool
     # @launch_parameter launch_presentation_document_target
@@ -1438,6 +1464,11 @@ module Lti
     def sis_pseudonym
       context = @enrollment || @context
       @sis_pseudonym ||= SisPseudonym.for(@current_user, context, type: :trusted, require_sis: false, root_account: @root_account) if @current_user
+    end
+
+    def find_sis_user_id_for(user)
+      context = @enrollment || @context
+      SisPseudonym.for(user, context, type: :trusted, require_sis: false, root_account: @root_account)&.sis_user_id
     end
 
     def expand_substring_variables(value)

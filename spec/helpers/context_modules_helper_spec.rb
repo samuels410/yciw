@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 #
 # Copyright (C) 2014 - present Instructure, Inc.
 #
@@ -51,6 +53,39 @@ describe ContextModulesHelper do
       item.reload
       topic.discussion_entries.create!(:user => @student)
       expect(module_item_unpublishable?(item)).to be_falsey
+    end
+  end
+
+  describe "module_item_publishable?" do
+    it "should return true for an itemless item like a subheader" do
+      item = t_module.add_item(type: 'context_module_sub_header')
+      expect(module_item_publishable?(item)).to be_truthy
+    end
+
+    it "returns true for an item that doesn't respond to can_publish?" do
+      tag = t_module.content_tags.build
+      tag.tag_type = 'context_module'
+      tag.content = Thumbnail.new
+      expect(module_item_publishable?(tag)).to be_truthy
+    end
+
+    it "returns the content's can_publish?" do
+      assignment = t_course.assignments.create(workflow_state: 'unpublished')
+      student_in_course(:course => t_course)
+      item = t_module.add_item(type: 'assignment', id: assignment.id)
+      expect(assignment.can_publish?).to be_truthy
+      expect(module_item_publishable?(item)).to be_truthy
+      assignment.publish!
+      item.content.reload
+      item.reload
+      expect(assignment.can_publish?).to be_truthy
+      expect(module_item_publishable?(item)).to be_truthy
+      assignment.workflow_state = 'duplicating'
+      assignment.save!
+      item.content.reload
+      item.reload
+      expect(assignment.can_publish?).to be_falsey
+      expect(module_item_publishable?(item)).to be_falsey
     end
   end
 

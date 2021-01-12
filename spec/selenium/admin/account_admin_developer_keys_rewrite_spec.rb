@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 #
 # Copyright (C) 2018 - present Instructure, Inc.
 #
@@ -261,6 +263,35 @@ describe 'Developer Keys' do
     end
 
     context "scopes" do
+      before(:all) do
+        # if docs haven't been generated, use mock data
+        unless File.exist?(Rails.root.join('lib', 'api_scope_mapper.rb'))
+          def api_scope_mapper_fallback
+            klass = Class.new(Object)
+            klass.class_eval do
+              def self.lookup_resource(controller, action)
+                controller == :assignment_groups_api ? :assignment_groups : controller
+              end
+
+              def self.name_for_resource(resource)
+                resource == :assignment_groups ? 'Assignment Groups' : resource.to_s
+              end
+            end
+            klass
+          end
+
+          Object.const_set("ApiScopeMapper", api_scope_mapper_fallback)
+          TokenScopes.reset!
+        end
+      end
+
+      after(:all) do
+        unless File.exist?(Rails.root.join('lib', 'api_scope_mapper.rb'))
+          Object.const_set("ApiScopeMapper", ApiScopeMapperLoader.api_scope_mapper_fallback)
+          TokenScopes.reset!
+        end
+      end
+
       let(:api_token_scopes) { ["url:GET|/api/v1/accounts/:account_id/scopes"] }
       let(:assignment_groups_scopes) do
         [
@@ -328,7 +359,6 @@ describe 'Developer Keys' do
       end
 
       it "scope group individual checkbox adds only associated scope" do
-        pending 'One of the items that should contain GET contains NULL for some unknown reason, fix in INTEROP-5986'
         expand_scope_group_by_filter('Assignment Groups', Account.default.id)
         click_scope_checkbox
         # adds a UI pill to scope group with http verb if scope selected
@@ -379,7 +409,6 @@ describe 'Developer Keys' do
       end
 
       it "keeps all endpoints read only checkbox checked if check/unchecking another http method" do
-        pending 'is false for some unknown reason, fix in INTEROP-5986'
         expand_scope_group_by_filter('Assignment Groups', Account.default.id)
         click_select_all_readonly_checkbox
         click_scope_checkbox

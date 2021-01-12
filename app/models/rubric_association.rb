@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 #
 # Copyright (C) 2011 - present Instructure, Inc.
 #
@@ -21,6 +23,8 @@
 # with this idea, such as assignment submissions.
 # The other purpose of this class is just to make rubrics reusable.
 class RubricAssociation < ActiveRecord::Base
+  include Workflow
+
   attr_accessor :skip_updating_points_possible
   attr_writer :updating_user
 
@@ -36,6 +40,7 @@ class RubricAssociation < ActiveRecord::Base
   has_a_broadcast_policy
 
   validates_presence_of :purpose, :rubric_id, :association_id, :association_type, :context_id, :context_type
+  validates :workflow_state, inclusion: {in: ["active"]}, allow_nil: true
 
   before_create :set_root_account_id
   before_save :update_assignment_points
@@ -56,6 +61,10 @@ class RubricAssociation < ActiveRecord::Base
   with_options if: -> { auditable? && @updating_user.present? } do
     before_save :record_save_audit_event
     before_destroy :record_deletion_audit_event
+  end
+
+  workflow do
+    state :active
   end
 
   ValidAssociationModels = {
@@ -151,6 +160,7 @@ class RubricAssociation < ActiveRecord::Base
     self.bookmarked = true if self.purpose == 'bookmark' || self.bookmarked.nil?
     self.context_code ||= "#{self.context_type.underscore}_#{self.context_id}" rescue nil
     self.title ||= (self.association_object.title rescue self.association_object.name) rescue nil
+    self.workflow_state ||= "active"
   end
   protected :update_values
 

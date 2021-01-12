@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 #
 # Copyright (C) 2011 - present Instructure, Inc.
 #
@@ -40,7 +42,7 @@ module LocaleSelection
       -> { root_account.try(:default_locale) },
       -> {
         if accept_language && locale = infer_browser_locale(accept_language, LocaleSelection.locales_with_aliases)
-          Shackles.activate(:master) do
+          GuardRail.activate(:primary) do
             user.update_attribute(:browser_locale, locale) if user && user.browser_locale != locale
           end
           locale

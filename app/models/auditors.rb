@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 #
 # Copyright (C) 2011 - present Instructure, Inc.
 #
@@ -82,7 +84,10 @@ module Auditors
 
     def write_paths
       paths = [config&.[]('write_paths')].flatten.compact
-      paths.empty? ? ['cassandra'] : paths
+      # default to both for now.
+      # after a year we will have hit our retention period
+      # and can safely de-comission all auditors cassandra code.
+      paths.empty? ? ['cassandra', 'active_record'] : paths
     end
 
     def config(shard=::Switchman::Shard.current)

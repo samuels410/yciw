@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 #
 # Copyright (C) 2019 - present Instructure, Inc.
 #
@@ -46,6 +48,7 @@ class AuditLogFieldExtension < GraphQL::Schema::FieldExtension
         return_consumed_capacity: "TOTAL"
       )
     rescue Aws::DynamoDB::Errors::ServiceError => e
+      ::Canvas::Errors.capture_exception(:graphql_mutation_audit_logs, e)
       Rails.logger.error "Couldn't log mutation: #{e}"
     end
 
@@ -133,8 +136,9 @@ class AuditLogFieldExtension < GraphQL::Schema::FieldExtension
       next unless AuditLogFieldExtension.enabled?
 
       mutation = field.mutation
-      # TODO: figure out how to resolve root account for user and communication channels
+      # TODO: figure out how to resolve root account for user, communication channels, and conversations
       next if mutation == Mutations::UpdateNotificationPreferences
+      next if mutation == Mutations::CreateConversation
 
       logger = Logger.new(mutation, context, arguments)
 

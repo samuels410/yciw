@@ -475,7 +475,7 @@ class CoursesController < ApplicationController
   #
   # @returns [Course]
   def index
-    Shackles.activate(:slave) do
+    GuardRail.activate(:secondary) do
       respond_to do |format|
         format.html {
           css_bundle :context_list, :course_list
@@ -523,15 +523,15 @@ class CoursesController < ApplicationController
     end
 
     if @domain_root_account.feature_enabled?(:unpublished_courses)
-      @past_enrollments.sort_by! {|e| [e.course.published? ? 0 : 1, Canvas::ICU.collation_key(e.long_name(@current_user))]}
+      @past_enrollments.sort_by! {|e| [e.course.published? ? 0 : 1, Canvas::ICU.collation_key(e.long_name)]}
       [@current_enrollments, @future_enrollments].each do |list|
         list.sort_by! do |e|
-          [e.course.published? ? 0 : 1, e.active? ? 1 : 0, Canvas::ICU.collation_key(e.long_name(@current_user))]
+          [e.course.published? ? 0 : 1, e.active? ? 1 : 0, Canvas::ICU.collation_key(e.long_name)]
         end
       end
     else
-      @past_enrollments.sort_by! {|e| Canvas::ICU.collation_key(e.long_name(@current_user))}
-      [@current_enrollments, @future_enrollments].each {|list| list.sort_by! {|e| [e.active? ? 1 : 0, Canvas::ICU.collation_key(e.long_name(@current_user))]}}
+      @past_enrollments.sort_by! {|e| Canvas::ICU.collation_key(e.long_name)}
+      [@current_enrollments, @future_enrollments].each {|list| list.sort_by! {|e| [e.active? ? 1 : 0, Canvas::ICU.collation_key(e.long_name)]}}
     end
   end
   helper_method :load_enrollments_for_index
@@ -630,7 +630,7 @@ class CoursesController < ApplicationController
   #
   # @returns [Course]
   def user_index
-    Shackles.activate(:slave) do
+    GuardRail.activate(:secondary) do
       render json: courses_for_user(@user, paginate_url: api_v1_user_courses_url(@user))
     end
   end
@@ -963,7 +963,7 @@ class CoursesController < ApplicationController
   #  "active" and "invited" enrollments are returned by default.
   # @returns [User]
   def users
-    Shackles.activate(:slave) do
+    GuardRail.activate(:secondary) do
       get_context
       if authorized_action(@context, @current_user, [:read_roster, :view_all_grades, :manage_grades])
         log_api_asset_access([ "roster", @context ], 'roster', 'other')
@@ -1123,9 +1123,9 @@ class CoursesController < ApplicationController
     get_context
     return render json: { message: "Feature disabled" }, status: :forbidden unless @context.root_account.feature_enabled?(:direct_share)
     reject!('Search term required') unless params[:search_term]
-    return unless authorized_action(@context, @current_user, :manage_content)
+    return unless authorized_action(@context, @current_user, :read_as_admin)
 
-    users_scope = User.shard(Shard.current).where.not(id: @current_user.id).active.distinct
+    users_scope = User.shard(Shard.current).active.distinct
     union_scope = teacher_scope(name_scope(users_scope), @context.root_account_id).
       union(
         teacher_scope(email_scope(users_scope), @context.root_account_id),
@@ -1218,7 +1218,7 @@ class CoursesController < ApplicationController
   #
   # For full documentation, see the API documentation for the user todo items, in the user api.
   def todo_items
-    Shackles.activate(:slave) do
+    GuardRail.activate(:secondary) do
       get_context
       if authorized_action(@context, @current_user, :read)
         bookmark = Plannable::Bookmarker.new(Assignment, false, [:due_at, :created_at], :id)
@@ -1401,7 +1401,8 @@ class CoursesController < ApplicationController
         PUBLISHING_ENABLED: @publishing_enabled,
         COURSE_IMAGES_ENABLED: course_card_images_enabled,
         use_unsplash_image_search: course_card_images_enabled && PluginSetting.settings_for_plugin(:unsplash)&.dig('access_key')&.present?,
-        COURSE_VISIBILITY_OPTION_DESCRIPTIONS: @context.course_visibility_option_descriptions
+        COURSE_VISIBILITY_OPTION_DESCRIPTIONS: @context.course_visibility_option_descriptions,
+        NEW_FEATURES_UI: Account.site_admin.feature_enabled?(:new_features_ui)
       })
 
       set_tutorial_js_env
@@ -1544,8 +1545,8 @@ class CoursesController < ApplicationController
       :home_page_announcement_limit
     )
     changes = changed_settings(@course.changes, @course.settings, old_settings)
-    @course.send_later_if_production_enqueue_args(:touch_content_if_public_visibility_changed,
-      { :priority => Delayed::LOW_PRIORITY }, changes)
+    @course.delay_if_production(priority: Delayed::LOW_PRIORITY).
+      touch_content_if_public_visibility_changed(changes)
 
     DueDateCacher.with_executing_user(@current_user) do
       if @course.save
@@ -1614,7 +1615,7 @@ class CoursesController < ApplicationController
   def re_send_invitations
     get_context
     if authorized_action(@context, @current_user, [:manage_students, :manage_admin_users])
-      @context.send_later_if_production(:re_send_invitations!, @current_user)
+      @context.delay_if_production.re_send_invitations!(@current_user)
 
       respond_to do |format|
         format.html { redirect_to course_settings_url }
@@ -1646,7 +1647,7 @@ class CoursesController < ApplicationController
   def accept_enrollment(enrollment)
     if @current_user && enrollment.user == @current_user
       if enrollment.workflow_state == 'invited'
-        Shackles.activate(:master) do
+        GuardRail.activate(:primary) do
           DueDateCacher.with_executing_user(@current_user) do
             enrollment.accept!
           end
@@ -1685,7 +1686,7 @@ class CoursesController < ApplicationController
   # Returns nothing.
   def reject_enrollment(enrollment)
     if enrollment.invited?
-      Shackles.activate(:master) do
+      GuardRail.activate(:primary) do
         enrollment.reject!
       end
       flash[:notice] = t('notices.invitation_cancelled', 'Invitation canceled.')
@@ -1727,7 +1728,7 @@ class CoursesController < ApplicationController
 
       if enrollment.rejected?
         enrollment.workflow_state = 'invited'
-        Shackles.activate(:master) {enrollment.save_without_broadcasting}
+        GuardRail.activate(:primary) {enrollment.save_without_broadcasting}
       end
 
       if enrollment.self_enrolled?
@@ -1915,7 +1916,7 @@ class CoursesController < ApplicationController
   #
   # @returns Course
   def show
-    Shackles.activate(:slave) do
+    GuardRail.activate(:secondary) do
       if api_request?
         includes = Set.new(Array(params[:include]))
 
@@ -1968,7 +1969,7 @@ class CoursesController < ApplicationController
 
       return if check_for_xlist
       @unauthorized_message = t('unauthorized.invalid_link', "The enrollment link you used appears to no longer be valid.  Please contact the course instructor and make sure you're still correctly enrolled.") if params[:invitation]
-      Shackles.activate(:master) do
+      GuardRail.activate(:primary) do
         claim_course if session[:claim_course_uuid] || params[:verification]
         @context.claim if @context.created?
       end
@@ -1990,7 +1991,7 @@ class CoursesController < ApplicationController
         check_incomplete_registration
 
         add_crumb(@context.nickname_for(@current_user, :short_name), url_for(@context), :id => "crumb_#{@context.asset_string}")
-        Shackles.activate(:master) do
+        GuardRail.activate(:primary) do
           set_badge_counts_for(@context, @current_user, @current_enrollment)
         end
 
@@ -2021,10 +2022,7 @@ class CoursesController < ApplicationController
           js_env(:SHOW_ANNOUNCEMENTS => true, :ANNOUNCEMENT_LIMIT => @context.home_page_announcement_limit)
         end
 
-        if @domain_root_account&.feature_enabled?(:mute_notifications_by_course) && params[:view] == 'notifications'
-          render_course_notification_settings
-          return
-        end
+        return render_course_notification_settings if params[:view] == 'notifications'
 
         @contexts = [@context]
         case @course_home_view
@@ -2131,9 +2129,10 @@ class CoursesController < ApplicationController
     js_env(
       course_name: @context.name,
       NOTIFICATION_PREFERENCES_OPTIONS: {
-        granular_course_preferences_enabled: Account.site_admin.feature_enabled?(:notification_granular_course_preferences),
         deprecate_sms_enabled: !@domain_root_account.settings[:sms_allowed] && Account.site_admin.feature_enabled?(:deprecate_sms),
+        reduce_push_enabled: Account.site_admin.feature_enabled?(:reduce_push_notifications),
         allowed_sms_categories: Notification.categories_to_send_in_sms(@domain_root_account),
+        allowed_push_categories: Notification.categories_to_send_in_push,
         send_scores_in_emails_text: Notification.where(category: 'Grading').first&.related_user_setting(@current_user, @domain_root_account)
       }
     )
@@ -2751,7 +2750,7 @@ class CoursesController < ApplicationController
       end
 
       params_for_update[:conclude_at] = params[:course].delete(:end_at) if api_request? && params[:course].has_key?(:end_at)
-      @default_wiki_editing_roles_was = @course.default_wiki_editing_roles
+      @default_wiki_editing_roles_was = @course.default_wiki_editing_roles || "teachers"
 
       if params[:course].has_key?(:blueprint)
         master_course = value_to_boolean(params[:course].delete(:blueprint))
@@ -2802,8 +2801,8 @@ class CoursesController < ApplicationController
 
       changes = changed_settings(@course.changes, @course.settings, old_settings)
 
-      @course.send_later_if_production_enqueue_args(:touch_content_if_public_visibility_changed,
-        { :priority => Delayed::LOW_PRIORITY }, changes)
+      # RUBY 3.0 - **{} can go away, because data won't implicitly convert to kwargs
+      @course.delay_if_production(priority: Delayed::LOW_PRIORITY).touch_content_if_public_visibility_changed(changes , **{})
 
       if @course.errors.none? && @course.save
         Auditors::Course.record_updated(@course, @current_user, changes, source: logging_source)
@@ -3090,7 +3089,7 @@ class CoursesController < ApplicationController
     session.delete(:become_user_id)
     return_url = session[:masquerade_return_to]
     session.delete(:masquerade_return_to)
-    return return_to(return_url, request.referer || dashboard_url)
+    return_to(return_url, request.referer || dashboard_url)
   end
 
   def reset_test_student
@@ -3115,6 +3114,8 @@ class CoursesController < ApplicationController
       @fake_student.all_submissions.preload(:all_submission_comments, :submission_drafts, :lti_result, :versions).destroy_all
       @fake_student.quiz_submissions.each{|qs| qs.events.destroy_all}
       @fake_student.quiz_submissions.destroy_all
+      @fake_student.learning_outcome_results.preload(:artifact).each { |lor| lor.artifact.destroy }
+      @fake_student.learning_outcome_results.destroy_all
 
       flash[:notice] = t('notices.reset_test_student', "The test student has been reset successfully.")
       enter_student_view
@@ -3126,7 +3127,9 @@ class CoursesController < ApplicationController
     session[:become_user_id] = @fake_student.id
     return_url = course_path(@context)
     session.delete(:masquerade_return_to)
-    return return_to(return_url, request.referer || dashboard_url)
+    return return_to(request.referer, return_url || dashboard_url) if value_to_boolean(params[:redirect_to_referer])
+
+    return_to(return_url, request.referer || dashboard_url)
   end
   protected :enter_student_view
 

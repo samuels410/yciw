@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 #
 # Copyright (C) 2014 - present Instructure, Inc.
 #
@@ -463,6 +465,11 @@ describe EventStream::Stream do
           @index.key_proc lambda{ |entry| entry.key }
           expect(@index_strategy).to receive(:insert).once.with(anything, @key)
           @stream.insert(@record)
+        end
+
+        it "does not index in cassandra if a backend override is supplied" do
+          expect(@index_strategy).to_not receive(:insert)
+          @stream.insert(@record, backend_strategy: :active_record)
         end
       end
 

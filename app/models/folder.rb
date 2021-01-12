@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 #
 # Copyright (C) 2011 - present Instructure, Inc.
 #
@@ -64,7 +66,13 @@ class Folder < ActiveRecord::Base
   end
 
   def populate_root_account_id
-    self.root_account_id = self.context.root_account_id if self.context_type != "User"
+    if self.context_type == "User"
+      self.root_account_id = 0
+    elsif context_type == 'Account' && context.root_account?
+      self.root_account_id = self.context_id
+    else
+      self.root_account_id = self.context.root_account_id
+    end
   end
 
   def protect_root_folder_name
@@ -312,7 +320,7 @@ class Folder < ActiveRecord::Base
     context.shard.activate do
       Folder.unique_constraint_retry do
         root_folder = context.folders.active.where(parent_folder_id: nil, name: name).first
-        root_folder ||= Shackles.activate(:master) {context.folders.create!(:name => name, :full_name => name, :workflow_state => "visible")}
+        root_folder ||= GuardRail.activate(:primary) {context.folders.create!(:name => name, :full_name => name, :workflow_state => "visible")}
         root_folders = [root_folder]
       end
     end
@@ -324,8 +332,11 @@ class Folder < ActiveRecord::Base
     folder = nil
     context.shard.activate do
       Folder.unique_constraint_retry do
-        folder = context.folders.active.where(:unique_type => unique_type).take
-        folder ||= context.folders.create!(:unique_type => unique_type, :name => default_name_proc.call, :parent_folder_id => Folder.root_folders(context).first)
+        folder = context.folders.active.where(unique_type: unique_type).take
+        folder ||= context.folders.create!(unique_type: unique_type,
+                                           name: default_name_proc.call,
+                                           parent_folder_id: Folder.root_folders(context).first,
+                                           workflow_state: 'hidden')
       end
     end
     folder

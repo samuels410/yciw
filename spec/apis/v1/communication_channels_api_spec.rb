@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 #
 # Copyright (C) 2012 Instructure, Inc.
 #
@@ -99,6 +101,30 @@ describe 'CommunicationChannels API', type: :request do
         :user_id => @someone.id.to_param, }
       @post_params = { :communication_channel => {
         :address => 'new+api@example.com', :type => 'email' }}
+    end
+
+    it 'should not create a login on restore of login that was set to build login' do
+      json = api_call(:post, @path, @path_options, @post_params.merge({ skip_confirmation: 1 }))
+      channel = CommunicationChannel.find(json['id'])
+      channel.update(workflow_state: 'retired', build_pseudonym_on_confirm: true)
+      api_call(:post, @path, @path_options, @post_params.merge({ skip_confirmation: 1 }))
+      expect(channel.reload.workflow_state).to eq 'active'
+      expect(channel.pseudonym).to be_nil
+    end
+
+    it 'should should casing communication channel restores' do
+      json = api_call(:post, @path, @path_options, @post_params.merge({ skip_confirmation: 1 }))
+      channel = CommunicationChannel.find(json['id'])
+      channel.update(workflow_state: 'retired', build_pseudonym_on_confirm: true)
+      api_call(:post, @path, @path_options, @post_params.merge({
+        skip_confirmation: 1,
+        communication_channel: {
+          address: 'NEW+api@example.com',
+          type: 'email'
+        }
+      }))
+      expect(channel.reload.workflow_state).to eq 'active'
+      expect(channel.path).to eq 'NEW+api@example.com'
     end
 
     it 'should be able to create new channels' do
@@ -204,7 +230,7 @@ describe 'CommunicationChannels API', type: :request do
       end
 
       context 'push' do
-        before { @post_params.merge!(communication_channel: {token: 'registration_token', type: 'push'}) }
+        before { @post_params.merge!(communication_channel: {token: +'registration_token', type: 'push'}) }
 
         let(:client) { double() }
         let(:dk) do

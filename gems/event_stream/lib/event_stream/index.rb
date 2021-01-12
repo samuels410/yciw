@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 #
 # Copyright (C) 2013 - present Instructure, Inc.
 #
@@ -30,7 +32,9 @@ class EventStream::Index
   attr_config :scrollback_limit, :type => Integer, :default => 52.weeks
   attr_config :entry_proc, :type => Proc
   attr_config :key_proc, :type => Proc, :default => nil
-  attr_config :ar_conditions_proc, type: Proc, default: nil
+  # it's expected that this proc will return an AR Scope from the
+  # associated AR type.  If it doesn't, there could be problems...
+  attr_config :ar_scope_proc, type: Proc, default: nil
 
   def initialize(event_stream, &blk)
     @event_stream = event_stream

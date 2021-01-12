@@ -81,11 +81,7 @@
     <% end %>
     <% if can_do(@context, @current_user, :view_feature_flags) %>
       <li><a href="#tab-features" id="tab-features-link">
-        <% if @account.root_account.feature_enabled?(:new_features_ui) %>
-          <%= t(:feature_preview, "Feature Preview") %>
-        <% else %>
           <%= t(:feature_options, "Feature Options") %>
-        <% end %>
         </a>
       </li>
     <% end %>
@@ -326,46 +322,6 @@
                     </tr>
                   <% end %>
                 <% end %>
-
-                <% if @account.root_account.feature_enabled?(:account_level_mastery_scales) %>
-                  <%= settings.fields_for :lock_outcome_proficiency do |r| %>
-                    <% hash = @account.lock_outcome_proficiency %>
-                    <% disabled = hash[:locked] && hash[:inherited] %>
-                    <tr>
-                      <td colspan="2">
-                        <%= r.check_box :value, checked: hash[:value], disabled: disabled %>
-                        <%= r.label :value, t("Restrict instructors from changing mastery scales") %>
-                      </td>
-                    </tr>
-                    <% unless disabled %>
-                      <tr>
-                        <td colspan="2" class="sub_checkbox">
-                          <%= r.check_box :locked, :checked => hash[:locked] %>
-                          <%= r.label :locked, :en => "Lock this setting for sub-accounts and courses" %>
-                        </td>
-                      </tr>
-                    <% end %>
-                  <% end %>
-
-                  <%= settings.fields_for :lock_proficiency_calculation do |r| %>
-                    <% hash = @account.lock_proficiency_calculation %>
-                    <% disabled = hash[:locked] && hash[:inherited] %>
-                    <tr>
-                      <td colspan="2">
-                        <%= r.check_box :value, checked: hash[:value], disabled: disabled %>
-                        <%= r.label :value, t("Restrict instructors from changing proficiency calculation method") %>
-                      </td>
-                    </tr>
-                    <% unless disabled %>
-                      <tr>
-                        <td colspan="2" class="sub_checkbox">
-                          <%= r.check_box :locked, :checked => hash[:locked] %>
-                          <%= r.label :locked, :en => "Lock this setting for sub-accounts and courses" %>
-                        </td>
-                      </tr>
-                    <% end %>
-                  <% end %>
-                <% end %>
               <% end %>
             <% end %>
           </table>
@@ -394,6 +350,8 @@
               <%= settings.check_box :can_add_pronouns, :checked => @account.settings[:can_add_pronouns], class: "element_toggler", "aria-controls": "personal_pronouns_options" %>
               <%= settings.label :can_add_pronouns, en: "Enable Personal Pronouns" %>
               <div id="personal_pronouns_options" <%= hidden(true) unless @account.settings[:can_add_pronouns] %>>
+                <%= settings.check_box :can_change_pronouns, :checked => @account.can_change_pronouns? %>
+                <%= settings.label :can_change_pronouns, en: "Allow users to change their pronouns in Canvas" %>
                 <% js_env(PRONOUNS_LIST: ((@account.pronouns.presence || Pronouns.default_pronouns)))
                 js_bundle :available_pronouns_list %>
               </div>
@@ -596,7 +554,7 @@
                 </div>
               <% end %>
               <div>
-                <%= settings.check_box :users_can_edit_name, :checked => @account.settings[:users_can_edit_name] != false %>
+                <%= settings.check_box :users_can_edit_name, :checked => @account.users_can_edit_name? %>
                 <%= settings.label :users_can_edit_name, :en => "Users can edit their name" %>
               </div>
 

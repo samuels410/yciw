@@ -136,6 +136,11 @@ require 'csv'
 #           "description": "Content of the Terms of Service",
 #           "example": "To be or not to be that is the question",
 #           "type": "string"
+#         },
+#         "self_registration_type": {
+#           "description": "The type of self registration allowed",
+#           "example": ["none", "observer", "all"],
+#           "type": "string"
 #         }
 #       }
 #     }
@@ -448,6 +453,7 @@ class AccountsController < ApplicationController
     tos = @account.root_account.terms_of_service
     res = tos.attributes.slice(*keys)
     res['content'] = tos.terms_of_service_content&.content
+    res['self_registration_type'] = @account.self_registration_type
     render :json => res
   end
 
@@ -655,20 +661,31 @@ class AccountsController < ApplicationController
       search_term = params[:search_term]
       SearchTermHelper.validate_search_term(search_term)
 
-      if params[:search_by] == "teacher"
-        @courses = @courses.where("EXISTS (?)", TeacherEnrollment.active.joins(:user).where(
-          ActiveRecord::Base.wildcard('users.name', params[:search_term])
-        ).where("enrollments.course_id=courses.id"))
+      if params[:search_by] == 'teacher'
+        @courses =
+          @courses.where(
+            'EXISTS (?)',
+            TeacherEnrollment.active.joins(:user).where(
+              ActiveRecord::Base.wildcard('users.name', params[:search_term])
+            ).where(
+              "enrollments.workflow_state NOT IN ('rejected', 'inactive', 'completed', 'deleted') AND enrollments.course_id=courses.id"
+            )
+          )
       else
         name = ActiveRecord::Base.wildcard('courses.name', search_term)
         code = ActiveRecord::Base.wildcard('courses.course_code', search_term)
+        or_clause = Course.where(code).or(Course.where(name))
+
+        if search_term =~ Api::ID_REGEX && Api::MAX_ID_RANGE.cover?(search_term.to_i)
+          or_clause = Course.where(:id => search_term).or(or_clause)
+        end
 
         if @account.grants_any_right?(@current_user, :read_sis, :manage_sis)
           sis_source = ActiveRecord::Base.wildcard('courses.sis_source_id', search_term)
-          @courses = @courses.merge(Course.where(:id => search_term).or(Course.where(code)).or(Course.where(name)).or(Course.where(sis_source)))
-        else
-          @courses = @courses.merge(Course.where(:id => search_term).or(Course.where(code)).or(Course.where(name)))
+          or_clause = or_clause.or(Course.where(sis_source))
         end
+
+        @courses = @courses.merge(or_clause)
       end
     end
 
@@ -681,7 +698,7 @@ class AccountsController < ApplicationController
     page_opts[:total_entries] = nil if params[:search_term] # doesn't calculate a total count
 
     all_precalculated_permissions = nil
-    Shackles.activate(:slave) do
+    GuardRail.activate(:secondary) do
       @courses = Api.paginate(@courses, self, api_v1_account_courses_url, page_opts)
 
       ActiveRecord::Associations::Preloader.new.preload(@courses, [:account, :root_account, course_account_associations: :account])
@@ -846,16 +863,16 @@ class AccountsController < ApplicationController
   #   Lock this setting for sub-accounts and courses
   #
   # @argument account[settings][lock_outcome_proficiency][value] [Boolean]
-  #   Restrict instructors from changing mastery scale
+  #   [DEPRECATED] Restrict instructors from changing mastery scale
   #
   # @argument account[lock_outcome_proficiency][locked] [Boolean]
-  #   Lock this setting for sub-accounts and courses
+  #   [DEPRECATED] Lock this setting for sub-accounts and courses
   #
   # @argument account[settings][lock_proficiency_calculation][value] [Boolean]
-  #   Restrict instructors from changing proficiency calculation method
+  #   [DEPRECATED] Restrict instructors from changing proficiency calculation method
   #
   # @argument account[lock_proficiency_calculation][locked] [Boolean]
-  #   Lock this setting for sub-accounts and courses
+  #   [DEPRECATED] Lock this setting for sub-accounts and courses
   #
   # @argument account[services] [Hash]
   #   Give this a set of keys and boolean values to enable or disable services matching the keys
@@ -1065,7 +1082,7 @@ class AccountsController < ApplicationController
         MEMBERSHIP_SERVICE_FEATURE_FLAG_ENABLED: @account.root_account.feature_enabled?(:membership_service_for_lti_tools),
         CONTEXT_BASE_URL: "/accounts/#{@context.id}",
         MASKED_APP_CENTER_ACCESS_TOKEN: @account.settings[:app_center_access_token].try(:[], 0...5),
-        NEW_FEATURES_UI: @account.root_account.feature_enabled?(:new_features_ui),
+        NEW_FEATURES_UI: Account.site_admin.feature_enabled?(:new_features_ui),
         PERMISSIONS: {
           :create_tool_manually => @account.grants_right?(@current_user, session, :create_tool_manually),
           :manage_feature_flags => @account.grants_right?(@current_user, session, :manage_feature_flags)
@@ -1114,6 +1131,10 @@ class AccountsController < ApplicationController
                       Account.site_admin.grants_right?(@current_user, :read_messages),
        logging: logging
       }
+    js_env enhanced_grade_change_query: Auditors::read_from_postgres? &&
+      Account.site_admin.feature_enabled?(:enhanced_grade_change_query)
+    js_env bounced_emails_admin_tool: @account.feature_enabled?(:bounced_emails_admin_tool) &&
+      @account.grants_right?(@current_user, session, :view_bounced_emails)
   end
 
   def confirm_delete_user
@@ -1193,8 +1214,7 @@ class AccountsController < ApplicationController
     pseudonym.update!(workflow_state: 'active')
     pseudonym.clear_permissions_cache(user)
     user.update_account_associations
-    user.clear_cache_key(*Canvas::CacheRegister::ALLOWED_TYPES['User'])
-    user.touch
+    user.clear_caches
     render json: user || {}
   end
 
@@ -1368,7 +1388,7 @@ class AccountsController < ApplicationController
     return unless authorized_action(@context, @current_user, :read_roster)
     @root_account = @context.root_account
     @query = params[:term]
-    Shackles.activate(:slave) do
+    GuardRail.activate(:secondary) do
       @users = @context.users_name_like(@query)
       @users = @users.paginate(:page => params[:page])
 
@@ -1506,7 +1526,8 @@ class AccountsController < ApplicationController
   PERMITTED_SETTINGS_FOR_UPDATE = [:admins_can_change_passwords, :admins_can_view_notifications,
                                    :allow_invitation_previews, :allow_sending_scores_in_emails,
                                    :author_email_in_notifications, :canvadocs_prefer_office_online,
-                                   :consortium_parent_account, :consortium_can_create_own_accounts, :can_add_pronouns,
+                                   :can_add_pronouns, :can_change_pronouns,
+                                   :consortium_parent_account, :consortium_can_create_own_accounts,
                                    :shard_per_account, :consortium_autocreate_web_of_trust,
                                    :consortium_autocreate_reverse_trust,
                                    :default_storage_quota, :default_storage_quota_mb,
@@ -1541,8 +1562,6 @@ class AccountsController < ApplicationController
                                    :sub_account_includes, :teachers_can_create_courses, :trusted_referers,
                                    :turnitin_host, :turnitin_account_id, :users_can_edit_name,
                                    {:usage_rights_required => [:value, :locked] }.freeze,
-                                   {:lock_outcome_proficiency => [:value, :locked] }.freeze,
-                                   {:lock_proficiency_calculation => [:value, :locked] }.freeze,
                                    :app_center_access_token, :default_dashboard_view, :force_default_dashboard_view,
                                    :smart_alerts_threshold, :enable_fullstory, :enable_google_analytics].freeze
 

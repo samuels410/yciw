@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 #
 # Copyright (C) 2018 - present Instructure, Inc.
 #
@@ -40,7 +42,7 @@ class AccountReportRunner < ActiveRecord::Base
   def write_rows
     return unless rows
     return if rows.empty?
-    Shackles.activate(:master) do
+    GuardRail.activate(:primary) do
       self.class.bulk_insert_objects(rows)
       @rows = []
     end

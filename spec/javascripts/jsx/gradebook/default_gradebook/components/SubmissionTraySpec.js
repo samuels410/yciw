@@ -65,7 +65,6 @@ QUnit.module('SubmissionTray', hooks => {
       isOpen: true,
       courseId: '1',
       currentUserId: '2',
-      postPoliciesEnabled: false,
       speedGraderEnabled: true,
       student: {
         id: '27',
@@ -302,22 +301,16 @@ QUnit.module('SubmissionTray', hooks => {
     })
   })
 
-  QUnit.module('when passing true for postPoliciesEnabled', contextHooks => {
-    contextHooks.beforeEach(() => {
-      defaultProps.postPoliciesEnabled = true
-    })
+  test('"Hidden" is displayed when a submission is graded and unposted', () => {
+    defaultProps.submission.workflowState = 'graded'
+    mountComponent()
+    ok(content.textContent.includes('Hidden'))
+  })
 
-    test('"Hidden" is displayed when a submission is graded and unposted', () => {
-      defaultProps.submission.workflowState = 'graded'
-      mountComponent()
-      ok(content.textContent.includes('Hidden'))
-    })
-
-    test('"Hidden" is displayed when a submission has comments and is unposted', () => {
-      defaultProps.submission.hasPostableComments = true
-      mountComponent()
-      ok(content.textContent.includes('Hidden'))
-    })
+  test('"Hidden" is displayed when a submission has comments and is unposted', () => {
+    defaultProps.submission.hasPostableComments = true
+    mountComponent()
+    ok(content.textContent.includes('Hidden'))
   })
 
   test('shows avatar if avatar is not null', () => {

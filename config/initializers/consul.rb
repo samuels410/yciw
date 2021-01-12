@@ -16,6 +16,7 @@
 # with this program. If not, see <http://www.gnu.org/licenses/>.
 
 handle_fallbacks = -> do
+  # dumps the whole cache, even if it's a shared local redis
   Canvas::DynamicSettings.reset_cache!
 end
 handle_fallbacks.call

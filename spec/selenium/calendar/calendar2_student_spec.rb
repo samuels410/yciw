@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 #
 # Copyright (C) 2014 - present Instructure, Inc.
 #
@@ -177,7 +179,7 @@ describe "calendar2" do
         group.add_user @student
         group.save!
         get '/calendar2'
-        fj('.calendar .fc-week .fc-today').click
+        move_to_click_element(fj('.calendar .fc-week .fc-today'))
         edit_event_dialog = f('#edit_event_tabs')
         expect(edit_event_dialog).to be_displayed
         edit_event_form = edit_event_dialog.find('#edit_calendar_event_form')

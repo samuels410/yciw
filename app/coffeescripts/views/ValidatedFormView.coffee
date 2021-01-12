@@ -102,6 +102,11 @@ export default class ValidatedFormView extends Backbone.View
         saveDfd.done -> disablingDfd.resolve()
 
       @$el.disableWhileLoading disablingDfd, @disableWhileLoadingOpts
+
+      # Indicate to the RCE that the page is closing.
+      if rceInputs.length > 0
+        rceInputs.forEach((rce) => sendFunc($(rce), "RCEClosed"))
+          
       @trigger 'submit'
       saveDfd
     else
@@ -177,8 +182,8 @@ export default class ValidatedFormView extends Backbone.View
   hideErrors: ->
     @$el.hideErrors()
 
-  onSaveSuccess: =>
-    @trigger 'success', arguments...
+  onSaveSuccess: (xhr) =>
+    @trigger 'success', xhr, arguments...
 
   onSaveFail: (xhr) =>
     errors = @parseErrorResponse xhr

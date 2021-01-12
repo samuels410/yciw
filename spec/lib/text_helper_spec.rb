@@ -1,5 +1,5 @@
-# encoding: UTF-8
-#
+# frozen_string_literal: true
+
 # Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
@@ -207,6 +207,20 @@ Ad dolore andouille meatball irure, ham hock tail exercitation minim ribeye sint
         expect(th.mt(:foo, "para1\n\npara2")).
           to eq "<p>para1</p>\n\n<p>para2</p>"
       end
+    end
+  end
+
+  context "round_if_whole" do
+    it "rounds whole floats" do
+      expect(TextHelper.round_if_whole(2.0)).to eq(2)
+    end
+
+    it "returns non-whole floats" do
+      expect(TextHelper.round_if_whole(2.5)).to eq(2.5)
+    end
+
+    it "passes NaN right through because it's not whole" do
+      expect(TextHelper.round_if_whole(Float::NAN).nan?).to be_truthy
     end
   end
 end

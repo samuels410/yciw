@@ -2,6 +2,8 @@
 
 set -e
 
+source build/common_docker_build_steps.sh
+
 # shellcheck disable=1004
 echo '
   ________  ________  ________   ___      ___ ________  ________
@@ -46,24 +48,6 @@ else
   echo 'This script only supports MacOS and Linux :('
   exit 1
 fi
-
-BOLD="$(tput bold)"
-NORMAL="$(tput sgr0)"
-
-function message {
-  echo ''
-  echo "$BOLD> $*$NORMAL"
-}
-
-function prompt {
-  read -r -p "$1 " "$2"
-}
-
-function confirm_command {
-  prompt "OK to run '$*'? [y/n]" confirm
-  [[ ${confirm:-n} == 'y' ]] || return 1
-  eval "$*"
-}
 
 function install_dependencies {
   local packages=()
@@ -199,83 +183,23 @@ function setup_docker_environment {
     message "Copying default configuration from config/docker-compose.override.yml.example to docker-compose.override.yml"
     cp config/docker-compose.override.yml.example docker-compose.override.yml
   fi
+
+  echo -n "COMPOSE_FILE=docker-compose.yml:docker-compose.override.yml" > .env
 }
 
 function copy_docker_config {
   message 'Copying Canvas docker configuration...'
-  confirm_command 'cp docker-compose/config/* config/' || true
-}
-
-function build_images {
-  message 'Building docker images...'
-  docker-compose build --pull
-}
-
-function check_gemfile {
-  if [[ -e Gemfile.lock ]]; then
-    message \
-'For historical reasons, the Canvas Gemfile.lock is not tracked by git. We may
-need to remove it before we can install gems, to prevent conflicting depencency
-errors.'
-    confirm_command 'rm Gemfile.lock' || true
-  fi
-
-  # Fixes 'error while trying to write to `/usr/src/app/Gemfile.lock`'
-  if ! docker-compose run --no-deps --rm web touch Gemfile.lock; then
-    message \
-"The 'docker' user is not allowed to write to Gemfile.lock. We need write
-permissions so we can install gems."
-    touch Gemfile.lock
-    confirm_command 'chmod a+rw Gemfile.lock' || true
-  fi
-}
-
-function database_exists {
-  docker-compose run --rm web \
-    bundle exec rails runner 'ActiveRecord::Base.connection' &> /dev/null
-}
-
-function create_db {
-  if ! docker-compose run --no-deps --rm web touch db/structure.sql; then
-    message \
-"The 'docker' user is not allowed to write to db/structure.sql. We need write
-permissions so we can run migrations."
-    touch db/structure.sql
-    confirm_command 'chmod a+rw db/structure.sql' || true
-  fi
-
-  if database_exists; then
-    message \
-'An existing database was found.
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-This script will destroy ALL EXISTING DATA if it continues
-If you want to migrate the existing database, use docker_dev_update.sh
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!'
-    message 'About to run "bundle exec rake db:drop"'
-    prompt "type NUKE in all caps: " nuked
-    [[ ${nuked:-n} == 'NUKE' ]] || exit 1
-    docker-compose run --rm web bundle exec rake db:drop
-  fi
-
-  message "Creating new database"
-  docker-compose run --rm web \
-    bundle exec rake db:create
-  docker-compose run --rm web \
-    bundle exec rake db:migrate
-  docker-compose run --rm web \
-    bundle exec rake db:initial_setup
+  # Only copy yamls, not contents of new-jenkins folder
+  confirm_command 'cp docker-compose/config/*.yml config/' || true
 }
 
 function setup_canvas {
   message 'Now we can set up Canvas!'
   copy_docker_config
   build_images
-
   check_gemfile
-  docker-compose run --rm web ./script/canvas_update -n code -n data
+  build_assets
   create_db
-  docker-compose run --rm web ./script/canvas_update -n code -n deps
 }
 
 function display_next_steps {
@@ -306,6 +230,23 @@ function display_next_steps {
   Running the tests:
 
     docker-compose run --rm web bundle exec rspec
+
+   Running Selenium tests:
+
+    add docker-compose/selenium.override.yml in the .env file
+      echo ':docker-compose/selenium.override.yml' >> .env
+
+    build the selenium container
+      docker-compose build selenium-chrome
+
+    run selenium
+      docker-compose run --rm web bundle exec rspec spec/selenium
+
+    Virtual network remote desktop sharing to selenium container
+      for Firefox:
+        $ open vnc://secret:secret@seleniumff.docker
+      for chrome:
+        $ open vnc://secret:secret@seleniumch.docker:5901
 
   I'm stuck. Where can I go for help?
 

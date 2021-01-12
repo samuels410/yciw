@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 #
 # Copyright (C) 2012 - present Instructure, Inc.
 #
@@ -510,6 +512,7 @@ describe SearchController, type: :request do
       specs_require_cache(:redis_cache_store)
 
       it "should show new groups in existing categories" do
+        skip 'FOO-1234 (11/24/2020)'
 
         json = api_call(:get, "/api/v1/search/recipients.json?context=course_#{@course.id}_groups&synthetic_contexts=1",
           {:controller => 'search', :action => 'recipients', :format => 'json', :context => "course_#{@course.id}_groups", :synthetic_contexts => "1"})

@@ -17,17 +17,16 @@
  */
 
 import axios from 'axios'
-
+import pluralize from 'str/pluralize'
 import {gql} from 'jsx/canvas-apollo'
 
-export const OUTCOME_PROFICIENCY_QUERY = gql`
+export const ACCOUNT_OUTCOME_PROFICIENCY_QUERY = gql`
   query GetOutcomeProficiencyData($contextId: ID!) {
-    account(id: $contextId) {
+    context: account(id: $contextId) {
       outcomeProficiency {
         _id
         contextId
         contextType
-        locked
         proficiencyRatingsConnection {
           nodes {
             _id
@@ -38,51 +37,34 @@ export const OUTCOME_PROFICIENCY_QUERY = gql`
           }
         }
       }
-      outcomeCalculationMethod {
+    }
+  }
+`
+
+export const COURSE_OUTCOME_PROFICIENCY_QUERY = gql`
+  query GetOutcomeProficiencyData($contextId: ID!) {
+    context: course(id: $contextId) {
+      outcomeProficiency {
         _id
-        calculationInt
-        calculationMethod
         contextId
         contextType
-        locked
+        proficiencyRatingsConnection {
+          nodes {
+            _id
+            color
+            description
+            mastery
+            points
+          }
+        }
       }
     }
   }
 `
 
-export const SET_OUTCOME_CALCULATION_METHOD = gql`
-  mutation SetOutcomeCalculationMethod(
-    $contextType: String!
-    $contextId: ID!
-    $calculationMethod: String!
-    $calculationInt: Int
-  ) {
-    createOutcomeCalculationMethod(
-      input: {
-        contextId: $contextId
-        contextType: $contextType
-        calculationMethod: $calculationMethod
-        calculationInt: $calculationInt
-      }
-    ) {
-      outcomeCalculationMethod {
-        _id
-        calculationMethod
-        calculationInt
-        contextId
-        contextType
-        locked
-      }
-      errors {
-        attribute
-        message
-      }
-    }
-  }
-`
-
-export const fetchProficiency = (contextType, contextId) =>
-  axios.get(`/api/v1/accounts/${contextId}/outcome_proficiency`)
-
-export const saveProficiency = (contextType, contextId, config) =>
-  axios.post(`/api/v1/accounts/${contextId}/outcome_proficiency`, config)
+export const saveProficiency = (contextType, contextId, config) => {
+  return axios.post(
+    `/api/v1/${pluralize(contextType).toLowerCase()}/${contextId}/outcome_proficiency`,
+    config
+  )
+}

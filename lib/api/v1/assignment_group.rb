@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 #
 # Copyright (C) 2011 - present Instructure, Inc.
 #
@@ -41,7 +43,7 @@ module Api::V1::AssignmentGroup
       assignments = opts[:assignments] || group.visible_assignments(user)
 
       # Preload assignments' post policies for Assignment#assignment_json.
-      if assignments.present? && assignments.first.context.post_policies_enabled?
+      if assignments.present?
         ActiveRecord::Associations::Preloader.new.preload(assignments, :post_policy)
         Assignment.preload_unposted_anonymous_submissions(assignments)
       end
@@ -124,7 +126,7 @@ module Api::V1::AssignmentGroup
     assignment_ids = assignments.pluck(:id).join(",")
     last_grading_period = grading_periods.order(end_date: :desc).first
 
-    submissions = ActiveRecord::Base.connection.select_all(<<-SQL)
+    submissions = ActiveRecord::Base.connection.select_all(<<~SQL)
       SELECT DISTINCT ON (assignment_id) assignment_id, user_id
       FROM #{Submission.quoted_table_name}
       WHERE

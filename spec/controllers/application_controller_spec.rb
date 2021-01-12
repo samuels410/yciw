@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 #
 # Copyright (C) 2011 - present Instructure, Inc.
 #
@@ -314,6 +316,22 @@ RSpec.describe ApplicationController do
         end
       end
 
+      context "usage_rights_discussion_topics" do
+        before(:each) do
+          controller.instance_variable_set(:@domain_root_account, Account.default)
+        end
+
+        it 'is false if the feature flag is off' do
+          Account.default.disable_feature!(:usage_rights_discussion_topics)
+          expect(controller.js_env[:FEATURES][:usage_rights_discussion_topics]).to be_falsey
+        end
+
+        it 'is true if the feature flag is on' do
+          Account.default.enable_feature!(:usage_rights_discussion_topics)
+          expect(controller.js_env[:FEATURES][:usage_rights_discussion_topics]).to be_truthy
+        end
+      end
+
       context "unpublished_courses" do
         before(:each) do
           controller.instance_variable_set(:@domain_root_account, Account.default)
@@ -414,6 +432,12 @@ RSpec.describe ApplicationController do
     end
   end
 
+  describe "response_code_for_rescue" do
+    it "maps certain exceptions declared outside core canvas to known codes" do
+      e = CanvasHttp::CircuitBreakerError.new
+      expect(controller.send(:response_code_for_rescue, e)).to eq(502)
+    end
+  end
   describe "#reject!" do
     it "sets the message and status in the error json" do
       expect { controller.reject!('test message', :not_found) }.to(raise_error(RequestError) do |e|
@@ -552,6 +576,15 @@ RSpec.describe ApplicationController do
       expect(controller.instance_variable_get(:@context)).to eq @course
       I18n.set_locale_with_localizer # this is what t() triggers
       expect(I18n.locale.to_s).to eq "ru"
+    end
+
+    it "doesn't fail if localizer exists in a contextless state" do
+      # establish an instance with no request/session
+      ctrl = ApplicationController.new
+      ctrl.send(:assign_localizer)
+      locale = nil
+      expect{ locale = I18n.localizer.call }.to_not raise_error
+      expect(locale).to eq("en") # default locale
     end
   end
 
@@ -712,7 +745,8 @@ RSpec.describe ApplicationController do
           content_id: 44,
           tag_type: 'context_module',
           context_type: 'Account',
-          context_id: 1
+          context_id: 1,
+          root_account_id: Account.default
         }.merge(overrides)
       )
     end
@@ -972,6 +1006,35 @@ RSpec.describe ApplicationController do
 
           context 'assignments' do
             it_behaves_like 'a placement that caches the launch'
+
+            context 'when a 1.3 tool replaces an LTI 1.1 tool' do
+              let(:assignment) { content_tag.context }
+
+              before do
+                # assignments configured with LTI 1.1 will not have
+                # LineItem or ResouceLink records prior to the LTI 1.3
+                # launch.
+                assignment.line_items.destroy_all
+
+                Lti::ResourceLink.where(
+                  resource_link_id: assignment.lti_context_id
+                ).destroy_all
+
+                assignment.update!(lti_context_id: SecureRandom.uuid)
+
+                controller.send(:content_tag_redirect, course, content_tag, nil)
+              end
+
+              it 'creates the default line item' do
+                expect(assignment.line_items).to be_present
+              end
+
+              it 'creates the LTI resource link' do
+                expect(
+                  Lti::ResourceLink.where(resource_link_id: assignment.lti_context_id)
+                ).to be_present
+              end
+            end
           end
 
           context 'module items' do
@@ -1138,7 +1201,7 @@ RSpec.describe ApplicationController do
         end
 
         it 'uses selection_width and selection_height from the ContentTag if provided' do
-          content_tag.update_attributes(link_settings: {selection_width: 543, selection_height: 321})
+          content_tag.update(link_settings: {selection_width: 543, selection_height: 321})
           controller.send(:content_tag_redirect, course, content_tag, nil)
 
           expect(assigns[:lti_launch].tool_dimensions[:selection_width]).to eq '543px'
@@ -1737,6 +1800,92 @@ describe ApplicationController do
       end
     end
   end
+
+  describe "show_student_view_button? helper" do
+    before :once do
+      Account.default.enable_feature!(:easy_student_view)
+    end
+
+    context "for teachers" do
+      before :once do
+        course_with_teacher :active_all => true
+      end
+
+      before :each do
+        user_session @teacher
+        controller.instance_variable_set(:@context, @course)
+        controller.instance_variable_set(:@current_user, @user)
+      end
+
+      it "should return true on course home page" do
+        controller.params[:controller] = 'courses'
+        controller.params[:action] = 'show'
+        expect(controller.send(:show_student_view_button?)).to be_truthy
+      end
+
+      it "should return true on modules page" do
+        controller.params[:controller] = 'context_modules'
+        controller.params[:action] = 'index'
+        expect(controller.send(:show_student_view_button?)).to be_truthy
+      end
+
+      it "should return false if flag is disabled" do
+        Account.default.disable_feature!(:easy_student_view)
+        controller.params[:controller] = 'courses'
+        controller.params[:action] = 'show'
+        expect(controller.send(:show_student_view_button?)).to be_falsey
+      end
+
+      it "should return false if context is not set" do
+        controller.instance_variable_set(:@context, nil)
+        controller.params[:controller] = 'courses'
+        controller.params[:action] = 'show'
+        expect(controller.send(:show_student_view_button?)).to be_falsey
+      end
+
+      it "should return false for pages index if pages tab is disabled" do
+        @course.update_attribute(:tab_configuration, [{'id'=>Course::TAB_PAGES, 'hidden'=>true}])
+        controller.instance_variable_set(:@context, @course)
+        controller.params[:controller] = 'wiki_pages'
+        controller.params[:action] = 'index'
+        expect(controller.send(:show_student_view_button?)).to be_falsey
+      end
+
+      it "should return true for pages page even if pages tab is disabled" do
+        @course.update_attribute(:tab_configuration, [{'id'=>Course::TAB_PAGES, 'hidden'=>true}])
+        controller.instance_variable_set(:@context, @course)
+        controller.params[:controller] = 'wiki_pages'
+        controller.params[:action] = 'show'
+        expect(controller.send(:show_student_view_button?)).to be_truthy
+      end
+    end
+
+    context "for students" do
+      before :once do
+        course_with_student :active_all => true
+      end
+
+      before :each do
+        user_session @student
+        controller.instance_variable_set(:@context, @course)
+        controller.instance_variable_set(:@current_user, @user)
+      end
+
+      it "should return false regardless of page" do
+        controller.params[:controller] = 'courses'
+        controller.params[:action] = 'show'
+        expect(controller.send(:show_student_view_button?)).to be_falsey
+
+        controller.params[:controller] = 'wiki_pages'
+        controller.params[:action] = 'show'
+        expect(controller.send(:show_student_view_button?)).to be_falsey
+
+        controller.params[:controller] = 'assignments'
+        controller.params[:action] = 'syllabus'
+        expect(controller.send(:show_student_view_button?)).to be_falsey
+      end
+    end
+  end
 end
 
 describe WikiPagesController do
@@ -2015,7 +2164,7 @@ RSpec.describe ApplicationController, '#redirect_to_login' do
   end
 end
 
-RSpec.describe ApplicationController, '#teardown_live_events_context' do
+RSpec.describe ApplicationController, '#manage_live_events_context' do
   controller do
     def index
       render json: [{}]
@@ -2023,7 +2172,7 @@ RSpec.describe ApplicationController, '#teardown_live_events_context' do
   end
 
   it 'sets the context to nil after request' do
-    Thread.current[:live_events_ctx] = "something"
+    Thread.current[:live_events_ctx] = {}
 
     get :index, format: :html
 

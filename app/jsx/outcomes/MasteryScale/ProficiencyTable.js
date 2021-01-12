@@ -19,18 +19,20 @@ import $ from 'jquery'
 import React from 'react'
 import PropTypes from 'prop-types'
 import {Button} from '@instructure/ui-buttons'
+import {Flex} from '@instructure/ui-flex'
 import {IconPlusLine} from '@instructure/ui-icons'
 import I18n from 'i18n!ProficiencyTable'
-import {ScreenReaderContent} from '@instructure/ui-a11y'
-import {Table} from '@instructure/ui-elements'
 import {View} from '@instructure/ui-view'
 import ProficiencyRating from './ProficiencyRating'
 import uuid from 'uuid/v1'
-import _ from 'underscore'
+import _ from 'lodash'
 import {fromJS, List} from 'immutable'
 import NumberHelper from '../../shared/helpers/numberHelper'
+import WithBreakpoints, {breakpointsShape} from '../../shared/WithBreakpoints'
+import ConfirmMasteryModal from 'jsx/outcomes/ConfirmMasteryModal'
 
 const ADD_DEFAULT_COLOR = 'EF4437'
+
 function unformatColor(color) {
   if (color[0] === '#') {
     return color.substring(1)
@@ -45,24 +47,28 @@ const createRating = (description, points, color, mastery = false, focusField = 
   mastery,
   focusField
 })
+
 const configToState = data => {
   const rows = List(
     data.proficiencyRatingsConnection.nodes.map(rating =>
-      fromJS(createRating(rating.description, rating.points, rating.color))
+      fromJS(createRating(rating.description, rating.points, rating.color, rating.mastery))
     )
   )
-  const masteryIndex = data.proficiencyRatingsConnection.nodes.findIndex(rating => rating.mastery)
   return {
-    masteryIndex,
     rows,
-    locked: data.locked
+    savedRows: rows,
+    showConfirmation: false
   }
 }
-export default class ProficiencyTable extends React.Component {
+class ProficiencyTable extends React.Component {
   static propTypes = {
     proficiency: PropTypes.object,
+    canManage: PropTypes.bool.isRequired,
     update: PropTypes.func.isRequired,
-    focusTab: PropTypes.func
+    focusTab: PropTypes.func,
+    breakpoints: breakpointsShape,
+    contextType: PropTypes.string.isRequired,
+    onNotifyPendingChanges: PropTypes.func
   }
 
   static defaultProps = {
@@ -77,7 +83,9 @@ export default class ProficiencyTable extends React.Component {
         ]
       }
     },
-    focusTab: null
+    canManage: window.ENV?.PERMISSIONS ? ENV.PERMISSIONS.manage_proficiency_scales : true,
+    focusTab: null,
+    breakpoints: {}
   }
 
   constructor(props) {
@@ -85,17 +93,29 @@ export default class ProficiencyTable extends React.Component {
     this.state = configToState(props.proficiency)
   }
 
-  componentDidUpdate(_prevProps, prevState) {
+  componentDidUpdate() {
     if (this.fieldWithFocus()) {
       // eslint-disable-next-line react/no-did-update-set-state
-      this.setState(({rows}) => ({rows: rows.map(row => row.delete('focusField'))}))
-    } else if (
-      this.state.masteryIndex !== prevState.masteryIndex ||
-      this.state.rows !== prevState.rows
-    ) {
-      this.validateAndSave()
+      this.setState(
+        ({rows}) => ({rows: rows.map(row => row.delete('focusField'))}),
+        this.notifyPendingChanges
+      )
     }
   }
+
+  notifyPendingChanges = () => {
+    if (this.props.onNotifyPendingChanges) {
+      this.props.onNotifyPendingChanges(this.hasPendingChanges())
+    }
+  }
+
+  hasPendingChanges = () => {
+    const {rows, savedRows} = this.state
+
+    return !_.isEqual(rows, savedRows)
+  }
+
+  hideConfirmationModal = () => this.setState({showConfirmation: false})
 
   fieldWithFocus = () => this.state.rows.some(row => row.get('focusField'))
 
@@ -110,33 +130,59 @@ export default class ProficiencyTable extends React.Component {
         if (points < 0.0 || Number.isNaN(points)) {
           points = 0.0
         }
-        const newRow = fromJS(createRating('', points, ADD_DEFAULT_COLOR, null, 'mastery'))
+        const newRow = fromJS(createRating('', points, ADD_DEFAULT_COLOR, false, 'mastery'))
         return {rows: rows.push(newRow)}
       },
       () => {
-        $.screenReaderFlashMessage(I18n.t('Added new proficiency rating'))
+        this.notifyPendingChanges()
+        $.screenReaderFlashMessage(I18n.t('Added mastery level'))
       }
     )
   }
 
-  validateAndSave = _.debounce(() => {
+  confirmSubmit = () => {
     if (!this.checkForErrors()) {
-      this.props.update(this.stateToConfig()).catch(e => {
-        $.flashError(
-          I18n.t('An error occurred while saving account proficiency ratings: %{message}', {
-            message: e.message
-          })
-        )
-      })
+      this.setState({showConfirmation: true})
     }
-  }, 500)
+  }
 
-  componentWillUnmount() {
-    this.validateAndSave.cancel()
+  handleSubmit = () => {
+    let oldRows
+    this.setState(
+      ({savedRows}) => {
+        oldRows = savedRows
+        const sortedRows = this.sortRows()
+        return {
+          showConfirmation: false,
+          rows: sortedRows,
+          savedRows: sortedRows
+        }
+      },
+      () => {
+        this.notifyPendingChanges()
+        this.props
+          .update(this.stateToConfig())
+          .then(() => $.flashMessage(I18n.t(`Mastery scale saved`)))
+          .catch(e => {
+            $.flashError(
+              I18n.t('An error occurred while saving the mastery scale: %{message}', {
+                message: e.message
+              })
+            )
+            this.setState({savedRows: oldRows}, this.notifyPendingChanges)
+          })
+      }
+    )
   }
 
   handleMasteryChange = _.memoize(index => () => {
-    this.setState({masteryIndex: index})
+    this.setState(({rows}) => {
+      const masteryIndex = rows.findIndex(row => row.get('mastery'))
+      const adjustedRows = rows
+        .setIn([masteryIndex, 'mastery'], false)
+        .setIn([index, 'mastery'], true)
+      return {rows: adjustedRows}
+    }, this.notifyPendingChanges)
   })
 
   handleDescriptionChange = _.memoize(index => value => {
@@ -146,7 +192,7 @@ export default class ProficiencyTable extends React.Component {
       }
       rows = rows.setIn([index, 'description'], value)
       return {rows}
-    })
+    }, this.notifyPendingChanges)
   })
 
   handlePointsChange = _.memoize(index => value => {
@@ -157,30 +203,44 @@ export default class ProficiencyTable extends React.Component {
       }
       rows = rows.setIn([index, 'points'], parsed)
       return {rows}
-    })
+    }, this.notifyPendingChanges)
   })
 
   handleColorChange = _.memoize(index => value => {
-    this.setState(({rows}) => ({
-      rows: rows.update(index, row => row.set('color', unformatColor(value)))
-    }))
+    this.setState(
+      ({rows}) => ({
+        rows: rows.update(index, row => row.set('color', unformatColor(value)))
+      }),
+      this.notifyPendingChanges
+    )
   })
 
   handleDelete = _.memoize(index => () => {
-    const masteryIndex = this.state.masteryIndex
-    const rows = this.state.rows.delete(index)
-    if (masteryIndex >= index && masteryIndex > 0) {
-      this.setState({masteryIndex: masteryIndex - 1})
+    const masteryIndex = this.state.rows.findIndex(row => row.get('mastery'))
+    let rows = this.state.rows.delete(index)
+
+    if (masteryIndex === index) {
+      if (masteryIndex > 0) {
+        rows = rows.setIn([masteryIndex - 1, 'mastery'], true)
+      } else {
+        rows = rows.setIn([masteryIndex, 'mastery'], true)
+      }
     }
+
     if (index === 0) {
-      this.setState({rows})
+      this.setState({rows}, this.notifyPendingChanges)
       if (this.props.focusTab) {
         setTimeout(this.props.focusTab, 700)
       }
     } else {
-      this.setState({rows: rows.setIn([index - 1, 'focusField'], 'trash')})
+      this.setState(
+        {
+          rows: rows.setIn([index - 1, 'focusField'], 'trash')
+        },
+        this.notifyPendingChanges
+      )
     }
-    $.screenReaderFlashMessage(I18n.t('Proficiency Rating deleted'))
+    $.screenReaderFlashMessage(I18n.t('Mastery level deleted'))
   })
 
   isStateValid = () =>
@@ -193,103 +253,184 @@ export default class ProficiencyTable extends React.Component {
 
   stateToConfig = () => ({
     ratings: this.state.rows
-      .map((row, idx) => ({
+      .map(row => ({
         description: row.get('description'),
         points: row.get('points'),
-        mastery: idx === this.state.masteryIndex,
+        mastery: row.get('mastery'),
         color: row.get('color')
       }))
       .toJS()
   })
 
+  sortRows = () => this.state.rows.sortBy(row => -row.get('points'))
+
   checkForErrors = () => {
-    let previousPoints = null
     let hasError = false
     let changed = false
-    const rows = this.state.rows.map(row => {
+    const allPoints = this.state.rows.map(row => row.get('points'))
+    const rows = this.state.rows.map((row, index) => {
       let r = row
       if (this.invalidDescription(row.get('description'))) {
+        if (!hasError) {
+          r = r.set('focusField', 'description')
+        }
         hasError = true
         r = r.set('descriptionError', I18n.t('Missing required description'))
       } else {
         r = r.delete('descriptionError')
       }
       if (this.invalidPoints(row.get('points'))) {
+        if (!hasError) {
+          r = r.set('focusField', 'points')
+        }
         hasError = true
-        previousPoints = null
         r = r.set('pointsError', I18n.t('Invalid points'))
       } else if (row.get('points') < 0) {
+        if (!hasError) {
+          r = r.set('focusField', 'points')
+        }
         hasError = true
         r = r.set('pointsError', I18n.t('Negative points'))
       } else {
         const currentPoints = row.get('points')
-        if (previousPoints !== null && previousPoints <= currentPoints) {
+        const firstIndex = allPoints.findIndex(points => points === currentPoints)
+        if (index !== firstIndex) {
+          if (!hasError) {
+            r = r.set('focusField', 'points')
+          }
           hasError = true
-          r = r.set('pointsError', I18n.t('Points must be less than previous rating'))
+          r = r.set('pointsError', I18n.t('Points must be unique'))
         } else {
           r = r.delete('pointsError')
         }
-        previousPoints = currentPoints
       }
       changed = changed || r !== row
       return r
     })
     if (changed) {
-      this.setState({rows})
+      this.setState({rows}, this.notifyPendingChanges)
     }
     return hasError
+  }
+
+  renderBorder = () => {
+    return (
+      <View
+        width="100%"
+        textAlign="start"
+        margin="0 0 small 0"
+        as="div"
+        borderWidth="none none small none"
+      />
+    )
   }
 
   invalidPoints = points => Number.isNaN(points)
 
   invalidDescription = description => !description || description.trim().length === 0
 
+  getModalText = () => {
+    const {contextType} = this.props
+    if (contextType === 'Course') {
+      return I18n.t(
+        'This will update all rubrics aligned to outcomes within this course that have not yet been assessed.'
+      )
+    }
+    return I18n.t(
+      'This will update all account and course level rubrics that are tied to the account level mastery scale and have not yet been assessed.'
+    )
+  }
+
   render() {
-    const masteryIndex = this.state.masteryIndex
+    const {showConfirmation} = this.state
+    const {breakpoints, canManage} = this.props
+    const isMobileView = breakpoints.mobileOnly
     return (
-      <div>
-        <Table caption={<ScreenReaderContent>{I18n.t('Proficiency ratings')}</ScreenReaderContent>}>
-          <thead>
-            <tr>
-              <th className="masteryCol" scope="col">
-                {I18n.t('Mastery')}
-              </th>
-              <th scope="col">{I18n.t('Proficiency Rating')}</th>
-              <th className="pointsCol" scope="col">
-                {I18n.t('Points')}
-              </th>
-              <th className="colorCol" scope="col">
-                {I18n.t('Color')}
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {this.state.rows.map((rating, index) => (
-              <ProficiencyRating
-                key={rating.get('key')}
-                color={rating.get('color')}
-                description={rating.get('description')}
-                descriptionError={rating.get('descriptionError')}
-                disableDelete={this.state.rows.size === 1}
-                focusField={rating.get('focusField') || (index === 0 ? 'mastery' : null)}
-                points={rating.get('points').toString()}
-                pointsError={rating.get('pointsError')}
-                mastery={index === masteryIndex}
-                onColorChange={this.handleColorChange(index)}
-                onDelete={this.handleDelete(index)}
-                onDescriptionChange={this.handleDescriptionChange(index)}
-                onMasteryChange={this.handleMasteryChange(index)}
-                onPointsChange={this.handlePointsChange(index)}
-              />
-            ))}
-          </tbody>
-        </Table>
-        <View width="100%" textAlign="center" padding="small" as="div">
-          <Button onClick={this.addRow} icon={<IconPlusLine />} variant="circle-primary">
-            <ScreenReaderContent>{I18n.t('Add proficiency rating')}</ScreenReaderContent>
-          </Button>
-        </View>
-      </div>
+      <>
+        <Flex width="100%" padding={`${isMobileView ? '0 0 small 0' : '0 small small small'}`}>
+          <Flex.Item size={isMobileView ? '25%' : '15%'} padding="0 medium 0 0">
+            <div aria-hidden="true" className="header">
+              {I18n.t('Mastery')}
+            </div>
+          </Flex.Item>
+          <Flex.Item size={isMobileView ? '75%' : '40%'}>
+            <div aria-hidden="true" className="header">
+              {isMobileView ? I18n.t('Mastery Levels') : I18n.t('Description')}
+            </div>
+          </Flex.Item>
+          {!isMobileView && (
+            <>
+              <Flex.Item size="15%">
+                <div aria-hidden="true" className="header">
+                  {I18n.t('Points')}
+                </div>
+              </Flex.Item>
+              <Flex.Item padding="0 0 0 small">
+                <div aria-hidden="true" className="header">
+                  {I18n.t('Color')}
+                </div>
+              </Flex.Item>
+            </>
+          )}
+        </Flex>
+        {this.renderBorder()}
+        {this.state.rows.map((rating, index) => (
+          <React.Fragment key={rating.get('key')}>
+            <ProficiencyRating
+              color={rating.get('color')}
+              description={rating.get('description')}
+              descriptionError={rating.get('descriptionError')}
+              disableDelete={this.state.rows.size === 1}
+              focusField={rating.get('focusField') || (index === 0 ? 'mastery' : null)}
+              points={rating.get('points').toString()}
+              pointsError={rating.get('pointsError')}
+              mastery={rating.get('mastery')}
+              onColorChange={this.handleColorChange(index)}
+              onDelete={this.handleDelete(index)}
+              onDescriptionChange={this.handleDescriptionChange(index)}
+              onMasteryChange={this.handleMasteryChange(index)}
+              onPointsChange={this.handlePointsChange(index)}
+              position={index + 1}
+              isMobileView={isMobileView}
+              canManage={canManage}
+            />
+            {this.renderBorder()}
+          </React.Fragment>
+        ))}
+
+        {canManage && (
+          <>
+            <View
+              width="100%"
+              textAlign="start"
+              padding="small small medium small"
+              as="div"
+              borderWidth="none none small none"
+            >
+              <Button onClick={this.addRow} renderIcon={<IconPlusLine />}>
+                {I18n.t('Add Mastery Level')}
+              </Button>
+            </View>
+            <div className="save">
+              <Button
+                variant="primary"
+                interaction={this.hasPendingChanges() ? 'enabled' : 'disabled'}
+                onClick={this.confirmSubmit}
+              >
+                {I18n.t('Save Mastery Scale')}
+              </Button>
+            </div>
+            <ConfirmMasteryModal
+              isOpen={showConfirmation}
+              onConfirm={this.handleSubmit}
+              modalText={this.getModalText()}
+              title={I18n.t('Confirm Mastery Scale')}
+              onClose={this.hideConfirmationModal}
+            />
+          </>
+        )}
+      </>
     )
   }
 }
+export default WithBreakpoints(ProficiencyTable)

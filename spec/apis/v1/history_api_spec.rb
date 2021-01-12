@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 #
 # Copyright (C) 2019 - present Instructure, Inc.
 #
@@ -50,6 +52,7 @@ describe HistoryController, type: :request do
                              "visited_url" => "http://example.com/courses/X/users",
                              "interaction_seconds" => 5.0,
                              "asset_icon" => "icon-user",
+                             "asset_readable_category" => "People",
                              "asset_name" => "Course People",
                              "context_name" => "Something 101"},
                             {"asset_code" => "pages:#{@group.asset_string}",
@@ -59,6 +62,7 @@ describe HistoryController, type: :request do
                              "visited_url" => "http://example.com/groups/Z/pages",
                              "interaction_seconds" => 5.0,
                              "asset_icon" => "icon-document",
+                             "asset_readable_category" => "Page",
                              "asset_name" => "Group Pages",
                              "context_name" => "A Group"},
                             {"asset_code" => @assignment.asset_string,
@@ -68,9 +72,9 @@ describe HistoryController, type: :request do
                              "visited_url" => "http://example.com/courses/X/assignments/Y",
                              "interaction_seconds" => 5.0,
                              "asset_icon" => "icon-assignment",
+                             "asset_readable_category" => "Assignment",
                              "asset_name" => "Assign 1",
-                             "context_name" => "Something 101"}]
-                        )
+                             "context_name" => "Something 101"}])
       end
 
       it "respects course nicknames" do
@@ -78,6 +82,13 @@ describe HistoryController, type: :request do
         json = api_call(:get, "/api/v1/users/self/history", controller: 'history', action: 'index',
                         format: 'json', user_id: 'self')
         expect(json[0]['context_name']).to eq 'Terribad'
+      end
+
+      it "deals with a missing asset_user_access" do
+        AssetUserAccess.where(asset_code: "pages:#{@group.asset_string}").delete_all
+        json = api_call(:get, "/api/v1/users/self/history", controller: 'history', action: 'index',
+                        format: 'json', user_id: 'self')
+        expect(json.map { |item| item['asset_name'] }).to eq(['Course People', 'Assign 1'])
       end
     end
 
@@ -124,12 +135,12 @@ describe HistoryController, type: :request do
                       asset_code: @a2.asset_string, real_user: @admin
       end
 
-      it "shows the masquerader only her own history on behalf of the user" do
+      it "shows the masquerader the target user's history and not her own" do
         @user = @admin
         json = api_call(:get, "/api/v1/users/self/history?as_user_id=#{@student.id}",
                         controller: 'history', action: 'index', format: 'json', user_id: 'self',
                         as_user_id: @student.to_param)
-        expect(json.map { |e| e['asset_name'] }).to match_array(['Assign 2'])
+        expect(json.map { |e| e['asset_name'] }).to match_array(['Group Pages', 'Course People', 'Assign 1'])
       end
 
       it "does not show the target user the masquerader's actions" do
@@ -138,6 +149,61 @@ describe HistoryController, type: :request do
                         format: 'json', user_id: 'self')
         expect(json.map { |e| e['asset_name'] }).to match_array(['Group Pages', 'Course People', 'Assign 1'])
       end
+    end
+
+    context "page view filtering" do
+      it "excludes file downloads" do
+        a1 = attachment_model context: @course
+        page_view_for url: "http://example.com/api/v1/courses/#{@course.id}/files/#{a1.id}/download", context: @course, created_at: @dates[2],
+                      asset_category: 'attachments', asset_code: a1.asset_string
+        a2 = attachment_model context: @course
+        page_view_for url: "http://localhost:3000/courses/#{@course.id}/files/#{a2.id}/file_preview?annotate=0", context: @course, created_at: @dates[2],
+                      asset_category: 'attachments', asset_code: a2.asset_string
+
+        @user = @student
+        json = api_call(:get, "/api/v1/users/self/history", controller: 'history', action: 'index',
+                        format: 'json', user_id: 'self')
+
+        asset_codes = json.map { |e| e['asset_code'] }
+        expect(asset_codes).not_to include a1.asset_string
+        expect(asset_codes).to include a2.asset_string
+      end
+
+      it "excludes API calls" do
+        other_course = @course
+        page_view_for url: "http://example.com/courses/#{other_course.id}/modules", context: other_course, created_at: @dates[1],
+                      asset_category: 'modules', asset_code: "modules:#{other_course.asset_string}"
+        course_with_student(user: @student)
+        page_view_for url: "http://example.com/api/v1/courses/#{@course.id}/modules", context: @course, created_at: @dates[1],
+                      asset_category: 'modules', asset_code: "modules:#{@course.asset_string}"
+
+        @user = @student
+        json = api_call(:get, "/api/v1/users/self/history", controller: 'history', action: 'index',
+                        format: 'json', user_id: 'self')
+
+        asset_codes = json.map { |e| e['asset_code'] }
+        expect(asset_codes).not_to include "modules:#{@course.asset_string}"
+        expect(asset_codes).to include "modules:#{other_course.asset_string}"
+      end
+
+      it "excludes unparseable URLs" do
+        page1 = @course.wiki_pages.create! title: 'test-page-1'
+        page_view_for url: 'this is not a url', created_at: @dates[0],
+                      asset_category: 'wiki_pages', asset_code: page1.asset_string
+
+        page2 = @course.wiki_pages.create! title: 'test-page-2'
+        page_view_for url: "http://example.com/courses/#{@course.id}/pages/test-page-2", created_at: @dates[0],
+                      asset_category: 'wiki_pages', asset_code: page2.asset_string
+
+        @user = @student
+        json = api_call(:get, "/api/v1/users/self/history", controller: 'history', action: 'index',
+                        format: 'json', user_id: 'self')
+
+        asset_codes = json.map { |e| e['asset_code'] }
+        expect(asset_codes).not_to include page1.asset_string
+        expect(asset_codes).to include page2.asset_string
+      end
+
     end
   end
 end

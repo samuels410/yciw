@@ -22,6 +22,8 @@ import {Text} from '@instructure/ui-text'
 import {TextInput} from '@instructure/ui-text-input'
 import {nanoid} from 'nanoid'
 import {IconInfoLine} from '@instructure/ui-icons'
+import {ScreenReaderContent} from '@instructure/ui-a11y'
+import {Tooltip} from '@instructure/ui-tooltip'
 import I18n from 'i18n!PronounsInput'
 
 export default class PronounsInput extends React.Component {
@@ -65,6 +67,9 @@ export default class PronounsInput extends React.Component {
   }
 
   render() {
+    const infoToolTip = I18n.t(
+      'These pronouns will be available to Canvas users in your account to choose from.'
+    )
     return (
       <TextInput
         id={`${this.state.input_id}`}
@@ -74,8 +79,8 @@ export default class PronounsInput extends React.Component {
           if (e.key === 'Enter') {
             e.preventDefault()
             this.setState(prevState => {
-              if (prevState.value && prevState.value !== '') {
-                prevState.pronouns.push(prevState.value)
+              if (prevState.value && prevState.value.trim() !== '') {
+                prevState.pronouns.push(prevState.value.trim())
                 return {pronouns: [...new Set(prevState.pronouns)]}
               }
               return prevState
@@ -86,9 +91,16 @@ export default class PronounsInput extends React.Component {
         label={
           <>
             <Text>{I18n.t('Available Pronouns')}</Text>
-            <span style={{margin: '0 10px 0 10px'}}>
-              <IconInfoLine />
-            </span>
+            <Tooltip tip={infoToolTip} on={['hover', 'focus']} variant="inverse">
+              <span
+                style={{margin: '0 10px 0 10px'}}
+                // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
+                tabIndex="0"
+              >
+                <IconInfoLine data-testid="pronoun_info" />
+                <ScreenReaderContent>{infoToolTip}</ScreenReaderContent>
+              </span>
+            </Tooltip>
           </>
         }
         size="medium"

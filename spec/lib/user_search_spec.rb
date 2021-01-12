@@ -1,5 +1,5 @@
-# encoding: utf-8
-#
+# frozen_string_literal: true
+
 # Copyright (C) 2012 - present Instructure, Inc.
 #
 # This file is part of Canvas.
@@ -186,6 +186,12 @@ describe UserSearch do
             pseudonym.save!
             course.enroll_user(user2)
             expect(UserSearch.for_user_in_context(user2.id.to_s, course, user)).to eq [user, user2]
+          end
+
+          it 'handles search terms out of bounds for max bigint' do
+            pseudonym.sis_user_id = '9223372036854775808'
+            pseudonym.save!
+            expect(UserSearch.for_user_in_context('9223372036854775808', course, user)).to eq [user]
           end
 
           it 'will match against a login id' do

@@ -144,16 +144,6 @@ allow_opt_out_of_inbox:
       on the Inbox, and hide the Conversation's notification preferences.
   applies_to: RootAccount
   root_opt_in: true
-gradebook_list_students_by_sortable_name:
-  state: allowed
-  display_name:
-    features.gradebook_list_students_by_sortable_name: Gradebook - List Students by
-      Sortable Name
-  description:
-    enable_gradebook_list_students_by_sortable_name: List students by their sortable
-      names in the Gradebook. Sortable name defaults to 'Last Name, First Name' and
-      can be changed in settings.
-  applies_to: Course
 lti2_rereg:
   state: hidden
   display_name: LTI 2 Reregistration
@@ -228,12 +218,6 @@ disable_keyboard_shortcuts:
       will have an improved experience with these shortcuts turned off.
   applies_to: User
   autoexpand: true
-enable_i18n_features_in_outcomes_exports:
-  state: hidden
-  display_name: Enable i18n features in outcomes exports
-  description: Enable byte_order_mark and semi_colon_field_separator user-level feature flags to be toggled
-    on or off for outcomes exports.
-  applies_to: RootAccount
 include_byte_order_mark_in_gradebook_exports:
   state: allowed
   display_name: Include Byte-Order Mark in compatible spreadsheet exports
@@ -268,6 +252,8 @@ conditional_release:
     results.
   applies_to: Course
   root_opt_in: true
+  custom_transition_proc: conditional_release_transition_hook
+  after_state_change_proc: conditional_release_after_change_hook
 wrap_calendar_event_titles:
   state: allowed
   display_name: Wrap event titles in Calendar month view
@@ -382,14 +368,11 @@ rce_enhancements:
       state: hidden
 new_features_ui:
   state: hidden
-  applies_to: RootAccount
+  applies_to: SiteAdmin
   display_name: New Feature Flags
   description: This feature creates a SiteAdmin Release Flag tab to be able
     to release features to users through the UI. It also reworks the UI for
     the old Feature Options tabs.
-  environments:
-    production:
-      state: disabled
 direct_share:
   state: hidden
   applies_to: RootAccount
@@ -449,3 +432,9 @@ recent_history:
   applies_to: RootAccount
   display_name: Recent History
   description: Show a list of recently visited pages in the Canvas global navigation
+easy_student_view:
+  state: hidden
+  applies_to: Course
+  display_name: Easy Toggle Student View
+  description: Places a button in the top-right corner of course pages allowing teachers to quickly switch to Student
+    View.

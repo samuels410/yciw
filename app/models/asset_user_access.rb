@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 #
 # Copyright (C) 2011 - present Instructure, Inc.
 #
@@ -202,7 +204,7 @@ class AssetUserAccess < ActiveRecord::Base
     return unless user && accessed_asset[:code]
     correct_context = self.get_correct_context(context, accessed_asset)
     return unless correct_context && Context::CONTEXT_TYPES.include?(correct_context.class_name.to_sym)
-    Shackles.activate(:slave) do
+    GuardRail.activate(:secondary) do
       @access = AssetUserAccess.where(user: user, asset_code: accessed_asset[:code]).
         polymorphic_where(context: correct_context).first_or_initialize
     end
@@ -288,26 +290,34 @@ class AssetUserAccess < ActiveRecord::Base
     self.view_score -= deductible_points
   end
 
+  # Includes both the icon name and the associated screenreader label for the icon
   ICON_MAP = {
-    announcements: "icon-announcement",
-    assignments: "icon-assignment",
-    calendar: "icon-calendar-month",
-    files: "icon-download",
-    grades: "icon-gradebook",
-    home: "icon-home",
-    inbox: "icon-message",
-    modules: "icon-module",
-    outcomes: "icon-outcomes",
-    pages: "icon-document",
-    quizzes: "icon-quiz",
-    roster: "icon-user",
-    syllabus: "icon-syllabus",
-    topics: "icon-discussion",
-    wiki: "icon-document",
+    announcements: ["icon-announcement", t('Announcement')].freeze,
+    assignments: ["icon-assignment", t('Assignment')].freeze,
+    calendar: ["icon-calendar-month", t('Calendar')].freeze,
+    collaborations: ["icon-document", t('Collaboration')].freeze,
+    conferences: ["icon-group", t('Conference')].freeze,
+    external_tools: ["icon-link", t('App')].freeze,
+    files: ["icon-download", t('File')].freeze,
+    grades: ["icon-gradebook", t('Grades')].freeze,
+    home: ["icon-home", t('Home')].freeze,
+    inbox: ["icon-message", t('Inbox')].freeze,
+    modules: ["icon-module", t('Module')].freeze,
+    outcomes: ["icon-outcomes", t('Outcome')].freeze,
+    pages: ["icon-document", t('Page')].freeze,
+    quizzes: ["icon-quiz", t('Quiz')].freeze,
+    roster: ["icon-user", t('People')].freeze,
+    syllabus: ["icon-syllabus", t('Syllabus')].freeze,
+    topics: ["icon-discussion", t('Discussion')].freeze,
+    wiki: ["icon-document", t('Page')].freeze
   }.freeze
 
   def icon
-    ICON_MAP[asset_category.to_sym] || "icon-question"
+    ICON_MAP[asset_category.to_sym]&.[](0) || "icon-question"
+  end
+
+  def readable_category
+    ICON_MAP[asset_category.to_sym]&.[](1) || ""
   end
 
   private

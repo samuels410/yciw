@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 #
 # Copyright (C) 2016 - present Instructure, Inc.
 #
@@ -20,6 +22,7 @@ module Lti
     class UnauthorizedError < StandardError; end
     class UnsupportedExportTypeError < StandardError; end
     class UnsupportedMessageTypeError < StandardError; end
+    class UnsupportedPlacement < StandardError; end
     class InvalidMediaTypeError < StandardError; end
     class UnauthorizedToolError < StandardError; end
   end

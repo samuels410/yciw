@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 #
 # Copyright (C) 2018 - present Instructure, Inc.
 #
@@ -95,13 +97,12 @@ module Types
       load_association(:account)
     end
 
-    # TODO: restore when OUT-3878 is complete
-    # field :outcome_proficiency, OutcomeProficiencyType, null: true
-    # def outcome_proficiency
-    #   # This does a recursive lookup of parent accounts, not sure how we could
-    #   # batch load it in a reasonable way.
-    #   course.resolved_outcome_proficiency
-    # end
+    field :outcome_proficiency, OutcomeProficiencyType, null: true
+    def outcome_proficiency
+      # This does a recursive lookup of parent accounts, not sure how we could
+      # batch load it in a reasonable way.
+      course.resolved_outcome_proficiency
+    end
 
     # field :proficiency_ratings_connection, ProficiencyRatingType.connection_type, null: true
     # def proficiency_ratings_connection
@@ -303,7 +304,10 @@ module Types
     field :sis_id, String, null: true
     def sis_id
       return nil unless course.grants_any_right?(current_user, :read_sis, :manage_sis)
+
       course.sis_course_id
     end
+
+    field :root_outcome_group, LearningOutcomeGroupType, null: false
   end
 end

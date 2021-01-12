@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 #
 # Copyright (C) 2018 - present Instructure, Inc.
 #
@@ -36,6 +38,7 @@ class Types::MutationType < Types::ApplicationObjectType
     super(*args, **kwargs, extensions: [PostgresTimeoutFieldExtension, AuditLogFieldExtension])
   end
 
+  field :create_conversation, mutation: Mutations::CreateConversation
   field :create_group_in_set, mutation: Mutations::CreateGroupInSet
   field :hide_assignment_grades, mutation: Mutations::HideAssignmentGrades
   field :hide_assignment_grades_for_sections, mutation: Mutations::HideAssignmentGradesForSections

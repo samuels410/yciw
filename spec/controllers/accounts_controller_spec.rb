@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 #
 # Copyright (C) 2011 - present Instructure, Inc.
 #
@@ -762,7 +764,7 @@ describe AccountsController do
       end
 
       it 'passes on correct value for new feature flags ui' do
-        account.root_account.enable_feature!(:new_features_ui)
+        Account.site_admin.enable_feature!(:new_features_ui)
         get 'settings', params: {account_id: account.id}
         expect(assigns.dig(:js_env, :NEW_FEATURES_UI)).to eq(true)
       end
@@ -919,6 +921,27 @@ describe AccountsController do
 
       expect(response).to be_successful
       expect(response.body).to match(/\"content\":\"custom content\"/)
+    end
+
+    it "should return default self_registration_type" do
+      @account.update_terms_of_service(terms_type: "custom", content: "custom content")
+
+      remove_user_session
+      get 'terms_of_service', params: {account_id: @account.id}
+
+      expect(response).to be_successful
+      expect(response.body).to match(/\"self_registration_type\":\"none\"/)
+    end
+
+    it "should return other self_registration_type" do
+      @account.update_terms_of_service(terms_type: "custom", content: "custom content")
+      @account.canvas_authentication_provider.update_attribute(:self_registration, 'observer')
+
+      remove_user_session
+      get 'terms_of_service', params: {account_id: @account.id}
+
+      expect(response).to be_successful
+      expect(response.body).to match(/\"self_registration_type\":\"observer\"/)
     end
   end
 
@@ -1239,24 +1262,48 @@ describe AccountsController do
       expect(response.body).to match(/\"name\":\"hot dog eating\".+\"name\":\"xylophone\"/)
     end
 
-    it "should be able to search by course name" do
+    it "should filter course search by teacher enrollment state" do
       @c3 = course_factory(account: @account, course_name: "apple", sis_source_id: 30)
 
-      user = @c3.shard.activate { user_factory(name: 'Zach Zachary') }
+      user = @c3.shard.activate { user_factory(name: 'rejected') }
       enrollment = @c3.enroll_user(user, 'TeacherEnrollment')
       user.save!
       enrollment.course = @c3
-      enrollment.workflow_state = 'active'
+      enrollment.workflow_state = 'rejected'
       enrollment.save!
-      @c3.reload
 
-      user2 = @c3.shard.activate { user_factory(name: 'Example Another') }
+      user2 = @c3.shard.activate { user_factory(name: 'inactive') }
       enrollment2 = @c3.enroll_user(user2, 'TeacherEnrollment')
       user2.save!
       enrollment2.course = @c3
-      enrollment2.workflow_state = 'active'
+      enrollment2.workflow_state = 'inactive'
       enrollment2.save!
-      @c3.reload
+
+      user3 = @c3.shard.activate { user_factory(name: 'completed') }
+      enrollment3 = @c3.enroll_user(user, 'TeacherEnrollment')
+      user3.save!
+      enrollment3.course = @c3
+      enrollment3.workflow_state = 'completed'
+      enrollment3.save!
+
+      user4 = @c3.shard.activate { user_factory(name: 'deleted') }
+      enrollment4 = @c3.enroll_user(user2, 'TeacherEnrollment')
+      user4.save!
+      enrollment4.course = @c3
+      enrollment4.workflow_state = 'deleted'
+      enrollment4.save!
+
+      @c4 = course_with_teacher(name: 'Teach Teacherson', course: course_factory(account: @account, course_name: "xylophone", sis_source_id: 52))
+      @c5 = course_with_teacher(name: 'Teachy McTeacher', course: course_factory(account: @account, course_name: "hot dog eating", sis_source_id: 63))
+
+      admin_logged_in(@account)
+      get 'courses_api', params: {account_id: @account.id, sort: "sis_course_id", order: "asc", search_by: "teacher", search_term: "teach"}
+
+      expect(JSON.parse(response.body.sub("while(1)\;", '')).length).to eq 2
+    end
+
+    it "should be able to search by course name" do
+      @c3 = course_factory(account: @account, course_name: "apple", sis_source_id: 30)
 
       @c4 = course_with_teacher(name: 'Teach Teacherson', course: course_factory(account: @account, course_name: "Apps", sis_source_id: 52))
 
@@ -1274,22 +1321,6 @@ describe AccountsController do
     it "should be able to search by course sis id" do
       @c3 = course_factory(account: @account, course_name: "apple", sis_source_id: 30012)
 
-      user = @c3.shard.activate { user_factory(name: 'Zach Zachary') }
-      enrollment = @c3.enroll_user(user, 'TeacherEnrollment')
-      user.save!
-      enrollment.course = @c3
-      enrollment.workflow_state = 'active'
-      enrollment.save!
-      @c3.reload
-
-      user2 = @c3.shard.activate { user_factory(name: 'Example Another') }
-      enrollment2 = @c3.enroll_user(user2, 'TeacherEnrollment')
-      user2.save!
-      enrollment2.course = @c3
-      enrollment2.workflow_state = 'active'
-      enrollment2.save!
-      @c3.reload
-
       @c4 = course_with_teacher(name: 'Teach Teacherson', course: course_factory(account: @account, course_name: "Apps", sis_source_id: 3002))
 
       @c5 = course_with_teacher(name: 'Teachy McTeacher', course: course_factory(account: @account, course_name: "cappuccino", sis_source_id: 63))
@@ -1301,6 +1332,19 @@ describe AccountsController do
       expect(response).to be_successful
       expect(response.body).to match(/\"name\":\"apple\".+\"name\":\"Apps\"/)
       expect(response.body).not_to match(/\"name\":\"apple\".+\"name\":\"Apps\".+\"name\":\"bar\".+\"name\":\"cappuccino\".+\"name\":\"foo\"/)
+    end
+
+    it "should be able to search by a course sis id that is > than bigint max" do
+      @c3 = course_factory(account: @account, course_name: "apple", sis_source_id: "9223372036854775808")
+
+      @c4 = course_with_teacher(name: 'Teach Teacherson', course: course_factory(account: @account, course_name: "Apps", sis_source_id: 3002))
+
+      admin_logged_in(@account)
+      get 'courses_api', params: {account_id: @account.id, sort: "course_name", order: "asc", search_by: "course", search_term: "9223372036854775808"}
+
+      expect(response).to be_successful
+      expect(response.body).to match(/\"name\":\"apple\"/)
+      expect(response.body).not_to match(/\"name\":\"Apps\"/)
     end
 
   end

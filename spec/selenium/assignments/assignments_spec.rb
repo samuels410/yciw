@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 #
 # Copyright (C) 2011 - present Instructure, Inc.
 #
@@ -43,6 +45,33 @@ describe "assignments" do
 
     before :each do
       create_session(@pseudonym)
+    end
+
+    describe 'keyboard shortcuts' do
+      context 'when the user has keyboard shortcuts enabled' do
+        before do
+          get "/courses/#{@course.id}/assignments"
+        end
+
+        it 'keyboard shortcut "SHIFT-?"' do
+          driver.action.key_down(:shift).key_down('?').key_up(:shift).key_up('?').perform
+          keyboard_nav = f('#keyboard_navigation')
+          expect(keyboard_nav).to be_displayed
+        end
+      end
+
+      context 'when the user has keyboard shortcuts disabled' do
+        before do
+          @teacher.enable_feature!(:disable_keyboard_shortcuts)
+          get "/courses/#{@course.id}/assignments"
+        end
+
+        it 'keyboard shortcut dialog is not accesible when user disables keyboard shortcuts' do
+          driver.action.key_down(:shift).key_down('?').key_up(:shift).key_up('?').perform
+          keyboard_nav = f('#keyboard_navigation')
+          expect(keyboard_nav).not_to be_displayed
+        end
+      end
     end
 
     context "save and publish button" do
@@ -431,7 +460,7 @@ describe "assignments" do
 
       it "should not allow deleting a frozen assignment from index page", priority:"2", test_id: 649309 do
         get "/courses/#{@course.id}/assignments"
-        fj("div#assignment_#{@frozen_assign.id} a.al-trigger").click
+        fj("div#assignment_#{@frozen_assign.id} button.al-trigger").click
         wait_for_ajaximations
         expect(f("div#assignment_#{@frozen_assign.id}")).to contain_css("a.delete_assignment.disabled")
       end
@@ -705,7 +734,7 @@ describe "assignments" do
     it "should not show the moderation page if it is not a moderated assignment ", priority: "2", test_id: 609653 do
       @assignment.update_attribute(:moderated_grading, false)
       get "/courses/#{@course.id}/assignments/#{@assignment.id}/moderate"
-      expect(f('#content h1').text).to eql "Woops... Looks like nothing is here!"
+      expect(f('#content h1').text).to eql "Whoops... Looks like nothing is here!"
     end
   end
 

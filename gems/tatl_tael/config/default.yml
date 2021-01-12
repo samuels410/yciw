@@ -15,7 +15,7 @@ CopyrightLinter:
 #      - "*.erb"
 #      - "*.handlebars"
 #      - "*.hbs"
-    Whitelist:
+    Allowlist:
       - "**/bower/**"
       - "**/mediaelement/**"
       - "**/shims/**"
@@ -26,6 +26,7 @@ CopyrightLinter:
     FirstLineExceptions:
       - !ruby/regexp '/^#!/' # e.g. "#!/usr/bin/env ruby"
       - !ruby/regexp '/coding:/' # encodings
+      - !ruby/regexp '/frozen_string_literal:/'
       - !ruby/regexp '/@jsx React\.DOM/' # jsx header (see client_apps/quizzes)
     CommentPrefixRegex: !ruby/regexp '/^( *)?(#|\/\/|\/?\*+|<%|\{\{\!)( *)?/'
   CopyrightYearPlaceholder: "CURRENT_YEAR"
@@ -130,7 +131,7 @@ SeleniumSpecsLinter:
     # i.e., the code changes could/should be tested at a lower level.
     PublicJs:
       - "public/javascripts/**.js"
-    PublicJsWhitelist:
+    PublicJsAllowlist:
       - "**/bower/**"
       - "**/mediaelement/**"
       - "**/shims/**"
@@ -141,7 +142,7 @@ SeleniumSpecsLinter:
       - "spec/javascripts/**"
     Coffee:
       - "app/coffeescripts/**.coffee"
-    CoffeeWhitelist:
+    CoffeeAllowlist:
       - "app/coffeescripts/bundles/**"
     CoffeeSpec:
       - "spec/coffeescripts/**.coffee"
@@ -196,7 +197,7 @@ Simple/PublicJsSpecsLinter:
   Precondition:
     Include:
     - "public/javascripts/**.js"
-    Whitelist:
+    Allowlist:
     - "**/bower/**"
     - "**/mediaelement/**"
     - "**/vendor/**"

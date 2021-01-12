@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 #
 # Copyright (C) 2015 - present Instructure, Inc.
 #
@@ -38,6 +40,23 @@ describe AuthenticationProvider::SAML do
     @account.save!
     @aac = @account.authentication_providers.create!(:auth_type => "saml")
     expect(@aac.entity_id).to eq "my_entity"
+  end
+
+  it "unsets the entity id when it gets deleted" do
+    @account.settings[:saml_entity_id] = 'my_entity'
+    @account.save!
+    @aac = @account.authentication_providers.create!(:auth_type => "saml")
+    @aac.destroy
+    expect(@account.settings).not_to have_key(:saml_entity_id)
+  end
+
+  it "does not unset the entity id when it gets deleted if another config exists" do
+    @account.settings[:saml_entity_id] = 'my_entity'
+    @account.save!
+    @aac = @account.authentication_providers.create!(:auth_type => "saml")
+    @aac2 = @account.authentication_providers.create!(:auth_type => "saml")
+    @aac.destroy
+    expect(@account.settings[:saml_entity_id]).to eq 'my_entity'
   end
 
   it "should set requested_authn_context to nil if empty string" do

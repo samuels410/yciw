@@ -25,6 +25,7 @@ import $ from 'jquery'
 import numberHelper from 'jsx/shared/helpers/numberHelper'
 import round from '../../util/round'
 import RichContentEditor from 'jsx/shared/rce/RichContentEditor'
+import { showFlashAlert } from 'jsx/shared/FlashAlert'
 import EditViewTemplate from 'jst/assignments/EditView'
 import userSettings from '../../userSettings'
 import TurnitinSettings from '../../models/TurnitinSettings'
@@ -91,6 +92,7 @@ export default class EditView extends ValidatedFormView
   EXTERNAL_TOOLS_CONTENT_TYPE = '#assignment_external_tool_tag_attributes_content_type'
   EXTERNAL_TOOLS_CONTENT_ID = '#assignment_external_tool_tag_attributes_content_id'
   EXTERNAL_TOOLS_NEW_TAB = '#assignment_external_tool_tag_attributes_new_tab'
+  EXTERNAL_TOOLS_CUSTOM_PARAMS = '#assignment_external_tool_tag_attributes_custom_params'
   ASSIGNMENT_POINTS_POSSIBLE = '#assignment_points_possible'
   ASSIGNMENT_POINTS_CHANGE_WARN = '#point_change_warning'
   SECURE_PARAMS = '#secure_params'
@@ -127,6 +129,7 @@ export default class EditView extends ValidatedFormView
     els["#{EXTERNAL_TOOLS_URL}"] = '$externalToolsUrl'
     els["#{EXTERNAL_TOOLS_NEW_TAB}"] = '$externalToolsNewTab'
     els["#{EXTERNAL_TOOLS_CONTENT_TYPE}"] = '$externalToolsContentType'
+    els["#{EXTERNAL_TOOLS_CUSTOM_PARAMS}"] = '$externalToolsCustomParams'
     els["#{EXTERNAL_TOOLS_CONTENT_ID}"] = '$externalToolsContentId'
     els["#{EXTERNAL_TOOL_DATA}"] = '$externalToolExternalData'
     els["#{EXTERNAL_TOOL_SETTINGS_NEW_TAB}"] = '$externalToolNewTabContainer'
@@ -309,6 +312,7 @@ export default class EditView extends ValidatedFormView
       select_button_text: I18n.t('buttons.select_url', 'Select'),
       no_name_input: true,
       submit: (data) =>
+        @$externalToolsCustomParams.val(data['item[custom_params]'])
         @$externalToolsContentType.val(data['item[type]'])
         @$externalToolsContentId.val(data['item[id]'])
         @$externalToolsUrl.val(data['item[url]'])
@@ -445,6 +449,11 @@ export default class EditView extends ValidatedFormView
         other: '%{count} Students'
       }, {count: mc_ext.studentCount})
       $("#mc_external_data_students").text(student_count_text)
+
+      showFlashAlert({
+        message: I18n.t('Assignment details updated'),
+        type: 'info'
+      })
 
   handleOnlineSubmissionTypeChange: (env) =>
     showConfigTools = @$onlineSubmissionTypes.find(ALLOW_FILE_UPLOADS).attr('checked') ||

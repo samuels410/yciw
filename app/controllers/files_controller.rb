@@ -144,7 +144,6 @@ class FilesController < ApplicationController
 
   before_action :open_limited_cors, only: [:show]
 
-  prepend_around_action :load_pseudonym_from_policy, only: :create
   skip_before_action :verify_authenticity_token, only: :api_create
   before_action :verify_api_id, only: [
     :api_show, :api_create_success, :api_file_status, :api_update, :destroy, :reset_verifier
@@ -163,8 +162,7 @@ class FilesController < ApplicationController
   def quota
     get_quota
     if authorized_action(@context.attachments.temp_record, @current_user, :create)
-      h = ActionView::Base.new
-      h.extend ActionView::Helpers::NumberHelper
+      h = ActiveSupport::NumberHelper
       result = {
         :quota => h.number_to_human_size(@quota),
         :quota_used => h.number_to_human_size(@quota_used),
@@ -285,7 +283,7 @@ class FilesController < ApplicationController
   #
   # @returns [File]
   def api_index
-    Shackles.activate(:slave) do
+    GuardRail.activate(:secondary) do
       get_context
       verify_api_id unless @context.present?
       @folder = Folder.from_context_or_id(@context, params[:id])
@@ -363,6 +361,9 @@ class FilesController < ApplicationController
   end
 
   def react_files
+    if !request.format.html?
+      return render body: "endpoint does not support #{request.format.symbol}", status: :bad_request
+    end
     if authorized_action(@context, @current_user, [:read, :manage_files]) && tab_enabled?(@context.class::TAB_FILES)
       @contexts = [@context]
       get_all_pertinent_contexts(include_groups: true, cross_shard: true) if @context == @current_user
@@ -440,13 +441,16 @@ class FilesController < ApplicationController
   #
   def public_url
     @attachment = Attachment.find(params[:id])
+    verifier_checker = Attachments::Verification.new(@attachment)
+
     # if the attachment is part of a submisison, its 'context' will be the student that submmited the assignment.  so if  @current_user is a
     # teacher authorized_action(@attachment, @current_user, :download) will be false, we need to actually check if they have perms to see the
     # submission.
     @submission = Submission.active.find(params[:submission_id]) if params[:submission_id]
     # verify that the requested attachment belongs to the submission
     return render_unauthorized_action if @submission && !@submission.includes_attachment?(@attachment)
-    if @submission ? authorized_action(@submission, @current_user, :read) : authorized_action(@attachment, @current_user, :download)
+    if ((@submission && authorized_action(@submission, @current_user, :read)) ||
+        ((params[:verifier] && verifier_checker.valid_verifier_for_permission?(params[:verifier], :download, session)) || authorized_action(@attachment, @current_user, :download)))
       render :json  => { :public_url => @attachment.public_url(:secure => request.ssl?) }
     end
   end
@@ -486,7 +490,7 @@ class FilesController < ApplicationController
   end
 
   def show
-    Shackles.activate(:slave) do
+    GuardRail.activate(:secondary) do
       original_params = params.dup
       params[:id] ||= params[:file_id]
       get_context
@@ -1247,11 +1251,13 @@ class FilesController < ApplicationController
   def image_thumbnail
     cancel_cache_buster
 
+    no_cache = !!Canvas::Plugin.value_to_boolean(params[:no_cache])
+
     # include authenticator fingerprint so we don't redirect to an
     # authenticated thumbnail url for the wrong user
     cache_key = ['thumbnail_url2', params[:uuid], params[:size], file_authenticator.fingerprint].cache_key
     url, instfs = Rails.cache.read(cache_key)
-    unless url
+    if !url || no_cache
       attachment = Attachment.active.where(id: params[:id], uuid: params[:uuid]).first if params[:id].present?
       thumb_opts = params.slice(:size)
       url = authenticated_thumbnail_url(attachment, thumb_opts)

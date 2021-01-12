@@ -17,7 +17,7 @@
  */
 
 import React from 'react'
-import {fireEvent, render} from '@testing-library/react'
+import {fireEvent, render, waitFor} from '@testing-library/react'
 
 import Filter, {useFilterSettings} from '../Filter'
 
@@ -31,7 +31,8 @@ describe('RCE Plugins > Filter', () => {
     default_filter_settings = {
       contentType: 'course_files',
       contentSubtype: 'documents',
-      sortValue: 'date_added'
+      sortValue: 'date_added',
+      searchString: ''
     }
   })
 
@@ -132,6 +133,14 @@ describe('RCE Plugins > Filter', () => {
       selectContentType('Course Files')
       expect(currentFilterSettings.contentType).toEqual('course_files')
       expect(component.getByLabelText('Content Type').value).toEqual('Course Files')
+    })
+
+    it('has "Group" options', () => {
+      renderComponent({userContextType: 'group'})
+
+      selectContentType('Group Files')
+      expect(currentFilterSettings.contentType).toEqual('group_files')
+      expect(component.getByLabelText('Content Type').value).toEqual('Group Files')
     })
 
     it('has "User" options', () => {
@@ -286,6 +295,110 @@ describe('RCE Plugins > Filter', () => {
       selectContentSubtype('Media')
       selectSortBy('Alphabetical')
       expect(currentFilterSettings.contentSubtype).toEqual('media')
+    })
+  })
+
+  describe('"Search" field', () => {
+    it('is visible when the contentSubtype is documents', () => {
+      renderComponent({
+        userContextType: 'course',
+        contentType: 'course_files',
+        contentSubtype: 'documents'
+      })
+      expect(component.getByPlaceholderText('Search')).toBeInTheDocument()
+    })
+
+    it('is visible when the contentSubtype is images', () => {
+      renderComponent({
+        userContextType: 'course',
+        contentType: 'course_files',
+        contentSubtype: 'images'
+      })
+      expect(component.getByPlaceholderText('Search')).toBeInTheDocument()
+    })
+
+    it('is visible when the contentSubtype is media', () => {
+      renderComponent({
+        userContextType: 'course',
+        contentType: 'course_files',
+        contentSubtype: 'media'
+      })
+      expect(component.queryByPlaceholderText('Search')).toBeInTheDocument()
+    })
+
+    it('is visible when the contentType is links', () => {
+      renderComponent({
+        userContextType: 'course',
+        contentType: 'links'
+      })
+      expect(component.queryByPlaceholderText('Search')).toBeInTheDocument()
+    })
+
+    it('is visible when the contentSubtype is all', () => {
+      renderComponent({
+        userContextType: 'course',
+        contentType: 'course_files',
+        contentSubtype: 'all'
+      })
+      expect(component.queryByPlaceholderText('Search')).toBeInTheDocument()
+    })
+
+    it('updates filter settings when the search string is > 3 chars long', async () => {
+      renderComponent({
+        userContextType: 'course',
+        contentType: 'course_files',
+        contentSubtype: 'documents'
+      })
+      const searchInput = component.getByPlaceholderText('Search')
+      expect(currentFilterSettings.searchString).toBe('')
+      fireEvent.change(searchInput, {target: {value: 'abc'}})
+      await waitFor(() => {
+        expect(currentFilterSettings.searchString).toBe('abc')
+      })
+    })
+
+    it('clears search when clear button is clicked', async () => {
+      renderComponent({
+        userContextType: 'course',
+        contentType: 'course_files',
+        contentSubtype: 'documents'
+      })
+      const searchInput = component.getByPlaceholderText('Search')
+      expect(currentFilterSettings.searchString).toBe('')
+      fireEvent.change(searchInput, {target: {value: 'abc'}})
+      await waitFor(() => {
+        expect(currentFilterSettings.searchString).toBe('abc')
+      })
+      fireEvent.click(component.getByText('Clear'))
+      await waitFor(() => {
+        expect(currentFilterSettings.searchString).toBe('')
+      })
+    })
+
+    it('is readonly while content is loading', () => {
+      renderComponent({
+        userContextType: 'course',
+        contentType: 'course_files',
+        contentSubtype: 'documents',
+        isContentLoading: true,
+        searchString: 'abc'
+      })
+      const searchInput = component.getByPlaceholderText('Search')
+      expect(searchInput.hasAttribute('readonly')).toBe(true)
+
+      const clearBtn = component.getByText('Clear').closest('button')
+      expect(clearBtn.hasAttribute('disabled')).toBe(true)
+    })
+
+    it('shows the search message when not loading', () => {
+      renderComponent()
+      expect(component.getByText('Enter at least 3 characters to search')).toBeInTheDocument()
+    })
+
+    it('shows the loading message when loading', () => {
+      renderComponent({isContentLoading: true})
+      // screenreader message + hint under the search input box
+      expect(component.getByText('Loading, please wait')).toBeInTheDocument()
     })
   })
 })

@@ -18,9 +18,9 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-library "canvas-builds-library"
+library "canvas-builds-library@${env.CANVAS_BUILDS_REFSPEC}"
 
-def COFFEE_NODE_COUNT = 2
+def COFFEE_NODE_COUNT = 4
 def DEFAULT_NODE_COUNT = 1
 def JSG_NODE_COUNT = 3
 
@@ -49,12 +49,16 @@ def makeKarmaStage(group, ciNode, ciTotal) {
 }
 
 def cleanupFn() {
-  try {
-    archiveArtifacts artifacts: 'tmp/**/*.xml'
-    junit "tmp/**/*.xml"
-    sh 'find ./tmp -path "*.xml"'
-  } finally {
-    execute 'bash/docker-cleanup.sh --allow-failure'
+  timeout(time: 5) {
+    try {
+      if(env.TEST_SUITE != 'upload') {
+        archiveArtifacts artifacts: 'tmp/**/*.xml'
+        junit "tmp/**/*.xml"
+        sh 'find ./tmp -path "*.xml"'
+      }
+    } finally {
+      execute 'bash/docker-cleanup.sh --allow-failure'
+    }
   }
 }
 
@@ -63,8 +67,11 @@ pipeline {
   options { ansiColor('xterm') }
 
   environment {
-    COMPOSE_FILE = 'docker-compose.new-jenkins.canvas.yml:docker-compose.new-jenkins-karma.yml'
+    COMPOSE_DOCKER_CLI_BUILD=1
+    COMPOSE_FILE = 'docker-compose.new-jenkins-js.yml'
+    DOCKER_BUILDKIT=1
     FORCE_FAILURE = configuration.forceFailureJS()
+    PROGRESS_NO_TRUNC=1
     SENTRY_URL="https://sentry.insops.net"
     SENTRY_ORG="instructure"
     SENTRY_PROJECT="master-javascript-build"
@@ -79,8 +86,10 @@ pipeline {
               cleanAndSetup()
               timeout(time: 10) {
                 sh 'rm -vrf ./tmp/*'
-                checkout scm
-                sh './build/new-jenkins/docker-with-flakey-network-protection.sh pull $PATCHSET_TAG'
+                def refspecToCheckout = env.GERRIT_PROJECT == "canvas-lms" ? env.JENKINSFILE_REFSPEC : env.CANVAS_LMS_REFSPEC
+
+                checkoutRepo("canvas-lms", refspecToCheckout, 1)
+
                 sh 'docker-compose build'
               }
             }
@@ -90,7 +99,12 @@ pipeline {
                 script {
                   def tests = [:]
 
-                  if(env.TEST_SUITE == 'jest') {
+                  if(env.TEST_SUITE == 'upload') {
+                    sh """
+                      docker tag local/js-runner $JS_DEBUG_IMAGE_TAG
+                      docker push $JS_DEBUG_IMAGE_TAG
+                    """
+                  } else if(env.TEST_SUITE == 'jest') {
                     tests['Jest'] = {
                       withEnv(['CONTAINER_NAME=tests-jest']) {
                         try {
@@ -102,9 +116,11 @@ pipeline {
                         }
                       }
                     }
-                  }
-
-                  if(env.TEST_SUITE == 'karma') {
+                  } else if(env.TEST_SUITE == 'coffee') {
+                    for(int i = 0; i < COFFEE_NODE_COUNT; i++) {
+                      tests["Karma - Spec Group - coffee${i}"] = makeKarmaStage('coffee', i, COFFEE_NODE_COUNT)
+                    }
+                  } else if(env.TEST_SUITE == 'karma') {
                     tests['Packages'] = {
                       withEnv(['CONTAINER_NAME=tests-packages']) {
                         try {
@@ -119,10 +135,6 @@ pipeline {
 
                     tests['canvas_quizzes'] = {
                       sh 'build/new-jenkins/js/tests-quizzes.sh'
-                    }
-
-                    for(int i = 0; i < COFFEE_NODE_COUNT; i++) {
-                      tests["Karma - Spec Group - coffee${i}"] = makeKarmaStage('coffee', i, COFFEE_NODE_COUNT)
                     }
 
                     for(int i = 0; i < JSG_NODE_COUNT; i++) {

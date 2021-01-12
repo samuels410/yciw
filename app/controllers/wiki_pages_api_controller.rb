@@ -470,7 +470,7 @@ class WikiPagesApiController < ApplicationController
   #
   # @returns PageRevision
   def show_revision
-    Shackles.activate(:slave) do
+    GuardRail.activate(:secondary) do
       if params.has_key?(:revision_id)
         permission = :read_revisions
         revision = @page.versions.where(number: params[:revision_id].to_i).first!
@@ -484,7 +484,26 @@ class WikiPagesApiController < ApplicationController
                           else
                             true
                           end
-        render :json => wiki_page_revision_json(revision, @current_user, session, include_content, @page.current_version)
+        output_json = nil
+        begin
+          output_json = wiki_page_revision_json(revision, @current_user, session, include_content, @page.current_version)
+        rescue Psych::SyntaxError => e
+          # TODO: This should be temporary.  For a long time
+          # course exports/imports would corrupt the yaml in the first version
+          # of an imported wiki page by trying to replace placeholders right
+          # in the yaml.  When that happens, we can't parse it anymore because
+          # the html is insufficiently escaped.  This is a fix until it seems
+          # like none of these are happening anymore
+          GuardRail.activate(:primary) do
+            Canvas::Errors.capture_exception(:content_imports, e, :info)
+            # this is a badly escaped media comment
+            clean_version_yaml = WikiPage.reinterpret_version_yaml(revision.yaml)
+            revision.yaml = clean_version_yaml
+            revision.save
+          end
+          output_json = wiki_page_revision_json(revision, @current_user, session, include_content, @page.current_version)
+        end
+        render :json => output_json
       end
     end
   end
@@ -526,7 +545,7 @@ class WikiPagesApiController < ApplicationController
   end
 
   def get_wiki_page
-    Shackles.activate(:slave) do
+    GuardRail.activate(%w{update update_front_page}.include?(params[:action]) ? :primary : :secondary) do
       @wiki = @context.wiki
 
       # attempt to find an existing page

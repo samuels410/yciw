@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 #
 # Copyright (C) 2011 - present Instructure, Inc.
 #
@@ -176,6 +178,7 @@ class LearningOutcome < ActiveRecord::Base
     tag = find_or_create_tag(asset, context)
     tag.tag = determine_tag_type(opts[:mastery_type])
     tag.mastery_score = opts[:mastery_score] if opts[:mastery_score]
+    InstStatsd::Statsd.increment('learning_outcome.align') if tag.new_record?
     tag.save
 
     if context.is_a? Course
@@ -389,7 +392,7 @@ class LearningOutcome < ActiveRecord::Base
       !self.saved_change_to_short_description? &&
       !self.saved_change_to_description?
 
-    self.send_later_if_production(:update_associated_rubrics)
+    delay_if_production.update_associated_rubrics
   end
 
   def update_associated_rubrics
@@ -401,17 +404,14 @@ class LearningOutcome < ActiveRecord::Base
   def updateable_rubrics
     conds = { learning_outcome_id: self.id, content_type: 'Rubric', workflow_state: 'active' }
     # Find all unassessed, active rubrics aligned to this outcome, referenced by no more than one assignment
-    Rubric.where(id:
-      Rubric.select('rubrics.id').
-        where.not(workflow_state: 'deleted').
+    Rubric.where(
+      id: Rubric.
+        active.
         joins(:learning_outcome_alignments).
         where(content_tags: conds).
-        joins("LEFT JOIN #{RubricAssociation.quoted_table_name} ra2 ON rubrics.id = ra2.rubric_id AND ra2.purpose = 'grading'").
-        group('rubrics.id').
-        having('COUNT(rubrics.id) < 2')).
-      joins("LEFT JOIN #{RubricAssociation.quoted_table_name} ra2 ON rubrics.id = ra2.rubric_id AND ra2.purpose = 'grading'" \
-            " LEFT JOIN #{RubricAssessment.quoted_table_name} ra3 ON ra2.id = ra3.rubric_association_id").
-      where('ra3.id IS NULL')
+        with_at_most_one_association.
+        select('rubrics.id')
+    ).unassessed
   end
 
   def updateable_rubrics?

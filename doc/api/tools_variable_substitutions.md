@@ -188,6 +188,15 @@ context of the tool launch is within a course.
 ```
 [ "Section 1", "Section 5", "TA Section"]
 ```
+## com.instructure.Observee.sisIds
+returns all observee ids linked to this observer as an String separated by `,`.
+
+**Availability**: *when launched in a course*  
+**Launch Parameter**: *com_instructure_observee_sis_ids*  
+
+```
+"A123,B456,..."
+```
 ## Context.title
 The title of the context.
 
@@ -292,6 +301,16 @@ The sourced Id of the context.
 
 ```
 1234
+```
+## Context.id.history
+return a string with a comma-separeted list of the context ids of the
+courses in reverse chronological order from which content has been copied.
+
+**Availability**: *when launched in a course*  
+
+
+```
+"789,456,123"
 ```
 ## Message.documentTarget
 communicates the kind of browser window/frame where the Canvas has launched a tool.

@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 #
 # Copyright (C) 2011 - present Instructure, Inc.
 #
@@ -31,6 +33,8 @@ describe RubricAssessment do
     rubric_model
     @association = @rubric.associate_with(@assignment, @course, :purpose => 'grading', :use_for_grading => true)
   end
+
+  it { is_expected.to have_many(:learning_outcome_results).dependent(:destroy) }
 
   it "should htmlify the rating comments" do
     comment = "Hi, please see www.example.com.\n\nThanks."

@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 #
 # Copyright (C) 2011 - present Instructure, Inc.
 #
@@ -469,7 +471,7 @@ RSpec.configure do |config|
   config.before :each do
     if Canvas.redis_enabled? && Canvas.redis_used
       # yes, we really mean to run this dangerous redis command
-      Shackles.activate(:deploy) { Canvas.redis.flushdb }
+      GuardRail.activate(:deploy) { Canvas.redis.flushdb }
     end
     Canvas.redis_used = false
   end
@@ -516,7 +518,7 @@ RSpec.configure do |config|
   end
 
   def fixture_file_upload(path, mime_type=nil, binary=false)
-    Rack::Test::UploadedFile.new(File.join(ActionController::TestCase.fixture_path, path), mime_type, binary)
+    Rack::Test::UploadedFile.new(File.join(RSpec.configuration.fixture_path, path), mime_type, binary)
   end
 
   def default_uploaded_data
@@ -542,7 +544,8 @@ RSpec.configure do |config|
     opts = lines.extract_options!
     opts.reverse_merge!(allow_printing: false)
     account = opts[:account] || @account || account_model
-    opts[:batch] ||= account.sis_batches.create!
+    user = opts[:user] || @user || user_model
+    opts[:batch] ||= account.sis_batches.create!(user_id: user.id)
 
     path = generate_csv_file(lines)
     opts[:files] = [path]
@@ -650,7 +653,7 @@ RSpec.configure do |config|
     BACKENDS = %w{FileSystem S3}.map { |backend| AttachmentFu::Backends.const_get(:"#{backend}Backend") }.freeze
 
     class As #:nodoc:
-      private *instance_methods.select { |m| m !~ /(^__|^\W|^binding$)/ }
+      private *instance_methods.select { |m| m !~ /(^__|^\W|^binding$|^untaint$)/ }
 
       def initialize(subject, ancestor)
         @subject = subject
@@ -789,7 +792,10 @@ RSpec.configure do |config|
       @headers = headers
     end
 
-    def read_body(io)
+    def read_body(io = nil)
+      return yield(@body) if block_given?
+      return if io.nil?
+
       io << @body
     end
 
@@ -847,7 +853,7 @@ RSpec.configure do |config|
   end
 end
 
-class I18n::Backend::Simple
+class LazyPresumptuousI18nBackend
   def stub(translations)
     @stubs = translations.with_indifferent_access
     singleton_class.instance_eval do
@@ -864,7 +870,7 @@ class I18n::Backend::Simple
   end
 
   def lookup_with_stubs(locale, key, scope = [], options = {})
-    init_translations unless initialized?
+    ensure_initialized
     keys = I18n.normalize_keys(locale, key, scope, options[:separator])
     keys.inject(@stubs){ |h,k| h[k] if h.respond_to?(:key) } || lookup_without_stubs(locale, key, scope, options)
   end
@@ -898,4 +904,8 @@ end
 
 def enable_default_developer_key!
   enable_developer_key_account_binding!(DeveloperKey.default)
+end
+
+def run_live_events_specs?
+  ENV.fetch('RUN_LIVE_EVENTS_SPECS', '0') == '1'
 end

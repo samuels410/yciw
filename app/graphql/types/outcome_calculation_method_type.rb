@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 #
 # Copyright (C) 2020 - present Instructure, Inc.
 #
@@ -32,8 +34,7 @@ module Types
 
     field :locked, Boolean, null: false
     def locked
-      context = object.context
-      (context.is_a?(Account) ? context : context.account).lock_proficiency_calculation[:locked]
+      !object.context.grants_right?(current_user, :manage_proficiency_calculations)
     end
   end
 end

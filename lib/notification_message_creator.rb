@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 #
 # Copyright (C) 2013 - present Instructure, Inc.
 #
@@ -27,6 +29,7 @@ class NotificationMessageCreator
   include LocaleSelection
 
   attr_accessor :notification, :asset, :to_user_channels, :message_data
+  attr_reader :courses, :account
 
   # Options can include:
   #  :to_list - A list of Users, User IDs, and CommunicationChannels to send to
@@ -37,13 +40,12 @@ class NotificationMessageCreator
     @to_user_channels = user_channels(options[:to_list])
     @user_counts = recent_messages_for_users(@to_user_channels.keys)
     @message_data = options.delete(:data)
-    course_id = @message_data&.dig(:course_id)
+    course_ids = @message_data&.dig(:course_ids)
+    course_ids ||= [@message_data&.dig(:course_id)]
     root_account_id = @message_data&.dig(:root_account_id)
-    if course_id && root_account_id
+    if course_ids.any? && root_account_id
       @account = Account.new(id: root_account_id)
-      @course = Course.new(id: course_id)
-      @mute_notifications_by_course_enabled = @account.feature_enabled?(:mute_notifications_by_course)
-      @override_preferences_enabled = Account.site_admin.feature_enabled?(:notification_granular_course_preferences)
+      @courses = course_ids.map { |id| Course.new(id: id, root_account_id: @account&.id) }
     end
   end
 
@@ -75,7 +77,9 @@ class NotificationMessageCreator
         # otherwise it will create a delayed_message. Any message can create a
         # dashboard message in addition to itself.
         channels.each do |channel|
-          next unless notifications_enabled_for_context?(user, @course)
+          channel.set_root_account_ids(persist_changes: true, log: true)
+          next unless notifications_enabled_for_courses?(user)
+
           if immediate_policy?(user, channel)
             immediate_messages << build_immediate_message_for(user, channel)
             delayed_messages << build_fallback_for(user, channel)
@@ -102,13 +106,13 @@ class NotificationMessageCreator
   # root_account_id on the message, or look up policy overrides in the future.
   # A user can disable notifications for a course with a notification policy
   # override.
-  def notifications_enabled_for_context?(user, context)
+  def notifications_enabled_for_courses?(user)
     # if the message is not summarizable?, it is in a context that notifications
     # cannot be disabled, so return true before checking.
     return true unless @notification.summarizable?
-    if @mute_notifications_by_course_enabled
-      return NotificationPolicyOverride.enabled_for(user, context)
-    end
+
+    return NotificationPolicyOverride.enabled_for_all_contexts(user, courses) if courses&.any?
+
     true
   end
 
@@ -182,7 +186,7 @@ class NotificationMessageCreator
   def dispatch_immediate_messages(messages)
     Message.transaction do
       # Cancel any that haven't been sent out for the same purpose
-      cancel_pending_duplicate_messages
+      cancel_pending_duplicate_messages if Rails.env.production?
       messages.each do |message|
         message.stage_without_dispatch!
         message.save!
@@ -213,13 +217,13 @@ class NotificationMessageCreator
   end
 
   def effective_policy_for(user, channel)
-    # a user can override the notification preference for a context, the context
-    # needs to be provided in the notification from broadcast_policy, the lowest
-    # level override is the one that should be respected.
-    if @override_preferences_enabled
-      policy = override_policy_for(channel, @message_data&.dig(:course_id), 'Course')
-      policy ||= override_policy_for(channel, @message_data&.dig(:root_account_id), 'Account')
-    end
+    # a user can override the notification preference for a course or a
+    # root_account, the course_id needs to be provided in the notification from
+    # broadcast_policy in message_data, the lowest level override is the one
+    # that should be respected.
+    policy = override_policy_for(channel, 'Course')
+    policy ||= override_policy_for(channel, 'Account')
+
     if !policy && should_use_default_policy?(user, channel)
       policy ||= channel.notification_policies.new(notification_id: @notification.id, frequency: @notification.default_frequency(user))
     end
@@ -238,15 +242,15 @@ class NotificationMessageCreator
     user.email_channel == channel
   end
 
-  def override_policy_for(channel, context_id, context_type)
+  def override_policy_for(channel, context_type)
     # NotificationPolicyOverrides are already loaded and this find block is on
     # an array and can only have one for a given context and channel.
-    if context_id
-      channel.notification_policy_overrides.find do |np|
-        np.notification_id == @notification.id &&
-          np.context_id == context_id &&
-          np.context_type == context_type
-      end
+    ops = channel.notification_policy_overrides.select { |np| np.notification_id == @notification.id && np.context_type == context_type }
+    case context_type
+    when 'Course'
+      ops.find { |np| courses.map(&:id).include?(np.context_id) } if courses&.any?
+    when 'Account'
+      ops.find { |np| np.context_id == account.id } if account
     end
   end
 
@@ -382,7 +386,7 @@ class NotificationMessageCreator
   # data can get out of sync if messages are cancelled for being repeats...
   # not sure if we care about that...
   def recent_messages_for_users(users)
-    Shackles.activate(:slave) do
+    GuardRail.activate(:secondary) do
       Hash.new(0).merge(Message.more_recent_than(24.hours.ago).where(user_id: users, to_email: true).group(:user_id).count)
     end
   end

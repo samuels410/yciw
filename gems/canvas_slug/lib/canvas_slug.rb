@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 #
 # Copyright (C) 2011 - present Instructure, Inc.
 #
@@ -28,6 +30,7 @@ class CanvasSlug
       # Ensure we don't get naughties by looping until we get something
       # "clean". Loop count is arbitrary, we use length as shorter strings
       # are less likely to result in problematic strings.
+      uuid = ""
       length.times do
         uuid = Array.new(length) { CHARS[SecureRandom.random_number(CHARS.length)] }.join
         return uuid unless SJ.profane?(uuid)
@@ -35,11 +38,11 @@ class CanvasSlug
 
       # TODO: raise exception to allow consumer to handle
       # raise "CanvasSlug couldn't find valid uuid after #{length} attempts"
-      return uuid
+      uuid
     end
 
     def generate(purpose = nil, length = 4)
-      slug = ''
+      slug = +''
       slug << purpose << '-' if purpose
       slug << generate_securish_uuid(length)
       slug

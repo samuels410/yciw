@@ -17,6 +17,8 @@
 
 module Lti
   module Ims
+    class InvalidLaunch < StandardError; end
+
     class AuthenticationController < ApplicationController
       include Lti::RedisMessageClient
 
@@ -47,6 +49,7 @@ module Lti
         validate_oidc_params!
         validate_current_user!
         validate_client_id!
+        validate_launch_eligibility!
 
         render(
           'lti/ims/authentication/authorize.html.erb',
@@ -69,6 +72,8 @@ module Lti
       end
 
       def validate_current_user!
+        return if public_course? && @current_user.blank?
+
         if !@current_user || Lti::Asset.opaque_identifier_for(@current_user, context: context) != oidc_params[:login_hint]
           set_oidc_error!('login_required', 'Must have an active user session')
         end
@@ -82,12 +87,25 @@ module Lti
         set_oidc_error!('invalid_request_object', "The 'scope' must be '#{SCOPE}'") if oidc_params[:scope] != SCOPE
       end
 
+      def validate_launch_eligibility!
+        return if @oidc_error
+        id_token
+      rescue InvalidLaunch => e
+        Canvas::Errors.capture_exception(:lti, e, :info)
+        set_oidc_error!('launch_no_longer_valid', "The launch has either expired or already been consumed")
+      end
+
       def set_oidc_error!(error, error_description)
         @oidc_error = {
           error: error,
           error_description: error_description,
           state: oidc_params[:state]
         }
+      end
+
+      def public_course?
+        # Is the context published and public?
+        context&.is_a?(Course) && context&.available? && context&.is_public?
       end
 
       def verifier
@@ -107,12 +125,9 @@ module Lti
 
       def cached_launch_with_nonce
         @cached_launch_with_nonce ||= begin
-          JSON.parse(
-            fetch_and_delete_launch(
-              context,
-              verifier
-            )
-          ).merge({nonce: oidc_params[:nonce]})
+          launch_payload = fetch_and_delete_launch(context,verifier)
+          raise InvalidLaunch, "no payload found in cache" if launch_payload.nil?
+          JSON.parse(launch_payload).merge({nonce: oidc_params[:nonce]})
         end
       end
 

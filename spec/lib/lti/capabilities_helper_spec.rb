@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 #
 # Copyright (C) 2017 - present Instructure, Inc.
 #
@@ -115,7 +117,8 @@ module Lti
          com.instructure.Course.available_canvas_resources
          com.instructure.Person.pronouns
          com.instructure.User.observees
-         com.instructure.User.sectionNames)
+         com.instructure.User.sectionNames
+         com.instructure.Observee.sisIds)
     }
 
     describe '#supported_capabilities' do

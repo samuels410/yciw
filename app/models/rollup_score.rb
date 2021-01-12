@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 #
 # Copyright (C) 2015 - present Instructure, Inc.
 #
@@ -22,17 +24,23 @@ class RollupScore
 
   attr_reader :outcome_results, :outcome, :score, :count, :title, :submitted_at, :hide_points
 
-  def initialize(outcome_results:, opts: {}, context: nil)
+  def initialize(outcome_results:, opts: {})
     @outcome_results = outcome_results
     @aggregate = opts[:aggregate_score]
     @median = opts[:aggregate_stat] == 'median'
     @outcome = @outcome_results.first.learning_outcome
     @count = @outcome_results.size
-    @points_possible = @outcome.rubric_criterion[:points_possible]
-    @mastery_points = @outcome.rubric_criterion[:mastery_points]
-    if context.is_a?(Course) && context.root_account.feature_enabled?(:account_level_mastery_scales) && context.resolved_outcome_calculation_method
-      @calculation_method = context.resolved_outcome_calculation_method.calculation_method
-      @calculation_int = context.resolved_outcome_calculation_method.calculation_int
+    if opts[:points_possible].present?
+      @points_possible = opts[:points_possible]
+      @mastery_points = opts[:mastery_points]
+    else
+      @points_possible = @outcome.rubric_criterion[:points_possible]
+      @mastery_points = @outcome.rubric_criterion[:mastery_points]
+    end
+
+    if opts[:calculation_method].present?
+      @calculation_method = opts[:calculation_method]
+      @calculation_int = opts[:calculation_int]
     else
       @calculation_method = @outcome.calculation_method || "highest"
       @calculation_int = @outcome.calculation_int
@@ -101,5 +109,4 @@ class RollupScore
     decaying_avg_score = (latest_weighted + older_avg_weighted).round(PRECISION)
     {score: decaying_avg_score, results: tmp_score_sets.pluck(:result).push(latest[:result])}
   end
-
 end

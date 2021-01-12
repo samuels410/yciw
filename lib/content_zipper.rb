@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 #
 # Copyright (C) 2011 - present Instructure, Inc.
 #
@@ -54,9 +56,7 @@ class ContentZipper
       when Quizzes::Quiz then zip_quiz(attachment, attachment.context)
       end
     rescue => e
-      Canvas::Errors.capture(e, message: "Content zipping failed")
-      @logger.debug(e.to_s)
-      @logger.debug(e.backtrace.join('\n'))
+      Canvas::Errors.capture(e, { message: "Content zipping failed" }, :warn)
       attachment.update_attribute(:workflow_state, 'to_be_zipped')
     end
   end
@@ -317,7 +317,12 @@ class ContentZipper
     begin
       handle = attachment.open(:need_local_file => true)
       zipfile.get_output_stream(filename){|zos| Zip::IOExtras.copy_stream(zos, handle)}
+    rescue Attachment::FailedResponse, Net::ReadTimeout, Net::OpenTimeout => e
+      Canvas::Errors.capture_exception(:content_export, e, :warn)
+      @logger.error("  skipping #{attachment.full_filename} with error: #{e.message}")
+      return false
     rescue => e
+      Canvas::Errors.capture_exception(:content_export, e, :error)
       @logger.error("  skipping #{attachment.full_filename} with error: #{e.message}")
       return false
     ensure

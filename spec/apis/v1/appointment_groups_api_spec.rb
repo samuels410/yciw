@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 #
 # Copyright (C) 2011 Instructure, Inc.
 #
@@ -323,6 +325,19 @@ describe AppointmentGroupsController, type: :request do
     expect(json['end_at']).to eql "2012-01-01T13:00:00Z"
     expect(json['new_appointments'].size).to eql 1
     expect(json['workflow_state']).to eql 'pending'
+  end
+
+  describe 'sharding' do
+    specs_require_sharding
+
+    it "creates an appointment group in the contexts' shard" do
+      json = @shard1.activate do
+        api_call(:post, "/api/v1/appointment_groups",
+                 {:controller => 'appointment_groups', :action => 'create', :format => 'json'},
+                 {:appointment_group => {:context_codes => [@course.asset_string], :title => 'over there', :new_appointments => {'0' => ["2012-01-01 12:00:00", "2012-01-01 13:00:00"]}}})
+      end
+      expect(AppointmentGroup.find(json['id']).title).to eq 'over there'
+    end
   end
 
   it 'should forbid creating an appointment group for a concluded course' do

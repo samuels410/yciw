@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 #
 # Copyright (C) 2011 - present Instructure, Inc.
 #
@@ -41,6 +43,17 @@ describe DeveloperKey do
     )
   end
 
+  describe '#find_cached' do
+    it "raises error when not found, and caches that" do
+      enable_cache do
+        expect(DeveloperKey).to receive(:find_by).once.and_call_original
+        expect { DeveloperKey.find_cached(0) }.to raise_error(ActiveRecord::RecordNotFound)
+        # only calls the original once
+        expect { DeveloperKey.find_cached(0) }.to raise_error(ActiveRecord::RecordNotFound)
+      end
+    end
+  end
+
   describe 'site_admin' do
     subject { DeveloperKey.site_admin }
 
@@ -75,8 +88,8 @@ describe DeveloperKey do
     specs_require_sharding
     include_context 'lti_1_3_spec_helper'
 
-    let(:developer_key) { @shard1.activate { DeveloperKey.create! } }
     let(:shard_1_account) { @shard1.activate { account_model } }
+    let(:developer_key) { @shard1.activate { DeveloperKey.create!(root_account: shard_1_account) } }
     let(:shard_1_tool) do
       tool = nil
       @shard1.activate do
@@ -664,6 +677,16 @@ describe DeveloperKey do
             developer_key_not_saved.save!
             expect(developer_key_not_saved.root_account).to eq account.root_account
           end
+        end
+
+        context 'when accout is site admin' do
+          subject { developer_key_not_saved.root_account }
+
+          let(:account) { nil }
+
+          before { developer_key_not_saved.update!(account: account) }
+
+          it { is_expected.to eq Account.site_admin }
         end
 
         context 'when account is root account' do

@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 #
 # Copyright (C) 2020 - present Instructure, Inc.
 #
@@ -125,6 +127,22 @@ describe Lti::PlagiarismSubscriptionsHelper do
       end
     end
 
+  end
+
+  describe '#plagiarism_subscription' do
+    let(:subscription_helper) { Lti::PlagiarismSubscriptionsHelper.new(tool_proxy) }
+
+    it 'should have associated fields' do
+      expect(subscription_helper.plagiarism_subscription(tool_proxy, tool_proxy.product_family)).to eq({
+        'EventTypes' => Lti::PlagiarismSubscriptionsHelper::EVENT_TYPES,
+        'ContextType' => 'root_account',
+        'ContextId' => tool_proxy.context.root_account.uuid,
+        'Format' => 'live-event',
+        'TransportType' => 'https',
+        'TransportMetadata' => {'Url' => "test.com/submission"},
+        'AssociatedIntegrationId' => tool_proxy.guid
+      })
+    end
   end
 
   describe '#destroy_subscription' do

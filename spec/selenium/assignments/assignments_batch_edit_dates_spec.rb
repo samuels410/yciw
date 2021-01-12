@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 #
 # Copyright (C) 2020 - present Instructure, Inc.
 #
@@ -101,6 +103,8 @@ describe "assignment batch edit" do
       end
 
       it 'allows editing and saving dates', custom_timeout: 30 do
+        skip 'DEMO-76 (10/14/2020)'
+
         date_inputs = assignment_dates_inputs(@assignment2.title)
         # add a due date to Second Assignment
         replace_content(date_inputs[0], format_date_for_view(@date, :medium))
@@ -119,6 +123,8 @@ describe "assignment batch edit" do
       end
 
       it 'allows selecting and shifting dates', custom_timeout: 30 do
+        skip 'DEMO-76 (10/14/2020)'
+
         select_assignment_checkbox(@assignment1.title).send_keys(:space)
         open_batch_edit_dialog
         # shift by 2 days
@@ -141,6 +147,8 @@ describe "assignment batch edit" do
       end
 
       it 'allows clearing dates', custom_timeout: 30 do
+        skip 'DEMO-76 (10/14/2020)'
+
         select_assignment_checkbox(@assignment1.title).send_keys(:space)
         open_batch_edit_dialog
         dialog_remove_date_radio_btn.send_keys(:space)

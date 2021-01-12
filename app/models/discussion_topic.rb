@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 # Copyright (C) 2011 - present Instructure, Inc.
 #
 # This file is part of Canvas.
@@ -37,9 +39,10 @@ class DiscussionTopic < ActiveRecord::Base
   include LockedFor
 
   restrict_columns :content, [:title, :message]
-  restrict_columns :settings, [:delayed_post_at, :require_initial_post, :discussion_type, :assignment_id,
-                               :lock_at, :pinned, :locked, :allow_rating, :only_graders_can_rate, :sort_by_rating, :group_category_id]
+  restrict_columns :settings, [:require_initial_post, :discussion_type, :assignment_id,
+                               :pinned, :locked, :allow_rating, :only_graders_can_rate, :sort_by_rating, :group_category_id]
   restrict_columns :state, [:workflow_state]
+  restrict_columns :availability_dates, [:delayed_post_at, :lock_at]
   restrict_assignment_columns
 
   attr_accessor :user_has_posted, :saved_by, :total_root_discussion_entries
@@ -219,9 +222,9 @@ class DiscussionTopic < ActiveRecord::Base
 
   def schedule_delayed_transitions
     return if self.saved_by == :migration
-
-    self.send_at(self.delayed_post_at, :update_based_on_date) if @should_schedule_delayed_post
-    self.send_at(self.lock_at, :update_based_on_date) if @should_schedule_lock_at
+    bp = true if @importing_migration&.migration_type == 'master_course_import'
+    delay(run_at: delayed_post_at).update_based_on_date(for_blueprint: bp) if @should_schedule_delayed_post
+    delay(run_at: lock_at).update_based_on_date(for_blueprint: bp) if @should_schedule_lock_at
     # need to clear these in case we do a save whilst saving (e.g.
     # Announcement#respect_context_lock_rules), so as to avoid the dreaded
     # double delayed job ಠ_ಠ
@@ -240,7 +243,7 @@ class DiscussionTopic < ActiveRecord::Base
 
   def update_subtopics
     if !self.deleted? && (self.has_group_category? || !!self.group_category_id_before_last_save)
-      send_later_if_production_enqueue_args(:refresh_subtopics, :singleton => "refresh_subtopics_#{self.global_id}")
+      delay_if_production(singleton: "refresh_subtopics_#{self.global_id}").refresh_subtopics
     end
   end
 
@@ -542,8 +545,8 @@ class DiscussionTopic < ActiveRecord::Base
     current_user ||= self.current_user
     return 0 unless current_user # default for logged out users
 
-    environment = lock ? :master : :slave
-    Shackles.activate(environment) do
+    environment = lock ? :primary : :secondary
+    GuardRail.activate(environment) do
       topic_participant = if opts[:use_preload] && self.association(:discussion_topic_participants).loaded?
         self.discussion_topic_participants.find{|dtp| dtp.user_id == current_user.id}
       else
@@ -633,7 +636,7 @@ class DiscussionTopic < ActiveRecord::Base
     return nil unless current_user
 
     topic_participant = nil
-    Shackles.activate(:master) do
+    GuardRail.activate(:primary) do
       DiscussionTopic.uncached do
         DiscussionTopic.unique_constraint_retry do
           topic_participant = self.discussion_topic_participants.where(:user_id => current_user).lock.first
@@ -724,10 +727,10 @@ class DiscussionTopic < ActiveRecord::Base
   scope :by_position_legacy, -> { order("discussion_topics.position DESC, discussion_topics.created_at DESC, discussion_topics.id DESC") }
   scope :by_last_reply_at, -> { order("discussion_topics.last_reply_at DESC, discussion_topics.created_at DESC, discussion_topics.id DESC") }
 
-  scope :by_posted_at, -> { order(Arel.sql(<<-SQL))
-      COALESCE(discussion_topics.delayed_post_at, discussion_topics.posted_at, discussion_topics.created_at) DESC,
-      discussion_topics.created_at DESC,
-      discussion_topics.id DESC
+  scope :by_posted_at, -> { order(Arel.sql(<<~SQL))
+    COALESCE(discussion_topics.delayed_post_at, discussion_topics.posted_at, discussion_topics.created_at) DESC,
+    discussion_topics.created_at DESC,
+    discussion_topics.id DESC
     SQL
   }
 
@@ -774,7 +777,9 @@ class DiscussionTopic < ActiveRecord::Base
 
   # There may be delayed jobs that expect to call this to update the topic, so be sure to alias
   # the old method name if you change it
-  def update_based_on_date
+  # Also: if this method is scheduled by a blueprint sync, ensure it isn't counted as a manual downstream change
+  def update_based_on_date(for_blueprint: false)
+    skip_downstream_changes! if for_blueprint
     transaction do
       reload lock: true # would call lock!, except, oops, workflow overwrote it :P
       lock if should_lock_yet
@@ -952,7 +957,7 @@ class DiscussionTopic < ActiveRecord::Base
     # either changed sections or made section specificness
     return unless self.is_section_specific? ? @sections_changed : self.is_section_specific_before_last_save
 
-    send_later_if_production(:clear_stream_items_for_sections)
+    delay_if_production.clear_stream_items_for_sections
   end
 
   def clear_stream_items_for_sections
@@ -970,7 +975,7 @@ class DiscussionTopic < ActiveRecord::Base
 
   def clear_non_applicable_stream_items_for_delayed_posts
     if self.is_announcement && self.delayed_post_at? && @delayed_post_at_changed && self.delayed_post_at > Time.now
-      send_later_if_production(:clear_stream_items_for_delayed_posts)
+      delay_if_production.clear_stream_items_for_delayed_posts
     end
   end
 
@@ -985,7 +990,7 @@ class DiscussionTopic < ActiveRecord::Base
 
   def clear_non_applicable_stream_items_for_locked_modules
     return unless self.locked_by_module?
-    send_later_if_production(:clear_stream_items_for_locked_modules)
+    delay_if_production.clear_stream_items_for_locked_modules
   end
 
   def clear_stream_items_for_locked_modules
@@ -1001,13 +1006,11 @@ class DiscussionTopic < ActiveRecord::Base
 
   def clear_stream_item_cache_for(user_ids)
     if stream_item && user_ids.any?
-      StreamItemCache.send_later_if_production_enqueue_args(
-        :invalidate_all_recent_stream_items,
-        { :priority => Delayed::LOW_PRIORITY },
-        user_ids,
-        stream_item.context_type,
-        stream_item.context_id
-      )
+      StreamItemCache.delay_if_production(priority: Delayed::LOW_PRIORITY).
+        invalidate_all_recent_stream_items(
+          user_ids,
+          stream_item.context_type,
+          stream_item.context_id)
     end
   end
 
@@ -1543,7 +1546,7 @@ class DiscussionTopic < ActiveRecord::Base
     media_objects = media_object_ids.empty? ? [] : MediaObject.where(media_id: media_object_ids).to_a
     media_objects = media_objects.uniq(&:media_id)
     media_objects = media_objects.map do |media_object|
-      if media_object.media_id == "maybe" || media_object.deleted? || media_object.context != context
+      if media_object.media_id == "maybe" || media_object.deleted? || (media_object.context_type != "User" && media_object.context != context)
         media_object = nil
       end
       if media_object && media_object.podcast_format_details
@@ -1625,7 +1628,7 @@ class DiscussionTopic < ActiveRecord::Base
 
   # synchronously create/update the materialized view
   def create_materialized_view
-    DiscussionTopic::MaterializedView.for(self).update_materialized_view_without_send_later(use_master: true)
+    DiscussionTopic::MaterializedView.for(self).update_materialized_view(synchronous: true, use_master: true)
   end
 
   def grading_standard_or_default

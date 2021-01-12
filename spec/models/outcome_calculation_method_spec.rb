@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 #
 # Copyright (C) 2020 - present Instructure, Inc.
 #
@@ -100,6 +102,45 @@ describe OutcomeCalculationMethod, type: :model do
   describe 'as_json' do
     it 'includes expected keys' do
       expect(subject.as_json.keys).to match_array(['id', 'calculation_method', 'calculation_int', 'context_type', 'context_id'])
+    end
+  end
+
+  describe 'find_or_create_default!' do
+    it 'creates the default calculation method if one doesnt exist' do
+      calculation_method = OutcomeCalculationMethod.find_or_create_default!(account)
+      expect(calculation_method.calculation_method).to eq 'highest'
+      expect(calculation_method.workflow_state).to eq 'active'
+      expect(calculation_method.calculation_int).to eq nil
+      expect(calculation_method.context).to eq account
+    end
+
+    it 'finds the method if one exists' do
+      calculation_method = outcome_calculation_method_model(account)
+      default = OutcomeCalculationMethod.find_or_create_default!(account)
+      expect(calculation_method).to eq default
+    end
+
+    it 'can reset and undelete soft deleted records' do
+      calculation_method = outcome_calculation_method_model(account)
+      calculation_method.destroy!
+      default = OutcomeCalculationMethod.find_or_create_default!(account)
+      calculation_method = calculation_method.reload
+      expect(calculation_method).to eq default
+      expect(calculation_method.workflow_state).to eq 'active'
+    end
+
+    it 'can graciously handle RecordInvalid errors' do
+      calculation_method = outcome_calculation_method_model(account)
+      allow(OutcomeCalculationMethod).to receive(:find_by).and_return(nil, calculation_method)
+      default = OutcomeCalculationMethod.find_or_create_default!(@account)
+      expect(calculation_method).to eq default
+    end
+  end
+
+  describe 'interaction with cache' do
+    it 'clears the account cache on save' do
+      expect(account).to receive(:clear_downstream_caches).with(:resolved_outcome_proficiency)
+      OutcomeProficiency.find_or_create_default!(account)
     end
   end
 end

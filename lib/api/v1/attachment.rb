@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 #
 # Copyright (C) 2012 - present Instructure, Inc.
 #
@@ -90,6 +92,10 @@ module Api::V1::Attachment
         h.merge!(:verifier => attachment.uuid) unless options[:omit_verifier_in_app] && (respond_to?(:in_app?, true) && in_app? || @authenticated_with_jwt)
         url = file_download_url(attachment, h.merge(url_options))
       end
+       # and svg can stand in as its own thumbnail, but let's be reasonable about their size
+       if !thumbnail_url && attachment.content_type == 'image/svg+xml' && attachment.size < 16_384 #16k
+        thumbnail_url = url
+      end
     else
       thumbnail_url = ''
       url = ''
@@ -125,7 +131,7 @@ module Api::V1::Attachment
     if includes.include? 'preview_url'
 
       url_opts = {
-        moderated_grading_whitelist: options[:moderated_grading_whitelist],
+        moderated_grading_allow_list: options[:moderated_grading_allow_list],
         enable_annotations: options[:enable_annotations],
         enrollment_type: options[:enrollment_type],
         anonymous_instructor_annotations: options[:anonymous_instructor_annotations],
@@ -308,7 +314,6 @@ module Api::V1::Attachment
         on_duplicate = nil if on_duplicate == 'overwrite'
         quota_exemption = @attachment.quota_exemption_key if !opts[:check_quota]
         json = @attachment.ajax_upload_params(
-          @current_pseudonym,
           api_v1_files_create_url(
             on_duplicate: on_duplicate,
             quota_exemption: quota_exemption,

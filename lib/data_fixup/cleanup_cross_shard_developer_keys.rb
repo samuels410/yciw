@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 #
 # Copyright (C) 2020 - present Instructure, Inc.
 #
@@ -18,23 +20,19 @@
 module DataFixup::CleanupCrossShardDeveloperKeys
   def self.run
     DeveloperKey.find_ids_in_ranges(batch_size: 100_000) do |min, max|
-      self.send_later_if_production_enqueue_args(:delete_developer_keys_with_cross_shard_account_ids,
-      {
-        priority: Delayed::MAX_PRIORITY,
-        n_strand: ["root_account_id_backfill", Shard.current.database_server.id]
-      },
-      min, max)
+      delay_if_production(priority: Delayed::MAX_PRIORITY,
+        n_strand: ["root_account_id_backfill", Shard.current.database_server.id]).
+        delete_developer_keys_with_cross_shard_account_ids(min, max)
     end
   end
 
   def self.delete_developer_keys_with_cross_shard_account_ids(min, max)
     DeveloperKey.find_ids_in_ranges(start_at: min, end_at: max) do |batch_min, batch_max|
       ids = DeveloperKey.where(id: batch_min..batch_max).
-        where(AccessToken.joins(:user).
+        where("NOT EXISTS (?)", AccessToken.joins(:user).
           where("access_tokens.developer_key_id=developer_keys.id").
           where.not(users: {workflow_state: 'deleted'}).
-          where("users.id < ?", Shard::IDS_PER_SHARD).
-          exists.not).
+          where("users.id < ?", Shard::IDS_PER_SHARD)).
         where("account_id > ?", Shard::IDS_PER_SHARD).
         pluck(:id)
       AccessToken.where(developer_key_id: ids).delete_all
