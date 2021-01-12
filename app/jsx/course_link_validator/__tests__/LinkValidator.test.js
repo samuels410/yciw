@@ -18,7 +18,7 @@
 
 import React from 'react'
 import {act} from 'react-dom/test-utils'
-import {mount,render} from 'enzyme'
+import {mount, render} from 'enzyme'
 import LinkValidator from '../LinkValidator'
 import sinon from 'sinon'
 import $ from 'jquery'
@@ -163,12 +163,12 @@ describe('LinkValidator', () => {
           wrapper.update()
 
           expect(
-            wrapper.findWhere(x => x.text() === 'hehehh')
+            wrapper
+              .findWhere(x => x.text() === 'hehehh')
               .hostNodes()
               .first()
-              .getDOMNode()
-              .href
-          ).toEqual("about:blank")
+              .getDOMNode().href
+          ).toEqual('about:blank')
         })
       })
     })

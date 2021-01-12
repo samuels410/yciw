@@ -136,7 +136,7 @@ export function ltiMessageHandler(e) {
 
       case 'lti.screenReaderAlert':
         $.screenReaderFlashMessageExclusive(
-          typeof(message.body) === 'string' ? message.body : JSON.stringify(message.body)
+          typeof message.body === 'string' ? message.body : JSON.stringify(message.body)
         )
         break
 

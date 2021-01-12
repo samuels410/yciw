@@ -308,7 +308,8 @@ export default class TopicView extends Backbone.View {
 
   handleKeyDown(e) {
     const nodeName = e.target.nodeName.toLowerCase()
-    if (nodeName === 'input' || nodeName === 'textarea' || window.ENV.disable_keyboard_shortcuts) return
+    if (nodeName === 'input' || nodeName === 'textarea' || window.ENV.disable_keyboard_shortcuts)
+      return
     if (e.which !== 78) return // n
     this.addRootReply(e)
     e.preventDefault()
