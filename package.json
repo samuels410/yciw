@@ -177,7 +177,7 @@
     "jest-moxios-utils": "^1",
     "json-loader": "^0.5.7",
     "jsx-loader": "0.11.2",
-    "karma": "^3",
+    "karma": "^6",
     "karma-chrome-launcher": "^2",
     "karma-coverage-istanbul-reporter": "^2",
     "karma-firework-reporter": "~0.2.4",
